@@ -68,23 +68,23 @@ worktree setup — just work on that branch in a normal checkout there).
   log, but it physically only exists where last committed) updated at
   phase-level checkpoints — this is a standing preference, not specific to
   this project.
-- **tdd-guard pre-authorized exception:** the guard's PreToolUse hook
-  blocks a schema/validation file whose test is a single all-or-nothing
-  object assertion (e.g. a zod schema validated via `.parse()`/`toEqual`
-  against a complete multi-field object) — the guard wants field-by-field
-  incremental tests, which this test shape cannot provide. Confirmed via
-  two independent incidents (Tasks 1 and 3). When this exact pattern
-  recurs: skip discussion, directly ask the human partner to type
-  `tdd-guard off`, let the implementer finish that one file, then ask for
-  `tdd-guard on`. Any other blocking pattern still gets a full discussion
-  with the human partner before deciding how to proceed. Note: a separate,
-  likely-unrelated cause of guard malfunctions was found and fixed —
-  `TDD_GUARD_MODEL_VERSION=claude-sonnet-5` set in `~/.claude/settings.json`
-  `env`, working around the guard's hardcoded validation-judge model
-  (`claude-sonnet-4-6`) apparently being retired (see commit history /
-  ledger for the investigation). That fix resolved the garbled/contradictory
-  rejection reasoning; the schema-file pattern above is a separate,
-  structural limitation that persists even with a working judge model.
+- **tdd-guard is disabled for the remainder of this plan (Tasks 4-24),
+  as of Task 4.** Superseded two narrower attempts: (1) setting
+  `TDD_GUARD_MODEL_VERSION=claude-sonnet-5` in `~/.claude/settings.json`
+  `env` to work around an apparent retired-model failure mode, and (2) a
+  pre-authorized toggle-per-incident exception for all-or-nothing schema
+  files. A direct probe of the exact SDK call tdd-guard makes (same model,
+  same config) returned a clean success response, disproving the
+  model-retirement theory. The guard went on to block 3 of 4 tasks across
+  three unrelated code shapes (calendar validation logic, a zod schema,
+  plain data-access functions) with no identifiable fixable cause — this
+  looks like an inherent LLM-judge reliability problem in the plugin
+  itself. The human partner confirmed disabling it entirely rather than
+  continuing to toggle per incident. **TDD discipline is still required**
+  by every task brief and is independently checked by each task reviewer
+  against the implementer's RED/GREEN evidence — enforcement moved from
+  mechanical (hook) to review-gate, it was not dropped. `TDD_GUARD_MODEL_VERSION`
+  can be left set; it's harmless now that the hook won't run anyway.
 
 ## Skills/plugins this workflow depends on
 

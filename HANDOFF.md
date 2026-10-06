@@ -67,6 +67,23 @@ up first) — git history alone will not follow you.
   log, but it physically only exists where last committed) updated at
   phase-level checkpoints — this is a standing preference, not specific to
   this project.
+- **tdd-guard pre-authorized exception:** the guard's PreToolUse hook
+  blocks a schema/validation file whose test is a single all-or-nothing
+  object assertion (e.g. a zod schema validated via `.parse()`/`toEqual`
+  against a complete multi-field object) — the guard wants field-by-field
+  incremental tests, which this test shape cannot provide. Confirmed via
+  two independent incidents (Tasks 1 and 3). When this exact pattern
+  recurs: skip discussion, directly ask the human partner to type
+  `tdd-guard off`, let the implementer finish that one file, then ask for
+  `tdd-guard on`. Any other blocking pattern still gets a full discussion
+  with the human partner before deciding how to proceed. Note: a separate,
+  likely-unrelated cause of guard malfunctions was found and fixed —
+  `TDD_GUARD_MODEL_VERSION=claude-sonnet-5` set in `~/.claude/settings.json`
+  `env`, working around the guard's hardcoded validation-judge model
+  (`claude-sonnet-4-6`) apparently being retired (see commit history /
+  ledger for the investigation). That fix resolved the garbled/contradictory
+  rejection reasoning; the schema-file pattern above is a separate,
+  structural limitation that persists even with a working judge model.
 
 ## Skills/plugins this workflow depends on
 

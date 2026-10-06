@@ -13,3 +13,4 @@ Plan: `docs/superpowers/plans/2026-10-06-road-trip-photo-planner.md`
 | 1 | Scaffold Next.js app, tooling, first tested module | `904455d..5b2260a` | Approved, 0 Critical/Important (tdd-guard briefly disabled by human partner to unblock a reproducible guard malfunction, then re-enabled; see ledger) |
 | 2 | Prisma schema, client singleton, test DB harness | `c7bd334..00a3e43` | Approved, 0 Critical/Important, 2 Minor |
 | 3 | Shared types and validation schemas | `8c2c64f..f7fa57e` | Approved, 0 Critical/Important, 2 Minor (plan-mandated) |
+| 4 | User accounts data access | `6612d4f..803e7d8` | Approved, 0 Critical/Important, 2 Minor (plan-mandated). First task done with tdd-guard disabled. |

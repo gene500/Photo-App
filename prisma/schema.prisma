@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  trips        Trip[]
+}
+
+model Trip {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  startName   String
+  startLat    Float
+  startLng    Float
+  endName     String
+  endLat      Float
+  endLng      Float
+  /// Calendar date stored at UTC midnight; exposed as "YYYY-MM-DD".
+  plannedDate DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  stops       Stop[]
+
+  @@index([userId])
+}
+
+model Stop {
+  id        String   @id @default(cuid())
+  tripId    String
+  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  /// 0-based position in the route sequence; kept contiguous by the data layer.
+  order     Int
+  name      String
+  lat       Float
+  lng       Float
+  notes     String?
+  /// "manual" | "suggested", validated in application code.
+  source    String
+  photoUrl  String?
+  visited   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tripId, order])
+}

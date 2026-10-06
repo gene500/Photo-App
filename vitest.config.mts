@@ -6,6 +6,7 @@ export default defineConfig({
   test: {
     environment: "node", // component tests opt into jsdom with `// @vitest-environment jsdom`
     include: ["src/**/*.test.{ts,tsx}", "tests/**/*.test.ts"],
+    globalSetup: ["tests/global-setup.ts"],
     setupFiles: ["tests/setup.ts"],
     env: {
       DATABASE_URL: "file:./test.db",

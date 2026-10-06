@@ -66,6 +66,49 @@ up first) — git history alone will not follow you.
   phase-level checkpoints — this is a standing preference, not specific to
   this project.
 
+## Skills/plugins this workflow depends on
+
+This machine has these installed via Claude Code's plugin system
+(`~/.claude/plugins/installed_plugins.json`). A different device needs
+the first two installed before resuming — the rest of this workflow
+assumes their skills exist:
+
+- **`superpowers@superpowers-marketplace`** (v6.3.0, marketplace repo
+  `obra/superpowers-marketplace`) — required. Provides every
+  `superpowers:*` skill this project's workflow uses:
+  - `brainstorming` — used to design the spec (already done)
+  - `writing-plans` — used to write the implementation plan (already done)
+  - `using-git-worktrees` — used to set up this worktree
+  - `subagent-driven-development` — the skill currently driving task-by-task
+    implementation (dispatch, per-task review, fix loops, final review)
+  - `requesting-code-review` — its `code-reviewer.md` template is what the
+    final whole-branch review in subagent-driven-development dispatches
+  - `verification-before-completion` — used in Task 24's final verification
+  - `finishing-a-development-branch` — used once the final review is clean
+  - `systematic-debugging` — referenced as a fallback if the Task 23
+    Playwright e2e test is flaky
+  - `test-driven-development` — the general TDD methodology every task follows
+  To install on another device: add the marketplace
+  (`obra/superpowers-marketplace`) via Claude Code's `/plugin` command, then
+  install the `superpowers` plugin from it.
+
+- **`tdd-guard@tdd-guard`** (v1.3.0, marketplace repo `nizos/tdd-guard`) —
+  required for the workflow to behave exactly as the plan assumes. This is
+  a PreToolUse hook that blocks writing implementation code without a
+  failing test first, and blocks adding more than one test at a time. The
+  plan's Global Constraints section and every task brief are written
+  assuming it's active (including the "ask the human partner to toggle
+  `tdd-guard off`/`on`" instruction for the handful of files with no
+  meaningful unit test). Without it installed, nothing breaks, but the
+  TDD discipline becomes advisory instead of enforced, and those
+  toggle-the-guard steps become no-ops.
+  To install: add the marketplace (`nizos/tdd-guard`) via `/plugin`, then
+  install the `tdd-guard` plugin from it.
+
+Two other plugins are installed on this machine (`clangd-lsp`,
+`claude-subconscious`) but neither is used by this project — no action
+needed for those.
+
 ## Current status (as of this file's last edit)
 
 Task 1 (scaffold) was dispatched to a Sonnet implementer subagent and was

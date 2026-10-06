@@ -40,6 +40,8 @@ up first) — git history alone will not follow you.
    `.superpowers/sdd/2026-10-06-road-trip-photo-planner/progress.md`
    — it names which tasks are `complete`, which are mid fix-loop, and the
    preflight conflict-scan table. Trust it over any memory of "where we were."
+   `HISTORY.md` (committed, durable) has the same per-task completion facts
+   in a simpler form, for a quick skim without the ledger's full detail.
 3. Re-invoke `superpowers:subagent-driven-development` and continue from the
    first task without a `Task N: complete` line in the ledger.
 

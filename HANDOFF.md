@@ -28,10 +28,11 @@ or `cd` there directly if working outside that tooling) before touching any
 files. Running git commands from the main checkout path will not see this
 branch's work.
 
-**No remote is configured on this repo** (`git remote -v` is empty). It is
-local to this machine only. Moving to a genuinely different device means
-copying the repo directory over yourself (or pushing to a remote you set
-up first) — git history alone will not follow you.
+**Remote:** `origin` → https://github.com/gene500/Photo-App.git. Both
+`main` and `worktree-road-trip-photo-planner` are pushed and tracking.
+On another device, clone this repo and check out
+`worktree-road-trip-photo-planner` directly (no need to recreate the
+worktree setup — just work on that branch in a normal checkout there).
 
 ## Resume procedure
 

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +11,28 @@ vi.mock("./MapView", () => ({
     <button type="button" onClick={() => onMapClick({ lat: 37.5, lng: -119.5 })}>drop pin</button>
   ),
 }));
+// dnd-kit's drag gestures can't be simulated in jsdom (same reasoning Task 19
+// used for StopList's own tests), so the real StopList is kept for rendering
+// (stop-row, Visited checkbox, etc.) but wrapped with an extra button that
+// invokes the same onReorder callback a real drag-end would.
+vi.mock("./StopList", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./StopList")>();
+  type Props = Parameters<typeof actual.StopList>[0];
+  function StopList(props: Props) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => props.onReorder([...props.stops].reverse().map((s) => s.id))}
+        >
+          reorder
+        </button>
+        <actual.StopList {...props} />
+      </>
+    );
+  }
+  return { ...actual, StopList };
+});
 import { api } from "@/lib/api-client";
 import type { Stop, TripWithStops } from "@/lib/types";
 import { TripEditor } from "./TripEditor";
@@ -75,5 +97,30 @@ describe("TripEditor", () => {
     await userEvent.click(screen.getByLabelText("Visited"));
     expect(api.updateStop).toHaveBeenCalledWith("s1", { visited: true });
     await waitFor(() => expect((screen.getByLabelText("Visited") as HTMLInputElement).checked).toBe(true));
+  });
+
+  it("reverts an optimistic reorder when the API rejects", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    const stop1 = newStop({ id: "s1", order: 0, name: "Pin 1" });
+    const stop2 = newStop({ id: "s2", order: 1, name: "Pin 2", lat: 37.6, lng: -119.6 });
+    let rejectReorder!: (e: Error) => void;
+    vi.mocked(api.reorderStops).mockImplementation(
+      () => new Promise((_resolve, reject) => { rejectReorder = reject; }),
+    );
+    render(<TripEditor initialTrip={{ ...trip, stops: [stop1, stop2] }} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "reorder" }));
+
+    // Optimistic: the new order is applied immediately, before the API call settles.
+    await waitFor(() => expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 2"));
+    expect(api.reorderStops).toHaveBeenCalledWith("t1", ["s2", "s1"]);
+
+    await act(async () => {
+      rejectReorder(new Error("Couldn't save the new order"));
+    });
+
+    // Reverted: back to the original order, with an inline, dismissible error.
+    await waitFor(() => expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 1"));
+    expect((await screen.findByRole("alert")).textContent).toContain("Couldn't save the new order");
   });
 });

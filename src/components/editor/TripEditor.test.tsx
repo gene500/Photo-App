@@ -264,4 +264,25 @@ describe("TripEditor", () => {
     const after = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("Pin 1"))!;
     expect((within(after).getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
   });
+
+  it("keeps the latest order when a slower stop patch returns a stale copy", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    const stop1 = newStop({ id: "s1", order: 0, name: "Pin 1" });
+    const stop2 = newStop({ id: "s2", order: 1, name: "Pin 2", lat: 37.6, lng: -119.6 });
+    let resolvePatch!: (v: { stop: Stop }) => void;
+    vi.mocked(api.updateStop).mockImplementation(() => new Promise((r) => { resolvePatch = r; }));
+    render(<TripEditor initialTrip={withStops([stop1, stop2])} />);
+    const pin1Row = () => screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("Pin 1"))!;
+    await userEvent.click(within(pin1Row()).getByLabelText("Visited"));
+    vi.mocked(api.reorderStops).mockResolvedValueOnce({ stops: [{ ...stop2, order: 0 }, { ...stop1, order: 1 }] });
+    await userEvent.click(screen.getByRole("button", { name: "reorder" }));
+    await waitFor(() => expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 2"));
+    await act(async () => { resolvePatch({ stop: { ...stop1, order: 0, visited: true } }); });
+    // A second reorder that fails must revert to the order the server confirmed, not the stale one.
+    vi.mocked(api.reorderStops).mockRejectedValueOnce(new Error("Couldn't save the new order"));
+    await userEvent.click(screen.getByRole("button", { name: "reorder" }));
+    await screen.findByRole("alert");
+    expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 2");
+    expect((within(pin1Row()).getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
+  });
 });

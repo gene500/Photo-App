@@ -175,13 +175,22 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     }
   }
 
-  function replaceStop(stop: Stop) {
-    setStops((prev) => prev.map((s) => (s.id === stop.id ? stop : s)));
+  /** Copy only `keys` from the server's stop onto the latest local one, so a response
+   *  that raced a reorder can't overwrite `order` (or anything else it didn't change). */
+  function mergeStop(stop: Stop, keys: (keyof Stop)[]) {
+    setStops((prev) =>
+      prev.map((s) => {
+        if (s.id !== stop.id) return s;
+        const next = { ...s };
+        for (const k of keys) (next as Record<string, unknown>)[k] = stop[k];
+        return next;
+      }),
+    );
   }
 
   async function patchStop(id: string, patch: StopPatch) {
     try {
-      replaceStop((await api.updateStop(id, patch)).stop);
+      mergeStop((await api.updateStop(id, patch)).stop, Object.keys(patch) as (keyof Stop)[]);
     } catch (e) {
       setStopsError(errorMessage(e, "Couldn't update the stop"));
     }
@@ -194,9 +203,9 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     const put = (at: LatLng) => setStops((cur) => cur.map((s) => (s.id === id ? { ...s, lat: at.lat, lng: at.lng } : s)));
     put(p);
     try {
-      replaceStop((await api.updateStop(id, { lat: p.lat, lng: p.lng })).stop);
+      mergeStop((await api.updateStop(id, { lat: p.lat, lng: p.lng })).stop, ["lat", "lng"]);
     } catch (e) {
-      put(before);
+      put(before); // restores lat/lng only
       setStopsError(errorMessage(e, "Couldn't move the stop"));
     }
   }
@@ -366,8 +375,8 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
           key={drawerStop.id}
           stop={drawerStop}
           onClose={() => setDrawerId(null)}
-          onSave={async (patch) => replaceStop((await api.updateStop(drawerStop.id, patch)).stop)}
-          onPhotoChange={replaceStop}
+          onSave={async (patch) => mergeStop((await api.updateStop(drawerStop.id, patch)).stop, Object.keys(patch) as (keyof Stop)[])}
+          onPhotoChange={(stop) => mergeStop(stop, ["photoUrl"])}
         />
       )}
     </div>

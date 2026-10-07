@@ -6,14 +6,14 @@ vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
 // Pass-through, so one test can delete the stop while a photo is being saved.
 vi.mock("@/server/photos", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/photos")>();
-  return { ...actual, savePhoto: vi.fn(actual.savePhoto) };
+  return { ...actual, savePhoto: vi.fn(actual.savePhoto), deletePhotoFile: vi.fn(actual.deletePhotoFile) };
 });
-import { savePhoto } from "@/server/photos";
+import { deletePhotoFile, savePhoto } from "@/server/photos";
 import { getCurrentUserId } from "@/server/session";
 import { DELETE as photoDELETE, POST as photoPOST } from "@/app/api/stops/[id]/photo/route";
 import { DELETE as stopDELETE } from "@/app/api/stops/[id]/route";
 import { GET as uploadGET } from "@/app/api/uploads/[name]/route";
-import { addStop, deleteStop } from "@/server/stops";
+import { addStop, deleteStop, getOwnedStop } from "@/server/stops";
 import { createTrip } from "@/server/trips";
 import { MAX_PHOTO_BYTES } from "@/lib/photo-rules";
 import { createTestUser, resetDb, sampleTripInput } from "../helpers/db";
@@ -91,6 +91,47 @@ describe("photo routes", () => {
     const url = (await (await upload(stopId, new File([PNG], "a.png", { type: "image/png" }))).json()).stop.photoUrl;
     await stopDELETE(new Request("http://localhost", { method: "DELETE" }), idParams(stopId));
     expect(fileOnDisk(url)).toBe(false);
+  });
+
+  // Policy: the loser of a concurrent swap deletes its own saved file and gets 200 with the CURRENT stop.
+  it("two interleaved uploads leave exactly one new file referenced and delete the old one once", async () => {
+    const oldUrl = (await (await upload(stopId, new File([PNG], "old.png", { type: "image/png" }))).json()).stop.photoUrl;
+    const real = (await vi.importActual<typeof import("@/server/photos")>("@/server/photos")).savePhoto;
+    // Hold both saves until both requests have read the same old photoUrl.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let waiting = 0;
+    const saved: string[] = [];
+    vi.mocked(savePhoto).mockImplementation(async (...args) => {
+      if (++waiting === 2) release();
+      await gate;
+      const url = await real(...args);
+      saved.push(url);
+      return url;
+    });
+    const deleteSpy = vi.mocked(deletePhotoFile);
+    deleteSpy.mockClear();
+
+    const [a, b] = await Promise.all([
+      upload(stopId, new File([PNG], "a.png", { type: "image/png" })),
+      upload(stopId, new File([PNG], "b.png", { type: "image/png" })),
+    ]);
+    vi.mocked(savePhoto).mockImplementation(real);
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+    expect(saved).toHaveLength(2);
+
+    const current = (await getOwnedStop(userId, stopId))!.photoUrl!;
+    expect(saved).toContain(current);
+    const loser = saved.find((u) => u !== current)!;
+    // Both responses report the stop's current photo.
+    expect((await a.json()).stop.photoUrl).toBe(current);
+    expect((await b.json()).stop.photoUrl).toBe(current);
+    expect(fileOnDisk(current)).toBe(true);
+    expect(fileOnDisk(loser)).toBe(false);
+    expect(fileOnDisk(oldUrl)).toBe(false);
+    expect(deleteSpy.mock.calls.filter(([u]) => u === oldUrl)).toHaveLength(1);
+    expect(deleteSpy.mock.calls.filter(([u]) => u === loser)).toHaveLength(1);
   });
 
   it("returns 404 and removes the saved file when the stop is deleted mid-upload", async () => {

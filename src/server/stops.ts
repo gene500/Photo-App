@@ -65,6 +65,30 @@ export async function updateStop(
   }
 }
 
+export type PhotoSwap =
+  | { status: "swapped"; stop: Stop }
+  | { status: "conflict"; stop: Stop }
+  | { status: "gone" };
+
+/**
+ * Compare-and-swap of a stop's photoUrl: only updates if it still equals `expected`.
+ * "conflict" means another request changed it first (stop = the current state).
+ */
+export async function swapStopPhoto(
+  userId: string,
+  stopId: string,
+  expected: string | null,
+  next: string | null,
+): Promise<PhotoSwap> {
+  const { count } = await prisma.stop.updateMany({
+    where: { id: stopId, trip: { userId }, photoUrl: expected },
+    data: { photoUrl: next },
+  });
+  const current = await getOwnedStop(userId, stopId);
+  if (!current) return { status: "gone" };
+  return count === 1 ? { status: "swapped", stop: current } : { status: "conflict", stop: current };
+}
+
 export async function deleteStop(
   userId: string,
   stopId: string,

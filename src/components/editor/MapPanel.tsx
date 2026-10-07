@@ -4,6 +4,7 @@ import type { Feature, LineString } from "geojson";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
+import { diffIds } from "@/lib/diff-ids";
 import { wrapLng } from "@/lib/geo";
 import { stopColor } from "@/lib/stop-style";
 import type { LngLat } from "@/lib/types";
@@ -43,7 +44,8 @@ export default function MapPanel({
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
-  const stopMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  const stopMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
+  const draggingRef = useRef<Set<string>>(new Set());
   const suggestionMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const pendingMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const handlersRef = useRef({ onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange });
@@ -112,23 +114,58 @@ export default function MapPanel({
     }
   }, [loaded, routeGeometry]);
 
-  // Numbered, draggable stop markers.
+  // Numbered, draggable stop markers, diffed by stop id so a state update never destroys a marker mid-drag.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    for (const m of stopMarkersRef.current) m.remove();
-    stopMarkersRef.current = stops.map((s, i) => {
-      const el = markerElement(`${STOP_CLASS} ${s.id === selectedId ? "ring-2 ring-black" : ""}`, `Stop ${i + 1}: ${s.name}`, String(i + 1));
-      el.style.background = stopColor(s);
-      el.addEventListener("click", () => handlersRef.current.onStopClick(s.id));
-      const marker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat([s.lng, s.lat]).addTo(map);
-      marker.on("dragend", () => {
-        const { lat, lng } = marker.getLngLat();
-        handlersRef.current.onStopMove?.(s.id, { lat, lng: wrapLng(lng) });
-      });
-      return marker;
+    const markers = stopMarkersRef.current;
+    const { add, keep, remove } = diffIds(markers.keys(), stops.map((s) => s.id));
+    for (const id of remove) {
+      if (draggingRef.current.has(id)) continue; // leave it alone until the drag ends
+      markers.get(id)?.remove();
+      markers.delete(id);
+    }
+    const addSet = new Set(add);
+    const keepSet = new Set(keep);
+    stops.forEach((s, i) => {
+      const label = `Stop ${i + 1}: ${s.name}`;
+      const className = `${MARKER_CLASS} ${STOP_CLASS} ${s.id === selectedId ? "ring-2 ring-black" : ""}`;
+      if (keepSet.has(s.id)) {
+        const marker = markers.get(s.id)!;
+        if (draggingRef.current.has(s.id)) return;
+        const el = marker.getElement();
+        const ll = marker.getLngLat();
+        if (ll.lng !== s.lng || ll.lat !== s.lat) marker.setLngLat([s.lng, s.lat]);
+        if (el.textContent !== String(i + 1)) el.textContent = String(i + 1);
+        if (el.className !== className) el.className = className;
+        el.style.background = stopColor(s);
+        el.setAttribute("aria-label", label);
+        el.title = label;
+      } else if (addSet.has(s.id)) {
+        const el = markerElement(className.slice(MARKER_CLASS.length + 1), label, String(i + 1));
+        el.style.background = stopColor(s);
+        const id = s.id;
+        el.addEventListener("click", () => handlersRef.current.onStopClick(id));
+        const marker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat([s.lng, s.lat]).addTo(map);
+        marker.on("dragstart", () => draggingRef.current.add(id));
+        marker.on("dragend", () => {
+          draggingRef.current.delete(id);
+          const { lat, lng } = marker.getLngLat();
+          handlersRef.current.onStopMove?.(id, { lat, lng: wrapLng(lng) });
+        });
+        markers.set(id, marker);
+      }
     });
   }, [stops, selectedId]);
+
+  // Remove all stop markers on unmount (the map teardown also drops them; this clears our bookkeeping).
+  useEffect(() => {
+    const markers = stopMarkersRef.current;
+    return () => {
+      for (const m of markers.values()) m.remove();
+      markers.clear();
+    };
+  }, []);
 
   // Faint suggestion markers (bigger when highlighted from the panel).
   useEffect(() => {

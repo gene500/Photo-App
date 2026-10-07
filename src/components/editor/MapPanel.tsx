@@ -57,6 +57,7 @@ export default function MapPanel({
       center: initialRef.current.center,
       zoom: initialRef.current.zoom,
       attributionControl: false,
+      logoPosition: "top-right",
     });
     // Top-right (offset below the search bar on phones, see globals.css) so the bottom sheet never covers them.
     map.addControl(new mapboxgl.NavigationControl(), "top-right");

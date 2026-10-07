@@ -55,5 +55,5 @@ export const api = {
       `/api/geocode?q=${encodeURIComponent(q)}${proximity ? `&proximity=${proximity.lng.toFixed(6)},${proximity.lat.toFixed(6)}` : ""}`,
     ),
   reverseGeocode: (lat: number, lng: number) =>
-    request<{ place: Place }>(`/api/reverse-geocode?lat=${lat}&lng=${lng}`),
+    request<{ place: Place }>(`/api/reverse-geocode?lat=${lat.toFixed(6)}&lng=${lng.toFixed(6)}`),
 };

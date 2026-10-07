@@ -30,7 +30,7 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, suggestio
   const open = snap !== "collapsed";
   const tabClass = (t: Tab) =>
     `min-h-9 rounded-lg px-3 py-1.5 text-sm transition ${tab === t ? "bg-surface font-medium text-foreground shadow-sm" : "text-muted hover:text-foreground"}`;
-  const arrowClass = "flex h-9 w-9 items-center justify-center rounded-full text-sm text-muted transition hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent";
+  const arrowClass = "flex h-9 w-9 items-center justify-center rounded-full text-base text-muted transition hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent";
 
   return (
     <aside

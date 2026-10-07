@@ -1,10 +1,10 @@
 import type { Stop } from "./types";
 
 export const STOP_COLORS = {
-  manual: "#2563eb",
-  manualVisited: "#93c5fd",
-  suggested: "#d97706",
-  suggestedVisited: "#fcd34d",
+  manual: "#3b3226",
+  manualVisited: "#b8a272",
+  suggested: "#b4572f",
+  suggestedVisited: "#e0a98a",
 } as const;
 
 export function stopColor(stop: Pick<Stop, "source" | "visited">): string {

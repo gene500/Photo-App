@@ -15,6 +15,9 @@ vi.mock("./MapView", () => ({
       <button type="button" onClick={() => p.onMapClick({ lat: 37.5, lng: -119.5 })}>drop pin</button>
       <button type="button" onClick={() => p.stops[0] && p.onStopClick(p.stops[0].id)}>click first marker</button>
       <button type="button" onClick={() => p.stops[0] && p.onStopMove?.(p.stops[0].id, { lat: 38, lng: -118 })}>drag first marker</button>
+      <button type="button" onClick={() => p.stops[0] && p.onStopMove?.(p.stops[0].id, { lat: 39, lng: -117 })}>drag first marker elsewhere</button>
+      {p.stops[0] && <span data-testid="first-stop">{p.stops[0].lat},{p.stops[0].lng}</span>}
+      {p.routeGeometry && <span data-testid="route-line">{p.routeGeometry.length}</span>}
       <button type="button" onClick={() => p.suggestions?.[0] && p.onSuggestionClick?.(p.suggestions[0].osmId)}>click first suggestion</button>
       {p.pending && <span data-testid="pending-pin">{p.pending.lat},{p.pending.lng}</span>}
     </div>
@@ -63,7 +66,7 @@ describe("TripEditor", () => {
 
   it("asks for stops and skips routing until there are two", () => {
     render(<TripEditor initialTrip={trip} />);
-    expect(screen.getByTestId("empty-hint")).toBeTruthy();
+    expect(screen.getByTestId("empty-hint").textContent).toBe("Search for a place or click the map to add your first stop.");
     expect(screen.getByTestId("route-status").textContent).toBe("Add 2 stops to see the route");
     expect(api.directions).not.toHaveBeenCalled();
   });
@@ -95,6 +98,39 @@ describe("TripEditor", () => {
     expect(api.addStop).toHaveBeenCalledWith("t1", { name: "Tunnel View", lat: 37.5, lng: -119.5, source: "manual" });
     await waitFor(() => expect(screen.queryByRole("region", { name: "Selected place" })).toBeNull());
     await waitFor(() => expect(api.directions).toHaveBeenLastCalledWith([[-119.79, 36.74], [-119.12, 37.96], [-119.5, 37.5]]));
+  });
+
+  it("never sticks on Loading after the route error is dismissed", async () => {
+    vi.mocked(api.directions).mockRejectedValue(new Error("No driving route found"));
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    const alert = await screen.findByRole("alert");
+    await userEvent.click(within(alert).getByRole("button"));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByTestId("route-status").textContent).toBe("Route unavailable");
+  });
+
+  it("drops the old route while a new one loads after stops change", async () => {
+    vi.mocked(api.directions).mockResolvedValueOnce({ route });
+    vi.mocked(api.updateStop).mockResolvedValue({ stop: { ...seed[0], lat: 38, lng: -118 } });
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await waitFor(() => expect(screen.getByTestId("route-line")).toBeTruthy());
+    vi.mocked(api.directions).mockImplementation(() => new Promise(() => {}));
+    await userEvent.click(screen.getByRole("button", { name: "drag first marker" }));
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toBe("Loading route…"));
+    expect(screen.queryByTestId("route-line")).toBeNull();
+  });
+
+  it("keeps a newer place card when an earlier add finishes", async () => {
+    let resolveAdd!: (v: { stop: Stop }) => void;
+    vi.mocked(api.addStop).mockImplementation(() => new Promise((r) => { resolveAdd = r; }));
+    render(<TripEditor initialTrip={trip} />);
+    await userEvent.click(screen.getByRole("button", { name: "drop pin" }));
+    await screen.findByText("Tunnel View");
+    await userEvent.click(screen.getByRole("button", { name: "Add stop" }));
+    await userEvent.click(screen.getByRole("button", { name: "pick place" }));
+    await act(async () => { resolveAdd({ stop: newStop({ name: "Tunnel View" }) }); });
+    expect(screen.getByText("Fresno, California")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Selected place" })).toBeTruthy();
   });
 
   it("falls back to the coordinates when the place lookup fails", async () => {
@@ -165,9 +201,11 @@ describe("TripEditor", () => {
     expect(api.updateStop).toHaveBeenCalledWith("a", { lat: 38, lng: -118 });
     await waitFor(() => expect(api.directions).toHaveBeenLastCalledWith([[-118, 38], [-119.12, 37.96]]));
 
+    expect(screen.getByTestId("first-stop").textContent).toBe("38,-118");
     vi.mocked(api.updateStop).mockRejectedValueOnce(new Error("Couldn't update the stop"));
-    await userEvent.click(screen.getByRole("button", { name: "drag first marker" }));
+    await userEvent.click(screen.getByRole("button", { name: "drag first marker elsewhere" }));
     expect((await screen.findByRole("alert")).textContent).toContain("Couldn't update the stop");
+    expect(screen.getByTestId("first-stop").textContent).toBe("38,-118");
     await waitFor(() => expect(api.directions).toHaveBeenLastCalledWith([[-118, 38], [-119.12, 37.96]]));
   });
 

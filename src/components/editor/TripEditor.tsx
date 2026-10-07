@@ -31,8 +31,9 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   const { stops: initialStops, ...initialFields } = initialTrip;
   const [trip, setTrip] = useState<Trip>(initialFields);
   const [stops, setStops] = useState<Stop[]>(initialStops);
-  const [route, setRoute] = useState<RouteResult | null>(null);
-  const [routeError, setRouteError] = useState<string | null>(null);
+  // The outcome of the last route fetch, tagged with the waypoints it was for so a
+  // stale result is never shown for different stops.
+  const [routeResult, setRouteResult] = useState<{ key: string; route: RouteResult | null; error: string | null; dismissed: boolean } | null>(null);
   const [stopsError, setStopsError] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [adding, setAdding] = useState(false);
@@ -60,13 +61,11 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     api.directions(coordinates).then(
       ({ route: next }) => {
         if (cancelled) return;
-        setRoute(next);
-        setRouteError(null);
+        setRouteResult({ key: waypointKey, route: next, error: null, dismissed: false });
       },
       (e: unknown) => {
         if (cancelled) return;
-        setRoute(null);
-        setRouteError(errorMessage(e, "Couldn't load the route"));
+        setRouteResult({ key: waypointKey, route: null, error: errorMessage(e, "Couldn't load the route"), dismissed: false });
       },
     );
     return () => {
@@ -75,8 +74,9 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   }, [waypointKey]);
 
   const enoughForRoute = stops.length >= 2;
-  const activeRoute = enoughForRoute ? route : null;
-  const activeRouteError = enoughForRoute ? routeError : null;
+  const current = enoughForRoute && routeResult?.key === waypointKey ? routeResult : null;
+  const activeRoute = current?.route ?? null;
+  const activeRouteError = current?.error ?? null;
   const legDurations = activeRoute ? activeRoute.legs.map((l) => l.duration) : null;
 
   const bestTimes = useMemo(
@@ -144,7 +144,9 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     setAdding(false);
     if (!ok) return;
     if (pending.osmId) dismissSuggestion(pending.osmId);
-    setPending(null);
+    // Only close the card we added from; the user may have opened another meanwhile.
+    const added = pending;
+    setPending((cur) => (cur === added ? null : cur));
   }
 
   // --- Stops -----------------------------------------------------------------
@@ -320,7 +322,10 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
                     ? "Loading route…"
                     : "Add 2 stops to see the route"}
             </p>
-            <ErrorBanner message={activeRouteError} onDismiss={() => setRouteError(null)} />
+            <ErrorBanner
+              message={current?.dismissed ? null : activeRouteError}
+              onDismiss={() => setRouteResult((r) => (r ? { ...r, dismissed: true } : r))}
+            />
             <ErrorBanner message={stopsError} onDismiss={() => setStopsError(null)} />
           </>
         }

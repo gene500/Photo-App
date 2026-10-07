@@ -11,6 +11,18 @@ for the full design. Being implemented from
 `docs/superpowers/plans/2026-10-06-road-trip-photo-planner.md` (24 tasks,
 5 phases) using `superpowers:subagent-driven-development`.
 
+## Map-first UI (2026-10-07)
+
+Second feature round: the app is now map-first (see
+`docs/superpowers/specs/2026-10-07-map-first-ui-design.md` and the plan next to
+it). Built on branch `map-first-ui`, ledger at
+`.superpowers/sdd/2026-10-07-map-first-ui/progress.md` (git-ignored; recover
+from `git log` if gone). Status is in `PROGRESS.md`. Merging to `main`
+auto-deploys to Vercel and applies the Turso migration, so: do not push the
+feature branch (Preview builds hold the Turso credentials), re-count live trips
+before merging (the migration drops trip start/end), and smoke-test the live
+site afterwards with a throwaway account.
+
 ## Where the work lives
 
 The project is finished and merged. All code is on `main` of

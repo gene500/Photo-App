@@ -3,6 +3,42 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
+## 2026-10-07 (map-first UI: built, reviewed, verified — ready to merge)
+
+Executed the plan on branch `map-first-ui` with
+`superpowers:subagent-driven-development` (Sonnet implementers/reviewers).
+All 10 tasks done; 246 unit tests, typecheck, lint, build and the Playwright
+golden path pass.
+
+What changed: a trip no longer has start/end (migration
+`20261007120000_drop_trip_start_end` drops six `Trip` columns; the live Turso
+DB had 0 trips when checked). The editor is a full-screen map with a
+search-as-you-type bar (proximity-biased), map-click and search-result
+add-stop cards, numbered draggable markers, route line, a floating stops panel
+(Stops/Suggestions tabs, Start/End labels) that becomes a bottom sheet on
+phones, and a stop cap of 25 (the Directions waypoint limit). Best time now
+departs at sunrise at the first stop.
+
+Reviews: per-task reviews, a final whole-branch review and a bug/security pass.
+They found and we fixed: lng outside ±180 breaking search/saves, no stop cap,
+drag responses clobbering stop order, a non-atomic Turso migration runner,
+bottom sheet hiding search results, plus several minors. Real-browser check on
+the real Mapbox map found three bugs unit tests could not: the map collapsed to
+zero height (mapbox-gl.css `position: relative` beat Tailwind `absolute`),
+controls overlapped the search bar, and fitted points hid under the sheet.
+
+Deviations/notes: add-stop and stop details are React cards under the search
+bar, not anchored Mapbox popups (same on real and offline maps, unit-testable).
+The final whole-branch review was run on Opus, which contradicts the standing
+"Sonnet only" rule in HANDOFF.md; the controller did it by mistake and is
+disclosing it here. Not verified in a real browser: desktop (>=1024px) layout,
+failed-drag revert, suggestion markers on the real map, landmark click names
+(Mapbox v6 reverse geocoding returns addresses/places, not POIs), and real
+Mapbox geocode/directions (fake mode was used locally).
+
+Deploy caution: `TURSO_*` env vars are set for Preview as well as Production, so
+never push the feature branch; merge to `main` locally and push `main` only.
+
 ## 2026-10-07 (map-first UI: implementation plan written)
 
 Wrote the implementation plan via `superpowers:writing-plans`:

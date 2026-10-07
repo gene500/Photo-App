@@ -59,7 +59,7 @@ Mapbox GL map for an offline preview panel client-side.
 ## 5. How best time is computed
 
 Each stop's best shooting window is derived, not stored. The trip's
-departure time is assumed to be sunrise at the start location on the
+departure time is assumed to be sunrise at the first stop on the
 trip's planned date; estimated arrival at each stop is that departure
 plus the cumulative Mapbox Directions leg durations up to that stop
 (no dwell time at earlier stops). The arrival time is then bucketed
@@ -67,7 +67,7 @@ against that stop's own sunrise/golden-hour/sunset times (computed
 from its coordinates and the planned date via `suncalc`): before
 morning golden hour ends → *sunrise*, before evening golden hour
 starts → *midday*, before sunset → *golden hour*, after sunset →
-*sunset* (the window just missed). With no route loaded yet, the
+*sunset* (the window just missed). With fewer than two stops (so no route), the
 display defaults to evening golden hour. See `src/lib/best-time.ts`.
 
 ## 6. Tunables

@@ -8,12 +8,15 @@ export const CORRIDOR_KM = 2;
 
 // Simplify the route (~500 m) before buffering, then the polygon (~200 m) after,
 // so long routes produce an Overpass `poly:` filter of manageable size.
-const ROUTE_SIMPLIFY_DEG = 0.005;
+// Long routes keep more detail than 200 points at the finest tolerance (a real
+// 1,900 km route simplifies to ~280), so coarsen step by step (up to ~4 km, still
+// within the 2 km buffer's margin) before giving up.
+const ROUTE_SIMPLIFY_STEPS_DEG = [0.005, 0.01, 0.02, 0.04];
 const POLYGON_SIMPLIFY_DEG = 0.002;
 
 // buffer()'s cost scales with the SIMPLIFIED point count, not the raw input
 // size — a raw-coordinate-count cap alone can't catch this, because adversarial
-// input (a zigzag whose amplitude is tuned just above ROUTE_SIMPLIFY_DEG) barely
+// input (a zigzag whose amplitude is tuned just above the simplify tolerance) barely
 // shrinks under simplify() while real route geometry (gentle curves following
 // actual roads) collapses to a tiny fraction of its input size. A real
 // road-trip route, even an unusually winding one, simplifies down to well
@@ -23,7 +26,12 @@ const MAX_SIMPLIFIED_ROUTE_POINTS = 200;
 
 export function buildCorridor(route: LngLat[], radiusKm: number = CORRIDOR_KM): LngLat[] {
   if (route.length < 2) throw new Error("Route needs at least 2 coordinates");
-  const line = simplify(lineString(route), { tolerance: ROUTE_SIMPLIFY_DEG, highQuality: false });
+  const input = lineString(route);
+  let line = simplify(input, { tolerance: ROUTE_SIMPLIFY_STEPS_DEG[0], highQuality: false });
+  for (const tolerance of ROUTE_SIMPLIFY_STEPS_DEG.slice(1)) {
+    if (line.geometry.coordinates.length <= MAX_SIMPLIFIED_ROUTE_POINTS) break;
+    line = simplify(input, { tolerance, highQuality: false });
+  }
   if (line.geometry.coordinates.length > MAX_SIMPLIFIED_ROUTE_POINTS) {
     throw new Error("Route is too complex to build a corridor for");
   }

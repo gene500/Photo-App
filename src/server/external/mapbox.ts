@@ -1,5 +1,6 @@
 import type { LngLat, Place, RouteResult } from "@/lib/types";
-import { fakeDirections, fakeGeocode, isFakeExternal } from "./fake";
+import { coordsLabel } from "@/lib/geo";
+import { fakeDirections, fakeGeocode, fakeReverseGeocode, isFakeExternal } from "./fake";
 
 const MAPBOX_BASE = "https://api.mapbox.com";
 const TIMEOUT_MS = 10_000;
@@ -67,11 +68,16 @@ type GeocodeResponse = {
   }[];
 };
 
-export async function geocode(query: string, fetchImpl: typeof fetch = fetch): Promise<Place[]> {
+export type GeocodeOptions = { proximity?: { lat: number; lng: number } };
+
+export async function geocode(query: string, options: GeocodeOptions = {}, fetchImpl: typeof fetch = fetch): Promise<Place[]> {
   if (isFakeExternal()) return fakeGeocode(query);
+  const proximity = options.proximity
+    ? `&proximity=${options.proximity.lng.toFixed(6)},${options.proximity.lat.toFixed(6)}`
+    : "";
   const url =
     `${MAPBOX_BASE}/search/geocode/v6/forward?q=${encodeURIComponent(query)}` +
-    `&limit=5&access_token=${encodeURIComponent(token())}`;
+    `&autocomplete=true&limit=5${proximity}&access_token=${encodeURIComponent(token())}`;
   const { ok, body } = await getJson<GeocodeResponse>(url, fetchImpl, "Couldn't reach the place search service");
   if (!ok || !body?.features) throw new ExternalServiceError("Place search failed. Please try again.");
   return body.features.map((f) => ({
@@ -79,4 +85,16 @@ export async function geocode(query: string, fetchImpl: typeof fetch = fetch): P
     lng: f.geometry.coordinates[0],
     lat: f.geometry.coordinates[1],
   }));
+}
+
+/** Names a clicked spot; the returned coordinates are the clicked ones, not the feature's. */
+export async function reverseGeocode(p: { lat: number; lng: number }, fetchImpl: typeof fetch = fetch): Promise<Place> {
+  if (isFakeExternal()) return fakeReverseGeocode(p);
+  const url =
+    `${MAPBOX_BASE}/search/geocode/v6/reverse?longitude=${p.lng.toFixed(6)}&latitude=${p.lat.toFixed(6)}` +
+    `&limit=1&access_token=${encodeURIComponent(token())}`;
+  const { ok, body } = await getJson<GeocodeResponse>(url, fetchImpl, "Couldn't reach the place lookup service");
+  if (!ok || !body) throw new ExternalServiceError("Place lookup failed. Please try again.");
+  const f = body.features?.[0];
+  return { name: f?.properties.full_address ?? f?.properties.name ?? coordsLabel(p), lat: p.lat, lng: p.lng };
 }

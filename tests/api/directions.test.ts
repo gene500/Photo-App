@@ -42,7 +42,18 @@ describe("GET /api/geocode", () => {
     vi.mocked(geocode).mockResolvedValue([{ name: "Fresno", lat: 36.7, lng: -119.8 }]);
     const res = await geocodeGET(new Request("http://localhost/api/geocode?q=Fresno"));
     expect(await res.json()).toEqual({ places: [{ name: "Fresno", lat: 36.7, lng: -119.8 }] });
-    expect(geocode).toHaveBeenCalledWith("Fresno");
+    expect(geocode).toHaveBeenCalledWith("Fresno", { proximity: undefined });
+  });
+
+  it("passes a proximity bias through", async () => {
+    vi.mocked(geocode).mockResolvedValue([]);
+    await geocodeGET(new Request("http://localhost/api/geocode?q=Spring&proximity=-119.79,36.74"));
+    expect(geocode).toHaveBeenLastCalledWith("Spring", { proximity: { lng: -119.79, lat: 36.74 } });
+  });
+
+  it("rejects a malformed proximity", async () => {
+    const res = await geocodeGET(new Request("http://localhost/api/geocode?q=Spring&proximity=nope"));
+    expect(res.status).toBe(400);
   });
 
   it("rejects too-short queries", async () => {

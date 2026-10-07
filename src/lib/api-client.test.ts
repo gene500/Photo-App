@@ -40,4 +40,17 @@ describe("api client", () => {
     await api.geocode("Lee Vining, CA");
     expect(fetchMock.mock.calls[0][0]).toBe("/api/geocode?q=Lee%20Vining%2C%20CA");
   });
+
+  it("adds a proximity bias to geocode requests", async () => {
+    fetchMock.mockResolvedValue(Response.json({ places: [] }));
+    await api.geocode("Spring", { lat: 36.74, lng: -119.79 });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/geocode?q=Spring&proximity=-119.79,36.74");
+  });
+
+  it("reverse geocodes a point", async () => {
+    fetchMock.mockResolvedValue(Response.json({ place: { name: "X", lat: 1, lng: 2 } }));
+    const { place } = await api.reverseGeocode(1, 2);
+    expect(place.name).toBe("X");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/reverse-geocode?lat=1&lng=2");
+  });
 });

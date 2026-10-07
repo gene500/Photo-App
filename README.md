@@ -19,8 +19,8 @@ Fill in `.env`:
 - `NEXT_PUBLIC_MAPBOX_TOKEN` and `MAPBOX_TOKEN` — create a Mapbox
   account and token at [account.mapbox.com](https://account.mapbox.com).
   `NEXT_PUBLIC_MAPBOX_TOKEN` is the public `pk.*` token used by the
-  browser map; `MAPBOX_TOKEN` is used server-side for Directions and
-  Geocoding (it can be the same `pk.*` token).
+  browser map; `MAPBOX_TOKEN` is used server-side for Directions, the
+  Matrix API (route optimization) and Geocoding (it can be the same `pk.*` token).
 - `DATABASE_URL` and `NEXTAUTH_URL` already have working local defaults
   in `.env.example`.
 
@@ -40,7 +40,7 @@ Run against canned data with no network calls to Mapbox or Overpass
 EXTERNAL_APIS_FAKE=1 NEXT_PUBLIC_MAP_FAKE=1 npm run dev
 ```
 
-`EXTERNAL_APIS_FAKE=1` swaps in canned Mapbox Directions/Geocoding and
+`EXTERNAL_APIS_FAKE=1` swaps in canned Mapbox Directions/Matrix/Geocoding and
 Overpass responses server-side; `NEXT_PUBLIC_MAP_FAKE=1` swaps the
 Mapbox GL map for an offline preview panel client-side.
 
@@ -56,7 +56,18 @@ Mapbox GL map for an offline preview panel client-side.
 | `typecheck` | `next typegen && tsc --noEmit` | Type-check the codebase |
 | `db:migrate` | `prisma migrate dev` | Apply/create Prisma migrations |
 
-## 5. How best time is computed
+## 5. Optimize route
+
+The **Optimize route** button (3+ stops) reorders the stops for the shortest
+total drive time. The first stop stays the starting point and the last stop is
+free (an open path, not a round trip). The server (`POST /api/optimize`) asks the
+Mapbox Matrix API (`directions-matrix/v1/mapbox/driving`, `annotations=duration`)
+for pairwise drive times, then solves the order in `src/lib/optimize-order.ts`:
+exact for up to 9 stops, nearest-neighbour plus 2-opt/or-opt above that. The
+Matrix API allows at most 25 coordinates per request, which matches the app's
+25-stop limit. **Undo** restores the previous order until the stops change again.
+
+## 6. How best time is computed
 
 Each stop's best shooting window is derived, not stored. The trip's
 departure time is assumed to be sunrise at the first stop on the

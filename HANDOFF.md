@@ -23,6 +23,12 @@ feature branch (Preview builds hold the Turso credentials), re-count live trips
 before merging (the migration drops trip start/end), and smoke-test the live
 site afterwards with a throwaway account.
 
+## Optimize route (2026-10-07)
+
+Built on branch `optimize-route` (not pushed or merged). Uses the Mapbox Matrix
+API via `MAPBOX_TOKEN`; verified only against fakes and injected fetch so far, so
+smoke-test it with a real token and on a phone-width browser before merging.
+
 ## Where the work lives
 
 The project is finished and merged. All code is on `main` of

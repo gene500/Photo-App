@@ -77,8 +77,8 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   useEffect(() => {
     idsKeyRef.current = idsKey;
   }, [idsKey]);
-  // What the optimizer reads besides positions: a change to it mid-flight makes the result stale.
-  const prefsKey = JSON.stringify(stops.map((s) => [s.lightPref, s.dwellMinutes]));
+  // What the optimizer reads besides positions (including the trip date): a change to it mid-flight makes the result stale.
+  const prefsKey = JSON.stringify([trip.plannedDate, stops.map((s) => [s.lightPref, s.dwellMinutes])]);
   const prefsKeyRef = useRef(prefsKey);
   useEffect(() => {
     prefsKeyRef.current = prefsKey;

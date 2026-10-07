@@ -8,6 +8,8 @@ function patchData(patch: TripPatch) {
   return {
     ...(patch.name !== undefined && { name: patch.name }),
     ...(patch.plannedDate && { plannedDate: dateOnlyToUtc(patch.plannedDate) }),
+    // A saved departure belongs to the old day; changing the date resets it to "sunrise at the first stop".
+    ...(patch.plannedDate && patch.departAt === undefined && { departAt: null }),
     ...(patch.departAt !== undefined && { departAt: patch.departAt === null ? null : new Date(patch.departAt) }),
   };
 }

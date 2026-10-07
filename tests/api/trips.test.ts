@@ -61,6 +61,16 @@ describe("trip routes", () => {
     expect((await res.json()).trip.plannedDate).toBe("2026-09-01");
   });
 
+  it("resets a saved departure when the date changes, but keeps it if sent together", async () => {
+    const trip = await createViaApi();
+    const dep = "2026-08-01T13:00:00.000Z";
+    await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { departAt: dep }), idParams(trip.id));
+    const moved = await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { plannedDate: "2026-09-01" }), idParams(trip.id));
+    expect((await moved.json()).trip.departAt).toBeNull();
+    const both = await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { plannedDate: "2026-09-02", departAt: dep }), idParams(trip.id));
+    expect((await both.json()).trip.departAt).toBe(dep);
+  });
+
   it("deletes a trip (204), after which it is gone", async () => {
     const trip = await createViaApi();
     const res = await DELETE(jsonRequest("DELETE", `/api/trips/${trip.id}`), idParams(trip.id));

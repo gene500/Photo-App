@@ -59,6 +59,14 @@ describe("stopPatchSchema", () => {
   it("allows clearing notes with null", () => {
     expect(stopPatchSchema.parse({ notes: null })).toEqual({ notes: null });
   });
+
+  it("accepts a coordinate move", () => {
+    expect(stopPatchSchema.parse({ lat: 37.5, lng: -119.5 })).toEqual({ lat: 37.5, lng: -119.5 });
+  });
+
+  it("rejects out-of-range coordinates", () => {
+    expect(stopPatchSchema.safeParse({ lat: 95, lng: 0 }).success).toBe(false);
+  });
 });
 
 describe("signupSchema", () => {

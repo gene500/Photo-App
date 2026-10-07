@@ -35,6 +35,8 @@ export const stopPatchSchema = z
     name: z.string().trim().min(1, "Stop name is required").max(200),
     notes: z.string().max(5000).nullable(),
     visited: z.boolean(),
+    lat,
+    lng,
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "Nothing to update");

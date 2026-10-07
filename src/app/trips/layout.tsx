@@ -7,8 +7,8 @@ export default async function TripsLayout({ children }: LayoutProps<"/trips">) {
   if (!(await getCurrentUserId())) redirect("/login");
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex h-12 items-center justify-between border-b px-4">
-        <Link href="/trips" className="font-semibold">Road Trip Photo Planner</Link>
+      <header className="flex h-12 items-center justify-between bg-surface px-4 shadow-sm">
+        <Link href="/trips" className="text-sm font-semibold tracking-tight">Road Trip Photo Planner</Link>
         <SignOutButton />
       </header>
       <div className="flex-1">{children}</div>

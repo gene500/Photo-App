@@ -9,8 +9,8 @@ export default async function TripsPage() {
   if (!userId) redirect("/login");
   const trips = await listTrips(userId);
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-4">
-      <h1 className="text-2xl font-semibold">Your trips</h1>
+    <main className="mx-auto max-w-2xl space-y-8 px-4 py-10">
+      <h1 className="text-2xl font-semibold tracking-tight">Your trips</h1>
       <TripList trips={trips} />
       <NewTripForm />
     </main>

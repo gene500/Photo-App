@@ -49,7 +49,7 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, suggestio
             </button>
           )}
           {BIGGER[snap] && (
-            <button type="button" aria-label="Expand panel" onClick={() => setSnap(BIGGER[snap]!)} className="rounded border px-2.5 py-1.5 text-sm">
+            <button type="button" aria-label="Expand panel" onClick={() => setSnap(BIGGER[snap]!)} className={`rounded border px-2.5 py-1.5 text-sm ${snap === "half" ? "lg:hidden" : ""}`}>
               ▴
             </button>
           )}

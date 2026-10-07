@@ -185,8 +185,8 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   /** Resolves true when the new order was saved (false: reverted, error shown). */
   async function reorder(ids: string[]): Promise<boolean> {
     const previousOrderById = new Map(stops.map((s) => [s.id, s.order]));
-    const byId = new Map(stops.map((s) => [s.id, s]));
-    setStops(ids.map((id, order) => ({ ...byId.get(id)!, order })));
+    // Applied onto the latest state so an edit that landed since this render is never reverted.
+    applyOrder(new Map(ids.map((id, order) => [id, order])));
     try {
       const { stops: reordered } = await api.reorderStops(trip.id, ids);
       applyOrder(new Map(reordered.map((s) => [s.id, s.order])));
@@ -201,12 +201,13 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   async function optimizeRoute() {
     if (optimizing || stops.length < 3) return;
     const startKey = idsKey;
+    const startWaypoints = waypointKey;
     const before = stops;
     setOptimizing(true);
     setOptimizeNote(null);
     try {
       const { order } = await api.optimizeOrder(before.map((s): LngLat => [s.lng, s.lat]));
-      if (idsKeyRef.current !== startKey) {
+      if (idsKeyRef.current !== startKey || waypointKeyRef.current !== startWaypoints) {
         setStopsError("Your stops changed while optimizing, so the result was discarded. Try again.");
         return;
       }

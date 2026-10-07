@@ -415,6 +415,23 @@ describe("TripEditor", () => {
       expect((screen.getByRole("button", { name: "Optimize route" }) as HTMLButtonElement).disabled).toBe(false);
     });
 
+    it("keeps a Visited tick made while optimizing is in flight", async () => {
+      let resolveIt!: (v: { order: number[] }) => void;
+      vi.mocked(api.optimizeOrder).mockReturnValue(new Promise((res) => (resolveIt = res)));
+      reorderEcho();
+      vi.mocked(api.updateStop).mockImplementation(async (id, patch) => ({ stop: { ...three.find((s) => s.id === id)!, ...patch } }));
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(three)} />);
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      const rowB = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("B"))!;
+      await user.click(within(rowB).getByLabelText("Visited"));
+      await waitFor(() => expect(api.updateStop).toHaveBeenCalled());
+      await act(async () => resolveIt({ order: [0, 2, 1] }));
+      await waitFor(() => expect(rowNames()[1]).toContain("C"));
+      const after = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("B"))!;
+      expect((within(after).getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
+    });
+
     it("discards the result when the stops changed while it was in flight", async () => {
       let resolveIt!: (v: { order: number[] }) => void;
       vi.mocked(api.optimizeOrder).mockReturnValue(new Promise((res) => (resolveIt = res)));

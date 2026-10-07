@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Stop } from "@/lib/types";
+import type { Stop, Suggestion } from "@/lib/types";
 import { FakeMapPanel } from "./FakeMapPanel";
 
 const stop: Stop = { id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false };
+const suggestion: Suggestion = { osmId: "node/1", name: "Fake Viewpoint", lat: 37.2, lng: -119.2, kind: "viewpoint" };
+const base = { stops: [] as Stop[], routeGeometry: null, onMapClick: vi.fn(), onStopClick: vi.fn() };
 
 describe("FakeMapPanel", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("converts a click position into lat/lng within the default bounds", () => {
+  it("converts a click position into lat/lng inside the fixed viewport", () => {
     const onMapClick = vi.fn();
     render(<FakeMapPanel stops={[]} routeGeometry={null} onMapClick={onMapClick} onStopClick={vi.fn()} />);
     const map = screen.getByTestId("map");
@@ -20,12 +22,45 @@ describe("FakeMapPanel", () => {
     expect(lng).toBeCloseTo(-119.5);
   });
 
-  it("selects a stop without dropping a pin", () => {
+  it("reports its centre on mount so searches can be biased", () => {
+    const onCenterChange = vi.fn();
+    render(<FakeMapPanel stops={[]} routeGeometry={null} onMapClick={vi.fn()} onStopClick={vi.fn()} onCenterChange={onCenterChange} />);
+    expect(onCenterChange).toHaveBeenCalledWith({ lat: 37, lng: -119.5 });
+  });
+
+  it("renders numbered stop markers; clicking one selects it without dropping a pin", () => {
     const onMapClick = vi.fn();
     const onStopClick = vi.fn();
     render(<FakeMapPanel stops={[stop]} routeGeometry={[[-120, 36], [-118, 38]]} onMapClick={onMapClick} onStopClick={onStopClick} />);
-    fireEvent.click(screen.getByRole("button", { name: "Stop Pin 1" }));
+    const marker = screen.getByRole("button", { name: "Stop 1: Pin 1" });
+    expect(marker.textContent).toBe("1");
+    fireEvent.click(marker);
     expect(onStopClick).toHaveBeenCalledWith("s1");
+    expect(onMapClick).not.toHaveBeenCalled();
+  });
+
+  it("positions markers against the fixed viewport regardless of the stops", () => {
+    render(<FakeMapPanel {...base} stops={[{ ...stop, lat: 38, lng: -118 }]} />);
+    expect(screen.getByRole("button", { name: "Stop 1: Pin 1" }).style.left).toBe("100%");
+  });
+
+  it("rings the selected stop marker", () => {
+    render(<FakeMapPanel {...base} stops={[stop]} selectedId="s1" />);
+    expect(screen.getByRole("button", { name: "Stop 1: Pin 1" }).className).toContain("ring-2");
+  });
+
+  it("enlarges the highlighted suggestion marker", () => {
+    render(<FakeMapPanel {...base} suggestions={[suggestion]} highlightedSuggestionId="node/1" />);
+    expect(screen.getByRole("button", { name: "Suggestion: Fake Viewpoint" }).className).toContain("h-5 w-5");
+  });
+
+  it("shows the pending pin and clickable suggestion markers", () => {
+    const onSuggestionClick = vi.fn();
+    const onMapClick = vi.fn();
+    render(<FakeMapPanel {...base} pending={{ lat: 37.5, lng: -119 }} suggestions={[suggestion]} onSuggestionClick={onSuggestionClick} onMapClick={onMapClick} />);
+    expect(screen.getByLabelText("Selected place")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Suggestion: Fake Viewpoint" }));
+    expect(onSuggestionClick).toHaveBeenCalledWith("node/1");
     expect(onMapClick).not.toHaveBeenCalled();
   });
 });

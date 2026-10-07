@@ -1,21 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { api } from "@/lib/api-client";
-import { computeBestTimes } from "@/lib/best-time";
+import { computeArrivals, computeBestTimes } from "@/lib/best-time";
 import { formatDistance, formatDuration } from "@/lib/format";
-import { haversineMeters } from "@/lib/geo";
-import type { LngLat, RouteResult, Stop, Suggestion, Trip, TripWithStops } from "@/lib/types";
+import { coordsLabel, haversineMeters } from "@/lib/geo";
+import type { LngLat, Place, RouteResult, Stop, StopSource, Suggestion, Trip, TripWithStops } from "@/lib/types";
 import type { StopPatch, TripPatch } from "@/lib/validation";
 import { MapView } from "./MapView";
+import { PlaceCard } from "./PlaceCard";
+import { SearchBar } from "./SearchBar";
+import { StopCard } from "./StopCard";
 import { StopDrawer } from "./StopDrawer";
 import { StopList } from "./StopList";
+import { StopsPanel } from "./StopsPanel";
 import { SuggestionsPanel, type SuggestionsStatus } from "./SuggestionsPanel";
 import { TripHeader } from "./TripHeader";
 
 /** Hide suggestions that sit on top of an existing stop. */
 const ALREADY_A_STOP_M = 100;
+
+type LatLng = { lat: number; lng: number };
+/** A place being considered: a search result, a clicked spot, or a suggestion. */
+type Pending = LatLng & { name: string; source: StopSource; osmId?: string; resolving: boolean };
 
 const errorMessage = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
@@ -26,15 +34,25 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [stopsError, setStopsError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [cardId, setCardId] = useState<string | null>(null);
+  const [drawerId, setDrawerId] = useState<string | null>(null);
+  const [flyTo, setFlyTo] = useState<(LatLng & { nonce: number }) | null>(null);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [suggestionsStatus, setSuggestionsStatus] = useState<SuggestionsStatus>("idle");
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const centerRef = useRef<LatLng | null>(null);
+  const lookupSeq = useRef(0);
 
-  // Data flow 1 & 4: ordered stops. A string key so that
-  // edits which don't move anything (visited, notes) don't refetch.
+  const handleCenter = useCallback((c: LatLng) => {
+    centerRef.current = c;
+  }, []);
+
+  // Route through the stops in order. A string key so edits that don't move anything
+  // (visited, notes) don't refetch. Fewer than 2 stops means no route at all.
   const waypointKey = JSON.stringify(stops.map((s) => [s.lng, s.lat]));
-
   useEffect(() => {
     const coordinates = JSON.parse(waypointKey) as LngLat[];
     if (coordinates.length < 2) return;
@@ -59,10 +77,16 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   const enoughForRoute = stops.length >= 2;
   const activeRoute = enoughForRoute ? route : null;
   const activeRouteError = enoughForRoute ? routeError : null;
+  const legDurations = activeRoute ? activeRoute.legs.map((l) => l.duration) : null;
 
-  // Data flow 5: recomputed whenever the planned date, stops, or route change.
   const bestTimes = useMemo(
-    () => computeBestTimes({ plannedDate: trip.plannedDate, stops }, activeRoute ? activeRoute.legs.map((l) => l.duration) : null),
+    () => computeBestTimes({ plannedDate: trip.plannedDate, stops }, legDurations),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- legDurations is derived from activeRoute
+    [trip.plannedDate, stops, activeRoute],
+  );
+  const arrivals = useMemo(
+    () => computeArrivals({ plannedDate: trip.plannedDate, stops }, legDurations),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- legDurations is derived from activeRoute
     [trip.plannedDate, stops, activeRoute],
   );
 
@@ -71,7 +95,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     setTrip(updated);
   }
 
-  async function addStop(input: { name: string; lat: number; lng: number; source: "manual" | "suggested" }) {
+  async function addStop(input: { name: string; lat: number; lng: number; source: StopSource }) {
     try {
       const { stop } = await api.addStop(trip.id, input);
       setStops((prev) => [...prev, stop]);
@@ -81,6 +105,49 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
       return false;
     }
   }
+
+  // --- Picking a place -------------------------------------------------------
+
+  /** Map click: show the pin immediately, then name it (falling back to coordinates). */
+  async function pickPoint(p: LatLng) {
+    const seq = ++lookupSeq.current;
+    setCardId(null);
+    setPending({ ...p, name: "Looking up place…", source: "manual", resolving: true });
+    let name: string;
+    try {
+      name = (await api.reverseGeocode(p.lat, p.lng)).place.name;
+    } catch {
+      name = coordsLabel(p);
+    }
+    if (seq === lookupSeq.current) setPending({ ...p, name, source: "manual", resolving: false });
+  }
+
+  function selectSearchResult(place: Place) {
+    lookupSeq.current++; // cancel any in-flight click lookup
+    setCardId(null);
+    setPending({ lat: place.lat, lng: place.lng, name: place.name, source: "manual", resolving: false });
+    setFlyTo({ lat: place.lat, lng: place.lng, nonce: Date.now() });
+  }
+
+  function pickSuggestion(osmId: string) {
+    const s = suggestions.find((x) => x.osmId === osmId);
+    if (!s) return;
+    lookupSeq.current++;
+    setCardId(null);
+    setPending({ lat: s.lat, lng: s.lng, name: s.name, source: "suggested", osmId: s.osmId, resolving: false });
+  }
+
+  async function addPending() {
+    if (!pending || pending.resolving) return;
+    setAdding(true);
+    const ok = await addStop({ name: pending.name, lat: pending.lat, lng: pending.lng, source: pending.source });
+    setAdding(false);
+    if (!ok) return;
+    if (pending.osmId) dismissSuggestion(pending.osmId);
+    setPending(null);
+  }
+
+  // --- Stops -----------------------------------------------------------------
 
   /** Apply an order-by-id map onto the latest state and re-sort by it, without
    *  touching any other field — safe against a concurrent mutation (e.g.
@@ -118,16 +185,45 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     }
   }
 
+  /** Marker drag: move optimistically, revert on failure. */
+  async function moveStop(id: string, p: LatLng) {
+    const before = stops.find((s) => s.id === id);
+    if (!before) return;
+    const put = (at: LatLng) => setStops((cur) => cur.map((s) => (s.id === id ? { ...s, lat: at.lat, lng: at.lng } : s)));
+    put(p);
+    try {
+      replaceStop((await api.updateStop(id, { lat: p.lat, lng: p.lng })).stop);
+    } catch (e) {
+      put(before);
+      setStopsError(errorMessage(e, "Couldn't move the stop"));
+    }
+  }
+
   async function removeStop(id: string) {
     if (!window.confirm("Delete this stop?")) return;
     try {
       await api.deleteStop(id);
       setStops((prev) => prev.filter((s) => s.id !== id).map((s, order) => ({ ...s, order })));
-      if (selectedId === id) setSelectedId(null);
+      if (cardId === id) setCardId(null);
+      if (drawerId === id) setDrawerId(null);
     } catch (e) {
       setStopsError(errorMessage(e, "Couldn't delete the stop"));
     }
   }
+
+  function openFromList(id: string) {
+    const s = stops.find((x) => x.id === id);
+    if (s) setFlyTo({ lat: s.lat, lng: s.lng, nonce: Date.now() });
+    setDrawerId(id);
+  }
+
+  function clickMarker(id: string) {
+    lookupSeq.current++;
+    setPending(null);
+    setCardId(id);
+  }
+
+  // --- Suggestions -----------------------------------------------------------
 
   async function findSuggestions() {
     if (!activeRoute) return;
@@ -151,57 +247,121 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     if (await addStop({ name: s.name, lat: s.lat, lng: s.lng, source: "suggested" })) dismissSuggestion(s.osmId);
   }
 
-  const selected = stops.find((s) => s.id === selectedId) ?? null;
+  const cardIndex = stops.findIndex((s) => s.id === cardId);
+  const cardStop = cardIndex >= 0 ? stops[cardIndex] : null;
+  const drawerStop = stops.find((s) => s.id === drawerId) ?? null;
 
   return (
-    <div className="grid min-h-[calc(100vh-3rem)] grid-cols-1 lg:grid-cols-[1fr_420px]">
-      <div className="relative min-h-[50vh]">
-        <MapView
-          stops={stops}
-          routeGeometry={activeRoute?.geometry ?? null}
-          onMapClick={({ lat, lng }) => void addStop({ name: `Pin ${stops.length + 1}`, lat, lng, source: "manual" })}
-          onStopClick={setSelectedId}
-        />
+    <div className="relative h-[calc(100dvh-3rem)] overflow-hidden">
+      <MapView
+        stops={stops}
+        routeGeometry={activeRoute?.geometry ?? null}
+        pending={pending}
+        suggestions={suggestions}
+        highlightedSuggestionId={highlightedId}
+        selectedId={cardId}
+        flyTo={flyTo}
+        onMapClick={(p) => void pickPoint(p)}
+        onStopClick={clickMarker}
+        onStopMove={(id, p) => void moveStop(id, p)}
+        onSuggestionClick={pickSuggestion}
+        onCenterChange={handleCenter}
+      />
+
+      <div className="pointer-events-none absolute inset-x-3 top-3 z-10 space-y-2 lg:inset-x-auto lg:left-[388px] lg:w-[460px]">
+        <div className="pointer-events-auto">
+          <SearchBar getProximity={() => centerRef.current} onSelect={selectSearchResult} />
+        </div>
+        {pending && (
+          <div className="pointer-events-auto">
+            <PlaceCard
+              name={pending.name}
+              resolving={pending.resolving}
+              busy={adding}
+              onAdd={() => void addPending()}
+              onClose={() => {
+                lookupSeq.current++;
+                setPending(null);
+              }}
+            />
+          </div>
+        )}
+        {cardStop && !pending && (
+          <div className="pointer-events-auto">
+            <StopCard
+              stop={cardStop}
+              bestTime={bestTimes[cardIndex] ?? null}
+              arrival={arrivals[cardIndex] ?? null}
+              onToggleVisited={(visited) => void patchStop(cardStop.id, { visited })}
+              onOpenDetails={() => setDrawerId(cardStop.id)}
+              onClose={() => setCardId(null)}
+            />
+          </div>
+        )}
       </div>
-      <aside className="space-y-4 overflow-y-auto border-l p-4">
-        <TripHeader trip={trip} onSave={saveTrip} />
-        <p data-testid="route-status" className="text-sm text-gray-700">
-          {activeRoute ? `${formatDistance(activeRoute.distance)} · ${formatDuration(activeRoute.duration)}` : activeRouteError ? "Route unavailable" : enoughForRoute ? "Loading route…" : "Add 2 stops to see the route"}
+
+      {stops.length === 0 && !pending && (
+        <p data-testid="empty-hint" className="pointer-events-none absolute inset-x-0 top-1/3 px-6 text-center text-sm text-gray-700">
+          Search for a place or click the map to add your first stop.
         </p>
-        <ErrorBanner message={activeRouteError} onDismiss={() => setRouteError(null)} />
-        <section className="space-y-2">
-          <h2 className="font-semibold">Stops</h2>
-          <p className="text-xs text-gray-500">Click the map to drop a pin. Drag ⋮⋮ to reorder.</p>
-          <ErrorBanner message={stopsError} onDismiss={() => setStopsError(null)} />
-          <StopList
-            stops={stops}
-            bestTimes={bestTimes}
-            onReorder={(ids) => void reorder(ids)}
-            onToggleVisited={(id, visited) => void patchStop(id, { visited })}
-            onDelete={(id) => void removeStop(id)}
-            onSelect={setSelectedId}
+      )}
+
+      <StopsPanel
+        header={<TripHeader trip={trip} onSave={saveTrip} />}
+        summary={
+          <>
+            <p className="text-xs text-gray-500">{stops.length} {stops.length === 1 ? "stop" : "stops"}</p>
+            <p data-testid="route-status" className="text-sm text-gray-700">
+              {activeRoute
+                ? `${formatDistance(activeRoute.distance)} · ${formatDuration(activeRoute.duration)}`
+                : activeRouteError
+                  ? "Route unavailable"
+                  : enoughForRoute
+                    ? "Loading route…"
+                    : "Add 2 stops to see the route"}
+            </p>
+            <ErrorBanner message={activeRouteError} onDismiss={() => setRouteError(null)} />
+            <ErrorBanner message={stopsError} onDismiss={() => setStopsError(null)} />
+          </>
+        }
+        stops={
+          <>
+            <p className="text-xs text-gray-500">Drag ⋮⋮ to reorder. Click the map or search to add stops.</p>
+            <StopList
+              stops={stops}
+              bestTimes={bestTimes}
+              onReorder={(ids) => void reorder(ids)}
+              onToggleVisited={(id, visited) => void patchStop(id, { visited })}
+              onDelete={(id) => void removeStop(id)}
+              onSelect={openFromList}
+            />
+          </>
+        }
+        suggestions={
+          <SuggestionsPanel
+            status={suggestionsStatus}
+            suggestions={suggestions}
+            error={suggestionsError}
+            canSearch={activeRoute !== null}
+            onFind={() => void findSuggestions()}
+            onAccept={(s) => void acceptSuggestion(s)}
+            onDismiss={dismissSuggestion}
+            onHover={setHighlightedId}
+            onDismissError={() => {
+              setSuggestionsError(null);
+              setSuggestionsStatus("idle");
+            }}
           />
-        </section>
-        <SuggestionsPanel
-          status={suggestionsStatus}
-          suggestions={suggestions}
-          error={suggestionsError}
-          canSearch={activeRoute !== null}
-          onFind={() => void findSuggestions()}
-          onAccept={(s) => void acceptSuggestion(s)}
-          onDismiss={dismissSuggestion}
-          onDismissError={() => {
-            setSuggestionsError(null);
-            setSuggestionsStatus("idle");
-          }}
-        />
-      </aside>
-      {selected && (
+        }
+        suggestionCount={suggestions.length}
+      />
+
+      {drawerStop && (
         <StopDrawer
-          key={selected.id}
-          stop={selected}
-          onClose={() => setSelectedId(null)}
-          onSave={async (patch) => replaceStop((await api.updateStop(selected.id, patch)).stop)}
+          key={drawerStop.id}
+          stop={drawerStop}
+          onClose={() => setDrawerId(null)}
+          onSave={async (patch) => replaceStop((await api.updateStop(drawerStop.id, patch)).stop)}
           onPhotoChange={replaceStop}
         />
       )}

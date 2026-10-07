@@ -21,7 +21,10 @@ export function SearchBar({ getProximity, onSelect }: Props) {
   const [text, setText] = useState("");
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const query = text.trim();
-  const debounced = useDebouncedValue(query, DEBOUNCE_MS);
+  // clear() bumps the nonce so retyping the same text within the debounce window still re-fetches.
+  const [nonce, setNonce] = useState(0);
+  const keyed = useDebouncedValue(`${nonce}|${query}`, DEBOUNCE_MS);
+  const debounced = keyed.slice(keyed.indexOf("|") + 1);
   const getProximityRef = useRef(getProximity);
   useEffect(() => {
     getProximityRef.current = getProximity;
@@ -41,13 +44,15 @@ export function SearchBar({ getProximity, onSelect }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [debounced]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `keyed` carries the nonce; `debounced` derives from it
+  }, [keyed]);
 
   const shown = query.length >= MIN_CHARS && outcome?.query === query ? outcome : null;
 
   function clear() {
     setText("");
     setOutcome(null);
+    setNonce((n) => n + 1);
   }
 
   return (

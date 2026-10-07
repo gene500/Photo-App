@@ -56,6 +56,20 @@ describe("mapbox", () => {
     await expect(getDirections([[0, 0], [1, 1]], vi.fn())).rejects.toBeInstanceOf(ExternalServiceError);
   });
 
+  it("falls back to the name, then coordinates, when full_address is empty", async () => {
+    const named = vi.fn(async () => json({ features: [{ geometry: { coordinates: [0, 0] }, properties: { name: "Tunnel View", full_address: "" } }] }));
+    expect((await reverseGeocode({ lat: 37.5, lng: -119.5 }, named)).name).toBe("Tunnel View");
+    const bare = vi.fn(async () => json({ features: [{ geometry: { coordinates: [0, 0] }, properties: { full_address: "" } }] }));
+    expect((await reverseGeocode({ lat: 37.5, lng: -119.5 }, bare)).name).toBe("37.5000, -119.5000");
+  });
+
+  it("truncates very long place names to 200 characters", async () => {
+    const long = "x".repeat(500);
+    const fetchImpl = vi.fn(async () => json({ features: [{ geometry: { coordinates: [1, 2] }, properties: { full_address: long } }] }));
+    expect((await geocode("x", {}, fetchImpl))[0].name).toHaveLength(200);
+    expect((await reverseGeocode({ lat: 1, lng: 2 }, fetchImpl)).name).toHaveLength(200);
+  });
+
   it("geocodes a query into places", async () => {
     const fetchImpl = vi.fn(async () => json({
       features: [{ geometry: { coordinates: [-119.79, 36.74] }, properties: { name: "Fresno", full_address: "Fresno, California, United States" } }],

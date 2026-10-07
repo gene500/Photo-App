@@ -27,6 +27,16 @@ describe("SearchBar", () => {
     expect((input() as HTMLInputElement).value).toBe("");
   });
 
+  it("searches again when identical text is retyped right after a clear", async () => {
+    vi.mocked(api.geocode).mockResolvedValue({ places: [fresno] });
+    render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
+    await userEvent.type(input(), "Fres");
+    await userEvent.click(await screen.findByRole("button", { name: "Fresno, California" }));
+    await userEvent.type(input(), "Fres"); // well inside the 250ms debounce window
+    expect(await screen.findByRole("button", { name: "Fresno, California" })).toBeTruthy();
+    expect(api.geocode).toHaveBeenCalledTimes(2);
+  });
+
   it("does not search for fewer than 2 characters", async () => {
     render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
     await userEvent.type(input(), "F");

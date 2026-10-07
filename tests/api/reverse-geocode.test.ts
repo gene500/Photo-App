@@ -24,6 +24,9 @@ describe("GET /api/reverse-geocode", () => {
   it("rejects missing or out-of-range coordinates", async () => {
     expect((await GET(url("lat=95&lng=0"))).status).toBe(400);
     expect((await GET(url(""))).status).toBe(400);
+    expect((await GET(url("lat=&lng="))).status).toBe(400);
+    expect((await GET(url("lat=1e2&lng=0x10"))).status).toBe(400);
+    expect((await GET(url("lat=%20&lng=3"))).status).toBe(400);
   });
 
   it("maps upstream failures to 502", async () => {

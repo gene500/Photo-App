@@ -68,6 +68,9 @@ type GeocodeResponse = {
   }[];
 };
 
+const MAX_NAME_LENGTH = 200; // matches newStopSchema's name limit
+const clampName = (name: string) => name.slice(0, MAX_NAME_LENGTH);
+
 export type GeocodeOptions = { proximity?: { lat: number; lng: number } };
 
 export async function geocode(query: string, options: GeocodeOptions = {}, fetchImpl: typeof fetch = fetch): Promise<Place[]> {
@@ -81,7 +84,7 @@ export async function geocode(query: string, options: GeocodeOptions = {}, fetch
   const { ok, body } = await getJson<GeocodeResponse>(url, fetchImpl, "Couldn't reach the place search service");
   if (!ok || !body?.features) throw new ExternalServiceError("Place search failed. Please try again.");
   return body.features.map((f) => ({
-    name: f.properties.full_address ?? f.properties.name ?? query,
+    name: clampName(f.properties.full_address || f.properties.name || query),
     lng: f.geometry.coordinates[0],
     lat: f.geometry.coordinates[1],
   }));
@@ -96,5 +99,5 @@ export async function reverseGeocode(p: { lat: number; lng: number }, fetchImpl:
   const { ok, body } = await getJson<GeocodeResponse>(url, fetchImpl, "Couldn't reach the place lookup service");
   if (!ok || !body) throw new ExternalServiceError("Place lookup failed. Please try again.");
   const f = body.features?.[0];
-  return { name: f?.properties.full_address ?? f?.properties.name ?? coordsLabel(p), lat: p.lat, lng: p.lng };
+  return { name: clampName(f?.properties.full_address || f?.properties.name || coordsLabel(p)), lat: p.lat, lng: p.lng };
 }

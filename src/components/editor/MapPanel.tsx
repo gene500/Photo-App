@@ -29,6 +29,14 @@ function markerElement(className: string, label: string, text = ""): HTMLButtonE
   return el;
 }
 
+// Keep fitted/flown-to points clear of what floats over the map: the bottom sheet on phones, the left card on desktop.
+function viewPadding(): mapboxgl.PaddingOptions {
+  const phone = typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
+  return phone
+    ? { top: 72, right: 24, left: 24, bottom: Math.round(window.innerHeight * 0.45) }
+    : { top: 72, right: 64, bottom: 64, left: 400 };
+}
+
 export default function MapPanel({
   stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, flyTo,
   onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange,
@@ -99,7 +107,7 @@ export default function MapPanel({
     if (!fittedRef.current && routeGeometry && routeGeometry.length > 1) {
       const bounds = new mapboxgl.LngLatBounds(routeGeometry[0], routeGeometry[0]);
       for (const c of routeGeometry) bounds.extend(c);
-      map.fitBounds(bounds, { padding: 64, duration: 0 });
+      map.fitBounds(bounds, { padding: viewPadding(), duration: 0 });
       fittedRef.current = true;
     }
   }, [loaded, routeGeometry]);
@@ -153,9 +161,15 @@ export default function MapPanel({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !flyTo) return;
-    map.flyTo({ center: [flyTo.lng, flyTo.lat], zoom: Math.max(map.getZoom(), 12) });
+    map.flyTo({ center: [flyTo.lng, flyTo.lat], zoom: Math.max(map.getZoom(), 12), padding: viewPadding() });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the request nonce only
   }, [flyNonce]);
 
-  return <div ref={containerRef} data-testid="map" className="absolute inset-0" />;
+  // mapbox-gl.css sets `.mapboxgl-map { position: relative }` on the container, which beats Tailwind's
+  // `absolute` and collapses it to zero height. The wrapper does the positioning; the container just fills it.
+  return (
+    <div className="absolute inset-0">
+      <div ref={containerRef} data-testid="map" className="h-full w-full" />
+    </div>
+  );
 }

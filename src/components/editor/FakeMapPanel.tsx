@@ -44,7 +44,7 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
             type="button"
             aria-label={`Stop ${i + 1}: ${s.name}`}
             title={s.name}
-            className={`absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white text-xs font-semibold text-white shadow-md ${
+            className={`absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white text-xs font-semibold shadow-md ${s.visited ? "text-black/75" : "text-white"} ${
               s.id === selectedId ? "ring-2 ring-route" : ""
             }`}
             style={{ left: `${p.left}%`, top: `${p.top}%`, background: stopColor(s) }}
@@ -76,7 +76,7 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
       {pending && (
         <span
           aria-label="Selected place"
-          className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-ink shadow-md"
+          className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#3b3226] shadow-md"
           style={{ left: `${pos(pending).left}%`, top: `${pos(pending).top}%` }}
         />
       )}

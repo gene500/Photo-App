@@ -15,8 +15,10 @@ const ROUTE_SOURCE = "route";
 const ROUTE_COLOR = "#b08d57";
 const MARKER_CLASS = "map-marker";
 const DEFAULT_CENTER: LngLat = [-98.5, 39.8];
-const STOP_CLASS = "flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-xs font-semibold text-white shadow-md";
-const PENDING_CLASS = "h-5 w-5 rounded-full border-2 border-white bg-ink shadow-md";
+const STOP_CLASS = "flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-xs font-semibold shadow-md";
+// Visited markers are light, so they get dark numerals; the rest get white.
+const textClass = (visited: boolean) => (visited ? "text-black/75" : "text-white");
+const PENDING_CLASS = "h-5 w-5 rounded-full border-2 border-white bg-[#3b3226] shadow-md";
 
 function routeData(geometry: LngLat[] | null): Feature<LineString> {
   return { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: geometry ?? [] } };
@@ -152,11 +154,13 @@ export default function MapPanel({
         // Toggle only our ring classes: mapbox owns the rest of the element's classes.
         el.classList.toggle("ring-2", selected);
         el.classList.toggle("ring-route", selected);
+        el.classList.toggle("text-black/75", s.visited);
+        el.classList.toggle("text-white", !s.visited);
         el.style.background = stopColor(s);
         el.setAttribute("aria-label", label);
         el.title = label;
       } else if (addSet.has(s.id)) {
-        const el = markerElement(`${STOP_CLASS} ${selected ? "ring-2 ring-route" : ""}`, label, String(i + 1));
+        const el = markerElement(`${STOP_CLASS} ${textClass(s.visited)} ${selected ? "ring-2 ring-route" : ""}`, label, String(i + 1));
         el.style.background = stopColor(s);
         const id = s.id;
         el.addEventListener("click", () => handlersRef.current.onStopClick(id));

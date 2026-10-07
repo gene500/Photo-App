@@ -110,7 +110,7 @@ function StopRow({ stop, index, bestTime, role, first, last, onToggleVisited, on
         <img src={stop.photoUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
       ) : null}
       <div className={`flex shrink-0 items-center transition-opacity ${REVEAL}`}>
-        <button type="button" data-testid="drag-handle" aria-label={`Reorder ${stop.name}`} className="flex h-9 w-8 cursor-grab touch-none items-center justify-center rounded-lg text-muted hover:bg-hover" {...attributes} {...listeners}>
+        <button type="button" data-testid="drag-handle" title="Drag to reorder" aria-label={`Reorder ${stop.name}`} className="flex h-9 w-8 cursor-grab touch-none items-center justify-center rounded-lg text-muted hover:bg-hover" {...attributes} {...listeners}>
           ⋮⋮
         </button>
         <button type="button" onClick={() => onDelete(stop.id)} aria-label={`Delete ${stop.name}`} className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-danger-soft hover:text-danger">

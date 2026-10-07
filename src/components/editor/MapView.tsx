@@ -6,7 +6,7 @@ import type { MapViewProps } from "./map-types";
 
 const MapPanel = dynamic(() => import("./MapPanel"), {
   ssr: false,
-  loading: () => <div className="flex h-full items-center justify-center text-sm text-gray-500">Loading map…</div>,
+  loading: () => <div className="flex h-full items-center justify-center text-sm text-muted">Loading map…</div>,
 });
 
 // Inlined at build time (NEXT_PUBLIC_*). Without a token the app stays usable via the offline preview.

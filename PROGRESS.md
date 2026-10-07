@@ -3,6 +3,23 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
+## 2026-10-07 (map-first UI: design spec written)
+
+The human partner wanted the app to feel like Google Maps (plan everything
+on a map layout). Brainstormed via `superpowers:brainstorming`
+(architectural path); all four design sections approved in chat.
+Spec: `docs/superpowers/specs/2026-10-07-map-first-ui-design.md`.
+
+Key decisions: trip has no start/end concept (ordered stops; first = start,
+last = end); full-screen map with search-as-you-type (proximity-biased),
+click-to-add popup, draggable numbered markers, floating stops panel with
+Stops/Suggestions tabs, bottom sheet on phones; evolve the current editor
+rather than rewrite. Four phases: data/API, map shell and search, panel and
+phone layout, e2e/verification/docs.
+
+Next: human partner reviews the written spec, then write the implementation
+plan (`superpowers:writing-plans`) and execute it. No code changed yet.
+
 ## 2026-10-07 (deployed: https://photo-app-pi2o.vercel.app)
 
 The app is live on Vercel (project `photo-app-pi2o`, team "Photo Project",

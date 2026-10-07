@@ -3,7 +3,7 @@ import type { LngLat, Suggestion } from "@/lib/types";
 import { fakeSuggestions, isFakeExternal } from "../external/fake";
 import { TtlCache } from "./cache";
 import { buildCorridor, buildOverpassQuery, toOverpassPoly } from "./corridor";
-import { fetchOverpass } from "./overpass";
+import { fetchOverpass, OverpassError } from "./overpass";
 import { parseOverpassResponse } from "./parse";
 
 export const SUGGESTION_CACHE_TTL_MS = 5 * 60_000;
@@ -28,7 +28,17 @@ export async function findSuggestions(
   const cached = cache.get(key);
   if (cached) return cached;
 
-  const query = buildOverpassQuery(toOverpassPoly(buildCorridor(route)));
+  // Defense-in-depth: the schema cap on `coordinates` (see suggestionsRequestSchema)
+  // is the real mitigation for pathological input reaching @turf/simplify here, but
+  // wrap this anyway so any unexpected failure becomes a clean, typed error instead
+  // of an unguarded throw.
+  let corridor: ReturnType<typeof buildCorridor>;
+  try {
+    corridor = buildCorridor(route);
+  } catch (e) {
+    throw new OverpassError(e instanceof Error ? e.message : "Could not build a route corridor");
+  }
+  const query = buildOverpassQuery(toOverpassPoly(corridor));
   const json = await (deps.fetchOverpass ?? fetchOverpass)(query);
   const suggestions = parseOverpassResponse(json);
   cache.set(key, suggestions);

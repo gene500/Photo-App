@@ -5,6 +5,7 @@ import {
   newStopSchema,
   signupSchema,
   stopPatchSchema,
+  suggestionsRequestSchema,
   tripInputSchema,
   tripPatchSchema,
 } from "./validation";
@@ -81,5 +82,19 @@ describe("directionsRequestSchema", () => {
     const coords = Array.from({ length: 26 }, (_, i) => [i * 0.01, 0] as [number, number]);
     const r = directionsRequestSchema.safeParse({ coordinates: coords });
     expect(formatZodError(r.error!)).toBe("coordinates: Routing supports at most 23 stops per trip");
+  });
+});
+
+describe("suggestionsRequestSchema", () => {
+  it("rejects a coordinates array longer than 2000 (DoS guard against @turf/simplify recursion)", () => {
+    const tooMany = Array.from({ length: 2001 }, (_, i) => [i * 0.0001, 0] as [number, number]);
+    const r = suggestionsRequestSchema.safeParse({ coordinates: tooMany });
+    expect(r.success).toBe(false);
+  });
+
+  it("accepts a coordinates array at 2000", () => {
+    const atMax = Array.from({ length: 2000 }, (_, i) => [i * 0.0001, 0] as [number, number]);
+    const r = suggestionsRequestSchema.safeParse({ coordinates: atMax });
+    expect(r.success).toBe(true);
   });
 });

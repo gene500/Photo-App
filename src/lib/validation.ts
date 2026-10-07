@@ -69,8 +69,18 @@ export const directionsRequestSchema = z.object({
     .max(MAX_ROUTE_WAYPOINTS, `Routing supports at most ${MAX_ROUTE_WAYPOINTS - 2} stops per trip`),
 });
 
+// Keep this far below the point count where @turf/simplify's recursive
+// Douglas-Peucker implementation (used by buildCorridor) risks a stack
+// overflow on adversarial input, while staying generous for this app's
+// real route geometries (routes are capped at MAX_ROUTE_WAYPOINTS = 25
+// waypoints, and Mapbox Directions is called with overview=full).
+export const MAX_SUGGESTIONS_COORDINATES = 2_000;
+
 export const suggestionsRequestSchema = z.object({
-  coordinates: z.array(lngLat).min(2, "A route needs at least 2 points").max(50_000),
+  coordinates: z
+    .array(lngLat)
+    .min(2, "A route needs at least 2 points")
+    .max(MAX_SUGGESTIONS_COORDINATES, `Route has too many points (max ${MAX_SUGGESTIONS_COORDINATES})`),
 });
 
 /** First issue as a user-facing string, prefixed with its field path when there is one. */

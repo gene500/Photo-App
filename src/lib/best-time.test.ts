@@ -127,3 +127,28 @@ describe("describeBestTime", () => {
     expect(describeBestTime(null)).toBe("No daylight");
   });
 });
+
+describe("computeBestTimes across days", () => {
+  const stops = [
+    { lat: 34.05, lng: -118.24 }, // Los Angeles
+    { lat: 41.88, lng: -87.63 }, // Chicago
+    { lat: 40.71, lng: -74.0 }, // New York
+  ];
+  const trip = { plannedDate: "2026-07-01", stops };
+  const legs = [30 * 3600, 12 * 3600];
+
+  it("judges each stop against the day its arrival falls on", () => {
+    const times = computeBestTimes(trip, legs);
+    // Chicago ~1:50 PM local on Jul 2: midday, not "sunset" of Jul 1.
+    expect(times[1]?.window).toBe("midday");
+    expect(times[1]?.at.toISOString().slice(0, 10)).toBe("2026-07-02");
+    // New York ~2:50 AM local on Jul 3: the Jul 3 sunrise is still ahead.
+    expect(times[2]?.window).toBe("sunrise");
+    expect(times[2]?.at.toISOString().slice(0, 10)).toBe("2026-07-03");
+  });
+
+  it("keeps single-day trips on the planned date", () => {
+    const sameDay = computeBestTimes({ plannedDate: "2026-07-01", stops: stops.slice(0, 2) }, [3600]);
+    expect(sameDay[1]?.at.toISOString().slice(0, 10)).toBe("2026-07-01");
+  });
+});

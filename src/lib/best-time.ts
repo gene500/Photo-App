@@ -28,6 +28,11 @@ export function solarDayAnchor(plannedDate: string, lng: number): Date {
   return new Date(Date.UTC(y, m - 1, d, 12) - lng * 4 * 60_000);
 }
 
+/** The local solar calendar date (YYYY-MM-DD) at longitude `lng` at instant `at`. */
+export function solarDateAt(at: Date, lng: number): string {
+  return new Date(at.getTime() + lng * 4 * 60_000).toISOString().slice(0, 10);
+}
+
 export function getSunWindows(lat: number, lng: number, plannedDate: string): SunWindows {
   const t = getTimes(solarDayAnchor(plannedDate, lng), lat, lng);
   return {
@@ -100,7 +105,12 @@ export function computeArrivals(trip: TripForTimes, legDurations: number[] | nul
 
 export function computeBestTimes(trip: TripForTimes, legDurations: number[] | null): BestTime[] {
   const arrivals = computeArrivals(trip, legDurations);
-  return trip.stops.map((s, i) => classifyBestTime(getSunWindows(s.lat, s.lng, trip.plannedDate), arrivals[i] ?? null));
+  return trip.stops.map((s, i) => {
+    const arrival = arrivals[i] ?? null;
+    // On a multi-day drive a stop's sun times are those of the day the arrival falls on.
+    const day = arrival ? solarDateAt(arrival, s.lng) : trip.plannedDate;
+    return classifyBestTime(getSunWindows(s.lat, s.lng, day), arrival);
+  });
 }
 
 /** "7:45 PM" in the viewer's time zone (or the one given, for tests). */

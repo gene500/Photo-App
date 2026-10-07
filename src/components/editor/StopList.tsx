@@ -67,7 +67,7 @@ function StopRow({ stop, index, bestTime, role, onToggleVisited, onDelete, onSel
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`flex items-start gap-2 rounded border bg-white p-2 ${isDragging ? "opacity-60" : ""}`}
     >
-      <button type="button" data-testid="drag-handle" aria-label={`Reorder ${stop.name}`} className="cursor-grab px-1 text-gray-400" {...attributes} {...listeners}>
+      <button type="button" data-testid="drag-handle" aria-label={`Reorder ${stop.name}`} className="cursor-grab touch-none px-1 text-gray-400" {...attributes} {...listeners}>
         ⋮⋮
       </button>
       <span aria-hidden className="mt-1.5 h-3 w-3 shrink-0 rounded-full" style={{ background: stopColor(stop) }} />

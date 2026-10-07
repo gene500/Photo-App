@@ -3,6 +3,21 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
+## 2026-10-07 (beige map + suggestion photo popups, branch `ui-redesign`)
+
+Basemap recoloured to the beige theme at runtime (`map-theme.ts`, pure
+`themeLayerPaint` + defensive `applyMapTheme`, hides poi/transit/airport icon
+labels). Suggestion dots now show a Wikipedia photo popup on hover/focus (and
+when highlighted from the panel), and the place card shows the photo for picked
+suggestions: `wikimedia.ts` (geosearch + pageimages, verified against the live
+API), `GET /api/place-photo`, `api.placePhoto`, session cache with in-flight
+de-duplication, DOM-only `suggestion-popup.ts`, FakeMapPanel parity, e2e.
+Verified the Wikipedia calls live; the Mapbox recolouring and popup have only
+been exercised against fakes and still need a real-token browser check (layer
+ids assumed from light-v11, popup positioning/styling, dark mode).
+Note: Wikipedia thumbnails are served from `thumb.wikimedia.org` (not only
+`upload.wikimedia.org`), so both hosts are allowed.
+
 ## 2026-10-07 (optimize route, branch `optimize-route`)
 
 Added an "Optimize route" button: `optimizeOrder` solver (exact Held-Karp up to 9

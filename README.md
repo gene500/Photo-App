@@ -67,6 +67,22 @@ exact for up to 9 stops, nearest-neighbour plus 2-opt/or-opt above that. The
 Matrix API allows at most 25 coordinates per request, which matches the app's
 25-stop limit. **Undo** restores the previous order until the stops change again.
 
+### Photo popups and beige map
+
+Hovering (or keyboard-focusing) a suggestion dot on the map, or hovering its card
+in the panel, shows a popup with a photo of the place; picking a suggestion shows
+the same photo in the place card. Photos come from English Wikipedia's public
+API (`GET /api/place-photo` -> `src/server/external/wikimedia.ts`: a geosearch
+around the spot, then the article whose title matches the name, else the nearest
+article within 300 m that has a thumbnail). No API key is needed, a "Photo:
+Wikipedia" credit is shown, and any failure (no article, no image, network) just
+means no photo is shown. Photos are looked up lazily per dot, cached for the
+session in the browser, and only https images on Wikimedia hosts are passed on.
+
+The Mapbox `light-v11` basemap is recoloured to the beige theme at runtime
+(`src/lib/map-theme.ts`, applied on style load); our own `route*` layers are
+never touched.
+
 ## 6. How best time is computed
 
 Each stop's best shooting window is derived, not stored. The trip's

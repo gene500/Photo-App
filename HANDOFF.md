@@ -23,6 +23,13 @@ feature branch (Preview builds hold the Turso credentials), re-count live trips
 before merging (the migration drops trip start/end), and smoke-test the live
 site afterwards with a throwaway account.
 
+## Beige map + photo popups (2026-10-07)
+
+On branch `ui-redesign` (not pushed or merged). Wikipedia photos need no key. The
+runtime basemap recolour (`src/lib/map-theme.ts`) and the Mapbox popup were never
+run against real Mapbox (no token in this environment): check them in a browser
+with `NEXT_PUBLIC_MAPBOX_TOKEN` set, including dark mode.
+
 ## Optimize route (2026-10-07)
 
 Built on branch `optimize-route` (not pushed or merged). Uses the Mapbox Matrix

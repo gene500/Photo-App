@@ -33,9 +33,9 @@ export function fakeSuggestions(route: LngLat[]): Suggestion[] {
   const [lng, lat] = route[Math.floor(route.length / 2)];
   const r = (n: number) => Math.round(n * 1e6) / 1e6;
   return [
-    { osmId: "node/9000001", name: "Fake Viewpoint", lat: r(lat + 0.01), lng, kind: "viewpoint" },
-    { osmId: "node/9000002", name: "Fake Peak", lat, lng: r(lng + 0.01), kind: "peak" },
-    { osmId: "node/9000003", name: "Fake Attraction", lat: r(lat - 0.01), lng, kind: "attraction" },
+    { osmId: "node/9000001", name: "Fake Viewpoint", lat: r(lat + 0.01), lng, kind: "viewpoint", popularity: 1234 },
+    { osmId: "node/9000002", name: "Fake Peak", lat, lng: r(lng + 0.01), kind: "peak", popularity: 87 },
+    { osmId: "node/9000003", name: "Fake Attraction", lat: r(lat - 0.01), lng, kind: "attraction", popularity: 2500 },
   ];
 }
 
@@ -59,6 +59,6 @@ export function fakePlacePhoto(p: { name: string }): PlacePhoto {
     url: `data:image/svg+xml,${encodeURIComponent(svg)}`,
     title: p.name,
     pageUrl: "https://en.wikipedia.org/wiki/Special:Random",
-    credit: "Wikipedia",
+    credit: "Photo: Wikipedia",
   };
 }

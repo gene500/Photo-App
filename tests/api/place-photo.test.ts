@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
-vi.mock("@/server/external/wikimedia", () => ({ getPlacePhoto: vi.fn() }));
+vi.mock("@/server/external/place-photo", () => ({ getPlacePhoto: vi.fn() }));
 import { getCurrentUserId } from "@/server/session";
-import { getPlacePhoto } from "@/server/external/wikimedia";
+import { getPlacePhoto } from "@/server/external/place-photo";
 import { GET } from "@/app/api/place-photo/route";
 
 const url = (qs: string) => new Request(`http://localhost/api/place-photo?${qs}`);
-const photo = { url: "https://upload.wikimedia.org/a.jpg", title: "Half Dome", pageUrl: "https://en.wikipedia.org/wiki/Half_Dome", credit: "Wikipedia" as const };
+const photo = { url: "https://upload.wikimedia.org/a.jpg", title: "Half Dome", pageUrl: "https://en.wikipedia.org/wiki/Half_Dome", credit: "Photo: Wikipedia" };
 
 describe("GET /api/place-photo", () => {
   beforeEach(() => vi.mocked(getCurrentUserId).mockResolvedValue("u1"));
@@ -25,13 +25,14 @@ describe("GET /api/place-photo", () => {
   it("returns a null photo when there is none", async () => {
     vi.mocked(getPlacePhoto).mockResolvedValue(null);
     const res = await GET(url("lat=1&lng=2&name=Nowhere"));
+    expect(res.headers.get("Cache-Control")).toBe("private, max-age=900");
     expect(await res.json()).toEqual({ photo: null });
   });
 
   it("returns an offline placeholder in fake mode", async () => {
     process.env.EXTERNAL_APIS_FAKE = "1";
     try {
-      const real = await vi.importActual<typeof import("@/server/external/wikimedia")>("@/server/external/wikimedia");
+      const real = await vi.importActual<typeof import("@/server/external/place-photo")>("@/server/external/place-photo");
       vi.mocked(getPlacePhoto).mockImplementation(real.getPlacePhoto);
       const body = await (await GET(url("lat=1&lng=2&name=Fake%20Peak"))).json();
       expect(body.photo.url).toMatch(/^data:image\/svg\+xml,/);

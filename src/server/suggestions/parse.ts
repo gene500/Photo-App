@@ -17,7 +17,7 @@ const DEFAULT_NAME: Record<SuggestionKind, string> = {
   attraction: "Attraction",
 };
 
-const KIND_RANK: Record<SuggestionKind, number> = { viewpoint: 0, peak: 1, attraction: 2 };
+export const KIND_RANK: Record<SuggestionKind, number> = { viewpoint: 0, peak: 1, attraction: 2 };
 
 type OverpassElement = {
   type?: string;

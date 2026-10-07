@@ -16,6 +16,7 @@ describe("fake externals", () => {
     const s = fakeSuggestions([[-119.8, 36.7], [-119.6, 37.0], [-119.1, 37.9]]);
     expect(s.map((x) => x.name)).toEqual(["Fake Viewpoint", "Fake Peak", "Fake Attraction"]);
     expect(s[0]).toMatchObject({ lat: 37.01, lng: -119.6, kind: "viewpoint" });
+    expect(s.map((x) => x.popularity)).toEqual([1234, 87, 2500]); // deterministic, so e2e can assert the caption
   });
 });
 
@@ -57,7 +58,7 @@ describe("fakePlacePhoto", () => {
     expect(a).toEqual(fakePlacePhoto({ name: "Fake Peak" }));
     expect(a.url.startsWith("data:image/svg+xml,")).toBe(true);
     expect(a.url.length).toBeLessThan(1200);
-    expect(a).toMatchObject({ title: "Fake Peak", credit: "Wikipedia" });
+    expect(a).toMatchObject({ title: "Fake Peak", credit: "Photo: Wikipedia" });
     expect(fakePlacePhoto({ name: "Other" }).url).not.toBe(a.url);
   });
 });

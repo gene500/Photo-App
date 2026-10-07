@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { getPlacePhoto } from "./wikimedia";
+import { describe, expect, it, vi } from "vitest";
+import { getWikipediaPhoto as getPlacePhoto } from "./wikimedia";
 
 // Shapes below were captured from the live English Wikipedia API (Griffith Observatory, 34.1184,-118.3004).
 const thumb = (name: string) => `https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4b/${name}/500px-${name}?utm_source=en.wikipedia.org&utm_campaign=api&utm_content=thumbnail`;
@@ -29,10 +29,6 @@ function fakeFetch(geo: unknown, pages: unknown) {
 }
 
 describe("getPlacePhoto", () => {
-  afterEach(() => {
-    delete process.env.EXTERNAL_APIS_FAKE;
-  });
-
   const observatory = { name: "Griffith Observatory", lat: 34.1184, lng: -118.3004 };
   const allPages = pageimages([
     page(645747, "Griffith Observatory", thumb("Griffith_observatory_2006.jpg")),
@@ -47,7 +43,7 @@ describe("getPlacePhoto", () => {
       url: thumb("Griffith_observatory_2006.jpg"),
       title: "Griffith Observatory",
       pageUrl: "https://en.wikipedia.org/wiki/Griffith_Observatory",
-      credit: "Wikipedia",
+      credit: "Photo: Wikipedia",
     });
   });
 
@@ -59,7 +55,7 @@ describe("getPlacePhoto", () => {
     expect(first).toContain("list=geosearch");
     expect(decodeURIComponent(first)).toContain("gscoord=34.1184|-118.3004");
     expect(first).toContain("gsradius=1500");
-    expect((init.headers as Record<string, string>)["User-Agent"]).toBe("RoadTripPhotoPlanner/1.0 (personal project)");
+    expect((init.headers as Record<string, string>)["User-Agent"]).toBe("RoadTripPhotoPlanner/1.0 (https://photo-app-pi2o.vercel.app)");
     expect(init.signal).toBeInstanceOf(AbortSignal);
     const second = decodeURIComponent(fetchImpl.mock.calls[1][0] as string);
     expect(second).toContain("prop=pageimages|info");
@@ -72,6 +68,12 @@ describe("getPlacePhoto", () => {
     const pages = pageimages([page(1, "Rancho Los Feliz", thumb("a.jpg")), page(2, "Half Dome", thumb("b.jpg"))]);
     const photo = await getPlacePhoto({ name: "Half Dome", lat: 37.7, lng: -119.5 }, fakeFetch(geo, pages));
     expect(photo?.title).toBe("Half Dome");
+  });
+
+  it("does not treat Eagle Peak as Eagle Rock", async () => {
+    const geo = { query: { geosearch: [{ pageid: 1, title: "Eagle Rock", dist: 900 }] } };
+    const photo = await getPlacePhoto({ name: "Eagle Peak", lat: 37.7, lng: -119.5 }, fakeFetch(geo, pageimages([page(1, "Eagle Rock", thumb("a.jpg"))])));
+    expect(photo).toBeNull();
   });
 
   it("ignores generic default names and falls back to the nearest photo within 300 m", async () => {
@@ -112,13 +114,5 @@ describe("getPlacePhoto", () => {
     expect(await getPlacePhoto(observatory, vi.fn(async () => json({}, 500)))).toBeNull();
     expect(await getPlacePhoto(observatory, vi.fn(async () => new Response("<html>", { status: 200 })))).toBeNull();
     expect(await getPlacePhoto(observatory, vi.fn(async () => json({ error: { code: "invalid-coord" } })))).toBeNull();
-  });
-
-  it("returns an inline placeholder without touching the network in fake mode", async () => {
-    process.env.EXTERNAL_APIS_FAKE = "1";
-    const fetchImpl = vi.fn();
-    const photo = await getPlacePhoto({ name: "Fake Peak", lat: 1, lng: 2 }, fetchImpl);
-    expect(photo?.url.startsWith("data:image/svg+xml,")).toBe(true);
-    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

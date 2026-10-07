@@ -5,6 +5,7 @@ import { TtlCache } from "./cache";
 import { buildCorridor, buildOverpassQuery, toOverpassPoly } from "./corridor";
 import { fetchOverpass, OverpassError } from "./overpass";
 import { parseOverpassResponse } from "./parse";
+import { enrichPopularity } from "./popularity";
 
 export const SUGGESTION_CACHE_TTL_MS = 5 * 60_000;
 
@@ -21,7 +22,7 @@ export function clearSuggestionCache(): void {
 
 export async function findSuggestions(
   route: LngLat[],
-  deps: { fetchOverpass?: (query: string) => Promise<unknown> } = {},
+  deps: { fetchOverpass?: (query: string) => Promise<unknown>; fetchImpl?: typeof fetch } = {},
 ): Promise<Suggestion[]> {
   if (isFakeExternal()) return fakeSuggestions(route);
   const key = routeCacheKey(route);
@@ -40,7 +41,9 @@ export async function findSuggestions(
   }
   const query = buildOverpassQuery(toOverpassPoly(corridor));
   const json = await (deps.fetchOverpass ?? fetchOverpass)(query);
-  const suggestions = parseOverpassResponse(json);
+  // Popularity is a bonus: enrichPopularity never throws, but guard anyway so it can never fail the request.
+  const parsed = parseOverpassResponse(json);
+  const suggestions = await enrichPopularity(parsed, { fetchImpl: deps.fetchImpl }).catch(() => parsed);
   cache.set(key, suggestions);
   return suggestions;
 }

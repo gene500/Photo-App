@@ -52,14 +52,18 @@ export type Suggestion = {
   lat: number;
   lng: number;
   kind: SuggestionKind;
+  /** Flickr photos taken nearby (only when a Flickr key is configured); used to rank and to caption. */
+  popularity?: number;
 };
 
-/** A Wikipedia photo of a place (decorative; always credited). */
+/** A photo of a place from Flickr, Wikimedia Commons or Wikipedia (decorative; always credited). */
 export type PlacePhoto = {
-  /** https thumbnail (~480px wide) on a Wikimedia upload host. */
+  /** https thumbnail (~480px wide) on an allow-listed image host. */
   url: string;
-  /** Wikipedia article title. */
+  /** Article or file title. */
   title: string;
+  /** Page the photo came from (article, Commons file page or Flickr photo page). */
   pageUrl: string;
-  credit: "Wikipedia";
+  /** Display text, e.g. "Photo: Jane Doe via Flickr (CC BY 2.0)". Plain text, never HTML. */
+  credit: string;
 };

@@ -6,23 +6,34 @@ import { clearSuggestionCache, findSuggestions, routeCacheKey } from "./service"
 const ROUTE: LngLat[] = [[-119.79, 36.74], [-119.6, 37.2], [-119.12, 37.96]];
 const overpassJson = { elements: [{ type: "node", id: 1, lat: 37.2, lon: -119.6, tags: { tourism: "viewpoint", name: "Spot" } }] };
 
+// Real Commons list=geosearch shape (3 files near the spot); popularity needs no key.
+const commonsHits = { batchcomplete: "", query: { geosearch: [1, 2, 3].map((i) => ({ pageid: i, ns: 6, title: `File:${i}.jpg`, lat: 37.2, lon: -119.6, dist: i, primary: "" })) } };
+const fetchImpl = vi.fn(async () => new Response(JSON.stringify(commonsHits))) as unknown as typeof fetch;
+const offline = vi.fn().mockRejectedValue(new Error("offline")) as unknown as typeof fetch;
+
 describe("findSuggestions", () => {
   beforeEach(() => {
     clearSuggestionCache();
     delete process.env.EXTERNAL_APIS_FAKE;
+    delete process.env.FLICKR_API_KEY;
   });
 
   it("queries Overpass with a polygon around the route and parses the result", async () => {
     const fetchOverpass = vi.fn<(query: string) => Promise<typeof overpassJson>>(async () => overpassJson);
-    const result = await findSuggestions(ROUTE, { fetchOverpass });
-    expect(result).toEqual([{ osmId: "node/1", name: "Spot", lat: 37.2, lng: -119.6, kind: "viewpoint" }]);
+    const result = await findSuggestions(ROUTE, { fetchOverpass, fetchImpl });
+    expect(result).toEqual([{ osmId: "node/1", name: "Spot", lat: 37.2, lng: -119.6, kind: "viewpoint", popularity: 3 }]);
     expect(fetchOverpass.mock.calls[0][0]).toContain('(poly:"');
+  });
+
+  it("still returns suggestions (without popularity) when the popularity lookups fail", async () => {
+    const result = await findSuggestions(ROUTE, { fetchOverpass: async () => overpassJson, fetchImpl: offline });
+    expect(result).toEqual([{ osmId: "node/1", name: "Spot", lat: 37.2, lng: -119.6, kind: "viewpoint" }]);
   });
 
   it("serves repeat requests for the same route from cache", async () => {
     const fetchOverpass = vi.fn(async () => overpassJson);
-    await findSuggestions(ROUTE, { fetchOverpass });
-    await findSuggestions(ROUTE, { fetchOverpass });
+    await findSuggestions(ROUTE, { fetchOverpass, fetchImpl });
+    await findSuggestions(ROUTE, { fetchOverpass, fetchImpl });
     expect(fetchOverpass).toHaveBeenCalledTimes(1);
   });
 

@@ -115,8 +115,9 @@ needed for those.
 
 ## Current status
 
-Build complete and merged to `main`. Hosting prep (Vercel + Turso +
-Vercel Blob) is code-complete and verified; the remaining steps are the
-human partner's account setup and first deploy (README section 7). See
-`PROGRESS.md` for details. The "Resume procedure" and standing rules above
-are historical context for how the build was run.
+Complete and deployed at https://photo-app-pi2o.vercel.app (Vercel +
+Turso + Vercel Blob). Pushes to `main` redeploy automatically. Env vars
+are managed in Vercel; set them with `vercel env add NAME env --value ...`
+(not via stdin, not by pasting into the web form: both caused stray
+whitespace). Remaining: restrict the Mapbox token to the site URL. See
+`PROGRESS.md`. The sections above are historical context for the build.

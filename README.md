@@ -108,3 +108,8 @@ Blob store for photos. Locally nothing changes.
 
 The Mapbox token is visible in the browser by design; in the Mapbox
 dashboard, restrict it to your site's URL.
+
+Tip: when setting variables from the CLI, use
+`vercel env add NAME production --value "..." --type secret --yes`.
+Piping values through stdin or pasting into the web form can add stray
+whitespace, which shows up as a Turso `401` during the build.

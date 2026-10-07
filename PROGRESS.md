@@ -3,6 +3,31 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
+## 2026-10-07 (deployed: https://photo-app-pi2o.vercel.app)
+
+The app is live on Vercel (project `photo-app-pi2o`, team "Photo Project",
+Hobby plan), backed by Turso database `photo-app` (aws-us-west-2) and a
+private Vercel Blob store `photo-app-photos`.
+
+What happened:
+- First two builds failed with a Turso 401 in `scripts/migrate-turso.mjs`.
+  Cause: env vars pasted into the Vercel web form carried stray whitespace,
+  and values piped to `vercel env add` via stdin were stored wrongly. Fixed
+  by setting every variable with `vercel env add NAME env --value ... --type`
+  from the CLI. Tokens were rotated several times because they appeared in
+  chat screenshots; the current Turso token and `NEXTAUTH_SECRET` were
+  generated and set by the CLI and never displayed.
+- `NEXTAUTH_URL` = the production URL; `NEXT_PUBLIC_MAPBOX_TOKEN` is a
+  plain Config value (public by design), `MAPBOX_TOKEN` is a Secret.
+- Live smoke test (throwaway account, then deleted; DB back to 0 users and
+  0 trips): signup, login, create trip, add stop, upload photo to Blob,
+  owner fetch 200, anonymous fetch 401, delete trip.
+
+Still to do (human partner): restrict the Mapbox token to the site URL in
+the Mapbox dashboard; try the app in a browser with the real map.
+Pushes to `main` now auto-deploy. Local-only files: `.vercel/` and
+`.env.local` (both ignored). Turso CLI lives in `~/.turso`.
+
 ## 2026-10-07 (hosting prep: Vercel + Turso + Blob)
 
 Goal: make the app usable as a real website. GitHub Pages can't host it

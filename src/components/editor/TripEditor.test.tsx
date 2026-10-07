@@ -100,6 +100,15 @@ describe("TripEditor", () => {
     await waitFor(() => expect(api.directions).toHaveBeenLastCalledWith([[-119.79, 36.74], [-119.12, 37.96], [-119.5, 37.5]]));
   });
 
+  it("shows the server's error when adding a stop is rejected", async () => {
+    vi.mocked(api.addStop).mockRejectedValue(new Error("A trip can have at most 25 stops"));
+    render(<TripEditor initialTrip={trip} />);
+    await userEvent.click(screen.getByRole("button", { name: "drop pin" }));
+    await screen.findByText("Tunnel View");
+    await userEvent.click(screen.getByRole("button", { name: "Add stop" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("at most 25 stops");
+  });
+
   it("never sticks on Loading after the route error is dismissed", async () => {
     vi.mocked(api.directions).mockRejectedValue(new Error("No driving route found"));
     render(<TripEditor initialTrip={withStops(seed)} />);

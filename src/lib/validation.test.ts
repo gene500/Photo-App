@@ -87,7 +87,7 @@ describe("directionsRequestSchema", () => {
   it("caps waypoints at 25", () => {
     const coords = Array.from({ length: 26 }, (_, i) => [i * 0.01, 0] as [number, number]);
     const r = directionsRequestSchema.safeParse({ coordinates: coords });
-    expect(formatZodError(r.error!)).toBe("coordinates: Routing supports at most 23 stops per trip");
+    expect(formatZodError(r.error!)).toBe("coordinates: Routing supports at most 25 stops per trip");
   });
 });
 

@@ -60,7 +60,7 @@ export const directionsRequestSchema = z.object({
   coordinates: z
     .array(lngLat)
     .min(2, "A route needs at least 2 stops")
-    .max(MAX_ROUTE_WAYPOINTS, `Routing supports at most ${MAX_ROUTE_WAYPOINTS - 2} stops per trip`),
+    .max(MAX_ROUTE_WAYPOINTS, `Routing supports at most ${MAX_ROUTE_WAYPOINTS} stops per trip`),
 });
 
 // Keep this far below the point count where @turf/simplify's recursive

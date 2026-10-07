@@ -5,6 +5,7 @@ import { getCurrentUserId } from "@/server/session";
 import { POST as addPOST } from "@/app/api/trips/[id]/stops/route";
 import { PUT as orderPUT } from "@/app/api/trips/[id]/stops/order/route";
 import { DELETE, PATCH } from "@/app/api/stops/[id]/route";
+import { MAX_ROUTE_WAYPOINTS } from "@/lib/validation";
 import { createTrip, getTrip } from "@/server/trips";
 import { createTestUser, resetDb, sampleTripInput } from "../helpers/db";
 import { idParams, jsonRequest } from "../helpers/requests";
@@ -34,6 +35,13 @@ describe("stop routes", () => {
     const b = await add("Olmsted Point", "suggested");
     expect(a.res.status).toBe(201);
     expect([a.stop.order, b.stop.order]).toEqual([0, 1]);
+  });
+
+  it("rejects a stop beyond the route waypoint limit with 400", async () => {
+    for (let i = 0; i < MAX_ROUTE_WAYPOINTS; i++) expect((await add(`Stop ${i}`)).res.status).toBe(201);
+    const { res } = await add("One too many");
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: `A trip can have at most ${MAX_ROUTE_WAYPOINTS} stops` });
   });
 
   it("returns 404 adding to another user's trip", async () => {

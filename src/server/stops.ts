@@ -1,5 +1,6 @@
 import type { Stop } from "@/lib/types";
 import type { NewStopInput, StopPatch } from "@/lib/validation";
+import { MAX_ROUTE_WAYPOINTS } from "@/lib/validation";
 import { prisma } from "./db";
 import { toStopDto } from "./mappers";
 
@@ -7,6 +8,13 @@ export class InvalidReorderError extends Error {
   constructor() {
     super("stopIds must list every stop in the trip exactly once");
     this.name = "InvalidReorderError";
+  }
+}
+
+export class TooManyStopsError extends Error {
+  constructor() {
+    super(`A trip can have at most ${MAX_ROUTE_WAYPOINTS} stops`);
+    this.name = "TooManyStopsError";
   }
 }
 
@@ -20,6 +28,7 @@ export async function addStop(
   return prisma.$transaction(async (tx) => {
     const trip = await tx.trip.findFirst({ where: { id: tripId, userId }, select: { id: true } });
     if (!trip) return null;
+    if ((await tx.stop.count({ where: { tripId } })) >= MAX_ROUTE_WAYPOINTS) throw new TooManyStopsError();
     const agg = await tx.stop.aggregate({ where: { tripId }, _max: { order: true } });
     const row = await tx.stop.create({
       data: {

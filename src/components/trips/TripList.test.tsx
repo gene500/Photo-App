@@ -12,7 +12,6 @@ import { TripList } from "./TripList";
 
 const trip: TripSummary = {
   id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", stopCount: 3, updatedAt: "2026-06-01T00:00:00Z",
-  start: { name: "Fresno", lat: 36.7, lng: -119.8 }, end: { name: "Lee Vining", lat: 38, lng: -119.1 },
 };
 
 describe("TripList", () => {

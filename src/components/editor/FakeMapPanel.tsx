@@ -4,9 +4,11 @@ import { boundsFor, latLngToPercent, pixelToLatLng } from "@/lib/map-bounds";
 import { stopColor } from "@/lib/stop-style";
 import type { MapViewProps } from "./map-types";
 
+const DEFAULT_POINTS = [{ lat: 36, lng: -121 }, { lat: 38, lng: -118 }];
+
 /** No-network stand-in for Mapbox GL: used in e2e and when no token is configured. */
-export function FakeMapPanel({ start, end, stops, routeGeometry, onMapClick, onStopClick }: MapViewProps) {
-  const bounds = boundsFor([start, end]);
+export function FakeMapPanel({ stops, routeGeometry, onMapClick, onStopClick }: MapViewProps) {
+  const bounds = boundsFor(stops.length ? stops : DEFAULT_POINTS);
   const pos = (p: { lat: number; lng: number }) => latLngToPercent(bounds, p);
   const routePoints = (routeGeometry ?? [])
     .map(([lng, lat]) => pos({ lat, lng }))
@@ -25,8 +27,6 @@ export function FakeMapPanel({ start, end, stops, routeGeometry, onMapClick, onS
       <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
         {routePoints && <polyline points={routePoints} fill="none" stroke="#2563eb" strokeWidth={0.6} />}
       </svg>
-      <Dot at={pos(start)} color="#16a34a" label={`Start: ${start.name}`} />
-      <Dot at={pos(end)} color="#dc2626" label={`End: ${end.name}`} />
       {stops.map((s) => {
         const p = pos(s);
         return (
@@ -46,16 +46,5 @@ export function FakeMapPanel({ start, end, stops, routeGeometry, onMapClick, onS
       })}
       <p className="absolute bottom-1 left-1 text-xs text-gray-500">Offline map preview</p>
     </div>
-  );
-}
-
-function Dot({ at, color, label }: { at: { left: number; top: number }; color: string; label: string }) {
-  return (
-    <span
-      aria-label={label}
-      title={label}
-      className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full"
-      style={{ left: `${at.left}%`, top: `${at.top}%`, background: color }}
-    />
   );
 }

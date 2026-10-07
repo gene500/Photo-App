@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  classifyBestTime, computeBestTimes, describeBestTime, estimateArrivals, getSunWindows, solarDayAnchor,
+  classifyBestTime, computeArrivals, computeBestTimes, describeBestTime, estimateArrivals, getSunWindows, solarDayAnchor,
   type SunWindows,
 } from "./best-time";
 
@@ -76,32 +76,48 @@ describe("classifyBestTime", () => {
 });
 
 describe("estimateArrivals", () => {
-  it("accumulates leg durations (seconds)", () => {
-    expect(estimateArrivals(at("06:00"), [3600, 1800, 600], 2)).toEqual([at("07:00"), at("07:30")]);
+  it("departs at the first stop and accumulates leg durations (seconds)", () => {
+    expect(estimateArrivals(at("06:00"), [3600, 1800], 3)).toEqual([at("06:00"), at("07:00"), at("07:30")]);
+  });
+
+  it("returns an empty list for no stops", () => {
+    expect(estimateArrivals(at("06:00"), [], 0)).toEqual([]);
   });
 
   it("returns null when the legs don't line up with the stops", () => {
-    expect(estimateArrivals(at("06:00"), [3600], 2)).toBeNull();
+    expect(estimateArrivals(at("06:00"), [3600], 3)).toBeNull();
   });
 });
 
 describe("computeBestTimes", () => {
+  const stops = [TUNNEL_VIEW, { lat: 37.75, lng: -119.6 }];
+
   it("returns one result per stop, defaulting to golden hour without legs", () => {
-    const result = computeBestTimes(
-      { start: FRESNO, plannedDate: "2026-07-01", stops: [TUNNEL_VIEW, { lat: 37.75, lng: -119.6 }] },
-      null,
-    );
+    const result = computeBestTimes({ plannedDate: "2026-07-01", stops }, null);
     expect(result).toHaveLength(2);
     expect(result[0]!.window).toBe("golden hour");
   });
 
-  it("uses arrival estimates when legs are available", () => {
-    // Depart ~5:40 AM PDT; 1 h to the first stop -> ~6:40, after morning golden hour ends -> midday.
-    const [first] = computeBestTimes(
-      { start: FRESNO, plannedDate: "2026-07-01", stops: [TUNNEL_VIEW] },
-      [3600, 3600],
-    );
-    expect(first!.window).toBe("midday");
+  it("departs at sunrise from the first stop, so it is a sunrise shot", () => {
+    const [first, second] = computeBestTimes({ plannedDate: "2026-07-01", stops }, [3600]);
+    expect(first!.window).toBe("sunrise");
+    expect(second!.window).toBe("midday"); // ~1 h after sunrise, after morning golden hour
+  });
+
+  it("uses the default for a single stop even if legs are given", () => {
+    const [only] = computeBestTimes({ plannedDate: "2026-07-01", stops: [TUNNEL_VIEW] }, []);
+    expect(only!.window).toBe("golden hour");
+  });
+});
+
+describe("computeArrivals", () => {
+  it("returns null entries without a usable route", () => {
+    expect(computeArrivals({ plannedDate: "2026-07-01", stops: [TUNNEL_VIEW, FRESNO] }, null)).toEqual([null, null]);
+  });
+
+  it("returns the departure for the first stop and later arrivals after it", () => {
+    const [a, b] = computeArrivals({ plannedDate: "2026-07-01", stops: [TUNNEL_VIEW, FRESNO] }, [3600]);
+    expect(b!.getTime() - a!.getTime()).toBe(3600_000);
   });
 });
 

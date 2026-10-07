@@ -1,5 +1,5 @@
 import { getTimes } from "suncalc";
-import type { Place, Stop } from "./types";
+import type { Stop } from "./types";
 
 export type BestTimeWindow = "sunrise" | "golden hour" | "midday" | "sunset";
 
@@ -63,40 +63,44 @@ export function classifyBestTime(w: SunWindows, arrival: Date | null): BestTime 
 }
 
 /**
- * Arrival at each stop = departure + cumulative leg durations (seconds).
- * Legs run start -> stop1 -> ... -> end, so there must be stopCount + 1.
+ * Arrival at each stop. The first stop is the departure point; each later stop is
+ * departure + cumulative leg durations (seconds). Legs run stop1 -> stop2 -> ...,
+ * so there must be stopCount - 1 of them.
  */
 export function estimateArrivals(
   departure: Date,
   legDurations: number[],
   stopCount: number,
 ): Date[] | null {
-  if (legDurations.length !== stopCount + 1) return null;
-  const arrivals: Date[] = [];
+  if (stopCount === 0) return [];
+  if (legDurations.length !== stopCount - 1) return null;
+  const arrivals: Date[] = [departure];
   let elapsedMs = 0;
-  for (let i = 0; i < stopCount; i++) {
-    elapsedMs += legDurations[i] * 1000;
+  for (const seconds of legDurations) {
+    elapsedMs += seconds * 1000;
     arrivals.push(new Date(departure.getTime() + elapsedMs));
   }
   return arrivals;
 }
 
-/** D1: depart at sunrise from the start; ~8 AM solar time when there is no sunrise. */
-export function departureTime(start: Place, plannedDate: string): Date {
-  const w = getSunWindows(start.lat, start.lng, plannedDate);
-  return w.sunrise ?? new Date(solarDayAnchor(plannedDate, start.lng).getTime() - 4 * 3_600_000);
+/** D1: depart at sunrise from the first stop; ~8 AM solar time when there is no sunrise. */
+export function departureTime(first: Pick<Stop, "lat" | "lng">, plannedDate: string): Date {
+  const w = getSunWindows(first.lat, first.lng, plannedDate);
+  return w.sunrise ?? new Date(solarDayAnchor(plannedDate, first.lng).getTime() - 4 * 3_600_000);
 }
 
-export function computeBestTimes(
-  trip: { start: Place; plannedDate: string; stops: Pick<Stop, "lat" | "lng">[] },
-  legDurations: number[] | null,
-): BestTime[] {
-  const arrivals = legDurations
-    ? estimateArrivals(departureTime(trip.start, trip.plannedDate), legDurations, trip.stops.length)
-    : null;
-  return trip.stops.map((s, i) =>
-    classifyBestTime(getSunWindows(s.lat, s.lng, trip.plannedDate), arrivals?.[i] ?? null),
-  );
+type TripForTimes = { plannedDate: string; stops: Pick<Stop, "lat" | "lng">[] };
+
+/** Estimated arrival per stop, or nulls when there are fewer than 2 stops or no matching route. */
+export function computeArrivals(trip: TripForTimes, legDurations: number[] | null): (Date | null)[] {
+  const none = trip.stops.map(() => null);
+  if (!legDurations || trip.stops.length < 2) return none;
+  return estimateArrivals(departureTime(trip.stops[0]!, trip.plannedDate), legDurations, trip.stops.length) ?? none;
+}
+
+export function computeBestTimes(trip: TripForTimes, legDurations: number[] | null): BestTime[] {
+  const arrivals = computeArrivals(trip, legDurations);
+  return trip.stops.map((s, i) => classifyBestTime(getSunWindows(s.lat, s.lng, trip.plannedDate), arrivals[i] ?? null));
 }
 
 /** "7:45 PM" in the viewer's time zone (or the one given, for tests). */

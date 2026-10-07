@@ -14,7 +14,5 @@ export async function createTestUser(email = `user-${randomUUID()}@example.com`)
 
 export const sampleTripInput = {
   name: "Sierra loop",
-  start: { name: "Fresno, CA", lat: 36.7378, lng: -119.7871 },
-  end: { name: "Lee Vining, CA", lat: 37.9577, lng: -119.1207 },
   plannedDate: "2026-07-01",
 };

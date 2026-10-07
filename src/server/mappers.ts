@@ -6,8 +6,6 @@ export function toTripDto(row: TripRow): Trip {
   return {
     id: row.id,
     name: row.name,
-    start: { name: row.startName, lat: row.startLat, lng: row.startLng },
-    end: { name: row.endName, lat: row.endLat, lng: row.endLng },
     plannedDate: utcToDateOnly(row.plannedDate),
   };
 }

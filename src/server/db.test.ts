@@ -14,8 +14,7 @@ describe("prisma client", () => {
     const user = await createTestUser();
     const trip = await prisma.trip.create({
       data: {
-        userId: user.id, name: "t", startName: "A", startLat: 1, startLng: 1,
-        endName: "B", endLat: 2, endLng: 2, plannedDate: new Date("2026-07-01T00:00:00Z"),
+        userId: user.id, name: "t", plannedDate: new Date("2026-07-01T00:00:00Z"),
       },
     });
     await prisma.stop.create({

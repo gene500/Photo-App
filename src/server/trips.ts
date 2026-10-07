@@ -7,12 +7,6 @@ import { toStopDto, toTripDto } from "./mappers";
 function patchData(patch: TripPatch) {
   return {
     ...(patch.name !== undefined && { name: patch.name }),
-    ...(patch.start && {
-      startName: patch.start.name,
-      startLat: patch.start.lat,
-      startLng: patch.start.lng,
-    }),
-    ...(patch.end && { endName: patch.end.name, endLat: patch.end.lat, endLng: patch.end.lng }),
     ...(patch.plannedDate && { plannedDate: dateOnlyToUtc(patch.plannedDate) }),
   };
 }
@@ -22,12 +16,6 @@ export async function createTrip(userId: string, input: TripInput): Promise<Trip
     data: {
       userId,
       name: input.name,
-      startName: input.start.name,
-      startLat: input.start.lat,
-      startLng: input.start.lng,
-      endName: input.end.name,
-      endLat: input.end.lat,
-      endLng: input.end.lng,
       plannedDate: dateOnlyToUtc(input.plannedDate),
     },
   });

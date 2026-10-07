@@ -6,20 +6,12 @@ export const MAX_ROUTE_WAYPOINTS = 25; // Mapbox Directions driving profile limi
 const lat = z.number().min(-90).max(90);
 const lng = z.number().min(-180).max(180);
 
-export const placeSchema = z.object({
-  name: z.string().trim().min(1, "Place name is required").max(200),
-  lat,
-  lng,
-});
-
 export const dateOnlySchema = z
   .string()
   .refine(isDateOnly, "Planned date must be a valid YYYY-MM-DD date");
 
 export const tripInputSchema = z.object({
   name: z.string().trim().min(1, "Trip name is required").max(120),
-  start: placeSchema,
-  end: placeSchema,
   plannedDate: dateOnlySchema,
 });
 export type TripInput = z.infer<typeof tripInputSchema>;
@@ -65,7 +57,7 @@ const lngLat = z.tuple([lng, lat]);
 export const directionsRequestSchema = z.object({
   coordinates: z
     .array(lngLat)
-    .min(2, "A route needs a start and an end")
+    .min(2, "A route needs at least 2 stops")
     .max(MAX_ROUTE_WAYPOINTS, `Routing supports at most ${MAX_ROUTE_WAYPOINTS - 2} stops per trip`),
 });
 

@@ -39,7 +39,6 @@ import { TripEditor } from "./TripEditor";
 
 const trip: TripWithStops = {
   id: "t1", name: "Sierra loop", plannedDate: "2026-07-01",
-  start: { name: "Fresno", lat: 36.74, lng: -119.79 }, end: { name: "Lee Vining", lat: 37.96, lng: -119.12 },
   stops: [],
 };
 const route = { geometry: [[-119.79, 36.74], [-119.12, 37.96]] as [number, number][], legs: [{ distance: 100_000, duration: 3_600 }], distance: 100_000, duration: 3_600 };
@@ -47,12 +46,17 @@ const newStop = (over: Partial<Stop>): Stop => ({
   id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37.5, lng: -119.5, notes: null, source: "manual", photoUrl: null, visited: false, ...over,
 });
 
+const seed = [
+  newStop({ id: "a", order: 0, name: "A", lat: 36.74, lng: -119.79 }),
+  newStop({ id: "b", order: 1, name: "B", lat: 37.96, lng: -119.12 }),
+];
+
 describe("TripEditor", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("loads the route for start -> stops -> end and shows its summary", async () => {
+  it("loads the route through the stops and shows its summary", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
-    render(<TripEditor initialTrip={trip} />);
+    render(<TripEditor initialTrip={{ ...trip, stops: seed }} />);
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toBe("100 km · 1 h 0 min"));
     expect(api.directions).toHaveBeenCalledWith([[-119.79, 36.74], [-119.12, 37.96]]);
   });
@@ -60,33 +64,39 @@ describe("TripEditor", () => {
   it("shows a dismissible route error while the rest of the editor keeps working", async () => {
     vi.mocked(api.directions).mockRejectedValue(new Error("No driving route found between these points"));
     vi.mocked(api.addStop).mockResolvedValue({ stop: newStop({}) });
-    render(<TripEditor initialTrip={trip} />);
+    render(<TripEditor initialTrip={{ ...trip, stops: seed }} />);
     expect((await screen.findByRole("alert")).textContent).toContain("No driving route found");
     expect(screen.getByTestId("route-status").textContent).toBe("Route unavailable");
     await userEvent.click(screen.getByRole("button", { name: "drop pin" }));
-    expect(await screen.findAllByTestId("stop-row")).toHaveLength(1);
+    expect(await screen.findAllByTestId("stop-row")).toHaveLength(3);
   });
 
   it("adds a manual stop when the map is clicked and refetches the route", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     vi.mocked(api.addStop).mockResolvedValue({ stop: newStop({}) });
-    render(<TripEditor initialTrip={trip} />);
+    render(<TripEditor initialTrip={{ ...trip, stops: [seed[0]!] }} />);
     await userEvent.click(screen.getByRole("button", { name: "drop pin" }));
-    expect(api.addStop).toHaveBeenCalledWith("t1", { name: "Pin 1", lat: 37.5, lng: -119.5, source: "manual" });
-    await waitFor(() => expect(api.directions).toHaveBeenLastCalledWith([[-119.79, 36.74], [-119.5, 37.5], [-119.12, 37.96]]));
+    expect(api.addStop).toHaveBeenCalledWith("t1", { name: "Pin 2", lat: 37.5, lng: -119.5, source: "manual" });
+    await waitFor(() => expect(api.directions).toHaveBeenLastCalledWith([[-119.79, 36.74], [-119.5, 37.5]]));
   });
 
   it("finds suggestions and accepts one as a suggested stop", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });
     vi.mocked(api.addStop).mockResolvedValue({ stop: newStop({ name: "Tunnel View", source: "suggested", lat: 37.7, lng: -119.7 }) });
-    render(<TripEditor initialTrip={trip} />);
+    render(<TripEditor initialTrip={{ ...trip, stops: seed }} />);
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("km"));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
     await userEvent.click(await screen.findByRole("button", { name: "Accept" }));
     expect(api.addStop).toHaveBeenCalledWith("t1", { name: "Tunnel View", lat: 37.7, lng: -119.7, source: "suggested" });
     await waitFor(() => expect(screen.queryAllByTestId("suggestion-card")).toHaveLength(0));
-    expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("Tunnel View");
+    expect(screen.getAllByTestId("stop-row")[2].textContent).toContain("Tunnel View");
+  });
+
+  it("makes no directions request and prompts for stops on an empty trip", () => {
+    render(<TripEditor initialTrip={trip} />);
+    expect(api.directions).not.toHaveBeenCalled();
+    expect(screen.getByTestId("route-status").textContent).toBe("Add 2 stops to see the route");
   });
 
   it("toggles visited through the API", async () => {

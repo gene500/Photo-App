@@ -22,8 +22,6 @@ export type Stop = {
 export type Trip = {
   id: string;
   name: string;
-  start: Place;
-  end: Place;
   /** Calendar date, "YYYY-MM-DD". */
   plannedDate: string;
 };
@@ -37,7 +35,7 @@ export type RouteLeg = { distance: number; duration: number };
 export type RouteResult = {
   /** Full route line as [lng, lat] pairs. */
   geometry: LngLat[];
-  /** One leg per consecutive waypoint pair: start -> stop1 -> ... -> end. */
+  /** One leg per consecutive stop pair: stop1 -> stop2 -> ... */
   legs: RouteLeg[];
   /** Meters. */
   distance: number;

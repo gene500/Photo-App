@@ -12,8 +12,6 @@ import {
 
 const validTrip = {
   name: "Sierra loop",
-  start: { name: "Fresno, CA", lat: 36.74, lng: -119.79 },
-  end: { name: "Lee Vining, CA", lat: 37.96, lng: -119.12 },
   plannedDate: "2026-07-01",
 };
 
@@ -30,9 +28,9 @@ describe("tripInputSchema", () => {
     );
   });
 
-  it("rejects out-of-range coordinates", () => {
-    const r = tripInputSchema.safeParse({ ...validTrip, start: { ...validTrip.start, lat: 95 } });
-    expect(r.success).toBe(false);
+  it("ignores legacy start/end fields", () => {
+    const parsed = tripInputSchema.parse({ ...validTrip, start: { name: "x", lat: 95, lng: 0 } });
+    expect(parsed).toEqual(validTrip);
   });
 });
 

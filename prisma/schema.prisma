@@ -20,12 +20,6 @@ model Trip {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
-  startName   String
-  startLat    Float
-  startLng    Float
-  endName     String
-  endLat      Float
-  endLng      Float
   /// Calendar date stored at UTC midnight; exposed as "YYYY-MM-DD".
   plannedDate DateTime
   createdAt   DateTime @default(now())

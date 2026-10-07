@@ -31,17 +31,15 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   const [suggestionsStatus, setSuggestionsStatus] = useState<SuggestionsStatus>("idle");
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
 
-  // Data flow 1 & 4: start -> ordered stops -> end. A string key so that
+  // Data flow 1 & 4: ordered stops. A string key so that
   // edits which don't move anything (visited, notes) don't refetch.
-  const waypointKey = JSON.stringify([
-    [trip.start.lng, trip.start.lat],
-    ...stops.map((s) => [s.lng, s.lat]),
-    [trip.end.lng, trip.end.lat],
-  ]);
+  const waypointKey = JSON.stringify(stops.map((s) => [s.lng, s.lat]));
 
   useEffect(() => {
+    const coordinates = JSON.parse(waypointKey) as LngLat[];
+    if (coordinates.length < 2) return;
     let cancelled = false;
-    api.directions(JSON.parse(waypointKey) as LngLat[]).then(
+    api.directions(coordinates).then(
       ({ route: next }) => {
         if (cancelled) return;
         setRoute(next);
@@ -58,10 +56,14 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     };
   }, [waypointKey]);
 
+  const enoughForRoute = stops.length >= 2;
+  const activeRoute = enoughForRoute ? route : null;
+  const activeRouteError = enoughForRoute ? routeError : null;
+
   // Data flow 5: recomputed whenever the planned date, stops, or route change.
   const bestTimes = useMemo(
-    () => computeBestTimes({ start: trip.start, plannedDate: trip.plannedDate, stops }, route ? route.legs.map((l) => l.duration) : null),
-    [trip.start, trip.plannedDate, stops, route],
+    () => computeBestTimes({ plannedDate: trip.plannedDate, stops }, activeRoute ? activeRoute.legs.map((l) => l.duration) : null),
+    [trip.plannedDate, stops, activeRoute],
   );
 
   async function saveTrip(patch: TripPatch) {
@@ -128,11 +130,11 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   }
 
   async function findSuggestions() {
-    if (!route) return;
+    if (!activeRoute) return;
     setSuggestionsStatus("loading");
     setSuggestionsError(null);
     try {
-      const { suggestions: found } = await api.suggestions(route.geometry);
+      const { suggestions: found } = await api.suggestions(activeRoute.geometry);
       setSuggestions(found.filter((s) => !stops.some((st) => haversineMeters(st, s) < ALREADY_A_STOP_M)));
       setSuggestionsStatus("done");
     } catch (e) {
@@ -155,10 +157,8 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     <div className="grid min-h-[calc(100vh-3rem)] grid-cols-1 lg:grid-cols-[1fr_420px]">
       <div className="relative min-h-[50vh]">
         <MapView
-          start={trip.start}
-          end={trip.end}
           stops={stops}
-          routeGeometry={route?.geometry ?? null}
+          routeGeometry={activeRoute?.geometry ?? null}
           onMapClick={({ lat, lng }) => void addStop({ name: `Pin ${stops.length + 1}`, lat, lng, source: "manual" })}
           onStopClick={setSelectedId}
         />
@@ -166,9 +166,9 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
       <aside className="space-y-4 overflow-y-auto border-l p-4">
         <TripHeader trip={trip} onSave={saveTrip} />
         <p data-testid="route-status" className="text-sm text-gray-700">
-          {route ? `${formatDistance(route.distance)} · ${formatDuration(route.duration)}` : routeError ? "Route unavailable" : "Loading route…"}
+          {activeRoute ? `${formatDistance(activeRoute.distance)} · ${formatDuration(activeRoute.duration)}` : activeRouteError ? "Route unavailable" : enoughForRoute ? "Loading route…" : "Add 2 stops to see the route"}
         </p>
-        <ErrorBanner message={routeError} onDismiss={() => setRouteError(null)} />
+        <ErrorBanner message={activeRouteError} onDismiss={() => setRouteError(null)} />
         <section className="space-y-2">
           <h2 className="font-semibold">Stops</h2>
           <p className="text-xs text-gray-500">Click the map to drop a pin. Drag ⋮⋮ to reorder.</p>
@@ -186,7 +186,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
           status={suggestionsStatus}
           suggestions={suggestions}
           error={suggestionsError}
-          canSearch={route !== null}
+          canSearch={activeRoute !== null}
           onFind={() => void findSuggestions()}
           onAccept={(s) => void acceptSuggestion(s)}
           onDismiss={dismissSuggestion}

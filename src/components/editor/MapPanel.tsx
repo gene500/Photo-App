@@ -25,12 +25,13 @@ function markerElement(color: string, label: string): HTMLButtonElement {
   return el;
 }
 
-export default function MapPanel({ start, end, stops, routeGeometry, onMapClick, onStopClick }: MapViewProps) {
+export default function MapPanel({ stops, routeGeometry, onMapClick, onStopClick }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const handlersRef = useRef({ onMapClick, onStopClick });
-  const initialCenterRef = useRef<LngLat>([start.lng, start.lat]);
+  const initialCenterRef = useRef<LngLat>(stops[0] ? [stops[0].lng, stops[0].lat] : [-98.5, 39.8]);
+  const initialZoomRef = useRef(stops.length ? 7 : 3.5);
   const fittedRef = useRef(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -46,7 +47,7 @@ export default function MapPanel({ start, end, stops, routeGeometry, onMapClick,
       accessToken: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
       style: "mapbox://styles/mapbox/outdoors-v12",
       center: initialCenterRef.current,
-      zoom: 7,
+      zoom: initialZoomRef.current,
     });
     map.addControl(new mapboxgl.NavigationControl(), "top-right");
     map.on("load", () => {
@@ -85,14 +86,12 @@ export default function MapPanel({ start, end, stops, routeGeometry, onMapClick,
     }
   }, [loaded, routeGeometry]);
 
-  // Start/end/stop markers.
+  // Stop markers.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     for (const m of markersRef.current) m.remove();
     const markers = [
-      new mapboxgl.Marker({ element: markerElement("#16a34a", `Start: ${start.name}`) }).setLngLat([start.lng, start.lat]),
-      new mapboxgl.Marker({ element: markerElement("#dc2626", `End: ${end.name}`) }).setLngLat([end.lng, end.lat]),
       ...stops.map((s) => {
         const el = markerElement(stopColor(s), s.name);
         el.addEventListener("click", () => handlersRef.current.onStopClick(s.id));
@@ -101,7 +100,7 @@ export default function MapPanel({ start, end, stops, routeGeometry, onMapClick,
     ];
     for (const m of markers) m.addTo(map);
     markersRef.current = markers;
-  }, [start, end, stops]);
+  }, [stops]);
 
   return <div ref={containerRef} data-testid="map" className="absolute inset-0" />;
 }

@@ -11,10 +11,12 @@ import type { LngLat } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
 
 const ROUTE_SOURCE = "route";
+/** Mapbox paint can't read CSS variables; this is the light-theme `--route` token. */
+const ROUTE_COLOR = "#b08d57";
 const MARKER_CLASS = "map-marker";
 const DEFAULT_CENTER: LngLat = [-98.5, 39.8];
-const STOP_CLASS = "flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-xs font-semibold text-white shadow";
-const PENDING_CLASS = "h-5 w-5 rounded-full border-2 border-white bg-red-600 shadow";
+const STOP_CLASS = "flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-xs font-semibold text-white shadow-md";
+const PENDING_CLASS = "h-5 w-5 rounded-full border-2 border-white bg-ink shadow-md";
 
 function routeData(geometry: LngLat[] | null): Feature<LineString> {
   return { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: geometry ?? [] } };
@@ -64,7 +66,7 @@ export default function MapPanel({
     const map = new mapboxgl.Map({
       container: containerRef.current,
       accessToken: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
-      style: "mapbox://styles/mapbox/outdoors-v12",
+      style: "mapbox://styles/mapbox/light-v11",
       center: initialRef.current.center,
       zoom: initialRef.current.zoom,
       attributionControl: false,
@@ -79,12 +81,20 @@ export default function MapPanel({
     };
     map.on("load", () => {
       map.addSource(ROUTE_SOURCE, { type: "geojson", data: routeData(null) });
+      // A slightly wider white line underneath gives the route a soft casing on the pale map.
+      map.addLayer({
+        id: "route-casing",
+        type: "line",
+        source: ROUTE_SOURCE,
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": "#ffffff", "line-width": 7, "line-opacity": 0.9 },
+      });
       map.addLayer({
         id: "route-line",
         type: "line",
         source: ROUTE_SOURCE,
         layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#2563eb", "line-width": 4 },
+        paint: { "line-color": ROUTE_COLOR, "line-width": 4 },
       });
       setLoaded(true);
       reportCenter();
@@ -141,12 +151,12 @@ export default function MapPanel({
         if (el.textContent !== String(i + 1)) el.textContent = String(i + 1);
         // Toggle only our ring classes: mapbox owns the rest of the element's classes.
         el.classList.toggle("ring-2", selected);
-        el.classList.toggle("ring-black", selected);
+        el.classList.toggle("ring-route", selected);
         el.style.background = stopColor(s);
         el.setAttribute("aria-label", label);
         el.title = label;
       } else if (addSet.has(s.id)) {
-        const el = markerElement(`${STOP_CLASS} ${selected ? "ring-2 ring-black" : ""}`, label, String(i + 1));
+        const el = markerElement(`${STOP_CLASS} ${selected ? "ring-2 ring-route" : ""}`, label, String(i + 1));
         el.style.background = stopColor(s);
         const id = s.id;
         el.addEventListener("click", () => handlersRef.current.onStopClick(id));
@@ -185,7 +195,7 @@ export default function MapPanel({
     suggestionMarkersRef.current = suggestions.map((s) => {
       const big = s.osmId === highlightedSuggestionId;
       const el = markerElement(
-        `rounded-full border border-white bg-amber-500 ${big ? "h-5 w-5" : "h-3.5 w-3.5 opacity-60"}`,
+        `rounded-full border-2 border-white bg-accent shadow ${big ? "h-5 w-5" : "h-3.5 w-3.5 opacity-70"}`,
         `Suggestion: ${s.name}`,
       );
       el.addEventListener("click", () => handlersRef.current.onSuggestionClick?.(s.osmId));

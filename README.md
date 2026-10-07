@@ -64,7 +64,8 @@ trip's planned date; estimated arrival at each stop is that departure
 plus the cumulative Mapbox Directions leg durations up to that stop
 (no dwell time at earlier stops). The arrival time is then bucketed
 against that stop's own sunrise/golden-hour/sunset times (computed
-from its coordinates and the planned date via `suncalc`): before
+from its coordinates via `suncalc`, for the local solar day the arrival
+falls on, so a trip spanning several days is judged day by day): before
 morning golden hour ends → *sunrise*, before evening golden hour
 starts → *midday*, before sunset → *golden hour*, after sunset →
 *sunset* (the window just missed). With fewer than two stops (so no route), the
@@ -113,3 +114,14 @@ Tip: when setting variables from the CLI, use
 `vercel env add NAME production --value "..." --type secret --yes`.
 Piping values through stdin or pasting into the web form can add stray
 whitespace, which shows up as a Turso `401` during the build.
+
+**Cautions**
+
+- Scope `TURSO_*` and `BLOB_READ_WRITE_TOKEN` to **Production only**. Preview
+  builds also run `vercel-build`, which migrates the database named by
+  `TURSO_*`, so a preview build would change the production database.
+- `vercel-build` migrates the database **before** `next build`. A build that
+  fails after the migration step still leaves the database migrated.
+- A local `.env.local` created by `vercel env pull` makes `npm run dev` use the
+  production Turso database and Blob store. Remove `TURSO_*` and
+  `BLOB_READ_WRITE_TOKEN` from it (or do not pull them) for local work.

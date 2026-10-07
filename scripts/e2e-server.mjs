@@ -11,6 +11,11 @@ const env = {
   NEXTAUTH_URL: "http://localhost:3100",
   NEXTAUTH_SECRET: "e2e-only-secret",
   UPLOAD_DIR: ".e2e-uploads",
+  // Never let e2e use a real Blob store from .env.local; photos go to UPLOAD_DIR.
+  BLOB_READ_WRITE_TOKEN: "",
+  // Likewise never reach a real Turso database (e.g. from a pulled .env.local).
+  TURSO_DATABASE_URL: "",
+  TURSO_AUTH_TOKEN: "",
 };
 
 rmSync("e2e.db", { force: true });

@@ -1,6 +1,6 @@
 import { handle, HttpError, requireUserId } from "@/server/http";
 import { deletePhotoFile, savePhoto, validatePhoto } from "@/server/photos";
-import { getOwnedStop, updateStop } from "@/server/stops";
+import { getOwnedStop, swapStopPhoto } from "@/server/stops";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -24,9 +24,20 @@ export const POST = handle(async (req: Request, { params }: Ctx) => {
   if (!check.ok) throw new HttpError(400, check.error);
 
   const photoUrl = await savePhoto(bytes, check.type);
-  const updated = await updateStop(userId, id, { photoUrl });
+  const swap = await swapStopPhoto(userId, id, stop.photoUrl, photoUrl);
+  if (swap.status === "gone") {
+    // The stop was deleted while we were saving: don't leave the new file orphaned.
+    await deletePhotoFile(photoUrl);
+    throw new HttpError(404, "Stop not found");
+  }
+  if (swap.status === "conflict") {
+    // A concurrent upload/removal won the swap: discard our file and report the current stop.
+    await deletePhotoFile(photoUrl);
+    return Response.json({ stop: swap.stop });
+  }
   await deletePhotoFile(stop.photoUrl);
-  return Response.json({ stop: updated });
+  if (!swap.stop) throw new HttpError(404, "Stop not found"); // deleted right after our swap
+  return Response.json({ stop: swap.stop });
 });
 
 export const DELETE = handle(async (_req: Request, { params }: Ctx) => {
@@ -34,7 +45,10 @@ export const DELETE = handle(async (_req: Request, { params }: Ctx) => {
   const { id } = await params;
   const stop = await getOwnedStop(userId, id);
   if (!stop) throw new HttpError(404, "Stop not found");
-  const updated = await updateStop(userId, id, { photoUrl: null });
-  await deletePhotoFile(stop.photoUrl);
-  return Response.json({ stop: updated });
+  const swap = await swapStopPhoto(userId, id, stop.photoUrl, null);
+  if (swap.status === "gone") throw new HttpError(404, "Stop not found");
+  // Only delete the old file if our swap won; otherwise someone else already owns its cleanup.
+  if (swap.status === "swapped") await deletePhotoFile(stop.photoUrl);
+  if (!swap.stop) throw new HttpError(404, "Stop not found");
+  return Response.json({ stop: swap.stop });
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import type { Suggestion } from "@/lib/types";
 
@@ -11,13 +12,29 @@ type Props = {
   error: string | null;
   canSearch: boolean;
   onFind: () => void;
-  onAccept: (s: Suggestion) => void;
+  onAccept: (s: Suggestion) => void | Promise<void>;
   onDismiss: (osmId: string) => void;
   onDismissError: () => void;
   onHover?: (osmId: string | null) => void;
 };
 
 export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind, onAccept, onDismiss, onDismissError, onHover }: Props) {
+  // Accepts in flight, per suggestion. The ref guards synchronously (two clicks can land
+  // before a re-render); the state disables the button.
+  const inFlight = useRef(new Set<string>());
+  const [accepting, setAccepting] = useState<ReadonlySet<string>>(new Set());
+  async function accept(sug: Suggestion) {
+    if (inFlight.current.has(sug.osmId)) return;
+    inFlight.current.add(sug.osmId);
+    setAccepting(new Set(inFlight.current));
+    try {
+      await onAccept(sug);
+    } finally {
+      inFlight.current.delete(sug.osmId);
+      setAccepting(new Set(inFlight.current));
+    }
+  }
+
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between">
@@ -49,7 +66,7 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
               <p className="text-xs capitalize text-gray-500">{s.kind}</p>
             </div>
             <div className="flex gap-2">
-              <button type="button" onClick={() => onAccept(s)} className="rounded bg-green-600 px-2 py-1 text-sm text-white">Accept</button>
+              <button type="button" disabled={accepting.has(s.osmId)} onClick={() => void accept(s)} className="rounded bg-green-600 px-2 py-1 text-sm text-white disabled:opacity-50">Accept</button>
               <button type="button" onClick={() => onDismiss(s.osmId)} className="rounded border px-2 py-1 text-sm">Dismiss</button>
             </div>
           </li>

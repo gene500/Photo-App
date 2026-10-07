@@ -56,8 +56,37 @@ export async function updateStop(
   patch: StopUpdate,
 ): Promise<Stop | null> {
   if (!(await getOwnedStop(userId, stopId))) return null;
-  const row = await prisma.stop.update({ where: { id: stopId }, data: patch });
-  return toStopDto(row);
+  try {
+    return toStopDto(await prisma.stop.update({ where: { id: stopId }, data: patch }));
+  } catch (e) {
+    // Deleted between the ownership check and the update (Prisma "record not found").
+    if (typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2025") return null;
+    throw e;
+  }
+}
+
+export type PhotoSwap =
+  | { status: "swapped"; stop: Stop | null } // null: swapped, then the stop was deleted before we re-read it
+  | { status: "conflict"; stop: Stop }
+  | { status: "gone" };
+
+/**
+ * Compare-and-swap of a stop's photoUrl: only updates if it still equals `expected`.
+ * "conflict" means another request changed it first (stop = the current state).
+ */
+export async function swapStopPhoto(
+  userId: string,
+  stopId: string,
+  expected: string | null,
+  next: string | null,
+): Promise<PhotoSwap> {
+  const { count } = await prisma.stop.updateMany({
+    where: { id: stopId, trip: { userId }, photoUrl: expected },
+    data: { photoUrl: next },
+  });
+  const current = await getOwnedStop(userId, stopId);
+  if (count === 1) return { status: "swapped", stop: current };
+  return current ? { status: "conflict", stop: current } : { status: "gone" };
 }
 
 export async function deleteStop(

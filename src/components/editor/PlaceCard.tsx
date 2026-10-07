@@ -4,7 +4,7 @@ type Props = { name: string; resolving: boolean; busy: boolean; onAdd: () => voi
 
 export function PlaceCard({ name, resolving, busy, onAdd, onClose }: Props) {
   return (
-    <section aria-label="Selected place" className="flex items-center gap-3 rounded-xl border bg-white p-3 shadow-lg">
+    <section aria-label="Selected place" className="flex items-center gap-3 rounded-xl border bg-white p-3 text-gray-900 shadow-lg">
       <p className={`min-w-0 flex-1 text-sm font-medium ${resolving ? "text-gray-500" : ""}`}>{name}</p>
       <button
         type="button"

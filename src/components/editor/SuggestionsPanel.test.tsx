@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Suggestion } from "@/lib/types";
@@ -47,5 +47,17 @@ describe("SuggestionsPanel", () => {
     expect(onHover).toHaveBeenLastCalledWith("node/1");
     await userEvent.unhover(screen.getByTestId("suggestion-card"));
     expect(onHover).toHaveBeenLastCalledWith(null);
+  });
+
+  it("ignores a second Accept click while the first is in flight, then re-enables", async () => {
+    let finish!: () => void;
+    const onAccept = vi.fn(() => new Promise<void>((r) => { finish = r; }));
+    render(<SuggestionsPanel {...base} status="done" suggestions={[s]} onAccept={onAccept} />);
+    const accept = screen.getByRole("button", { name: "Accept" });
+    await userEvent.dblClick(accept);
+    expect(onAccept).toHaveBeenCalledTimes(1);
+    expect((accept as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { finish(); });
+    expect((screen.getByRole("button", { name: "Accept" }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

@@ -21,6 +21,11 @@ describe("reorderIds", () => {
 });
 
 describe("StopList", () => {
+  it("disables browser touch panning on the drag handle so touch drags reach dnd-kit", () => {
+    render(<StopList stops={[stop("a", "A")]} bestTimes={[null]} {...handlers} />);
+    expect(screen.getByTestId("drag-handle").className).toContain("touch-none");
+  });
+
   it("shows an empty state", () => {
     render(<StopList stops={[]} bestTimes={[]} {...handlers} />);
     expect(screen.getByText("No stops yet.")).toBeTruthy();

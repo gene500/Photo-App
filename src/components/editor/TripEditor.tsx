@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { api } from "@/lib/api-client";
+import { downsampleRoute } from "@/lib/downsample";
 import { computeArrivals, computeBestTimes } from "@/lib/best-time";
 import { formatDistance, formatDuration } from "@/lib/format";
 import { coordsLabel, haversineMeters } from "@/lib/geo";
@@ -25,6 +26,7 @@ type LatLng = { lat: number; lng: number };
 /** A place being considered: a search result, a clicked spot, or a suggestion. */
 type Pending = LatLng & { name: string; source: StopSource; osmId?: string; resolving: boolean };
 
+const NO_SUGGESTIONS: Suggestion[] = [];
 const errorMessage = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
@@ -40,9 +42,9 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   const [cardId, setCardId] = useState<string | null>(null);
   const [drawerId, setDrawerId] = useState<string | null>(null);
   const [flyTo, setFlyTo] = useState<(LatLng & { nonce: number }) | null>(null);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [suggestionsStatus, setSuggestionsStatus] = useState<SuggestionsStatus>("idle");
-  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+  // Tagged with the waypoints they were found for, like routeResult: a change of stops
+  // makes them stale, so they are simply not shown (and a late response is dropped).
+  const [suggestionsState, setSuggestionsState] = useState<{ key: string; items: Suggestion[]; status: SuggestionsStatus; error: string | null } | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const centerRef = useRef<LatLng | null>(null);
   const lookupSeq = useRef(0);
@@ -54,6 +56,14 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   // Route through the stops in order. A string key so edits that don't move anything
   // (visited, notes) don't refetch. Fewer than 2 stops means no route at all.
   const waypointKey = JSON.stringify(stops.map((s) => [s.lng, s.lat]));
+  const waypointKeyRef = useRef(waypointKey);
+  useEffect(() => {
+    waypointKeyRef.current = waypointKey;
+  }, [waypointKey]);
+  const freshSuggestions = suggestionsState?.key === waypointKey ? suggestionsState : null;
+  const suggestions = freshSuggestions?.items ?? NO_SUGGESTIONS;
+  const suggestionsStatus: SuggestionsStatus = freshSuggestions?.status ?? "idle";
+  const suggestionsError = freshSuggestions?.error ?? null;
   useEffect(() => {
     const coordinates = JSON.parse(waypointKey) as LngLat[];
     if (coordinates.length < 2) return;
@@ -99,10 +109,10 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     try {
       const { stop } = await api.addStop(trip.id, input);
       setStops((prev) => [...prev, stop]);
-      return true;
+      return stop;
     } catch (e) {
       setStopsError(errorMessage(e, "Couldn't add the stop"));
-      return false;
+      return null;
     }
   }
 
@@ -140,10 +150,10 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   async function addPending() {
     if (!pending || pending.resolving) return;
     setAdding(true);
-    const ok = await addStop({ name: pending.name, lat: pending.lat, lng: pending.lng, source: pending.source });
+    const placed = await addStop({ name: pending.name, lat: pending.lat, lng: pending.lng, source: pending.source });
     setAdding(false);
-    if (!ok) return;
-    if (pending.osmId) dismissSuggestion(pending.osmId);
+    if (!placed) return;
+    if (pending.osmId) takeSuggestion(pending.osmId, placed);
     // Only close the card we added from; the user may have opened another meanwhile.
     const added = pending;
     setPending((cur) => (cur === added ? null : cur));
@@ -215,8 +225,9 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     try {
       await api.deleteStop(id);
       setStops((prev) => prev.filter((s) => s.id !== id).map((s, order) => ({ ...s, order })));
-      if (cardId === id) setCardId(null);
-      if (drawerId === id) setDrawerId(null);
+      // The user may have opened something else while the delete was in flight.
+      setCardId((cur) => (cur === id ? null : cur));
+      setDrawerId((cur) => (cur === id ? null : cur));
     } catch (e) {
       setStopsError(errorMessage(e, "Couldn't delete the stop"));
     }
@@ -238,24 +249,41 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
 
   async function findSuggestions() {
     if (!activeRoute) return;
-    setSuggestionsStatus("loading");
-    setSuggestionsError(null);
+    const key = waypointKey;
+    const placed = stops;
+    setSuggestionsState({ key, items: [], status: "loading", error: null });
     try {
-      const { suggestions: found } = await api.suggestions(activeRoute.geometry);
-      setSuggestions(found.filter((s) => !stops.some((st) => haversineMeters(st, s) < ALREADY_A_STOP_M)));
-      setSuggestionsStatus("done");
+      const { suggestions: found } = await api.suggestions(downsampleRoute(activeRoute.geometry));
+      if (waypointKeyRef.current !== key) return;
+      const items = found.filter((s) => !placed.some((st) => haversineMeters(st, s) < ALREADY_A_STOP_M));
+      setSuggestionsState({ key, items, status: "done", error: null });
     } catch (e) {
-      setSuggestionsStatus("error");
-      setSuggestionsError(errorMessage(e, "Couldn't load suggestions. Please retry."));
+      if (waypointKeyRef.current !== key) return;
+      setSuggestionsState({ key, items: [], status: "error", error: errorMessage(e, "Couldn't load suggestions. Please retry.") });
     }
   }
 
   function dismissSuggestion(osmId: string) {
-    setSuggestions((prev) => prev.filter((s) => s.osmId !== osmId));
+    setSuggestionsState((prev) => (prev ? { ...prev, items: prev.items.filter((s) => s.osmId !== osmId) } : prev));
+  }
+
+  /** An accepted suggestion adds a stop, which changes the waypoints. Remove it and keep
+   *  the rest valid by re-tagging them with the key that now includes the new stop. */
+  function takeSuggestion(osmId: string, added: Stop) {
+    setSuggestionsState((prev) => {
+      if (!prev) return prev;
+      const items = prev.items.filter((s) => s.osmId !== osmId);
+      const key = JSON.stringify([...(JSON.parse(prev.key) as LngLat[]), [added.lng, added.lat]]);
+      // Re-tag only suggestions that were current just before this stop was added
+      // (the ref may or may not have caught up with the new stop yet).
+      const wasCurrent = prev.key === waypointKeyRef.current || key === waypointKeyRef.current;
+      return { ...prev, key: wasCurrent ? key : prev.key, items };
+    });
   }
 
   async function acceptSuggestion(s: Suggestion) {
-    if (await addStop({ name: s.name, lat: s.lat, lng: s.lng, source: "suggested" })) dismissSuggestion(s.osmId);
+    const added = await addStop({ name: s.name, lat: s.lat, lng: s.lng, source: "suggested" });
+    if (added) takeSuggestion(s.osmId, added);
   }
 
   const cardIndex = stops.findIndex((s) => s.id === cardId);
@@ -363,13 +391,10 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
             error={suggestionsError}
             canSearch={activeRoute !== null}
             onFind={() => void findSuggestions()}
-            onAccept={(s) => void acceptSuggestion(s)}
+            onAccept={acceptSuggestion}
             onDismiss={dismissSuggestion}
             onHover={setHighlightedId}
-            onDismissError={() => {
-              setSuggestionsError(null);
-              setSuggestionsStatus("idle");
-            }}
+            onDismissError={() => setSuggestionsState(null)}
           />
         }
         suggestionCount={suggestions.length}

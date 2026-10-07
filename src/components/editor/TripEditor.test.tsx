@@ -285,4 +285,74 @@ describe("TripEditor", () => {
     expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 2");
     expect((within(pin1Row()).getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
   });
+
+  it("downsamples a long route before asking for suggestions", async () => {
+    const geometry = Array.from({ length: 3000 }, (_, i) => [-119.79 + i * 0.0002, 36.74 + i * 0.0004] as [number, number]);
+    vi.mocked(api.directions).mockResolvedValue({ route: { ...route, geometry } });
+    vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [] });
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("km"));
+    await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+    await waitFor(() => expect(api.suggestions).toHaveBeenCalled());
+    const sent = vi.mocked(api.suggestions).mock.calls[0]![0];
+    expect(sent.length).toBeLessThanOrEqual(1500);
+    expect(sent[0]).toEqual(geometry[0]);
+    expect(sent[sent.length - 1]).toEqual(geometry[2999]);
+  });
+
+  it("clears suggestions when the stops change and ignores a late response for the old stops", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    let resolveLate!: (v: { suggestions: import("@/lib/types").Suggestion[] }) => void;
+    vi.mocked(api.suggestions).mockResolvedValueOnce({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });
+    vi.mocked(api.updateStop).mockResolvedValue({ stop: { ...seed[0], lat: 38, lng: -118 } });
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("km"));
+    await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+    await screen.findByTestId("suggestion-card");
+    await userEvent.click(screen.getByRole("button", { name: "drag first marker" }));
+    await waitFor(() => expect(screen.queryAllByTestId("suggestion-card")).toHaveLength(0));
+
+    // A request started before the stops change must not land afterwards.
+    vi.mocked(api.suggestions).mockImplementationOnce(() => new Promise((r) => { resolveLate = r; }));
+    await waitFor(() => expect((screen.getByRole("button", { name: "Find photo spots" }) as HTMLButtonElement).disabled).toBe(false));
+    await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+    vi.mocked(api.updateStop).mockResolvedValue({ stop: { ...seed[0], lat: 39, lng: -117 } });
+    await userEvent.click(screen.getByRole("button", { name: "drag first marker elsewhere" }));
+    await act(async () => { resolveLate({ suggestions: [{ osmId: "node/2", name: "Late", lat: 37.8, lng: -119.6, kind: "viewpoint" }] }); });
+    expect(screen.queryAllByTestId("suggestion-card")).toHaveLength(0);
+  });
+
+  it("keeps a newer drawer open when an earlier delete finishes", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    let resolveDelete!: () => void;
+    vi.mocked(api.deleteStop).mockImplementation(() => new Promise<void>((r) => { resolveDelete = r; }) as never);
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await userEvent.click(screen.getByRole("button", { name: "2. B" }));
+    expect(await screen.findByRole("dialog", { name: "Edit B" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "Delete B" }));
+    await userEvent.click(screen.getByRole("button", { name: "1. A" }));
+    expect(await screen.findByRole("dialog", { name: "Edit A" })).toBeTruthy();
+    await act(async () => { resolveDelete(); });
+    await waitFor(() => expect(screen.getAllByTestId("stop-row")).toHaveLength(1));
+    expect(screen.getByRole("dialog", { name: "Edit A" })).toBeTruthy();
+  });
+
+  it("keeps the other suggestions after accepting one", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [
+      { osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" },
+      { osmId: "node/2", name: "Glacier Point", lat: 37.73, lng: -119.57, kind: "viewpoint" },
+    ] });
+    vi.mocked(api.addStop).mockResolvedValue({ stop: newStop({ id: "c", order: 2, name: "Tunnel View", source: "suggested", lat: 37.7, lng: -119.7 }) });
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("km"));
+    await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+    await userEvent.click((await screen.findAllByRole("button", { name: "Accept" }))[0]!);
+    await waitFor(() => expect(api.directions).toHaveBeenCalledTimes(2));
+    expect(screen.getAllByTestId("suggestion-name").map((e) => e.textContent)).toEqual(["Glacier Point"]);
+  });
 });

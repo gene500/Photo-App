@@ -18,6 +18,7 @@ const inputClass = "mt-1 w-full rounded border px-2 py-1";
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
+  const [initial] = useState({ name: stop.name, notes: stop.notes ?? null, visited: stop.visited });
   const [name, setName] = useState(stop.name);
   const [notes, setNotes] = useState(stop.notes ?? "");
   const [visited, setVisited] = useState(stop.visited);
@@ -28,7 +29,14 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
     setBusy(true);
     setError(null);
     try {
-      await onSave({ name, notes: notes.trim() === "" ? null : notes, visited });
+      // Send only what was edited here; fields left alone may have changed elsewhere
+      // (e.g. Visited ticked in the list) and must not be overwritten with stale copies.
+      const patch: StopPatch = {};
+      if (name !== initial.name) patch.name = name;
+      const nextNotes = notes.trim() === "" ? null : notes;
+      if (nextNotes !== initial.notes) patch.notes = nextNotes;
+      if (visited !== initial.visited) patch.visited = visited;
+      if (Object.keys(patch).length > 0) await onSave(patch);
       onClose();
     } catch (e) {
       setError(message(e, "Couldn't save the stop"));
@@ -67,7 +75,7 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-label={`Edit ${stop.name}`} className="fixed inset-y-0 right-0 z-20 w-full max-w-md space-y-3 overflow-y-auto border-l bg-white p-4 shadow-xl">
+    <div role="dialog" aria-modal="true" aria-label={`Edit ${stop.name}`} className="fixed inset-y-0 right-0 z-20 w-full max-w-md space-y-3 overflow-y-auto border-l bg-white p-4 text-gray-900 shadow-xl">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Edit stop</h2>
         <button type="button" onClick={onClose} className="text-sm underline">Close</button>

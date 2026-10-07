@@ -7,7 +7,8 @@ import { StopsPanel } from "./StopsPanel";
 function panel() {
   return render(
     <StopsPanel
-      header={<h1>Sierra loop</h1>}
+      header={<h1>Sierra loop <button type="button">Edit trip</button></h1>}
+      collapsedSummary="3 stops · 2 h 5 min"
       summary={<p>100 km</p>}
       stops={<p>stops content</p>}
       suggestions={<p>suggestions content</p>}
@@ -19,7 +20,8 @@ function panel() {
 describe("StopsPanel", () => {
   it("shows the header, summary and the Stops tab by default", () => {
     panel();
-    expect(screen.getByRole("heading", { name: "Sierra loop" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /Sierra loop/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Edit trip" })).toBeTruthy();
     expect(screen.getByText("100 km")).toBeTruthy();
     expect(screen.getByText("stops content")).toBeTruthy();
     expect(screen.queryByText("suggestions content")).toBeNull();
@@ -43,7 +45,10 @@ describe("StopsPanel", () => {
     await userEvent.click(handle);
     expect(root.getAttribute("data-snap")).toBe("collapsed");
     expect(screen.queryByText("stops content")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Sierra loop" })).toBeTruthy(); // header stays
+    // Collapsed shows a one-line summary instead of the header (and its Edit trip button).
+    expect(screen.getByText("3 stops · 2 h 5 min")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /Sierra loop/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit trip" })).toBeNull();
     await userEvent.click(handle);
     expect(root.getAttribute("data-snap")).toBe("half");
   });

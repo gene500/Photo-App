@@ -15,13 +15,15 @@ const SNAP_CLASS: Record<Snap, string> = {
 
 type Props = {
   header: ReactNode;
+  /** One line shown instead of the header when the panel is collapsed. */
+  collapsedSummary: ReactNode;
   summary: ReactNode;
   stops: ReactNode;
   suggestions: ReactNode;
   suggestionCount: number;
 };
 
-export function StopsPanel({ header, summary, stops, suggestions, suggestionCount }: Props) {
+export function StopsPanel({ header, collapsedSummary, summary, stops, suggestions, suggestionCount }: Props) {
   const [snap, setSnap] = useState<Snap>("half");
   const [tab, setTab] = useState<Tab>("stops");
   const open = snap !== "collapsed";
@@ -33,7 +35,11 @@ export function StopsPanel({ header, summary, stops, suggestions, suggestionCoun
       className={`absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-2xl border bg-white shadow-xl lg:inset-x-auto lg:left-3 lg:top-3 lg:w-[360px] lg:rounded-xl ${SNAP_CLASS[snap]}`}
     >
       <div className="flex items-start gap-2 border-b p-3">
-        <div className="min-w-0 flex-1">{header}</div>
+        {open ? (
+          <div className="min-w-0 flex-1">{header}</div>
+        ) : (
+          <p className="min-w-0 flex-1 truncate py-1 text-sm font-medium">{collapsedSummary}</p>
+        )}
         <button
           type="button"
           aria-label="Resize panel"

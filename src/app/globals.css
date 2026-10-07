@@ -24,3 +24,10 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Phones: keep the map controls and attribution below the floating search bar and clear of the bottom sheet. */
+@media (max-width: 1023px) {
+  .mapboxgl-ctrl-top-right {
+    top: 3.5rem;
+  }
+}

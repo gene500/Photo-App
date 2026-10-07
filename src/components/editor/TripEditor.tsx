@@ -279,7 +279,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
         onCenterChange={handleCenter}
       />
 
-      <div className="pointer-events-none absolute inset-x-3 top-3 z-10 space-y-2 lg:inset-x-auto lg:left-[388px] lg:w-[460px]">
+      <div className="pointer-events-none absolute inset-x-3 top-3 z-[15] space-y-2 lg:inset-x-auto lg:left-[388px] lg:w-[460px]">
         <div className="pointer-events-auto">
           <SearchBar getProximity={() => centerRef.current} onSelect={selectSearchResult} />
         </div>
@@ -319,6 +319,11 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
 
       <StopsPanel
         header={<TripHeader trip={trip} onSave={saveTrip} />}
+        collapsedSummary={
+          activeRoute
+            ? `${stops.length} ${stops.length === 1 ? "stop" : "stops"} · ${formatDuration(activeRoute.duration)}`
+            : trip.name
+        }
         summary={
           <>
             <p className="text-xs text-gray-500">{stops.length} {stops.length === 1 ? "stop" : "stops"}</p>

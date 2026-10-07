@@ -56,8 +56,11 @@ export default function MapPanel({
       style: "mapbox://styles/mapbox/outdoors-v12",
       center: initialRef.current.center,
       zoom: initialRef.current.zoom,
+      attributionControl: false,
     });
-    map.addControl(new mapboxgl.NavigationControl(), "bottom-right");
+    // Top-right (offset below the search bar on phones, see globals.css) so the bottom sheet never covers them.
+    map.addControl(new mapboxgl.NavigationControl(), "top-right");
+    map.addControl(new mapboxgl.AttributionControl({ compact: true }), "top-right");
     const reportCenter = () => {
       const c = map.getCenter();
       handlersRef.current.onCenterChange?.({ lat: c.lat, lng: wrapLng(c.lng) });

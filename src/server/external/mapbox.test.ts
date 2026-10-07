@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ExternalServiceError, geocode, getDirections } from "./mapbox";
+import { ExternalServiceError, geocode, getDirections, reverseGeocode } from "./mapbox";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const okRoute = {
@@ -60,7 +60,7 @@ describe("mapbox", () => {
     const fetchImpl = vi.fn(async () => json({
       features: [{ geometry: { coordinates: [-119.79, 36.74] }, properties: { name: "Fresno", full_address: "Fresno, California, United States" } }],
     }));
-    expect(await geocode("Fresno, CA", fetchImpl)).toEqual([{ name: "Fresno, California, United States", lat: 36.74, lng: -119.79 }]);
+    expect(await geocode("Fresno, CA", {}, fetchImpl)).toEqual([{ name: "Fresno, California, United States", lat: 36.74, lng: -119.79 }]);
     const url = new URL((fetchImpl.mock.calls[0] as unknown as [string])[0]);
     expect(url.pathname).toBe("/search/geocode/v6/forward");
     expect(url.searchParams.get("q")).toBe("Fresno, CA");
@@ -70,7 +70,40 @@ describe("mapbox", () => {
     process.env.EXTERNAL_APIS_FAKE = "1";
     const fetchImpl = vi.fn();
     expect((await getDirections([[0, 0], [0, 1]], fetchImpl)).legs).toHaveLength(1);
-    expect((await geocode("Alpha", fetchImpl))[0].name).toBe("Alpha (fake)");
+    expect((await geocode("Alpha", {}, fetchImpl))[0].name).toBe("Alpha (fake)");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("asks for autocomplete results biased to a proximity", async () => {
+    const fetchImpl = vi.fn(async () => json({ features: [] }));
+    await geocode("Spring", { proximity: { lat: 36.74, lng: -119.79 } }, fetchImpl);
+    const url = new URL((fetchImpl.mock.calls[0] as unknown as [string])[0]);
+    expect(url.searchParams.get("autocomplete")).toBe("true");
+    expect(url.searchParams.get("proximity")).toBe("-119.790000,36.740000");
+  });
+
+  it("reverse geocodes a click, keeping the clicked coordinates", async () => {
+    const fetchImpl = vi.fn(async () => json({
+      features: [{ geometry: { coordinates: [-119.5, 37.5] }, properties: { name: "Tunnel View", full_address: "Tunnel View, Yosemite, California" } }],
+    }));
+    expect(await reverseGeocode({ lat: 37.5001, lng: -119.5001 }, fetchImpl)).toEqual({
+      name: "Tunnel View, Yosemite, California", lat: 37.5001, lng: -119.5001,
+    });
+    const url = new URL((fetchImpl.mock.calls[0] as unknown as [string])[0]);
+    expect(url.pathname).toBe("/search/geocode/v6/reverse");
+    expect(url.searchParams.get("longitude")).toBe("-119.500100");
+    expect(url.searchParams.get("latitude")).toBe("37.500100");
+  });
+
+  it("falls back to coordinates when nothing is found at a spot", async () => {
+    const fetchImpl = vi.fn(async () => json({ features: [] }));
+    expect((await reverseGeocode({ lat: 37.5, lng: -119.5 }, fetchImpl)).name).toBe("37.5000, -119.5000");
+  });
+
+  it("reverse geocodes with fake data in fake mode", async () => {
+    process.env.EXTERNAL_APIS_FAKE = "1";
+    const fetchImpl = vi.fn();
+    expect(await reverseGeocode({ lat: 37, lng: -119 }, fetchImpl)).toEqual({ name: "Spot 37.0000, -119.0000 (fake)", lat: 37, lng: -119 });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

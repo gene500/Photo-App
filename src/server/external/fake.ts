@@ -1,4 +1,4 @@
-import { haversineMeters } from "@/lib/geo";
+import { coordsLabel, haversineMeters } from "@/lib/geo";
 import type { LngLat, Place, RouteResult, Suggestion } from "@/lib/types";
 
 /** EXTERNAL_APIS_FAKE=1 swaps Mapbox/Overpass for canned data (e2e tests, offline dev). */
@@ -35,4 +35,8 @@ export function fakeSuggestions(route: LngLat[]): Suggestion[] {
 export function fakeGeocode(query: string): Place[] {
   const h = [...query].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) % 100_000, 7);
   return [{ name: `${query.trim()} (fake)`, lat: 36 + (h % 200) / 100, lng: -121 + (Math.floor(h / 200) % 300) / 100 }];
+}
+
+export function fakeReverseGeocode(p: { lat: number; lng: number }): Place {
+  return { name: `Spot ${coordsLabel(p)} (fake)`, lat: p.lat, lng: p.lng };
 }

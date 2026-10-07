@@ -51,4 +51,15 @@ describe("StopList", () => {
     expect(handlers.onDelete).toHaveBeenCalledWith("a");
     expect(handlers.onSelect).toHaveBeenCalledWith("a");
   });
+
+  it("labels the first and last stops Start and End when there are two or more", () => {
+    render(<StopList stops={[stop("a", "A"), stop("b", "B"), stop("c", "C")]} bestTimes={[null, null, null]} {...handlers} />);
+    const roles = screen.getAllByTestId("stop-role").map((el) => el.textContent);
+    expect(roles).toEqual(["Start", "End"]);
+  });
+
+  it("does not label a lone stop", () => {
+    render(<StopList stops={[stop("a", "A")]} bestTimes={[null]} {...handlers} />);
+    expect(screen.queryAllByTestId("stop-role")).toHaveLength(0);
+  });
 });

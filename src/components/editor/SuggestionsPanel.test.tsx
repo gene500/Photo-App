@@ -39,4 +39,13 @@ describe("SuggestionsPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(onFind).toHaveBeenCalled();
   });
+
+  it("reports hover over a suggestion card", async () => {
+    const onHover = vi.fn();
+    render(<SuggestionsPanel {...base} status="done" suggestions={[s]} onHover={onHover} />);
+    await userEvent.hover(screen.getByTestId("suggestion-card"));
+    expect(onHover).toHaveBeenLastCalledWith("node/1");
+    await userEvent.unhover(screen.getByTestId("suggestion-card"));
+    expect(onHover).toHaveBeenLastCalledWith(null);
+  });
 });

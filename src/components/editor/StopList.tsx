@@ -47,7 +47,10 @@ export function StopList({ stops, bestTimes, onReorder, ...handlers }: Props) {
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         <ol className="space-y-2">
           {stops.map((s, i) => (
-            <StopRow key={s.id} stop={s} index={i} bestTime={bestTimes[i] ?? null} {...handlers} />
+            <StopRow key={s.id} stop={s} index={i} bestTime={bestTimes[i] ?? null}
+              role={stops.length > 1 ? (i === 0 ? "Start" : i === stops.length - 1 ? "End" : null) : null}
+              {...handlers}
+            />
           ))}
         </ol>
       </SortableContext>
@@ -55,7 +58,7 @@ export function StopList({ stops, bestTimes, onReorder, ...handlers }: Props) {
   );
 }
 
-function StopRow({ stop, index, bestTime, onToggleVisited, onDelete, onSelect }: Handlers & { stop: Stop; index: number; bestTime: BestTime }) {
+function StopRow({ stop, index, bestTime, role, onToggleVisited, onDelete, onSelect }: Handlers & { stop: Stop; index: number; bestTime: BestTime; role: "Start" | "End" | null }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id });
   return (
     <li
@@ -72,6 +75,7 @@ function StopRow({ stop, index, bestTime, onToggleVisited, onDelete, onSelect }:
         <button type="button" onClick={() => onSelect(stop.id)} className="block truncate text-left font-medium hover:underline">
           {index + 1}. {stop.name}
         </button>
+        {role && <span data-testid="stop-role" className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700">{role}</span>}
         <p data-testid="best-time" className="text-xs text-gray-600">{describeBestTime(bestTime)}</p>
         {stop.notes && <p className="truncate text-xs text-gray-500">{stop.notes}</p>}
       </div>

@@ -14,9 +14,10 @@ type Props = {
   onAccept: (s: Suggestion) => void;
   onDismiss: (osmId: string) => void;
   onDismissError: () => void;
+  onHover?: (osmId: string | null) => void;
 };
 
-export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind, onAccept, onDismiss, onDismissError }: Props) {
+export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind, onAccept, onDismiss, onDismissError, onHover }: Props) {
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between">
@@ -42,7 +43,7 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
       )}
       <ul className="space-y-2">
         {suggestions.map((s) => (
-          <li key={s.osmId} data-testid="suggestion-card" className="flex items-center justify-between gap-2 rounded border p-2">
+          <li key={s.osmId} data-testid="suggestion-card" onMouseEnter={() => onHover?.(s.osmId)} onMouseLeave={() => onHover?.(null)} onFocus={() => onHover?.(s.osmId)} onBlur={() => onHover?.(null)} className="flex items-center justify-between gap-2 rounded border p-2">
             <div>
               <p data-testid="suggestion-name" className="font-medium">{s.name}</p>
               <p className="text-xs capitalize text-gray-500">{s.kind}</p>

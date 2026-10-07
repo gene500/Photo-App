@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api-client";
+import { card } from "@/components/ui/styles";
 import type { Place } from "@/lib/types";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 
@@ -69,16 +70,16 @@ export function SearchBar({ getProximity, onSelect }: Props) {
           if (e.key === "Escape") clear();
         }}
         placeholder="Search for a place"
-        className="w-full rounded-xl border bg-white px-4 py-2.5 text-gray-900 shadow-lg"
+        className="w-full rounded-2xl bg-surface px-4 py-3 text-foreground placeholder:text-muted shadow-lg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-strong"
       />
-      {shown?.error && <p className="mt-1 rounded-lg bg-white px-3 py-2 text-sm text-red-700 shadow">{shown.error}</p>}
+      {shown?.error && <p className="mt-1 rounded-xl bg-surface px-3 py-2 text-sm text-danger shadow-lg">{shown.error}</p>}
       {shown && shown.places.length > 0 && (
-        <ul id="place-search-results" className="mt-1 overflow-hidden rounded-xl border bg-white text-gray-900 shadow-lg">
+        <ul id="place-search-results" className={`mt-1 overflow-hidden rounded-xl py-1 ${card}`}>
           {shown.places.map((p) => (
             <li key={`${p.lat},${p.lng},${p.name}`}>
               <button
                 type="button"
-                className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
+                className="min-h-10 w-full px-4 py-2 text-left text-sm hover:bg-hover"
                 onClick={() => {
                   onSelect(p);
                   clear();

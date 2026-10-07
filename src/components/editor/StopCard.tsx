@@ -1,6 +1,7 @@
 "use client";
 
 import { describeBestTime, formatClock } from "@/lib/best-time";
+import { btnSecondary, card } from "@/components/ui/styles";
 import type { BestTime } from "@/lib/best-time";
 import type { Stop } from "@/lib/types";
 
@@ -15,21 +16,21 @@ type Props = {
 
 export function StopCard({ stop, bestTime, arrival, onToggleVisited, onOpenDetails, onClose }: Props) {
   return (
-    <section aria-label="Selected stop" className="space-y-2 rounded-xl border bg-white p-3 text-gray-900 shadow-lg">
+    <section aria-label="Selected stop" className={`space-y-2 rounded-xl p-3 ${card}`}>
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold">{stop.name}</p>
-        <button type="button" onClick={onClose} aria-label="Close" className="px-1 text-lg leading-none text-gray-500">
+        <p className="py-1.5 text-sm font-semibold">{stop.name}</p>
+        <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg leading-none text-muted hover:bg-hover">
           ×
         </button>
       </div>
-      <p className="text-xs text-gray-600">{describeBestTime(bestTime)}</p>
-      {arrival && <p className="text-xs text-gray-600">Arrive ~{formatClock(arrival)}</p>}
+      <p className="text-xs text-muted">{describeBestTime(bestTime)}</p>
+      {arrival && <p className="text-xs text-muted">Arrive ~{formatClock(arrival)}</p>}
       <div className="flex items-center justify-between">
-        <label className="flex items-center gap-1 text-sm">
-          <input type="checkbox" checked={stop.visited} onChange={(e) => onToggleVisited(e.target.checked)} />
+        <label className="flex min-h-9 items-center gap-2 text-sm">
+          <input type="checkbox" className="h-4 w-4 accent-accent-strong" checked={stop.visited} onChange={(e) => onToggleVisited(e.target.checked)} />
           Visited
         </label>
-        <button type="button" onClick={onOpenDetails} className="rounded border px-3 py-1 text-sm">
+        <button type="button" onClick={onOpenDetails} className={btnSecondary}>
           Open details
         </button>
       </div>

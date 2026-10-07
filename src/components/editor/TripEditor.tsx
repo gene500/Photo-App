@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { btnGhost } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { downsampleRoute } from "@/lib/downsample";
 import { computeArrivals, computeBestTimes } from "@/lib/best-time";
@@ -382,7 +383,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
       </div>
 
       {stops.length === 0 && !pending && (
-        <p data-testid="empty-hint" className="pointer-events-none absolute inset-x-0 top-1/3 px-6 text-center text-sm text-gray-700">
+        <p data-testid="empty-hint" className="pointer-events-none absolute inset-x-0 top-1/3 px-6 text-center text-sm text-muted">
           Search for a place or click the map to add your first stop.
         </p>
       )}
@@ -396,8 +397,10 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
         }
         summary={
           <>
-            <p className="text-xs text-gray-500">{stops.length} {stops.length === 1 ? "stop" : "stops"}</p>
-            <p data-testid="route-status" className="text-sm text-gray-700">
+            <div className="flex flex-wrap items-baseline gap-x-1.5 text-sm text-muted">
+            <p>{stops.length} {stops.length === 1 ? "stop" : "stops"}</p>
+            <span aria-hidden>·</span>
+            <p data-testid="route-status">
               {activeRoute
                 ? `${formatDistance(activeRoute.distance)} · ${formatDuration(activeRoute.duration)}`
                 : activeRouteError
@@ -406,6 +409,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
                     ? "Loading route…"
                     : "Add 2 stops to see the route"}
             </p>
+            </div>
             <ErrorBanner
               message={current?.dismissed ? null : activeRouteError}
               onDismiss={() => setRouteResult((r) => (r ? { ...r, dismissed: true } : r))}
@@ -415,24 +419,23 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
         }
         stops={
           <>
-            <p className="text-xs text-gray-500">Drag ⋮⋮ to reorder. Click the map or search to add stops.</p>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <button
                 type="button"
                 onClick={() => void optimizeRoute()}
                 disabled={stops.length < 3 || optimizing}
-                className="rounded border px-3 py-1 text-sm disabled:opacity-50"
+                className="inline-flex min-h-9 items-center rounded-full bg-ink px-4 text-sm font-medium text-ink-foreground transition hover:opacity-85 disabled:opacity-40"
               >
                 {optimizing ? "Optimizing…" : "Optimize route"}
               </button>
               {canUndo && undo && (
-                <button type="button" onClick={() => void reorder(undo.previousIds)} className="text-sm underline">
+                <button type="button" onClick={() => void reorder(undo.previousIds)} className={btnGhost}>
                   Undo
                 </button>
               )}
-              {stops.length < 3 && <p className="text-xs text-gray-500">Add at least 3 stops to optimize the order.</p>}
+              {stops.length < 3 && <p className="text-xs text-muted">Add at least 3 stops to optimize the order.</p>}
               {optimizeNote?.idsKey === idsKey && (
-                <p role="status" className="text-xs text-gray-600">{optimizeNote.text}</p>
+                <p role="status" className="text-xs text-muted">{optimizeNote.text}</p>
               )}
             </div>
             <StopList

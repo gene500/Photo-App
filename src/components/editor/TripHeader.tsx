@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { btnGhost, btnPrimary, btnSecondary, inputClass } from "@/components/ui/styles";
 import type { Trip } from "@/lib/types";
 import type { TripPatch } from "@/lib/validation";
 
-const inputClass = "mt-1 w-full rounded border px-2 py-1";
 
 export function TripHeader({ trip, onSave }: { trip: Trip; onSave: (patch: TripPatch) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
@@ -36,30 +36,30 @@ export function TripHeader({ trip, onSave }: { trip: Trip; onSave: (patch: TripP
 
   if (!editing) {
     return (
-      <header className="space-y-1">
+      <header>
         <div className="flex items-start justify-between gap-2">
-          <h1 className="text-xl font-semibold">{trip.name}</h1>
-          <button type="button" onClick={beginEdit} className="text-sm underline">Edit trip</button>
+          <h1 className="min-w-0 truncate text-lg font-semibold leading-9">{trip.name}</h1>
+          <button type="button" onClick={beginEdit} className={`${btnGhost} shrink-0`}>Edit trip</button>
         </div>
-        <p className="text-sm text-gray-700">Planned for {trip.plannedDate}</p>
+        <p className="text-sm text-muted">Planned for {trip.plannedDate}</p>
       </header>
     );
   }
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="space-y-2 rounded border p-3">
+    <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="space-y-3 pb-2">
       <label className="block">
-        <span className="text-sm">Trip name</span>
+        <span className="text-sm text-muted">Trip name</span>
         <input required value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
       </label>
       <label className="block">
-        <span className="text-sm">Planned date</span>
+        <span className="text-sm text-muted">Planned date</span>
         <input type="date" required value={plannedDate} onChange={(e) => setPlannedDate(e.target.value)} className={inputClass} />
       </label>
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
       <div className="flex gap-2">
-        <button type="submit" disabled={busy} className="rounded bg-blue-600 px-3 py-1 text-white">Save trip</button>
-        <button type="button" onClick={() => setEditing(false)} className="rounded border px-3 py-1">Cancel</button>
+        <button type="submit" disabled={busy} className={btnPrimary}>Save trip</button>
+        <button type="button" onClick={() => setEditing(false)} className={btnSecondary}>Cancel</button>
       </div>
     </form>
   );

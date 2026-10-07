@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { btnAccent, btnGhost, btnSecondary } from "@/components/ui/styles";
 import type { Suggestion } from "@/lib/types";
 
 export type SuggestionsStatus = "idle" | "loading" | "done" | "error";
@@ -38,36 +39,36 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold">Photo spot suggestions</h2>
+        <h2 className="text-sm font-semibold">Photo spot suggestions</h2>
         <button
           type="button"
           onClick={onFind}
           disabled={!canSearch || status === "loading"}
-          className="rounded border px-3 py-1 text-sm"
+          className={btnSecondary}
         >
           {status === "loading" ? "Searching…" : "Find photo spots"}
         </button>
       </div>
-      {!canSearch && <p className="text-xs text-gray-500">Suggestions need a route first.</p>}
+      {!canSearch && <p className="text-xs text-muted">Suggestions need a route first.</p>}
       {status === "error" && error && (
         <div className="space-y-1">
           <ErrorBanner message={error} onDismiss={onDismissError} />
-          <button type="button" onClick={onFind} className="text-sm underline">Retry</button>
+          <button type="button" onClick={onFind} className={btnGhost}>Retry</button>
         </div>
       )}
       {status === "done" && suggestions.length === 0 && (
-        <p className="text-sm text-gray-500">No more suggestions along this route.</p>
+        <p className="text-sm text-muted">No more suggestions along this route.</p>
       )}
-      <ul className="space-y-2">
+      <ul className="space-y-1">
         {suggestions.map((s) => (
-          <li key={s.osmId} data-testid="suggestion-card" onMouseEnter={() => onHover?.(s.osmId)} onMouseLeave={() => onHover?.(null)} onFocus={() => onHover?.(s.osmId)} onBlur={() => onHover?.(null)} className="flex items-center justify-between gap-2 rounded border p-2">
-            <div>
-              <p data-testid="suggestion-name" className="font-medium">{s.name}</p>
-              <p className="text-xs capitalize text-gray-500">{s.kind}</p>
+          <li key={s.osmId} data-testid="suggestion-card" onMouseEnter={() => onHover?.(s.osmId)} onMouseLeave={() => onHover?.(null)} onFocus={() => onHover?.(s.osmId)} onBlur={() => onHover?.(null)} className="flex items-center justify-between gap-2 rounded-xl px-2 py-2 hover:bg-hover">
+            <div className="min-w-0">
+              <p data-testid="suggestion-name" className="truncate text-sm font-medium">{s.name}</p>
+              <p className="text-xs capitalize text-muted">{s.kind}</p>
             </div>
-            <div className="flex gap-2">
-              <button type="button" disabled={accepting.has(s.osmId)} onClick={() => void accept(s)} className="rounded bg-green-600 px-2 py-1 text-sm text-white disabled:opacity-50">Accept</button>
-              <button type="button" onClick={() => onDismiss(s.osmId)} className="rounded border px-2 py-1 text-sm">Dismiss</button>
+            <div className="flex shrink-0 gap-1">
+              <button type="button" disabled={accepting.has(s.osmId)} onClick={() => void accept(s)} className={btnAccent}>Accept</button>
+              <button type="button" onClick={() => onDismiss(s.osmId)} className={btnGhost}>Dismiss</button>
             </div>
           </li>
         ))}

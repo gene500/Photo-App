@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { btnGhost, btnPrimary, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { checkPhotoFile, PHOTO_TYPES } from "@/lib/photo-rules";
 import type { Stop } from "@/lib/types";
@@ -14,7 +15,6 @@ type Props = {
   onPhotoChange: (stop: Stop) => void;
 };
 
-const inputClass = "mt-1 w-full rounded border px-2 py-1";
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
@@ -75,24 +75,24 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-label={`Edit ${stop.name}`} className="fixed inset-y-0 right-0 z-20 w-full max-w-md space-y-3 overflow-y-auto border-l bg-white p-4 text-gray-900 shadow-xl">
+    <div role="dialog" aria-modal="true" aria-label={`Edit ${stop.name}`} className="fixed inset-y-0 right-0 z-20 w-full max-w-md space-y-4 overflow-y-auto rounded-l-2xl bg-surface p-5 text-foreground shadow-2xl ring-1 ring-border">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Edit stop</h2>
-        <button type="button" onClick={onClose} className="text-sm underline">Close</button>
+        <button type="button" onClick={onClose} className={btnGhost}>Close</button>
       </div>
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-muted">
         {stop.source === "suggested" ? "Suggested from OpenStreetMap" : "Manual pin"} · {stop.lat.toFixed(4)}, {stop.lng.toFixed(4)}
       </p>
       <label className="block">
-        <span className="text-sm">Name</span>
+        <span className="text-sm text-muted">Name</span>
         <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
       </label>
       <label className="block">
-        <span className="text-sm">Notes</span>
+        <span className="text-sm text-muted">Notes</span>
         <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
       </label>
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={visited} onChange={(e) => setVisited(e.target.checked)} />
+      <label className="flex min-h-9 items-center gap-2 text-sm">
+        <input type="checkbox" className="h-4 w-4 accent-accent-strong" checked={visited} onChange={(e) => setVisited(e.target.checked)} />
         Visited
       </label>
       <div className="space-y-2">
@@ -100,15 +100,15 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
         {stop.photoUrl ? (
           <div className="space-y-1">
             {/* eslint-disable-next-line @next/next/no-img-element -- user uploads served by an auth-checked route */}
-            <img src={stop.photoUrl} alt={`Reference for ${stop.name}`} className="max-h-48 rounded" />
-            <button type="button" disabled={busy} onClick={() => void removePhoto()} className="text-sm text-red-700 underline">
+            <img src={stop.photoUrl} alt={`Reference for ${stop.name}`} className="max-h-48 rounded-xl" />
+            <button type="button" disabled={busy} onClick={() => void removePhoto()} className="text-sm text-danger underline">
               Remove photo
             </button>
           </div>
         ) : (
-          <p className="text-xs text-gray-500">No photo yet.</p>
+          <p className="text-xs text-muted">No photo yet.</p>
         )}
-        <label className="block text-sm">
+        <label className="block text-sm text-muted">
           Upload photo
           <input
             type="file"
@@ -122,10 +122,10 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
             className="mt-1 block"
           />
         </label>
-        <p className="text-xs text-gray-500">JPEG, PNG or WebP, up to 4 MB.</p>
+        <p className="text-xs text-muted">JPEG, PNG or WebP, up to 4 MB.</p>
       </div>
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      <button type="button" disabled={busy} onClick={() => void save()} className="rounded bg-blue-600 px-4 py-2 text-white">
+      <button type="button" disabled={busy} onClick={() => void save()} className={btnPrimary}>
         Save
       </button>
     </div>

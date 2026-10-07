@@ -113,3 +113,14 @@ Tip: when setting variables from the CLI, use
 `vercel env add NAME production --value "..." --type secret --yes`.
 Piping values through stdin or pasting into the web form can add stray
 whitespace, which shows up as a Turso `401` during the build.
+
+**Cautions**
+
+- Scope `TURSO_*` and `BLOB_READ_WRITE_TOKEN` to **Production only**. Preview
+  builds also run `vercel-build`, which migrates the database named by
+  `TURSO_*`, so a preview build would change the production database.
+- `vercel-build` migrates the database **before** `next build`. A build that
+  fails after the migration step still leaves the database migrated.
+- A local `.env.local` created by `vercel env pull` makes `npm run dev` use the
+  production Turso database and Blob store. Remove `TURSO_*` and
+  `BLOB_READ_WRITE_TOKEN` from it (or do not pull them) for local work.

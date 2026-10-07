@@ -1,5 +1,6 @@
 import { stopPatchSchema } from "@/lib/validation";
 import { handle, HttpError, readJson, requireUserId } from "@/server/http";
+import { deletePhotoFile } from "@/server/photos";
 import { deleteStop, updateStop } from "@/server/stops";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -18,5 +19,6 @@ export const DELETE = handle(async (_req: Request, { params }: Ctx) => {
   const { id } = await params;
   const result = await deleteStop(userId, id);
   if (!result) throw new HttpError(404, "Stop not found");
+  await deletePhotoFile(result.photoUrl);
   return new Response(null, { status: 204 });
 });

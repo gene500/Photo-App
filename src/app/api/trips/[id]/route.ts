@@ -1,5 +1,6 @@
 import { tripPatchSchema } from "@/lib/validation";
 import { handle, HttpError, readJson, requireUserId } from "@/server/http";
+import { deletePhotoFile } from "@/server/photos";
 import { deleteTrip, getTrip, updateTrip } from "@/server/trips";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -26,5 +27,6 @@ export const DELETE = handle(async (_req: Request, { params }: Ctx) => {
   const { id } = await params;
   const result = await deleteTrip(userId, id);
   if (!result) throw new HttpError(404, "Trip not found");
+  await Promise.all(result.photoUrls.map((url) => deletePhotoFile(url)));
   return new Response(null, { status: 204 });
 });

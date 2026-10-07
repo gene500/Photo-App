@@ -21,8 +21,13 @@ viewer's local day; the stop drawer sends only changed fields; Accept has a
 per-suggestion busy guard; suggestions are cleared when the stops change and
 late responses ignored; removeStop no longer closes a newer card/drawer; a photo
 upload for a stop deleted mid-flight returns 404 and removes the file; dead
-`boundsFor` removed. Not addressed (out of scope): rate limiting, invite codes,
-security headers.
+`boundsFor` removed. Also: the server's corridor builder now coarsens its route
+simplification in steps for long routes (a real 1,916 km route simplified to 282
+points, over the 200-point guard, so "Find photo spots" failed beyond roughly
+1,000 km) and widens the buffer by the extra simplification error so spots near
+the real road are not missed. Not addressed (out of scope): rate limiting, invite
+codes, security headers, concurrent-upload orphan race, marker rebuild mid-drag,
+antimeridian-crossing routes.
 
 ## 2026-10-07 (map-first UI: built, reviewed, verified — ready to merge)
 

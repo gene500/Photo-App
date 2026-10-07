@@ -9,8 +9,10 @@ export const CORRIDOR_KM = 2;
 // Simplify the route (~500 m) before buffering, then the polygon (~200 m) after,
 // so long routes produce an Overpass `poly:` filter of manageable size.
 // Long routes keep more detail than 200 points at the finest tolerance (a real
-// 1,900 km route simplifies to ~280), so coarsen step by step (up to ~4 km, still
-// within the 2 km buffer's margin) before giving up.
+// 1,900 km route simplifies to ~280), so coarsen step by step before giving up.
+// Simplifying can move the line up to `tolerance` away from the real road, so the
+// buffer is widened by the extra error beyond the finest step (see buildCorridor).
+const KM_PER_DEG = 111;
 const ROUTE_SIMPLIFY_STEPS_DEG = [0.005, 0.01, 0.02, 0.04];
 const POLYGON_SIMPLIFY_DEG = 0.002;
 
@@ -27,15 +29,18 @@ const MAX_SIMPLIFIED_ROUTE_POINTS = 200;
 export function buildCorridor(route: LngLat[], radiusKm: number = CORRIDOR_KM): LngLat[] {
   if (route.length < 2) throw new Error("Route needs at least 2 coordinates");
   const input = lineString(route);
-  let line = simplify(input, { tolerance: ROUTE_SIMPLIFY_STEPS_DEG[0], highQuality: false });
+  let used = ROUTE_SIMPLIFY_STEPS_DEG[0];
+  let line = simplify(input, { tolerance: used, highQuality: false });
   for (const tolerance of ROUTE_SIMPLIFY_STEPS_DEG.slice(1)) {
     if (line.geometry.coordinates.length <= MAX_SIMPLIFIED_ROUTE_POINTS) break;
+    used = tolerance;
     line = simplify(input, { tolerance, highQuality: false });
   }
   if (line.geometry.coordinates.length > MAX_SIMPLIFIED_ROUTE_POINTS) {
     throw new Error("Route is too complex to build a corridor for");
   }
-  const corridor = buffer(line, radiusKm, { units: "kilometers" });
+  const extraKm = (used - ROUTE_SIMPLIFY_STEPS_DEG[0]) * KM_PER_DEG;
+  const corridor = buffer(line, radiusKm + extraKm, { units: "kilometers" });
   if (!corridor) throw new Error("Could not build a corridor around the route");
   const simple = simplify(corridor, { tolerance: POLYGON_SIMPLIFY_DEG, highQuality: false });
   const g = simple.geometry;

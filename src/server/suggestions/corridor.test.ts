@@ -50,6 +50,14 @@ describe("buildCorridor", () => {
     expect(ring[0]).toEqual(ring[ring.length - 1]);
   });
 
+  it("keeps every point of a coarsely simplified winding route inside the corridor", () => {
+    // Tight, steep wiggles force the coarsest simplification steps.
+    const winding: LngLat[] = Array.from({ length: 1500 }, (_, i) => [i * 0.01, 0.03 * Math.sin(i / 2)]);
+    const poly = polygon([buildCorridor(winding)]);
+    const outside = winding.filter((p) => !booleanPointInPolygon(point(p), poly));
+    expect(outside.length).toBe(0);
+  });
+
   it("accepts a route whose simplified geometry is within budget", () => {
     // raw=211 drops to 169 points once simplification is coarsened.
     expect(() => buildCorridor(zigzag(211))).not.toThrow();

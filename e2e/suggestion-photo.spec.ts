@@ -23,6 +23,12 @@ test("hovering a suggestion dot shows its photo popup; the place card shows it o
   await page.getByRole("button", { name: "Find photo spots" }).click();
   await expect(page.getByTestId("suggestion-card")).toHaveCount(3);
 
+  // The cards carry the (fake, deterministic) popularity captions.
+  const captions = page.getByTestId("suggestion-popularity");
+  await expect(captions).toHaveCount(3);
+  await expect(page.getByTestId("suggestion-card").filter({ hasText: "Fake Viewpoint" }).getByTestId("suggestion-popularity")).toContainText("≈1.2k photos nearby");
+  await expect(page.getByTestId("suggestion-card").filter({ hasText: "Fake Peak" }).getByTestId("suggestion-popularity")).toContainText("≈87 photos nearby");
+
   // (The offline map is tiny, so the three dots overlap: Fake Attraction is the topmost.)
   // Hover a dot: popup with the name and a photo; gone after the mouse leaves.
   const dot = page.getByRole("button", { name: "Suggestion: Fake Attraction" });
@@ -31,6 +37,7 @@ test("hovering a suggestion dot shows its photo popup; the place card shows it o
   await expect(popup.getByTestId("suggestion-popup-name")).toHaveText("Fake Attraction");
   await expect(popup.locator("img")).toBeVisible();
   await expect(popup).toContainText("Photo: Wikipedia");
+  await expect(popup.getByTestId("suggestion-popup-popularity")).toHaveText("≈2.5k photos nearby");
   await page.mouse.move(5, 5);
   await expect(popup).toHaveCount(0);
 
@@ -45,4 +52,5 @@ test("hovering a suggestion dot shows its photo popup; the place card shows it o
   const card = page.getByRole("region", { name: "Selected place" });
   await expect(card).toContainText("Fake Attraction");
   await expect(card.locator("img")).toBeVisible();
+  await expect(card.getByTestId("photo-credit")).toHaveText("Photo: Wikipedia");
 });

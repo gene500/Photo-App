@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakeSuggestions, isFakeExternal } from "./fake";
+import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakePlacePhoto, fakeSuggestions, isFakeExternal } from "./fake";
 
 describe("fake externals", () => {
   afterEach(() => {
@@ -50,3 +50,14 @@ describe("fakeGeocode", () => {
   });
 });
 
+
+describe("fakePlacePhoto", () => {
+  it("returns a deterministic inline svg placeholder", () => {
+    const a = fakePlacePhoto({ name: "Fake Peak" });
+    expect(a).toEqual(fakePlacePhoto({ name: "Fake Peak" }));
+    expect(a.url.startsWith("data:image/svg+xml,")).toBe(true);
+    expect(a.url.length).toBeLessThan(1200);
+    expect(a).toMatchObject({ title: "Fake Peak", credit: "Wikipedia" });
+    expect(fakePlacePhoto({ name: "Other" }).url).not.toBe(a.url);
+  });
+});

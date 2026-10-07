@@ -53,3 +53,13 @@ export type Suggestion = {
   lng: number;
   kind: SuggestionKind;
 };
+
+/** A Wikipedia photo of a place (decorative; always credited). */
+export type PlacePhoto = {
+  /** https thumbnail (~480px wide) on a Wikimedia upload host. */
+  url: string;
+  /** Wikipedia article title. */
+  title: string;
+  pageUrl: string;
+  credit: "Wikipedia";
+};

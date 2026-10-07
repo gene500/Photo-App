@@ -1,5 +1,5 @@
 import { coordsLabel, haversineMeters } from "@/lib/geo";
-import type { LngLat, Place, RouteResult, Suggestion } from "@/lib/types";
+import type { LngLat, Place, PlacePhoto, RouteResult, Suggestion } from "@/lib/types";
 
 /** EXTERNAL_APIS_FAKE=1 swaps Mapbox/Overpass for canned data (e2e tests, offline dev). */
 export function isFakeExternal(): boolean {
@@ -46,4 +46,19 @@ export function fakeGeocode(query: string): Place[] {
 
 export function fakeReverseGeocode(p: { lat: number; lng: number }): Place {
   return { name: `Spot ${coordsLabel(p)} (fake)`, lat: p.lat, lng: p.lng };
+}
+
+/** Deterministic inline-SVG placeholder (no network): the hue comes from the place name. */
+export function fakePlacePhoto(p: { name: string }): PlacePhoto {
+  const hue = [...p.name].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) % 360, 17);
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="480" height="300" viewBox="0 0 480 300">` +
+    `<rect width="480" height="300" fill="hsl(${hue} 30% 80%)"/>` +
+    `<path d="M0 230 L140 120 L230 200 L330 90 L480 230 V300 H0 Z" fill="hsl(${hue} 25% 55%)"/></svg>`;
+  return {
+    url: `data:image/svg+xml,${encodeURIComponent(svg)}`,
+    title: p.name,
+    pageUrl: "https://en.wikipedia.org/wiki/Special:Random",
+    credit: "Wikipedia",
+  };
 }

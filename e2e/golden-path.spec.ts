@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("sign up → create trip → manual stop → accept suggestion → reorder → mark visited", async ({ page }) => {
+test("sign up → new trip → search + click to add stops → suggestion → reorder → mark visited", async ({ page }) => {
   // Sign up
   await page.goto("/signup");
   await page.getByLabel("Email").fill(`e2e-${Date.now()}@example.com`);
@@ -8,46 +8,51 @@ test("sign up → create trip → manual stop → accept suggestion → reorder 
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL(/\/trips$/);
 
-  // Create trip
+  // New trip: just a name and a date, then the empty map
   await page.getByLabel("Trip name").fill("Sierra loop");
   await page.getByLabel("Planned date").fill("2026-07-01");
-  for (const [testId, query] of [["place-start", "Alpha Town"], ["place-end", "Beta City"]] as const) {
-    const group = page.getByTestId(testId);
-    await group.getByRole("textbox").fill(query);
-    await group.getByRole("button", { name: "Search" }).click();
-    await group.getByRole("button", { name: `${query} (fake)` }).click();
-  }
   await page.getByRole("button", { name: "Create trip" }).click();
   await expect(page).toHaveURL(/\/trips\/[^/]+$/);
-  await expect(page.getByTestId("route-status")).toHaveText(/km/);
+  await expect(page.getByTestId("empty-hint")).toBeVisible();
+  await expect(page.getByTestId("route-status")).toHaveText("Add 2 stops to see the route");
 
-  // Manual stop
-  await page.getByTestId("map").click({ position: { x: 120, y: 120 } });
+  // Stop 1: search as you type, pick the result, add it
+  await page.getByRole("combobox", { name: "Search for a place" }).fill("Alpha Town");
+  await page.getByRole("button", { name: "Alpha Town (fake)" }).click();
+  await page.getByRole("button", { name: "Add stop" }).click();
   const rows = page.getByTestId("stop-row");
   await expect(rows).toHaveCount(1);
-  await expect(rows.first()).toContainText("Pin 1");
+  await expect(rows.first()).toContainText("Alpha Town (fake)");
 
-  // Accept a suggestion
+  // Stop 2: click the map, wait for the lookup to name it, add it
+  await page.getByTestId("map").click({ position: { x: 400, y: 300 } });
+  await expect(page.getByText(/^Spot .* \(fake\)$/)).toBeVisible();
+  await page.getByRole("button", { name: "Add stop" }).click();
+  await expect(rows).toHaveCount(2);
+  await expect(page.getByTestId("route-status")).toHaveText(/km/);
+  await expect(page.getByTestId("stop-role")).toHaveText(["Start", "End"]);
+
+  // Accept a suggestion from the Suggestions tab
+  await page.getByRole("tab", { name: "Suggestions" }).click();
   await page.getByRole("button", { name: "Find photo spots" }).click();
   const card = page.getByTestId("suggestion-card").first();
   const suggestionName = (await card.getByTestId("suggestion-name").textContent())!;
   await card.getByRole("button", { name: "Accept" }).click();
-  await expect(rows).toHaveCount(2);
-  await expect(rows.nth(1)).toContainText(suggestionName);
+  await page.getByRole("tab", { name: "Stops" }).click();
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(2)).toContainText(suggestionName);
 
   // Reorder: move the suggestion to the top using dnd-kit's keyboard sensor
-  const handle = rows.nth(1).getByTestId("drag-handle");
+  const handle = rows.nth(2).getByTestId("drag-handle");
   await handle.focus();
   await page.keyboard.press("Space");
-  // dnd-kit's keyboard sensor needs a tick between activation and movement
-  // to register the drag start before the next key is processed.
+  // dnd-kit's keyboard sensor needs a tick between activation and movement.
   await page.waitForTimeout(150);
   await page.keyboard.press("ArrowUp");
   await page.waitForTimeout(150);
-  // Wait for the reorder to actually persist (not just the optimistic UI
-  // update) before reloading: page.reload() can abort an in-flight fetch
-  // that hasn't left the browser yet, which would otherwise make the
-  // reload below flaky against a freshly-compiled dev server route.
+  await page.keyboard.press("ArrowUp");
+  await page.waitForTimeout(150);
+  // Wait for the reorder to persist before reloading (reload can abort an in-flight fetch).
   const orderPersisted = page.waitForResponse(
     (res) => res.request().method() === "PUT" && res.url().includes("/stops/order"),
   );
@@ -57,10 +62,8 @@ test("sign up → create trip → manual stop → accept suggestion → reorder 
   await page.reload();
   await expect(rows.first()).toContainText(suggestionName);
 
-  // Mark visited (persists). The checkbox is controlled by server state (no
-  // optimistic update), so it only flips after the PATCH resolves: click
-  // rather than check() (which demands an immediate state change) and let
-  // the auto-retrying assertion below wait for the real update.
+  // Mark visited (persists). The checkbox is controlled by server state, so click
+  // and let the auto-retrying assertion wait for the PATCH to land.
   const visitedPersisted = page.waitForResponse(
     (res) => res.request().method() === "PATCH" && res.url().includes("/api/stops/"),
   );

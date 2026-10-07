@@ -22,6 +22,13 @@ export function fakeDirections(coords: LngLat[]): RouteResult {
   };
 }
 
+/** Square drive-time matrix in seconds; diagonal is 0. */
+export function fakeDurationMatrix(coords: LngLat[]): number[][] {
+  return coords.map(([aLng, aLat]) =>
+    coords.map(([bLng, bLat]) => haversineMeters({ lat: aLat, lng: aLng }, { lat: bLat, lng: bLng }) / FAKE_SPEED_MPS),
+  );
+}
+
 export function fakeSuggestions(route: LngLat[]): Suggestion[] {
   const [lng, lat] = route[Math.floor(route.length / 2)];
   const r = (n: number) => Math.round(n * 1e6) / 1e6;

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ExternalServiceError, geocode, getDirections, reverseGeocode } from "./mapbox";
+import { ExternalServiceError, geocode, getDirections, getDurationMatrix, reverseGeocode } from "./mapbox";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const okRoute = {
@@ -119,5 +119,45 @@ describe("mapbox", () => {
     const fetchImpl = vi.fn();
     expect(await reverseGeocode({ lat: 37, lng: -119 }, fetchImpl)).toEqual({ name: "Spot 37.0000, -119.0000 (fake)", lat: 37, lng: -119 });
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  describe("getDurationMatrix", () => {
+    const three: [number, number][] = [[-119.79, 36.74], [-119.6, 37.2], [-119.12, 37.96]];
+    const okMatrix = { code: "Ok", durations: [[0, 10, 30], [12, 0, 20], [31, 21, 0]] };
+
+    it("requests the Matrix API with duration annotations", async () => {
+      const fetchImpl = vi.fn(async () => json(okMatrix));
+      expect(await getDurationMatrix(three, fetchImpl)).toEqual(okMatrix.durations);
+      const url = new URL((fetchImpl.mock.calls[0] as unknown as [string])[0]);
+      expect(url.pathname).toBe("/directions-matrix/v1/mapbox/driving/-119.790000,36.740000;-119.600000,37.200000;-119.120000,37.960000");
+      expect(url.searchParams.get("annotations")).toBe("duration");
+      expect(url.searchParams.get("access_token")).toBe("test-token");
+    });
+
+    it("maps null (unreachable) durations to Infinity", async () => {
+      const body = { code: "Ok", durations: [[0, null, 30], [12, 0, 20], [31, 21, 0]] };
+      expect((await getDurationMatrix(three, vi.fn(async () => json(body))))[0][1]).toBe(Infinity);
+    });
+
+    it("rejects a malformed matrix", async () => {
+      const bad = vi.fn(async () => json({ code: "Ok", durations: [[0, 1], [1, 0]] }));
+      await expect(getDurationMatrix(three, bad)).rejects.toBeInstanceOf(ExternalServiceError);
+    });
+
+    it("explains service errors and network failures", async () => {
+      const failed = vi.fn(async () => json({ code: "InvalidInput" }, 422));
+      await expect(getDurationMatrix(three, failed)).rejects.toThrow("Couldn't calculate drive times. Please try again.");
+      const down = vi.fn().mockRejectedValue(new TypeError("fetch failed"));
+      await expect(getDurationMatrix(three, down)).rejects.toThrow("Couldn't reach the routing service");
+    });
+
+    it("refuses more than 25 coordinates and uses fake data in fake mode", async () => {
+      const many = Array.from({ length: 26 }, (_, i) => [i * 0.01, 0] as [number, number]);
+      await expect(getDurationMatrix(many, vi.fn())).rejects.toBeInstanceOf(ExternalServiceError);
+      process.env.EXTERNAL_APIS_FAKE = "1";
+      const fetchImpl = vi.fn();
+      expect(await getDurationMatrix([[0, 0], [0, 1]], fetchImpl)).toHaveLength(2);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
   });
 });

@@ -1,6 +1,6 @@
 import type { LngLat, Place, RouteResult } from "@/lib/types";
 import { coordsLabel } from "@/lib/geo";
-import { fakeDirections, fakeGeocode, fakeReverseGeocode, isFakeExternal } from "./fake";
+import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakeReverseGeocode, isFakeExternal } from "./fake";
 
 const MAPBOX_BASE = "https://api.mapbox.com";
 const TIMEOUT_MS = 10_000;
@@ -59,6 +59,29 @@ export async function getDirections(coords: LngLat[], fetchImpl: typeof fetch = 
     distance: route.distance,
     duration: route.duration,
   };
+}
+
+type MatrixResponse = { code?: string; durations?: (number | null)[][] };
+
+const MAX_MATRIX_COORDINATES = 25; // Mapbox Matrix API driving profile limit
+
+/** Drive seconds between every pair of coords; unreachable pairs come back as Infinity. */
+export async function getDurationMatrix(coords: LngLat[], fetchImpl: typeof fetch = fetch): Promise<number[][]> {
+  if (coords.length > MAX_MATRIX_COORDINATES) {
+    throw new ExternalServiceError(`Route optimization supports at most ${MAX_MATRIX_COORDINATES} stops`);
+  }
+  if (isFakeExternal()) return fakeDurationMatrix(coords);
+  const path = coords.map(([lng, lat]) => `${lng.toFixed(6)},${lat.toFixed(6)}`).join(";");
+  const url =
+    `${MAPBOX_BASE}/directions-matrix/v1/mapbox/driving/${path}` +
+    `?annotations=duration&access_token=${encodeURIComponent(token())}`;
+  const { ok, body } = await getJson<MatrixResponse>(url, fetchImpl, "Couldn't reach the routing service");
+  const rows = body?.durations;
+  const square = Array.isArray(rows) && rows.length === coords.length && rows.every((r) => Array.isArray(r) && r.length === coords.length);
+  if (!ok || body?.code !== "Ok" || !square) {
+    throw new ExternalServiceError("Couldn't calculate drive times. Please try again.");
+  }
+  return rows.map((row) => row.map((v) => (typeof v === "number" ? v : Infinity)));
 }
 
 type GeocodeResponse = {

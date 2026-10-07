@@ -3,6 +3,39 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
+## 2026-10-06 (implementation complete through Task 24)
+
+Task 24 (final task of 24) complete: wrote `README.md` (purpose,
+setup, offline mode, scripts table, best-time rule, tunables with
+file paths) and ran full verification across the whole app:
+- `lint`: clean.
+- `typecheck`: clean (`next typegen && tsc --noEmit`).
+- `test`: 181/181 tests passed across 41 files.
+- `build`: compiled successfully (only non-fatal Next.js tracing
+  warnings on `src/server/photos.ts`'s dynamic filesystem paths,
+  build exit 0).
+- `e2e`: 1/1 passed (golden path: sign up → create trip → manual
+  stop → accept suggestion → reorder → mark visited).
+
+Also walked the spec checklist against the actual Tasks 1-23 code
+(not just asserted): manual pins + Overpass suggestions (viewpoint/
+attraction/peak) both work; trip/stop/photo routes 404 on another
+user's data (`src/server/trips.test.ts`, `src/server/stops.test.ts`
+cover this); Stop has name/location/notes/photo/visited and a
+derived (non-persisted) best time (`src/lib/best-time.ts`); route
+geometry is refetched via a waypoint-keyed effect on every stop
+reorder/edit, never stored; Overpass/Directions failures show
+dismissible inline `ErrorBanner`s without blocking the rest of the
+UI; Overpass has a 12s timeout, one retry, and a 5-minute cache
+(`src/server/suggestions/overpass.ts`, `service.ts`); auth errors
+are inline with no internal detail leaked (`LoginForm.tsx`,
+`SignupForm.tsx`); photo uploads are validated by the same rules on
+both client and server (`src/lib/photo-rules.ts`). No gaps found.
+
+Nothing deferred beyond what the plan always scoped out (the final
+whole-branch review and the two extra bug/security review passes,
+run separately by the controller after this task).
+
 ## 2026-10-06 (implementation: Phase 4 complete)
 
 Tasks 16-22 complete and reviewed-approved: client helpers/typed API client,

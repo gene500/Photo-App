@@ -6,6 +6,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
 import { diffIds } from "@/lib/diff-ids";
 import { wrapLng } from "@/lib/geo";
+import { applyMapTheme } from "@/lib/map-theme";
 import { stopColor } from "@/lib/stop-style";
 import type { LngLat } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
@@ -81,7 +82,11 @@ export default function MapPanel({
       const c = map.getCenter();
       handlersRef.current.onCenterChange?.({ lat: c.lat, lng: wrapLng(c.lng) });
     };
+    // Recolour the stock light style to the beige theme; `style.load` covers any later style swap.
+    const theme = () => applyMapTheme(map);
+    map.on("style.load", theme);
     map.on("load", () => {
+      theme();
       map.addSource(ROUTE_SOURCE, { type: "geojson", data: routeData(null) });
       // A slightly wider white line underneath gives the route a soft casing on the pale map.
       map.addLayer({

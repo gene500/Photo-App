@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh: vi.fn() }) }));
@@ -21,11 +21,7 @@ async function submit() {
 }
 
 describe("SignupForm", () => {
-  // Reset in afterEach (not beforeEach) per Task 16's finding: a beforeEach
-  // reset combined with a later mockRejectedValue + awaited-call-in-try/catch
-  // test trips a real Vitest 4.1.11 bug that reports a false "unhandled
-  // rejection" failure. See api-client.test.ts / PlaceSearch.test.tsx.
-  afterEach(() => vi.clearAllMocks());
+  beforeEach(() => vi.clearAllMocks());
 
   it("shows the server's validation message", async () => {
     vi.mocked(api.signup).mockRejectedValue(new ApiError(409, "An account with that email already exists"));

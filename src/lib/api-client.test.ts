@@ -53,4 +53,14 @@ describe("api client", () => {
     expect(place.name).toBe("X");
     expect(fetchMock.mock.calls[0][0]).toBe("/api/reverse-geocode?lat=1.000000&lng=2.000000");
   });
+
+  it("asks the server for the fastest order of the coordinates", async () => {
+    fetchMock.mockResolvedValue(Response.json({ order: [0, 2, 1] }));
+    const res = await api.optimizeOrder([[0, 0], [2, 2], [1, 1]]);
+    expect(res.order).toEqual([0, 2, 1]);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/optimize");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ coordinates: [[0, 0], [2, 2], [1, 1]] });
+  });
 });

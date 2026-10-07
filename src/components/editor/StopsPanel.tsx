@@ -5,7 +5,8 @@ import { useState, type ReactNode } from "react";
 type Snap = "collapsed" | "half" | "full";
 type Tab = "stops" | "suggestions";
 
-const NEXT: Record<Snap, Snap> = { half: "full", full: "collapsed", collapsed: "half" };
+const BIGGER: Partial<Record<Snap, Snap>> = { collapsed: "half", half: "full" };
+const SMALLER: Partial<Record<Snap, Snap>> = { full: "half", half: "collapsed" };
 // Phones: a bottom sheet at three heights. lg+: a card on the left (collapsed = header only).
 const SNAP_CLASS: Record<Snap, string> = {
   collapsed: "h-14 lg:h-14",
@@ -40,14 +41,19 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, suggestio
         ) : (
           <p className="min-w-0 flex-1 truncate py-1 text-sm font-medium">{collapsedSummary}</p>
         )}
-        <button
-          type="button"
-          aria-label="Resize panel"
-          onClick={() => setSnap(NEXT[snap])}
-          className="shrink-0 rounded border px-2 py-1 text-sm"
-        >
-          {open ? "▾" : "▴"}
-        </button>
+        {/* One arrow per direction, so the arrow always does what it says. */}
+        <div className="flex shrink-0 gap-1">
+          {SMALLER[snap] && (
+            <button type="button" aria-label="Shrink panel" onClick={() => setSnap(SMALLER[snap]!)} className="rounded border px-2.5 py-1.5 text-sm">
+              ▾
+            </button>
+          )}
+          {BIGGER[snap] && (
+            <button type="button" aria-label="Expand panel" onClick={() => setSnap(BIGGER[snap]!)} className={`rounded border px-2.5 py-1.5 text-sm ${snap === "half" ? "lg:hidden" : ""}`}>
+              ▴
+            </button>
+          )}
+        </div>
       </div>
       {open && (
         <>

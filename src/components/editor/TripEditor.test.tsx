@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/api-client", () => ({
   api: {
     directions: vi.fn(), addStop: vi.fn(), suggestions: vi.fn(), reorderStops: vi.fn(),
-    updateStop: vi.fn(), deleteStop: vi.fn(), updateTrip: vi.fn(), reverseGeocode: vi.fn(), geocode: vi.fn(),
+    updateStop: vi.fn(), deleteStop: vi.fn(), updateTrip: vi.fn(), reverseGeocode: vi.fn(), geocode: vi.fn(), optimizeOrder: vi.fn(),
   },
 }));
 vi.mock("./MapView", () => ({
@@ -354,5 +354,106 @@ describe("TripEditor", () => {
     await userEvent.click((await screen.findAllByRole("button", { name: "Accept" }))[0]!);
     await waitFor(() => expect(api.directions).toHaveBeenCalledTimes(2));
     expect(screen.getAllByTestId("suggestion-name").map((e) => e.textContent)).toEqual(["Glacier Point"]);
+  });
+
+  describe("optimize route", () => {
+    const three = [
+      newStop({ id: "a", order: 0, name: "A", lat: 36, lng: -119 }),
+      newStop({ id: "b", order: 1, name: "B", lat: 38, lng: -119 }),
+      newStop({ id: "c", order: 2, name: "C", lat: 37, lng: -119 }),
+    ];
+    const rowNames = () => screen.getAllByTestId("stop-row").map((r) => r.textContent ?? "");
+    const reorderEcho = () =>
+      vi.mocked(api.reorderStops).mockImplementation(async (_t, ids) => ({
+        stops: ids.map((id, order) => ({ ...three.find((s) => s.id === id)!, order })),
+      }));
+    beforeEach(() => vi.mocked(api.directions).mockResolvedValue({ route }));
+
+    it("is disabled until there are three stops", () => {
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      expect((screen.getByRole("button", { name: "Optimize route" }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it("sends the coordinates, applies the order through reorder, and offers Undo", async () => {
+      reorderEcho();
+      vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1] });
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(three)} />);
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      expect(api.optimizeOrder).toHaveBeenCalledWith([[-119, 36], [-119, 38], [-119, 37]]);
+      await waitFor(() => expect(api.reorderStops).toHaveBeenCalledWith("t1", ["a", "c", "b"]));
+      await waitFor(() => expect(rowNames()[1]).toContain("C"));
+
+      await user.click(await screen.findByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(api.reorderStops).toHaveBeenLastCalledWith("t1", ["a", "b", "c"]));
+      await waitFor(() => expect(rowNames()[1]).toContain("B"));
+      expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+    });
+
+    it("says so instead of saving when the order is already fastest", async () => {
+      vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2] });
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(three)} />);
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      expect(await screen.findByText("Already the fastest order")).toBeTruthy();
+      expect(api.reorderStops).not.toHaveBeenCalled();
+      expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+    });
+
+    it("shows the server's error and ignores a second click while busy", async () => {
+      let rejectIt!: (e: Error) => void;
+      vi.mocked(api.optimizeOrder).mockReturnValue(new Promise((_, rej) => (rejectIt = rej)));
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(three)} />);
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      const busy = screen.getByRole("button", { name: "Optimizing…" });
+      expect((busy as HTMLButtonElement).disabled).toBe(true);
+      await user.click(busy);
+      expect(api.optimizeOrder).toHaveBeenCalledTimes(1);
+      await act(async () => rejectIt(new Error("Couldn't calculate drive times. Please try again.")));
+      expect((await screen.findByRole("alert")).textContent).toContain("Couldn't calculate drive times");
+      expect((screen.getByRole("button", { name: "Optimize route" }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("keeps a Visited tick made while optimizing is in flight", async () => {
+      let resolveIt!: (v: { order: number[] }) => void;
+      vi.mocked(api.optimizeOrder).mockReturnValue(new Promise((res) => (resolveIt = res)));
+      reorderEcho();
+      vi.mocked(api.updateStop).mockImplementation(async (id, patch) => ({ stop: { ...three.find((s) => s.id === id)!, ...patch } }));
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(three)} />);
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      const rowB = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("B"))!;
+      await user.click(within(rowB).getByLabelText("Visited"));
+      await waitFor(() => expect(api.updateStop).toHaveBeenCalled());
+      await act(async () => resolveIt({ order: [0, 2, 1] }));
+      await waitFor(() => expect(rowNames()[1]).toContain("C"));
+      const after = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("B"))!;
+      expect((within(after).getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
+    });
+
+    it("discards the result when the stops changed while it was in flight", async () => {
+      let resolveIt!: (v: { order: number[] }) => void;
+      vi.mocked(api.optimizeOrder).mockReturnValue(new Promise((res) => (resolveIt = res)));
+      reorderEcho();
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(three)} />);
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      await user.click(screen.getByRole("button", { name: "reorder" })); // manual change mid-flight
+      await act(async () => resolveIt({ order: [0, 2, 1] }));
+      expect((await screen.findByRole("alert")).textContent).toContain("changed");
+      expect(api.reorderStops).toHaveBeenCalledTimes(1); // only the manual one
+    });
+
+    it("drops Undo once the user reorders manually", async () => {
+      reorderEcho();
+      vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1] });
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(three)} />);
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      await screen.findByRole("button", { name: "Undo" });
+      await user.click(screen.getByRole("button", { name: "reorder" }));
+      await waitFor(() => expect(screen.queryByRole("button", { name: "Undo" })).toBeNull());
+    });
   });
 });

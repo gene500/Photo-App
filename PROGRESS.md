@@ -3,6 +3,21 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
+## 2026-10-07 (optimize route, branch `optimize-route`)
+
+Added an "Optimize route" button: `optimizeOrder` solver (exact Held-Karp up to 9
+stops, nearest neighbour + 2-opt/or-opt above), `getDurationMatrix` (Mapbox Matrix
+API, 25-coordinate limit, fake mode), `POST /api/optimize`, `api.optimizeOrder`,
+and the TripEditor button with busy state, "Already the fastest order" message,
+Undo, and discard-if-stops-changed guard. The first stop is fixed, the last is
+free. Unit, API and e2e tests added. Not yet merged. Needs a real-Mapbox and
+real-browser check (Matrix API response and phone bottom-sheet layout).
+
+Known gap (optimize): `/api/optimize` only requires a signed-in user and has no rate
+limit; Mapbox bills the Matrix API per element (n x n), so a 25-stop call is 625
+elements. Fine for a few trusted users; add a per-user limit (or take a tripId and
+load the stops server-side) before opening signup wider. Same gap as `/api/directions`.
+
 ## 2026-10-07 (map-first UI merged, deployed, final reviews and fixes)
 
 Merged `map-first-ui` into `main` and deployed to Vercel

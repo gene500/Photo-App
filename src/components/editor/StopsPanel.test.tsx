@@ -35,21 +35,25 @@ describe("StopsPanel", () => {
     expect(screen.queryByText("stops content")).toBeNull();
   });
 
-  it("cycles the sheet height and hides the content when collapsed", async () => {
+  it("has one arrow per direction: ▾ always shrinks and ▴ always grows", async () => {
     panel();
-    const handle = screen.getByRole("button", { name: "Resize panel" });
-    const root = handle.closest("[data-snap]")!;
+    const root = screen.getByRole("button", { name: "Shrink panel" }).closest("[data-snap]")!;
     expect(root.getAttribute("data-snap")).toBe("half");
-    await userEvent.click(handle);
-    expect(root.getAttribute("data-snap")).toBe("full");
-    await userEvent.click(handle);
+    // One click on ▾ from the default height collapses (it used to grow the panel first).
+    await userEvent.click(screen.getByRole("button", { name: "Shrink panel" }));
     expect(root.getAttribute("data-snap")).toBe("collapsed");
+    expect(screen.queryByRole("button", { name: "Shrink panel" })).toBeNull();
     expect(screen.queryByText("stops content")).toBeNull();
     // Collapsed shows a one-line summary instead of the header (and its Edit trip button).
     expect(screen.getByText("3 stops · 2 h 5 min")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: /Sierra loop/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit trip" })).toBeNull();
-    await userEvent.click(handle);
+    await userEvent.click(screen.getByRole("button", { name: "Expand panel" }));
+    expect(root.getAttribute("data-snap")).toBe("half");
+    await userEvent.click(screen.getByRole("button", { name: "Expand panel" }));
+    expect(root.getAttribute("data-snap")).toBe("full");
+    expect(screen.queryByRole("button", { name: "Expand panel" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Shrink panel" }));
     expect(root.getAttribute("data-snap")).toBe("half");
   });
 });

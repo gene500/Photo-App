@@ -45,6 +45,11 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   // Tagged with the waypoints they were found for, like routeResult: a change of stops
   // makes them stale, so they are simply not shown (and a late response is dropped).
   const [suggestionsState, setSuggestionsState] = useState<{ key: string; items: Suggestion[]; status: SuggestionsStatus; error: string | null } | null>(null);
+  const [optimizing, setOptimizing] = useState(false);
+  // Remembered so the optimization can be undone. Only honoured while the list still
+  // matches `appliedIds`, so any later add/remove/reorder retires it without bookkeeping.
+  const [undo, setUndo] = useState<{ previousIds: string[]; appliedIds: string[] } | null>(null);
+  const [optimizeNote, setOptimizeNote] = useState<{ text: string; idsKey: string } | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const centerRef = useRef<LatLng | null>(null);
   const lookupSeq = useRef(0);
@@ -60,6 +65,11 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   useEffect(() => {
     waypointKeyRef.current = waypointKey;
   }, [waypointKey]);
+  const idsKey = stops.map((s) => s.id).join(",");
+  const idsKeyRef = useRef(idsKey);
+  useEffect(() => {
+    idsKeyRef.current = idsKey;
+  }, [idsKey]);
   const freshSuggestions = suggestionsState?.key === waypointKey ? suggestionsState : null;
   const suggestions = freshSuggestions?.items ?? NO_SUGGESTIONS;
   const suggestionsStatus: SuggestionsStatus = freshSuggestions?.status ?? "idle";
@@ -172,18 +182,50 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     );
   }
 
-  async function reorder(ids: string[]) {
+  /** Resolves true when the new order was saved (false: reverted, error shown). */
+  async function reorder(ids: string[]): Promise<boolean> {
     const previousOrderById = new Map(stops.map((s) => [s.id, s.order]));
-    const byId = new Map(stops.map((s) => [s.id, s]));
-    setStops(ids.map((id, order) => ({ ...byId.get(id)!, order })));
+    // Applied onto the latest state so an edit that landed since this render is never reverted.
+    applyOrder(new Map(ids.map((id, order) => [id, order])));
     try {
       const { stops: reordered } = await api.reorderStops(trip.id, ids);
       applyOrder(new Map(reordered.map((s) => [s.id, s.order])));
+      return true;
     } catch (e) {
       applyOrder(previousOrderById);
       setStopsError(errorMessage(e, "Couldn't save the new order"));
+      return false;
     }
   }
+
+  async function optimizeRoute() {
+    if (optimizing || stops.length < 3) return;
+    const startKey = idsKey;
+    const startWaypoints = waypointKey;
+    const before = stops;
+    setOptimizing(true);
+    setOptimizeNote(null);
+    try {
+      const { order } = await api.optimizeOrder(before.map((s): LngLat => [s.lng, s.lat]));
+      if (idsKeyRef.current !== startKey || waypointKeyRef.current !== startWaypoints) {
+        setStopsError("Your stops changed while optimizing, so the result was discarded. Try again.");
+        return;
+      }
+      const ids = order.map((i) => before[i].id);
+      if (ids.join(",") === startKey) {
+        setOptimizeNote({ text: "Already the fastest order", idsKey: startKey });
+        return;
+      }
+      const previousIds = before.map((s) => s.id);
+      if (await reorder(ids)) setUndo({ previousIds, appliedIds: ids });
+    } catch (e) {
+      setStopsError(errorMessage(e, "Couldn't optimize the route"));
+    } finally {
+      setOptimizing(false);
+    }
+  }
+
+  const canUndo = undo !== null && undo.appliedIds.join(",") === idsKey;
 
   /** Copy only `keys` from the server's stop onto the latest local one, so a response
    *  that raced a reorder can't overwrite `order` (or anything else it didn't change). */
@@ -374,6 +416,25 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
         stops={
           <>
             <p className="text-xs text-gray-500">Drag ⋮⋮ to reorder. Click the map or search to add stops.</p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <button
+                type="button"
+                onClick={() => void optimizeRoute()}
+                disabled={stops.length < 3 || optimizing}
+                className="rounded border px-3 py-1 text-sm disabled:opacity-50"
+              >
+                {optimizing ? "Optimizing…" : "Optimize route"}
+              </button>
+              {canUndo && undo && (
+                <button type="button" onClick={() => void reorder(undo.previousIds)} className="text-sm underline">
+                  Undo
+                </button>
+              )}
+              {stops.length < 3 && <p className="text-xs text-gray-500">Add at least 3 stops to optimize the order.</p>}
+              {optimizeNote?.idsKey === idsKey && (
+                <p role="status" className="text-xs text-gray-600">{optimizeNote.text}</p>
+              )}
+            </div>
             <StopList
               stops={stops}
               bestTimes={bestTimes}

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { fakeDirections, fakeGeocode, fakeSuggestions, isFakeExternal } from "./fake";
+import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakeSuggestions, isFakeExternal } from "./fake";
 
 describe("fake externals", () => {
   afterEach(() => {
@@ -27,6 +27,17 @@ describe("fakeDirections", () => {
     expect(route.legs[0].distance).toBeCloseTo(111_195, -1);
     expect(route.legs[0].duration).toBeCloseTo(111_195 / 25, -1);
     expect(route.distance).toBeCloseTo(2 * 111_195, -1);
+  });
+});
+
+describe("fakeDurationMatrix", () => {
+  it("is square, zero on the diagonal, and symmetric haversine time at the fake speed", () => {
+    const m = fakeDurationMatrix([[0, 0], [0, 1], [0, 2]]);
+    expect(m).toHaveLength(3);
+    expect(m.map((row, i) => row[i])).toEqual([0, 0, 0]);
+    expect(m[0][1]).toBeCloseTo(111_195 / 25, -1);
+    expect(m[0][2]).toBeCloseTo(2 * 111_195 / 25, -1);
+    expect(m[2][0]).toBeCloseTo(m[0][2], 6);
   });
 });
 

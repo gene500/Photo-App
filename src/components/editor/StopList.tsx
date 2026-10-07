@@ -72,24 +72,27 @@ function StopRow({ stop, index, bestTime, role, onToggleVisited, onDelete, onSel
       </button>
       <span aria-hidden className="mt-1.5 h-3 w-3 shrink-0 rounded-full" style={{ background: stopColor(stop) }} />
       <div className="min-w-0 flex-1">
-        <button type="button" onClick={() => onSelect(stop.id)} className="block truncate text-left font-medium hover:underline">
+        <button type="button" onClick={() => onSelect(stop.id)} className="block w-full truncate text-left font-medium hover:underline">
           {index + 1}. {stop.name}
         </button>
-        {role && <span data-testid="stop-role" className="ml-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700">{role}</span>}
-        <p data-testid="best-time" className="text-xs text-gray-600">{describeBestTime(bestTime)}</p>
+        {role && <span data-testid="stop-role" className="mr-2 rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700">{role}</span>}
+        <span data-testid="best-time" className="text-xs text-gray-600">{describeBestTime(bestTime)}</span>
         {stop.notes && <p className="truncate text-xs text-gray-500">{stop.notes}</p>}
+        {/* Actions get their own row so a long name can never run underneath them. */}
+        <div className="mt-1 flex items-center gap-1">
+          <label className="flex cursor-pointer items-center gap-1.5 rounded px-2 py-1.5 text-sm hover:bg-gray-100">
+            <input type="checkbox" className="h-4 w-4" checked={stop.visited} onChange={(e) => onToggleVisited(stop.id, e.target.checked)} />
+            Visited
+          </label>
+          <button type="button" onClick={() => onDelete(stop.id)} aria-label={`Delete ${stop.name}`} className="rounded px-2 py-1.5 text-sm text-red-700 hover:bg-red-50">
+            Delete
+          </button>
+        </div>
       </div>
       {stop.photoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- user uploads served by an auth-checked route
-        <img src={stop.photoUrl} alt="" className="h-10 w-10 rounded object-cover" />
+        <img src={stop.photoUrl} alt="" className="h-10 w-10 shrink-0 rounded object-cover" />
       ) : null}
-      <label className="flex items-center gap-1 text-xs">
-        <input type="checkbox" checked={stop.visited} onChange={(e) => onToggleVisited(stop.id, e.target.checked)} />
-        Visited
-      </label>
-      <button type="button" onClick={() => onDelete(stop.id)} aria-label={`Delete ${stop.name}`} className="text-xs text-red-700">
-        Delete
-      </button>
     </li>
   );
 }

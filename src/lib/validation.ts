@@ -63,6 +63,13 @@ export const directionsRequestSchema = z.object({
     .max(MAX_ROUTE_WAYPOINTS, `Routing supports at most ${MAX_ROUTE_WAYPOINTS} stops per trip`),
 });
 
+export const optimizeRequestSchema = z.object({
+  coordinates: z
+    .array(lngLat)
+    .min(3, "Add at least 3 stops to optimize the route")
+    .max(MAX_ROUTE_WAYPOINTS, `Optimizing supports at most ${MAX_ROUTE_WAYPOINTS} stops per trip`),
+});
+
 // Keep this far below the point count where @turf/simplify's recursive
 // Douglas-Peucker implementation (used by buildCorridor) risks a stack
 // overflow on adversarial input, while staying generous for this app's

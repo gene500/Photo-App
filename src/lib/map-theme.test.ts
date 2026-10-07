@@ -32,6 +32,9 @@ describe("themeLayerPaint", () => {
     expect(paint("road-primary-case", "line")).toEqual({ "line-color": "#e4dccb" });
     expect(paint("road-street-case", "line")).toEqual({ "line-color": C.roadCasingFaint });
     expect(paint("bridge-motorway-trunk", "line")).toEqual({ "line-color": "#f5ecd8" });
+    // Casings named `bridge-case-simple` get the casing colour, not the road fill; railways stay visible.
+    expect(paint("bridge-case-simple", "line")).toEqual({ "line-color": "#e4dccb" });
+    expect(paint("road-rail", "line")).toEqual({ "line-color": "#e4dccb" });
     expect(paint("tunnel-street", "line")).toEqual({ "line-color": C.roadTunnel });
     expect(paint("road-path", "line")).toEqual({ "line-color": C.path });
   });

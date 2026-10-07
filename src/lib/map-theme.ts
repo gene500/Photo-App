@@ -38,11 +38,14 @@ function symbolTheme(id: string): LayerPaint | null {
 function roadTheme(id: string, type: string): LayerPaint | null {
   if (type !== "line" && type !== "fill") return null;
   if (type === "fill") return { paint: { "fill-color": C.road } }; // pedestrian areas
-  const casing = has(id, /-(case|casing)$/);
+  // light-v11 names casings `-case`, `-casing` and `bridge-case-simple`.
+  const casing = has(id, /-(case|casing)(-|$)/);
   const major = has(id, /motorway|trunk/);
   const faint = has(id, /minor|street|service|link|tertiary|secondary/);
   if (has(id, /path|pedestrian|steps|track/)) return { paint: { "line-color": C.path } };
   if (casing) return { paint: { "line-color": faint ? C.roadCasingFaint : C.roadCasing } };
+  // Railways are a darker tan so they stay visible on the beige land.
+  if (has(id, /-rail(-|$)/)) return { paint: { "line-color": C.roadCasing } };
   if (has(id, /^tunnel-/)) return { paint: { "line-color": major ? C.roadMajor : C.roadTunnel } };
   return { paint: { "line-color": major ? C.roadMajor : C.road } };
 }

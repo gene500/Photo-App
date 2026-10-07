@@ -80,14 +80,26 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     }
   }
 
+  /** Apply an order-by-id map onto the latest state and re-sort by it, without
+   *  touching any other field — safe against a concurrent mutation (e.g.
+   *  toggling Visited) that lands on `stops` while a reorder is in flight. */
+  function applyOrder(orderById: Map<string, number>) {
+    setStops((cur) =>
+      cur
+        .map((s) => ({ ...s, order: orderById.get(s.id) ?? s.order }))
+        .sort((a, b) => a.order - b.order),
+    );
+  }
+
   async function reorder(ids: string[]) {
-    const previous = stops;
+    const previousOrderById = new Map(stops.map((s) => [s.id, s.order]));
     const byId = new Map(stops.map((s) => [s.id, s]));
     setStops(ids.map((id, order) => ({ ...byId.get(id)!, order })));
     try {
-      setStops((await api.reorderStops(trip.id, ids)).stops);
+      const { stops: reordered } = await api.reorderStops(trip.id, ids);
+      applyOrder(new Map(reordered.map((s) => [s.id, s.order])));
     } catch (e) {
-      setStops(previous);
+      applyOrder(previousOrderById);
       setStopsError(errorMessage(e, "Couldn't save the new order"));
     }
   }

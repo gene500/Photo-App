@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -122,5 +122,43 @@ describe("TripEditor", () => {
     // Reverted: back to the original order, with an inline, dismissible error.
     await waitFor(() => expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 1"));
     expect((await screen.findByRole("alert")).textContent).toContain("Couldn't save the new order");
+  });
+
+  it("preserves a concurrent stop update when an in-flight reorder is later reverted", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    const stop1 = newStop({ id: "s1", order: 0, name: "Pin 1" });
+    const stop2 = newStop({ id: "s2", order: 1, name: "Pin 2", lat: 37.6, lng: -119.6 });
+    let rejectReorder!: (e: Error) => void;
+    vi.mocked(api.reorderStops).mockImplementation(
+      () => new Promise((_resolve, reject) => { rejectReorder = reject; }),
+    );
+    vi.mocked(api.updateStop).mockResolvedValue({ stop: { ...stop1, visited: true } });
+    render(<TripEditor initialTrip={{ ...trip, stops: [stop1, stop2] }} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "reorder" }));
+
+    // Optimistic: the new order is applied immediately, the reorder request is still in flight.
+    await waitFor(() => expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 2"));
+    expect(api.reorderStops).toHaveBeenCalledWith("t1", ["s2", "s1"]);
+
+    // While the reorder is still pending, a DIFFERENT mutation (toggling Visited
+    // on Pin 1) is made and resolves successfully before the reorder settles.
+    const pin1RowBefore = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("Pin 1"))!;
+    await userEvent.click(within(pin1RowBefore).getByLabelText("Visited"));
+    await waitFor(() => {
+      const row = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("Pin 1"))!;
+      expect((within(row).getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
+    });
+
+    // Now the still-pending reorder rejects and its revert runs.
+    await act(async () => {
+      rejectReorder(new Error("Couldn't save the new order"));
+    });
+
+    // Order is reverted, but the concurrent Visited toggle must survive the
+    // revert instead of being clobbered by a stale closure snapshot.
+    await waitFor(() => expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 1"));
+    const pin1RowAfter = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("Pin 1"))!;
+    expect((within(pin1RowAfter).getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
   });
 });

@@ -7,9 +7,11 @@ import { useEffect, useRef, useState } from "react";
 import { diffIds } from "@/lib/diff-ids";
 import { wrapLng } from "@/lib/geo";
 import { applyMapTheme } from "@/lib/map-theme";
+import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import { stopColor } from "@/lib/stop-style";
-import type { LngLat } from "@/lib/types";
+import type { LngLat, Suggestion } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
+import { createSuggestionPopupContent } from "./suggestion-popup";
 
 const ROUTE_SOURCE = "route";
 /** Mapbox paint can't read CSS variables; this is the light-theme `--route` token. */
@@ -54,6 +56,7 @@ export default function MapPanel({
   const stopIdsRef = useRef<Set<string>>(new Set());
   const suggestionMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const pendingMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const popupRef = useRef<mapboxgl.Popup | null>(null);
   const handlersRef = useRef({ onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange });
   const initialRef = useRef({ center: (stops[0] ? [stops[0].lng, stops[0].lat] : DEFAULT_CENTER) as LngLat, zoom: stops.length ? 7 : 3.5 });
   const fittedRef = useRef(false);
@@ -114,6 +117,8 @@ export default function MapPanel({
     });
     mapRef.current = map;
     return () => {
+      popupRef.current?.remove();
+      popupRef.current = null;
       map.remove();
       mapRef.current = null;
     };
@@ -196,10 +201,24 @@ export default function MapPanel({
     };
   }, []);
 
-  // Faint suggestion markers (bigger when highlighted from the panel).
+  // Faint suggestion markers (bigger when highlighted from the panel). Hovering/focusing one, or hovering its
+  // card in the panel, shows a photo popup; only one popup exists at a time.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    const hidePopup = () => {
+      popupRef.current?.remove();
+      popupRef.current = null;
+    };
+    const showPopup = (s: Suggestion) => {
+      hidePopup();
+      const content = createSuggestionPopupContent(s, () => loadPlacePhoto({ key: s.osmId, name: s.name, lat: s.lat, lng: s.lng }));
+      popupRef.current = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, closeOnMove: false, offset: 14, maxWidth: "220px", className: "suggestion-popup" })
+        .setLngLat([s.lng, s.lat])
+        .setDOMContent(content)
+        .addTo(map);
+    };
+    hidePopup(); // the markers below are rebuilt, so any open popup's dot is gone
     for (const m of suggestionMarkersRef.current) m.remove();
     suggestionMarkersRef.current = suggestions.map((s) => {
       const big = s.osmId === highlightedSuggestionId;
@@ -207,9 +226,18 @@ export default function MapPanel({
         `rounded-full border-2 border-white bg-accent shadow ${big ? "h-5 w-5" : "h-3.5 w-3.5 opacity-70"}`,
         `Suggestion: ${s.name}`,
       );
-      el.addEventListener("click", () => handlersRef.current.onSuggestionClick?.(s.osmId));
+      el.addEventListener("click", () => {
+        hidePopup(); // touch has no mouseleave; the place card shows the photo from here
+        handlersRef.current.onSuggestionClick?.(s.osmId);
+      });
+      el.addEventListener("mouseenter", () => showPopup(s));
+      el.addEventListener("focus", () => showPopup(s));
+      el.addEventListener("mouseleave", hidePopup);
+      el.addEventListener("blur", hidePopup);
       return new mapboxgl.Marker({ element: el }).setLngLat([s.lng, s.lat]).addTo(map);
     });
+    const highlighted = suggestions.find((s) => s.osmId === highlightedSuggestionId);
+    if (highlighted) showPopup(highlighted);
   }, [suggestions, highlightedSuggestionId]);
 
   // The temporary pin.

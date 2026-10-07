@@ -71,6 +71,17 @@ body {
   .mapboxgl-canvas { filter: brightness(0.85); }
 }
 
+/* Photo popup over a suggestion dot: the card itself is styled with tokens in suggestion-popup.ts; here we
+   strip Mapbox's default bubble. It never takes the pointer, so moving off the dot always closes it. */
+.suggestion-popup { pointer-events: none; z-index: 5; }
+.suggestion-popup .mapboxgl-popup-content {
+  padding: 0;
+  background: var(--surface);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18), 0 0 0 1px var(--border);
+}
+.suggestion-popup .mapboxgl-popup-tip { display: none; }
+
 /* Phones: keep the map controls and attribution below the floating search bar and clear of the bottom sheet. */
 @media (max-width: 1023px) {
   .mapboxgl-map .mapboxgl-ctrl-top-right {

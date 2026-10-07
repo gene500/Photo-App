@@ -1,15 +1,22 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Stop, Suggestion } from "@/lib/types";
 import { FakeMapPanel } from "./FakeMapPanel";
+
+const loadPlacePhoto = vi.fn();
+vi.mock("@/lib/place-photo-cache", () => ({ loadPlacePhoto: (...a: unknown[]) => loadPlacePhoto(...a) }));
 
 const stop: Stop = { id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false };
 const suggestion: Suggestion = { osmId: "node/1", name: "Fake Viewpoint", lat: 37.2, lng: -119.2, kind: "viewpoint" };
 const base = { stops: [] as Stop[], routeGeometry: null, onMapClick: vi.fn(), onStopClick: vi.fn() };
 
 describe("FakeMapPanel", () => {
-  afterEach(() => vi.restoreAllMocks());
+  beforeEach(() => loadPlacePhoto.mockResolvedValue(null));
+  afterEach(() => {
+    vi.restoreAllMocks();
+    loadPlacePhoto.mockReset();
+  });
 
   it("converts a click position into lat/lng inside the fixed viewport", () => {
     const onMapClick = vi.fn();
@@ -62,5 +69,40 @@ describe("FakeMapPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Suggestion: Fake Viewpoint" }));
     expect(onSuggestionClick).toHaveBeenCalledWith("node/1");
     expect(onMapClick).not.toHaveBeenCalled();
+  });
+
+  describe("suggestion photo popup", () => {
+    const photo = { url: "https://upload.wikimedia.org/a.jpg", title: "Fake Viewpoint", pageUrl: "https://en.wikipedia.org/wiki/X", credit: "Wikipedia" };
+    const dot = () => screen.getByRole("button", { name: "Suggestion: Fake Viewpoint" });
+
+    it("shows the name and photo on hover and removes the popup on leave", async () => {
+      loadPlacePhoto.mockResolvedValue(photo);
+      render(<FakeMapPanel {...base} suggestions={[suggestion]} />);
+      expect(screen.queryByTestId("suggestion-popup")).toBeNull();
+      fireEvent.mouseEnter(dot());
+      expect(screen.getByTestId("suggestion-popup-name").textContent).toBe("Fake Viewpoint");
+      await waitFor(() => expect(screen.getByTestId("suggestion-popup").querySelector("img")).not.toBeNull());
+      expect(loadPlacePhoto).toHaveBeenCalledWith({ key: "node/1", name: "Fake Viewpoint", lat: 37.2, lng: -119.2 });
+      fireEvent.mouseLeave(dot());
+      expect(screen.queryByTestId("suggestion-popup")).toBeNull();
+    });
+
+    it("opens on keyboard focus, closes on blur and when the dot is clicked", () => {
+      loadPlacePhoto.mockResolvedValue(null);
+      render(<FakeMapPanel {...base} suggestions={[suggestion]} />);
+      fireEvent.focus(dot());
+      expect(screen.getByTestId("suggestion-popup")).toBeTruthy();
+      fireEvent.blur(dot());
+      expect(screen.queryByTestId("suggestion-popup")).toBeNull();
+      fireEvent.mouseEnter(dot());
+      fireEvent.click(dot());
+      expect(screen.queryByTestId("suggestion-popup")).toBeNull();
+    });
+
+    it("opens for the suggestion highlighted from the panel", () => {
+      loadPlacePhoto.mockResolvedValue(null);
+      render(<FakeMapPanel {...base} suggestions={[suggestion]} highlightedSuggestionId="node/1" />);
+      expect(screen.getByTestId("suggestion-popup-name").textContent).toBe("Fake Viewpoint");
+    });
   });
 });

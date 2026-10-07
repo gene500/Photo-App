@@ -114,7 +114,7 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
             className="mt-1 block"
           />
         </label>
-        <p className="text-xs text-gray-500">JPEG, PNG or WebP, up to 5 MB.</p>
+        <p className="text-xs text-gray-500">JPEG, PNG or WebP, up to 4 MB.</p>
       </div>
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
       <button type="button" disabled={busy} onClick={() => void save()} className="rounded bg-blue-600 px-4 py-2 text-white">

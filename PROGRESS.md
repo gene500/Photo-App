@@ -3,6 +3,37 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
+## 2026-10-07 (hosting prep: Vercel + Turso + Blob)
+
+Goal: make the app usable as a real website. GitHub Pages can't host it
+(needs a server), so the design (approved in chat) is Vercel + Turso
+(hosted SQLite, so schema/migrations/tests unchanged) + Vercel Blob for
+photos. Local dev behaviour is unchanged.
+
+Done (branch `deploy-vercel`, TDD, all checks green):
+- `src/server/db-adapter.ts`: uses libSQL when `TURSO_DATABASE_URL` is
+  set, else local better-sqlite3. `db.ts` now calls it. 2 new tests.
+- `src/server/photos.ts`: private Vercel Blob storage when
+  `BLOB_READ_WRITE_TOKEN` is set, else local `UPLOAD_DIR`. Photos are
+  still served through the ownership-checked `/api/uploads/` route.
+  1 new test (mocked Blob).
+- Photo limit lowered 5 MB -> 4 MB (Vercel request bodies cap at 4.5 MB);
+  UI text, messages, tests, README updated.
+- `scripts/migrate-turso.mjs` + `vercel-build` script: applies
+  `prisma/migrations` to Turso on each deploy (no-op without the env var;
+  smoke-tested twice against a local libSQL file, idempotent).
+- `prisma.config.ts` falls back to `file:./dev.db` so `prisma generate`
+  works on a clean build with no `DATABASE_URL`.
+- README section 7 (deploy steps), `.env.example`, `.gitignore`
+  (`.DS_Store`, `.claude/`, `.vercel`).
+- Verification: typecheck clean, lint clean, 190/190 tests, production
+  build OK, e2e 1/1.
+
+Not done yet (needs the human partner's accounts): create Turso database,
+import the repo into Vercel, create the Blob store, set the env vars
+(README section 7), then do a first real-service smoke test with a real
+Mapbox token. Nothing has been deployed.
+
 ## 2026-10-07 (extra reviews done, merged to main, project complete)
 
 - The two extra read-only review passes (bug-hunting, security) ran after

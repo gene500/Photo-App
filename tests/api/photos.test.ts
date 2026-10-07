@@ -63,7 +63,7 @@ describe("photo routes", () => {
     big.set(PNG);
     const res = await upload(stopId, new File([big], "big.png", { type: "image/png" }));
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("Photo must be 5 MB or smaller");
+    expect((await res.json()).error).toBe("Photo must be 4 MB or smaller");
   });
 
   it("replaces an existing photo and deletes the old file", async () => {

@@ -13,6 +13,6 @@ describe("checkPhotoFile", () => {
 
   it("rejects empty and oversized files", () => {
     expect(checkPhotoFile({ type: "image/jpeg", size: 0 })).toBe("Photo file is empty");
-    expect(checkPhotoFile({ type: "image/jpeg", size: MAX_PHOTO_BYTES + 1 })).toBe("Photo must be 5 MB or smaller");
+    expect(checkPhotoFile({ type: "image/jpeg", size: MAX_PHOTO_BYTES + 1 })).toBe("Photo must be 4 MB or smaller");
   });
 });

@@ -79,4 +79,32 @@ display defaults to evening golden hour. See `src/lib/best-time.ts`.
 | `DUPLICATE_RADIUS_M` | `src/server/suggestions/parse.ts` | Distance (m) under which two candidates are treated as duplicates |
 | `SUGGESTION_CACHE_TTL_MS` | `src/server/suggestions/service.ts` | How long a route's suggestion results are cached server-side |
 | `OVERPASS_TIMEOUT_MS` | `src/server/suggestions/overpass.ts` | Per-attempt timeout for Overpass API requests |
-| `MAX_PHOTO_BYTES` | `src/lib/photo-rules.ts` | Max reference-photo upload size, enforced client- and server-side |
+| `MAX_PHOTO_BYTES` | `src/lib/photo-rules.ts` | Max reference-photo upload size (4 MB: Vercel caps request bodies at 4.5 MB), enforced client- and server-side |
+
+## 7. Deploying to Vercel
+
+The app runs on Vercel with a Turso database (hosted SQLite) and a Vercel
+Blob store for photos. Locally nothing changes.
+
+1. **Turso:** create a free account at turso.tech, then
+   `turso db create photo-app`, `turso db show photo-app --url`, and
+   `turso db tokens create photo-app`.
+2. **Vercel:** import this GitHub repo at vercel.com/new. In the project,
+   open Storage, create a **Blob** store (set to Private) and connect it;
+   this adds `BLOB_READ_WRITE_TOKEN` automatically.
+3. Add these Environment Variables in Vercel:
+
+   | Variable | Value |
+   | --- | --- |
+   | `TURSO_DATABASE_URL` | the `libsql://...` URL from step 1 |
+   | `TURSO_AUTH_TOKEN` | the token from step 1 |
+   | `NEXTAUTH_SECRET` | `openssl rand -base64 32` |
+   | `NEXTAUTH_URL` | your site URL, e.g. `https://photo-app.vercel.app` |
+   | `NEXT_PUBLIC_MAPBOX_TOKEN` | Mapbox `pk.*` token |
+   | `MAPBOX_TOKEN` | same token |
+
+4. Deploy. The build command (`npm run vercel-build`) applies database
+   migrations to Turso, then builds. Every push to `main` redeploys.
+
+The Mapbox token is visible in the browser by design; in the Mapbox
+dashboard, restrict it to your site's URL.

@@ -58,3 +58,7 @@ next-env.d.ts
 
 # tdd-guard runtime data
 /.claude/tdd-guard/
+
+.DS_Store
+.claude/
+.vercel

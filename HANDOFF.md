@@ -115,8 +115,8 @@ needed for those.
 
 ## Current status
 
-Complete. All 24 plan tasks were implemented and reviewed, the final
-whole-branch review, bug-hunting and security passes are done and their
-fixes merged to `main`. Nothing remains open except the deferred Minor
-notes listed in `PROGRESS.md`. The "Resume procedure" and standing rules
-above are historical context for how the build was run.
+Build complete and merged to `main`. Hosting prep (Vercel + Turso +
+Vercel Blob) is code-complete and verified; the remaining steps are the
+human partner's account setup and first deploy (README section 7). See
+`PROGRESS.md` for details. The "Resume procedure" and standing rules above
+are historical context for how the build was run.

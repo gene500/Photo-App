@@ -40,7 +40,7 @@ describe("StopDrawer", () => {
     render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
     const big = new File([new Uint8Array(MAX_PHOTO_BYTES + 1)], "big.png", { type: "image/png" });
     await userEvent.upload(screen.getByLabelText("Upload photo"), big);
-    expect((await screen.findByRole("alert")).textContent).toContain("Photo must be 5 MB or smaller");
+    expect((await screen.findByRole("alert")).textContent).toContain("Photo must be 4 MB or smaller");
     expect(api.uploadPhoto).not.toHaveBeenCalled();
   });
 

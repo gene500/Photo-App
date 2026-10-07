@@ -1,3 +1,4 @@
+import { del, get, put } from "@vercel/blob";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -9,6 +10,11 @@ const EXT: Record<PhotoType, string> = { "image/jpeg": "jpg", "image/png": "png"
 const TYPE_BY_EXT: Record<string, PhotoType> = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" };
 const NAME_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/;
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+// On Vercel there is no persistent disk, so photos live in a private Blob store
+// (enabled by BLOB_READ_WRITE_TOKEN). Locally they stay in UPLOAD_DIR.
+const blobEnabled = () => Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+const blobPath = (name: string) => `photos/${name}`;
 
 function uploadDir(): string {
   return path.resolve(process.env.UPLOAD_DIR ?? "uploads");
@@ -36,6 +42,10 @@ export function validatePhoto(file: { type: string; size: number }, bytes: Uint8
 
 export async function savePhoto(bytes: Uint8Array, type: PhotoType): Promise<string> {
   const name = `${randomUUID()}.${EXT[type]}`;
+  if (blobEnabled()) {
+    await put(blobPath(name), Buffer.from(bytes), { access: "private", contentType: type, addRandomSuffix: false });
+    return `${PHOTO_URL_PREFIX}${name}`;
+  }
   await mkdir(uploadDir(), { recursive: true });
   await writeFile(path.join(uploadDir(), name), bytes);
   return `${PHOTO_URL_PREFIX}${name}`;
@@ -49,9 +59,19 @@ export async function readPhoto(
   name: string,
 ): Promise<{ bytes: Buffer; contentType: PhotoType } | null> {
   if (!isValidPhotoName(name)) return null;
+  const contentType = TYPE_BY_EXT[name.slice(name.lastIndexOf(".") + 1)];
+  if (blobEnabled()) {
+    try {
+      const result = await get(blobPath(name), { access: "private" });
+      if (!result?.stream) return null;
+      return { bytes: Buffer.from(await new Response(result.stream).arrayBuffer()), contentType };
+    } catch {
+      return null;
+    }
+  }
   try {
     const bytes = await readFile(path.join(uploadDir(), name));
-    return { bytes, contentType: TYPE_BY_EXT[name.slice(name.lastIndexOf(".") + 1)] };
+    return { bytes, contentType };
   } catch {
     return null;
   }
@@ -61,5 +81,9 @@ export async function deletePhotoFile(photoUrl: string | null | undefined): Prom
   if (!photoUrl?.startsWith(PHOTO_URL_PREFIX)) return;
   const name = photoUrl.slice(PHOTO_URL_PREFIX.length);
   if (!isValidPhotoName(name)) return;
+  if (blobEnabled()) {
+    await del(blobPath(name)).catch(() => undefined);
+    return;
+  }
   await unlink(path.join(uploadDir(), name)).catch(() => undefined);
 }

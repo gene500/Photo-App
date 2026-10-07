@@ -25,6 +25,11 @@ export const POST = handle(async (req: Request, { params }: Ctx) => {
 
   const photoUrl = await savePhoto(bytes, check.type);
   const updated = await updateStop(userId, id, { photoUrl });
+  if (!updated) {
+    // The stop was deleted while we were saving: don't leave the new file orphaned.
+    await deletePhotoFile(photoUrl);
+    throw new HttpError(404, "Stop not found");
+  }
   await deletePhotoFile(stop.photoUrl);
   return Response.json({ stop: updated });
 });
@@ -35,6 +40,7 @@ export const DELETE = handle(async (_req: Request, { params }: Ctx) => {
   const stop = await getOwnedStop(userId, id);
   if (!stop) throw new HttpError(404, "Stop not found");
   const updated = await updateStop(userId, id, { photoUrl: null });
+  if (!updated) throw new HttpError(404, "Stop not found");
   await deletePhotoFile(stop.photoUrl);
   return Response.json({ stop: updated });
 });

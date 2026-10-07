@@ -3,11 +3,17 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
+// Pass-through, so one test can delete the stop while a photo is being saved.
+vi.mock("@/server/photos", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/server/photos")>();
+  return { ...actual, savePhoto: vi.fn(actual.savePhoto) };
+});
+import { savePhoto } from "@/server/photos";
 import { getCurrentUserId } from "@/server/session";
 import { DELETE as photoDELETE, POST as photoPOST } from "@/app/api/stops/[id]/photo/route";
 import { DELETE as stopDELETE } from "@/app/api/stops/[id]/route";
 import { GET as uploadGET } from "@/app/api/uploads/[name]/route";
-import { addStop } from "@/server/stops";
+import { addStop, deleteStop } from "@/server/stops";
 import { createTrip } from "@/server/trips";
 import { MAX_PHOTO_BYTES } from "@/lib/photo-rules";
 import { createTestUser, resetDb, sampleTripInput } from "../helpers/db";
@@ -85,5 +91,19 @@ describe("photo routes", () => {
     const url = (await (await upload(stopId, new File([PNG], "a.png", { type: "image/png" }))).json()).stop.photoUrl;
     await stopDELETE(new Request("http://localhost", { method: "DELETE" }), idParams(stopId));
     expect(fileOnDisk(url)).toBe(false);
+  });
+
+  it("returns 404 and removes the saved file when the stop is deleted mid-upload", async () => {
+    let savedUrl = "";
+    const real = (await vi.importActual<typeof import("@/server/photos")>("@/server/photos")).savePhoto;
+    vi.mocked(savePhoto).mockImplementationOnce(async (...args) => {
+      await deleteStop(userId, stopId); // the stop vanishes after the ownership check
+      savedUrl = await real(...args);
+      return savedUrl;
+    });
+    const res = await upload(stopId, new File([PNG], "ref.png", { type: "image/png" }));
+    expect(res.status).toBe(404);
+    expect(savedUrl).not.toBe("");
+    expect(fileOnDisk(savedUrl)).toBe(false);
   });
 });

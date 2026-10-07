@@ -56,8 +56,13 @@ export async function updateStop(
   patch: StopUpdate,
 ): Promise<Stop | null> {
   if (!(await getOwnedStop(userId, stopId))) return null;
-  const row = await prisma.stop.update({ where: { id: stopId }, data: patch });
-  return toStopDto(row);
+  try {
+    return toStopDto(await prisma.stop.update({ where: { id: stopId }, data: patch }));
+  } catch (e) {
+    // Deleted between the ownership check and the update (Prisma "record not found").
+    if (typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2025") return null;
+    throw e;
+  }
 }
 
 export async function deleteStop(

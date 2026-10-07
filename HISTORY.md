@@ -17,3 +17,4 @@ Plan: `docs/superpowers/plans/2026-10-06-road-trip-photo-planner.md`
 | 5 | next-auth config, session helper, HTTP helpers, signup route | `d4c0541..1ed4ce7` | Approved, 0 Critical/Important, 2 Minor (plan-mandated). Reviewer independently reproduced RED evidence to confirm authenticity. |
 | 6 | Trip data access | `b9632d3..f0eeec4` | Approved, 0 Critical/Important, 2 Minor (plan-mandated). Implementer disclosed a non-genuine RED instead of fabricating one; verified correct. |
 | 7 | Stop data access (add, update, delete, reorder) | `265ca95..5079e2f` | Approved after 1 fix round (completing a mutation-test claim, no code change needed), 3 Minor (plan-mandated). Re-reviewer independently reproduced the fix. |
+| 8 | Trip API routes | `e31bd99..e6f56b6` | Approved, 0 Critical/Important, 2 Minor informational. 404-not-403 confirmed structural. |

@@ -30,6 +30,14 @@ runtime basemap recolour (`src/lib/map-theme.ts`) and the Mapbox popup were neve
 run against real Mapbox (no token in this environment): check them in a browser
 with `NEXT_PUBLIC_MAPBOX_TOKEN` set, including dark mode.
 
+## Photo sources (2026-10-07, branch `photo-sources`, not pushed)
+
+Photos: Flickr (dormant unless `FLICKR_API_KEY`; unverified against the live API)
+-> Commons -> Wikipedia; suggestions are ranked by "photos nearby" (Commons count
+without a Flickr key, a weaker signal). Still needs a real-browser/Mapbox check of
+popups (and an iPhone tap check: first tap on a dot must select it) and, if a key
+ever exists, a live Flickr check. See README "Photo sources".
+
 ## Optimize route (2026-10-07)
 
 Built on branch `optimize-route` (not pushed or merged). Uses the Mapbox Matrix

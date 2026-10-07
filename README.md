@@ -21,6 +21,9 @@ Fill in `.env`:
   `NEXT_PUBLIC_MAPBOX_TOKEN` is the public `pk.*` token used by the
   browser map; `MAPBOX_TOKEN` is used server-side for Directions, the
   Matrix API (route optimization) and Geocoding (it can be the same `pk.*` token).
+- `FLICKR_API_KEY` — **optional**, server-only secret. Without it the app
+  uses Wikimedia Commons + Wikipedia only (see "Photo sources" below).
+  Flickr now restricts API keys to Pro accounts, so expect to leave it unset.
 - `DATABASE_URL` and `NEXTAUTH_URL` already have working local defaults
   in `.env.example`.
 
@@ -71,13 +74,40 @@ Matrix API allows at most 25 coordinates per request, which matches the app's
 
 Hovering (or keyboard-focusing) a suggestion dot on the map, or hovering its card
 in the panel, shows a popup with a photo of the place; picking a suggestion shows
-the same photo in the place card. Photos come from English Wikipedia's public
-API (`GET /api/place-photo` -> `src/server/external/wikimedia.ts`: a geosearch
-around the spot, then the article whose title matches the name, else the nearest
-article within 300 m that has a thumbnail). No API key is needed, a "Photo:
-Wikipedia" credit is shown, and any failure (no article, no image, network) just
-means no photo is shown. Photos are looked up lazily per dot, cached for the
-session in the browser, and only https images on Wikimedia hosts are passed on.
+the same photo (with its credit) in the place card. On touch devices there is no
+hover popup (it would make iOS swallow the first tap); tap a dot to open the card.
+
+#### Photo sources, attribution and licensing
+
+`GET /api/place-photo` -> `src/server/external/place-photo.ts` tries providers in
+order and the first hit wins:
+
+1. **Flickr** (only if `FLICKR_API_KEY` is set): `flickr.photos.search` within
+   300 m, most "interesting" first, restricted to Creative Commons / public-domain
+   licences (ids 1,2,3,4,5,6,9,10; note 1-3 are NonCommercial variants, fine for
+   a personal non-commercial project). Credit: `Photo: {owner} via Flickr (CC BY 2.0)`.
+   Only https images on `*.staticflickr.com` are passed on.
+2. **Wikimedia Commons** file geosearch (300 m): featured/quality/valued images
+   first, then name match, then nearest; only jpeg/png/webp. Credit: author and
+   licence from the file metadata, e.g. `Photo: Jane Doe via Wikimedia Commons (CC BY-SA 3.0)`.
+3. **Wikipedia** article image (name match, else nearest within 300 m).
+   Credit: `Photo: Wikipedia`.
+
+No key means Commons + Wikipedia only. Every photo is shown with its plain-text
+credit; any failure just means no photo. Results are cached on the server
+(500 entries LRU, 6 h for hits, 15 min for misses, concurrent lookups shared) and
+in the browser; browser failures are remembered for 60 s. Names are matched
+strictly (an "Eagle Peak" never matches "Eagle Rock").
+
+#### Popularity ranking
+
+After OpenStreetMap candidates are ranked and capped, the first 40 are enriched
+(5 at a time, 5 s timeout each, failures ignored) with a "photos nearby" count and
+re-ranked within each kind (viewpoint / peak / attraction) by it. The count is
+the Flickr `photos.total` within 250 m when `FLICKR_API_KEY` is set, otherwise
+the number of geotagged Wikimedia Commons files within 250 m (capped at 50, shown
+as "50+"; a weaker signal than Flickr). It shows as a muted "≈N photos nearby" caption
+on the suggestion card and popup.
 
 The Mapbox `light-v11` basemap is recoloured to the beige theme at runtime
 (`src/lib/map-theme.ts`, applied on style load); our own `route*` layers are

@@ -75,4 +75,10 @@ describe("stops data access", () => {
     expect((await findStopByPhotoUrl(user.id, "/api/uploads/p.png"))!.id).toBe(stops[0].id);
     expect(await findStopByPhotoUrl(intruder.id, "/api/uploads/p.png")).toBeNull();
   });
+
+  it("moves a stop", async () => {
+    const { user, stops } = await tripWithStops(["a"]);
+    const moved = await updateStop(user.id, stops[0].id, { lat: 38.25, lng: -118.5 });
+    expect(moved).toMatchObject({ lat: 38.25, lng: -118.5, name: "a" });
+  });
 });

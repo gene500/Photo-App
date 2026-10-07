@@ -8,6 +8,7 @@ function patchData(patch: TripPatch) {
   return {
     ...(patch.name !== undefined && { name: patch.name }),
     ...(patch.plannedDate && { plannedDate: dateOnlyToUtc(patch.plannedDate) }),
+    ...(patch.departAt !== undefined && { departAt: patch.departAt === null ? null : new Date(patch.departAt) }),
   };
 }
 

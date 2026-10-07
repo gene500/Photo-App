@@ -24,6 +24,15 @@ describe("stops data access", () => {
     expect(stops[0]).toMatchObject({ name: "a", source: "manual", visited: false, notes: null });
   });
 
+  it("defaults to any light and 30 minutes, and stores and patches both", async () => {
+    const { user, trip, stops } = await tripWithStops(["a"]);
+    expect(stops[0]).toMatchObject({ lightPref: "any", dwellMinutes: 30 });
+    const b = await addStop(user.id, trip.id, { ...pin("b"), lightPref: "sunset", dwellMinutes: 90 });
+    expect(b).toMatchObject({ lightPref: "sunset", dwellMinutes: 90 });
+    const patched = await updateStop(user.id, stops[0].id, { lightPref: "golden", dwellMinutes: 0 });
+    expect(patched).toMatchObject({ lightPref: "golden", dwellMinutes: 0 });
+  });
+
   it("refuses to add a stop to another user's trip", async () => {
     const { trip } = await tripWithStops([]);
     const intruder = await createTestUser();

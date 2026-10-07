@@ -11,7 +11,7 @@ import { StopDrawer } from "./StopDrawer";
 import { StopList } from "./StopList";
 import { StopsPanel } from "./StopsPanel";
 
-const stop: Stop = { id: "a", tripId: "t", order: 0, name: "A", lat: 1, lng: 2, notes: null, source: "manual", photoUrl: null, visited: false };
+const stop: Stop = { id: "a", tripId: "t", order: 0, name: "A", lat: 1, lng: 2, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 30 };
 
 // The page text colour follows the OS theme (light text in dark mode), so every white
 // floating surface must set its own dark text.

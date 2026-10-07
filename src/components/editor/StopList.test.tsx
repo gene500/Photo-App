@@ -6,7 +6,7 @@ import type { Stop } from "@/lib/types";
 import { reorderIds, StopList } from "./StopList";
 
 const stop = (id: string, name: string, extra: Partial<Stop> = {}): Stop => ({
-  id, tripId: "t1", order: 0, name, lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, ...extra,
+  id, tripId: "t1", order: 0, name, lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 30, ...extra,
 });
 const handlers = { onReorder: vi.fn(), onToggleVisited: vi.fn(), onDelete: vi.fn(), onSelect: vi.fn() };
 

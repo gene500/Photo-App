@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Stop } from "@/lib/types";
 import { StopCard } from "./StopCard";
 
-const stop: Stop = { id: "s1", tripId: "t1", order: 0, name: "Tunnel View", lat: 37.7, lng: -119.7, notes: null, source: "manual", photoUrl: null, visited: false };
+const stop: Stop = { id: "s1", tripId: "t1", order: 0, name: "Tunnel View", lat: 37.7, lng: -119.7, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 30 };
 const base = { stop, bestTime: { window: "golden hour" as const, at: new Date("2026-07-02T02:45:00Z") }, onToggleVisited: vi.fn(), onOpenDetails: vi.fn(), onClose: vi.fn() };
 
 describe("StopCard", () => {

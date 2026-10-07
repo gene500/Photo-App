@@ -69,6 +69,24 @@ describe("stopPatchSchema", () => {
   });
 });
 
+describe("light-aware fields", () => {
+  it("defaults new stops to any light and 30 minutes", () => {
+    expect(newStopSchema.parse({ name: "a", lat: 1, lng: 2, source: "manual" })).toMatchObject({ lightPref: "any", dwellMinutes: 30 });
+  });
+  it("validates light preference and dwell range", () => {
+    expect(stopPatchSchema.safeParse({ lightPref: "dusk" }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ dwellMinutes: 481 }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ dwellMinutes: -1 }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ dwellMinutes: 1.5 }).success).toBe(false);
+    expect(stopPatchSchema.parse({ lightPref: "sunrise", dwellMinutes: 480 })).toEqual({ lightPref: "sunrise", dwellMinutes: 480 });
+  });
+  it("accepts departAt as an ISO string or null on a trip patch", () => {
+    expect(tripPatchSchema.parse({ departAt: null })).toEqual({ departAt: null });
+    expect(tripPatchSchema.parse({ departAt: "2026-07-01T17:42:00Z" })).toEqual({ departAt: "2026-07-01T17:42:00Z" });
+    expect(tripPatchSchema.safeParse({ departAt: "tomorrow" }).success).toBe(false);
+  });
+});
+
 describe("signupSchema", () => {
   it("normalizes the email", () => {
     expect(signupSchema.parse({ email: "  Foo@Bar.COM ", password: "longenough" })).toEqual({

@@ -47,10 +47,10 @@ import { api } from "@/lib/api-client";
 import type { Stop, TripWithStops } from "@/lib/types";
 import { TripEditor } from "./TripEditor";
 
-const trip: TripWithStops = { id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", stops: [] };
+const trip: TripWithStops = { id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", departAt: null, stops: [] };
 const route = { geometry: [[-119.79, 36.74], [-119.12, 37.96]] as [number, number][], legs: [{ distance: 100_000, duration: 3_600 }], distance: 100_000, duration: 3_600 };
 const newStop = (over: Partial<Stop>): Stop => ({
-  id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37.5, lng: -119.5, notes: null, source: "manual", photoUrl: null, visited: false, ...over,
+  id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37.5, lng: -119.5, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 30, ...over,
 });
 const seed = [
   newStop({ id: "a", order: 0, name: "A", lat: 36.74, lng: -119.79 }),

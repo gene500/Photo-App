@@ -6,6 +6,8 @@ export type Place = { name: string; lat: number; lng: number };
 
 export type StopSource = "manual" | "suggested";
 
+export type LightPref = "any" | "sunrise" | "golden" | "sunset";
+
 export type Stop = {
   id: string;
   tripId: string;
@@ -17,6 +19,10 @@ export type Stop = {
   source: StopSource;
   photoUrl: string | null;
   visited: boolean;
+  /** Light the stop is best shot in. */
+  lightPref: LightPref;
+  /** Minutes spent at the stop (0..480). */
+  dwellMinutes: number;
 };
 
 export type Trip = {
@@ -24,6 +30,8 @@ export type Trip = {
   name: string;
   /** Calendar date, "YYYY-MM-DD". */
   plannedDate: string;
+  /** ISO instant the trip leaves the first stop; null = sunrise at the first stop. */
+  departAt: string | null;
 };
 
 export type TripWithStops = Trip & { stops: Stop[] };

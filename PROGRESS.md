@@ -3,6 +3,22 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
+## 2026-10-07 (extra reviews done, merged to main, project complete)
+
+- The two extra read-only review passes (bug-hunting, security) ran after
+  the final whole-branch review. Findings were fixed in three commits:
+  - `e5e143f` cap suggestions coordinates (recursive-simplify DoS)
+  - `455d67c` fix stale closure in TripEditor's optimistic reorder revert
+  - `6d6ed0a` reject pathological route geometry before `buffer()` (OOM)
+- Merged `worktree-road-trip-photo-planner` into `main` (fast-forward) and
+  pushed to origin. Re-verified on the merged tree: `typecheck` clean,
+  `lint` clean, 187/187 unit tests, e2e golden path 1/1.
+- Deleted the worktree and the `worktree-road-trip-photo-planner` branch
+  (local and remote); `main` is the only branch.
+- Deferred on purpose (outside the plan's scope): raw `<p>` errors instead
+  of `ErrorBanner` in a few forms, in-memory Overpass cache, SQLite
+  single-writer limit, no log when `NEXT_PUBLIC_MAPBOX_TOKEN` is absent.
+
 ## 2026-10-07 (final whole-branch review: ready to merge)
 
 All 24 tasks of the implementation plan are complete and reviewed-approved

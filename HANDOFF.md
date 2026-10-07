@@ -11,28 +11,12 @@ for the full design. Being implemented from
 `docs/superpowers/plans/2026-10-06-road-trip-photo-planner.md` (24 tasks,
 5 phases) using `superpowers:subagent-driven-development`.
 
-## Where the work actually lives
+## Where the work lives
 
-This is a **git worktree**, not the main checkout:
-
-- Main checkout: `/Users/genestone/road-trip-photo-planner` (branch `main`) —
-  holds only the spec, plan, PROGRESS.md, this file's counterpart if ever
-  merged back.
-- **Worktree** (all implementation work happens here):
-  `/Users/genestone/road-trip-photo-planner/.claude/worktrees/road-trip-photo-planner`
-  on branch `worktree-road-trip-photo-planner`.
-
-To resume: re-enter this worktree (native `EnterWorktree` tool with
-`path: "/Users/genestone/road-trip-photo-planner/.claude/worktrees/road-trip-photo-planner"`,
-or `cd` there directly if working outside that tooling) before touching any
-files. Running git commands from the main checkout path will not see this
-branch's work.
-
-**Remote:** `origin` → https://github.com/gene500/Photo-App.git. Both
-`main` and `worktree-road-trip-photo-planner` are pushed and tracking.
-On another device, clone this repo and check out
-`worktree-road-trip-photo-planner` directly (no need to recreate the
-worktree setup — just work on that branch in a normal checkout there).
+The project is finished and merged. All code is on `main` of
+`origin` → https://github.com/gene500/Photo-App.git. The worktree and
+feature branch used during implementation have been deleted. Clone the
+repo, `npm install`, and see `README.md` for setup.
 
 ## Resume procedure
 
@@ -129,9 +113,10 @@ Two other plugins are installed on this machine (`clangd-lsp`,
 `claude-subconscious`) but neither is used by this project — no action
 needed for those.
 
-## Current status (as of this file's last edit)
+## Current status
 
-Task 1 (scaffold) was dispatched to a Sonnet implementer subagent and was
-still running when this file was written. Check the ledger for whether it
-completed and was reviewed. Nothing has been committed to this branch yet
-beyond what the ledger shows.
+Complete. All 24 plan tasks were implemented and reviewed, the final
+whole-branch review, bug-hunting and security passes are done and their
+fixes merged to `main`. Nothing remains open except the deferred Minor
+notes listed in `PROGRESS.md`. The "Resume procedure" and standing rules
+above are historical context for how the build was run.

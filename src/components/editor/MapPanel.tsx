@@ -129,7 +129,7 @@ export default function MapPanel({
     const keepSet = new Set(keep);
     stops.forEach((s, i) => {
       const label = `Stop ${i + 1}: ${s.name}`;
-      const className = `${MARKER_CLASS} ${STOP_CLASS} ${s.id === selectedId ? "ring-2 ring-black" : ""}`;
+      const selected = s.id === selectedId;
       if (keepSet.has(s.id)) {
         const marker = markers.get(s.id)!;
         if (draggingRef.current.has(s.id)) return;
@@ -137,12 +137,14 @@ export default function MapPanel({
         const ll = marker.getLngLat();
         if (ll.lng !== s.lng || ll.lat !== s.lat) marker.setLngLat([s.lng, s.lat]);
         if (el.textContent !== String(i + 1)) el.textContent = String(i + 1);
-        if (el.className !== className) el.className = className;
+        // Toggle only our ring classes: mapbox owns the rest of the element's classes.
+        el.classList.toggle("ring-2", selected);
+        el.classList.toggle("ring-black", selected);
         el.style.background = stopColor(s);
         el.setAttribute("aria-label", label);
         el.title = label;
       } else if (addSet.has(s.id)) {
-        const el = markerElement(className.slice(MARKER_CLASS.length + 1), label, String(i + 1));
+        const el = markerElement(`${STOP_CLASS} ${selected ? "ring-2 ring-black" : ""}`, label, String(i + 1));
         el.style.background = stopColor(s);
         const id = s.id;
         el.addEventListener("click", () => handlersRef.current.onStopClick(id));

@@ -24,13 +24,33 @@ describe("StopDrawer", () => {
     await userEvent.type(screen.getByLabelText("Notes"), "   ");
     await userEvent.click(screen.getByLabelText("Visited"));
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(onSave).toHaveBeenCalledWith({ name: "Tunnel View", notes: null, visited: true });
+    // notes stayed blank (null), so only the visited change is sent
+    expect(onSave).toHaveBeenCalledWith({ visited: true });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("sends only the fields changed in the drawer, so a Visited tick made elsewhere is not undone", async () => {
+    const onSave = vi.fn(async () => {});
+    const { rerender } = render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    rerender(<StopDrawer stop={{ ...stop, visited: true }} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />); // ticked in the list
+    await userEvent.type(screen.getByLabelText("Notes"), "Golden light at 7");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({ notes: "Golden light at 7" });
+  });
+
+  it("closes without saving when nothing changed", async () => {
+    const onSave = vi.fn(async () => {});
+    const onClose = vi.fn();
+    render(<StopDrawer stop={stop} onClose={onClose} onSave={onSave} onPhotoChange={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
   });
 
   it("shows save errors and stays open", async () => {
     const onClose = vi.fn();
     render(<StopDrawer stop={stop} onClose={onClose} onSave={vi.fn(async () => { throw new Error("Stop not found"); })} onPhotoChange={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText("Name"), "!");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect((await screen.findByRole("alert")).textContent).toContain("Stop not found");
     expect(onClose).not.toHaveBeenCalled();

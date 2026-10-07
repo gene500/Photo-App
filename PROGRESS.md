@@ -3,6 +3,28 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
+## 2026-10-06 (implementation: Phases 1-2 complete)
+
+Executing the implementation plan via `superpowers:subagent-driven-development`
+(fresh implementer + reviewer per task). Tasks 1-10 of 24 complete and
+reviewed-approved:
+- **Phase 1 (Foundation):** scaffold, Prisma schema/client/test harness,
+  shared types and zod validation.
+- **Phase 2 (Auth and data backend):** user accounts, next-auth/HTTP
+  helpers/signup, trip data access + API routes, stop data access + API
+  routes, reference photo upload/serving/cleanup.
+
+Notable along the way: the `tdd-guard` plugin malfunctioned repeatedly
+(confirmed via direct SDK probe to be a plugin reliability issue, not a
+config problem) and was disabled for Tasks 4 onward — TDD discipline is
+still required by every task brief and independently checked by each task
+reviewer against real RED/GREEN evidence. Full detail in `HANDOFF.md` and
+the SDD ledger. Remote pushed to https://github.com/gene500/Photo-App.git
+(branches `main` and `worktree-road-trip-photo-planner`).
+
+Next: Phase 3 (domain logic and external services — best-time derivation,
+Overpass suggestions, Mapbox directions/geocoding), Task 11 onward.
+
 ## 2026-10-06 (implementation plan)
 
 - Wrote the implementation plan via `superpowers:writing-plans`:

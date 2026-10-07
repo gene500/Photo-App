@@ -17,3 +17,9 @@ export function dateOnlyToUtc(value: string): Date {
 export function utcToDateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
+
+/** A Date's calendar day in the viewer's own time zone -> "YYYY-MM-DD". */
+export function localDateOnly(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}

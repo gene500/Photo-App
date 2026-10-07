@@ -12,7 +12,7 @@ export default async function TripsPage() {
     <main className="mx-auto max-w-3xl space-y-6 p-4">
       <h1 className="text-2xl font-semibold">Your trips</h1>
       <TripList trips={trips} />
-      <NewTripForm today={new Date().toISOString().slice(0, 10)} />
+      <NewTripForm />
     </main>
   );
 }

@@ -38,6 +38,28 @@ describe("StopDrawer", () => {
     expect(onSave).toHaveBeenCalledWith({ notes: "Golden light at 7" });
   });
 
+  it("saves a changed best light and time here", async () => {
+    const onSave = vi.fn(async () => {});
+    render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    await userEvent.selectOptions(screen.getByLabelText("Best light"), "sunset");
+    const dwell = screen.getByLabelText("Time here (min)");
+    await userEvent.clear(dwell);
+    await userEvent.type(dwell, "75");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({ lightPref: "sunset", dwellMinutes: 75 });
+  });
+
+  it("rejects a time here outside 0 to 480 minutes", async () => {
+    const onSave = vi.fn(async () => {});
+    render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    const dwell = screen.getByLabelText("Time here (min)");
+    await userEvent.clear(dwell);
+    await userEvent.type(dwell, "500");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect((await screen.findByRole("alert")).textContent).toContain("0 to 480");
+  });
+
   it("closes without saving when nothing changed", async () => {
     const onSave = vi.fn(async () => {});
     const onClose = vi.fn();

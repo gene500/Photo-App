@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { SunWindows } from "./best-time";
-import { lightWindows, windowMissMinutes } from "./light-windows";
+import { getSunWindows, type SunWindows } from "./best-time";
+import { defaultLightPref, describeLightHint, lightWindows, windowMissMinutes } from "./light-windows";
 
 const at = (hhmm: string) => new Date(`2026-07-01T${hhmm}:00Z`);
 const SUN: SunWindows = {
@@ -51,5 +51,34 @@ describe("windowMissMinutes", () => {
   });
   it("uses the nearest of several windows", () => {
     expect(windowMissMinutes(at("10:00"), 0, lightWindows("golden", SUN))).toBe(180);
+  });
+});
+
+describe("defaultLightPref", () => {
+  it("makes scenic suggestions golden and others any", () => {
+    expect(defaultLightPref("viewpoint")).toBe("golden");
+    expect(defaultLightPref("peak")).toBe("golden");
+    expect(defaultLightPref("attraction")).toBe("any");
+  });
+});
+
+describe("describeLightHint", () => {
+  const yosemite = { lat: 37.7, lng: -119.6, lightPref: "sunset" as const, dwellMinutes: 30 };
+  const sun = getSunWindows(yosemite.lat, yosemite.lng, "2026-07-01");
+  const [[from, to]] = lightWindows("sunset", sun);
+
+  it("shows the window and arrival when the light is met", () => {
+    const hint = describeLightHint(yosemite, new Date(from.getTime() + 20 * 60_000), "UTC")!;
+    expect(hint.met).toBe(true);
+    expect(hint.text).toMatch(/^Sunset window \d{1,2}:\d{2}–\d{1,2}:\d{2} (AM|PM) · arrive \d{1,2}:\d{2} (AM|PM)$/);
+  });
+  it("says by how much the light is missed", () => {
+    const hint = describeLightHint(yosemite, new Date(to.getTime() + 40 * 60_000), "UTC")!;
+    expect(hint).toEqual({ text: "Misses sunset by 40 min", met: false });
+  });
+  it("is null for any, without an arrival, or without a window", () => {
+    expect(describeLightHint({ ...yosemite, lightPref: "any" }, from)).toBeNull();
+    expect(describeLightHint(yosemite, null)).toBeNull();
+    expect(describeLightHint({ lat: 78, lng: 15, lightPref: "sunset", dwellMinutes: 30 }, new Date("2026-06-21T12:00:00Z"))).toBeNull();
   });
 });

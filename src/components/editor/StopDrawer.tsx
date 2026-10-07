@@ -5,8 +5,8 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost, btnPrimary, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { checkPhotoFile, PHOTO_TYPES } from "@/lib/photo-rules";
-import type { Stop } from "@/lib/types";
-import type { StopPatch } from "@/lib/validation";
+import type { LightPref, Stop } from "@/lib/types";
+import { MAX_DWELL_MINUTES, type StopPatch } from "@/lib/validation";
 
 type Props = {
   stop: Stop;
@@ -15,13 +15,17 @@ type Props = {
   onPhotoChange: (stop: Stop) => void;
 };
 
+const LIGHT_OPTIONS: [LightPref, string][] = [["any", "Any"], ["sunrise", "Sunrise"], ["golden", "Golden hour"], ["sunset", "Sunset"]];
+
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
-  const [initial] = useState({ name: stop.name, notes: stop.notes ?? null, visited: stop.visited });
+  const [initial] = useState({ name: stop.name, notes: stop.notes ?? null, visited: stop.visited, lightPref: stop.lightPref, dwellMinutes: stop.dwellMinutes });
   const [name, setName] = useState(stop.name);
   const [notes, setNotes] = useState(stop.notes ?? "");
   const [visited, setVisited] = useState(stop.visited);
+  const [lightPref, setLightPref] = useState<LightPref>(stop.lightPref);
+  const [dwell, setDwell] = useState(String(stop.dwellMinutes));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -31,11 +35,18 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
     try {
       // Send only what was edited here; fields left alone may have changed elsewhere
       // (e.g. Visited ticked in the list) and must not be overwritten with stale copies.
+      const dwellMinutes = Number(dwell);
+      if (dwell.trim() === "" || !Number.isInteger(dwellMinutes) || dwellMinutes < 0 || dwellMinutes > MAX_DWELL_MINUTES) {
+        setError(`Time here must be a whole number of minutes from 0 to ${MAX_DWELL_MINUTES}`);
+        return;
+      }
       const patch: StopPatch = {};
       if (name !== initial.name) patch.name = name;
       const nextNotes = notes.trim() === "" ? null : notes;
       if (nextNotes !== initial.notes) patch.notes = nextNotes;
       if (visited !== initial.visited) patch.visited = visited;
+      if (lightPref !== initial.lightPref) patch.lightPref = lightPref;
+      if (dwellMinutes !== initial.dwellMinutes) patch.dwellMinutes = dwellMinutes;
       if (Object.keys(patch).length > 0) await onSave(patch);
       onClose();
     } catch (e) {
@@ -91,6 +102,20 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
         <span className="text-sm text-muted">Notes</span>
         <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
       </label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="text-sm text-muted">Best light</span>
+          <select value={lightPref} onChange={(e) => setLightPref(e.target.value as LightPref)} className={inputClass}>
+            {LIGHT_OPTIONS.map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-sm text-muted">Time here (min)</span>
+          <input type="number" inputMode="numeric" min={0} max={MAX_DWELL_MINUTES} step={5} value={dwell} onChange={(e) => setDwell(e.target.value)} className={inputClass} />
+        </label>
+      </div>
       <label className="flex min-h-9 items-center gap-2 text-sm">
         <input type="checkbox" className="h-4 w-4 accent-accent-strong" checked={visited} onChange={(e) => setVisited(e.target.checked)} />
         Visited

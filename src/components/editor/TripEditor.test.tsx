@@ -171,7 +171,7 @@ describe("TripEditor", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
     await userEvent.click(await screen.findByRole("button", { name: "Accept" }));
-    expect(api.addStop).toHaveBeenCalledWith("t1", { name: "Tunnel View", lat: 37.7, lng: -119.7, source: "suggested" });
+    expect(api.addStop).toHaveBeenCalledWith("t1", { name: "Tunnel View", lat: 37.7, lng: -119.7, source: "suggested", lightPref: "golden" });
     await userEvent.click(screen.getByRole("tab", { name: "Stops" }));
     expect(screen.getAllByTestId("stop-row")[2].textContent).toContain("Tunnel View");
   });
@@ -188,7 +188,7 @@ describe("TripEditor", () => {
     await userEvent.click(screen.getByRole("button", { name: "click first suggestion" }));
     expect((await screen.findByAltText("Photo of Tunnel View")).getAttribute("src")).toBe("https://upload.wikimedia.org/tv.jpg");
     await userEvent.click(screen.getByRole("button", { name: "Add stop" }));
-    expect(api.addStop).toHaveBeenCalledWith("t1", { name: "Tunnel View", lat: 37.7, lng: -119.7, source: "suggested" });
+    expect(api.addStop).toHaveBeenCalledWith("t1", { name: "Tunnel View", lat: 37.7, lng: -119.7, source: "suggested", lightPref: "golden" });
     await waitFor(() => expect(screen.queryAllByTestId("suggestion-card")).toHaveLength(0));
   });
 
@@ -382,7 +382,10 @@ describe("TripEditor", () => {
       const user = userEvent.setup();
       render(<TripEditor initialTrip={withStops(three)} />);
       await user.click(screen.getByRole("button", { name: "Optimize route" }));
-      expect(api.optimizeOrder).toHaveBeenCalledWith([[-119, 36], [-119, 38], [-119, 37]]);
+      expect(api.optimizeOrder).toHaveBeenCalledWith([[-119, 36], [-119, 38], [-119, 37]], {
+        stops: [30, 30, 30].map((dwellMinutes) => ({ lightPref: "any", dwellMinutes })),
+        plannedDate: "2026-07-01",
+      });
       await waitFor(() => expect(api.reorderStops).toHaveBeenCalledWith("t1", ["a", "c", "b"]));
       await waitFor(() => expect(rowNames()[1]).toContain("C"));
 
@@ -390,6 +393,62 @@ describe("TripEditor", () => {
       await waitFor(() => expect(api.reorderStops).toHaveBeenLastCalledWith("t1", ["a", "b", "c"]));
       await waitFor(() => expect(rowNames()[1]).toContain("B"));
       expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+    });
+
+    describe("with light preferences", () => {
+      const sunsetC = [three[0], three[1], { ...three[2], lightPref: "sunset" as const }];
+      const trip2 = (departAt: string | null) => ({ ...withStops(sunsetC), departAt });
+      const echoTrip = () =>
+        vi.mocked(api.updateTrip).mockImplementation(async (_id, patch) => ({ trip: { ...trip2(null), ...patch } as never }));
+
+      it("sends the preferences, saves the new departure, shows Starts, and Undo restores both", async () => {
+        reorderEcho();
+        echoTrip();
+        vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1], departAt: "2026-07-01T23:15:00.000Z", misses: [] });
+        const user = userEvent.setup();
+        render(<TripEditor initialTrip={trip2(null)} />);
+        await user.click(screen.getByRole("button", { name: "Optimize route" }));
+        expect(vi.mocked(api.optimizeOrder).mock.calls[0]![1]!.stops[2]).toEqual({ lightPref: "sunset", dwellMinutes: 30 });
+        await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", { departAt: "2026-07-01T23:15:00.000Z" }));
+        expect((await screen.findByTestId("depart-note")).textContent).toMatch(/^Starts \d{1,2}:\d{2} (AM|PM)$/);
+
+        await user.click(await screen.findByRole("button", { name: "Undo" }));
+        await waitFor(() => expect(api.updateTrip).toHaveBeenLastCalledWith("t1", { departAt: null }));
+        await waitFor(() => expect(api.reorderStops).toHaveBeenLastCalledWith("t1", ["a", "b", "c"]));
+        await waitFor(() => expect(screen.queryByTestId("depart-note")).toBeNull());
+      });
+
+      it("keeps an unchanged order but still applies a new departure", async () => {
+        echoTrip();
+        vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], departAt: "2026-07-01T23:15:00.000Z", misses: [] });
+        const user = userEvent.setup();
+        render(<TripEditor initialTrip={trip2(null)} />);
+        await user.click(screen.getByRole("button", { name: "Optimize route" }));
+        await waitFor(() => expect(api.updateTrip).toHaveBeenCalledTimes(1));
+        expect(api.reorderStops).not.toHaveBeenCalled();
+        expect(await screen.findByRole("button", { name: "Undo" })).toBeTruthy();
+      });
+
+      it("lists the stops that miss their light", async () => {
+        reorderEcho();
+        echoTrip();
+        vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1], departAt: null, misses: [{ stopIndex: 2, minutes: 90 }, { stopIndex: 1, minutes: 20 }] });
+        const user = userEvent.setup();
+        render(<TripEditor initialTrip={trip2(null)} />);
+        await user.click(screen.getByRole("button", { name: "Optimize route" }));
+        expect(await screen.findByText("Can't fit 2 stops in their light: C, B.")).toBeTruthy();
+        expect(api.updateTrip).not.toHaveBeenCalled(); // null departAt leaves the departure alone
+      });
+
+      it("resets a chosen departure back to sunrise", async () => {
+        echoTrip();
+        const user = userEvent.setup();
+        render(<TripEditor initialTrip={trip2("2026-07-01T23:15:00.000Z")} />);
+        expect(screen.getByTestId("depart-note")).toBeTruthy();
+        await user.click(screen.getByRole("button", { name: "Reset to sunrise" }));
+        await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", { departAt: null }));
+        await waitFor(() => expect(screen.queryByTestId("depart-note")).toBeNull());
+      });
     });
 
     it("says so instead of saving when the order is already fastest", async () => {

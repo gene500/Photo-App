@@ -1,4 +1,4 @@
-import type { LngLat, Place, PlacePhoto, RouteResult, Stop, Suggestion, Trip, TripSummary } from "./types";
+import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, Stop, Suggestion, Trip, TripSummary } from "./types";
 import type { NewStopInput, StopPatch, TripInput, TripPatch } from "./validation";
 
 export class ApiError extends Error {
@@ -48,8 +48,11 @@ export const api = {
   removePhoto: (stopId: string) => request<{ stop: Stop }>(`/api/stops/${stopId}/photo`, send("DELETE")),
   directions: (coordinates: LngLat[]) =>
     request<{ route: RouteResult }>("/api/directions", send("POST", { coordinates })),
-  optimizeOrder: (coordinates: LngLat[]) =>
-    request<{ order: number[] }>("/api/optimize", send("POST", { coordinates })),
+  optimizeOrder: (coordinates: LngLat[], light?: { stops: { lightPref: LightPref; dwellMinutes: number }[]; plannedDate: string }) =>
+    request<{ order: number[]; departAt?: string | null; misses?: { stopIndex: number; minutes: number }[] }>(
+      "/api/optimize",
+      send("POST", { coordinates, ...light }),
+    ),
   suggestions: (coordinates: LngLat[]) =>
     request<{ suggestions: Suggestion[] }>("/api/suggestions", send("POST", { coordinates })),
   geocode: (q: string, proximity?: { lat: number; lng: number }) =>

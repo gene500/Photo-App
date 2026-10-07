@@ -15,3 +15,4 @@ Plan: `docs/superpowers/plans/2026-10-06-road-trip-photo-planner.md`
 | 3 | Shared types and validation schemas | `8c2c64f..f7fa57e` | Approved, 0 Critical/Important, 2 Minor (plan-mandated) |
 | 4 | User accounts data access | `6612d4f..803e7d8` | Approved, 0 Critical/Important, 2 Minor (plan-mandated). First task done with tdd-guard disabled. |
 | 5 | next-auth config, session helper, HTTP helpers, signup route | `d4c0541..1ed4ce7` | Approved, 0 Critical/Important, 2 Minor (plan-mandated). Reviewer independently reproduced RED evidence to confirm authenticity. |
+| 6 | Trip data access | `b9632d3..f0eeec4` | Approved, 0 Critical/Important, 2 Minor (plan-mandated). Implementer disclosed a non-genuine RED instead of fabricating one; verified correct. |

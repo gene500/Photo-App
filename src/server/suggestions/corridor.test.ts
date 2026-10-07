@@ -28,6 +28,24 @@ describe("buildCorridor", () => {
   it("rejects a route with fewer than two points", () => {
     expect(() => buildCorridor([[0, 0]])).toThrow("Route needs at least 2 coordinates");
   });
+
+  // Adversarial zigzag: amplitude (0.006) just above ROUTE_SIMPLIFY_DEG (0.005)
+  // so the point survives simplify()'s Douglas-Peucker pass almost untouched,
+  // defeating a raw-input-count cap. buffer()'s cost scales with this
+  // POST-simplify point count, not the raw input size, so this must be
+  // rejected before buffer() ever runs.
+  const zigzag = (n: number): LngLat[] =>
+    Array.from({ length: n }, (_, i) => [i * 0.001, i % 2 === 0 ? 0 : 0.006]);
+
+  it("rejects a route whose simplified geometry is still too complex", () => {
+    // raw=211 simplifies to 201 points (just over the 200-point guard).
+    expect(() => buildCorridor(zigzag(211))).toThrow("too complex");
+  });
+
+  it("accepts a route whose simplified geometry is within budget", () => {
+    // raw=210 simplifies to exactly 200 points (at the guard's limit).
+    expect(() => buildCorridor(zigzag(210))).not.toThrow();
+  });
 });
 
 describe("toOverpassPoly", () => {

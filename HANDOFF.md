@@ -44,16 +44,14 @@ repo, `npm install`, and see `README.md` for setup.
 
 ## Standing rules for this project (confirmed by the human partner)
 
-- **Model allocation:** Opus is used ONLY for the planning step (already
-  done — the implementation plan was written by an Opus agent). Everything
-  else — every task implementer, every task reviewer, the final whole-branch
-  review, and the extra bug/security review passes below — runs on
-  **Sonnet**. Do not escalate the final review to a more-capable model even
-  though the skill's default guidance suggests it; the human partner
-  explicitly overrode that.
+- **Model allocation (updated 2026-10-07 by the human partner):** every
+  implementer and every regular (per-task and scoped re-) review runs on
+  **Sonnet**. Every *final* review runs on **Opus**: the final whole-branch
+  review and the final bug and security passes. (This replaces the earlier
+  "Sonnet only" rule; planning is also Opus.)
 - **Extra reviews requested beyond the skill's default process:** after all
   24 tasks are complete and the final whole-branch review is clean, dispatch
-  two additional subagents in parallel (both Sonnet, both read-only against
+  two additional subagents in parallel (both Opus, both read-only against
   the finished diff): one hunting for bugs, one for security issues. These
   are in addition to, not instead of, the per-task reviews and the final
   whole-branch review the skill already runs.

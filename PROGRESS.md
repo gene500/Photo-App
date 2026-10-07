@@ -25,6 +25,25 @@ the SDD ledger. Remote pushed to https://github.com/gene500/Photo-App.git
 Next: Phase 3 (domain logic and external services — best-time derivation,
 Overpass suggestions, Mapbox directions/geocoding), Task 11 onward.
 
+## 2026-10-06 (implementation: Phase 3 complete)
+
+Tasks 11-15 complete and reviewed-approved: best-time derivation (suncalc,
+independently re-verified against real astronomical output), geo
+helper/route corridor (turf.js), Overpass response parsing/dedup/ranking,
+Overpass client with cache/retry + fake mode, Mapbox directions/geocoding
+wrappers + routes. 15/24 tasks done.
+
+Two review findings this phase were accepted via controller ruling rather
+than a fix-loop redo, since both were about report/test-coverage precision
+on already-verified-correct code, not actual defects — see the SDD ledger
+for full reasoning. TDD discipline (now review-gate-only, no mechanical
+hook) has held up well: reviewers have repeatedly independently reproduced
+implementers' claimed test failures/fixes against the real toolchain
+rather than trusting reports at face value.
+
+Next: Phase 4 (UI) — Task 16 onward (client helpers, API client, then
+auth pages, trip editor, map views).
+
 ## 2026-10-06 (implementation plan)
 
 - Wrote the implementation plan via `superpowers:writing-plans`:

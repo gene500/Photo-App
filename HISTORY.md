@@ -24,3 +24,4 @@ Plan: `docs/superpowers/plans/2026-10-06-road-trip-photo-planner.md`
 | 12 | Geo helper, route corridor polygon, Overpass query builder | `581b469..17dd42d` | Approved after 1 fix round (report-only correction distinguishing a forced assertion from an empirical one; no code change). |
 | 13 | Overpass response parsing, dedup, ranking, cap | `cc250d0..616f942` | Approved, 0 Critical/Important, 4 Minor (plan-mandated). All three precisely-disclosed items independently verified. |
 | 14 | Overpass client (timeout+retry), TTL cache, suggestions service, fake mode | `54b9ade..d2c0c4e` | Approved, 0 Critical/Important, 2 Minor cosmetic. Reviewer reproduced a TS2493 compile error standalone to confirm a disclosed deviation was necessary. |
+| 15 | Mapbox Directions and Geocoding wrappers and routes | `a43194c..3f6e45b` | Approved, 1 Important ruled-on-and-accepted (plan-mandated untested error branches), 2 Minor. **Phase 3 complete.** |

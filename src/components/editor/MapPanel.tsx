@@ -4,6 +4,7 @@ import type { Feature, LineString } from "geojson";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
+import { wrapLng } from "@/lib/geo";
 import { stopColor } from "@/lib/stop-style";
 import type { LngLat } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
@@ -59,7 +60,7 @@ export default function MapPanel({
     map.addControl(new mapboxgl.NavigationControl(), "bottom-right");
     const reportCenter = () => {
       const c = map.getCenter();
-      handlersRef.current.onCenterChange?.({ lat: c.lat, lng: c.lng });
+      handlersRef.current.onCenterChange?.({ lat: c.lat, lng: wrapLng(c.lng) });
     };
     map.on("load", () => {
       map.addSource(ROUTE_SOURCE, { type: "geojson", data: routeData(null) });
@@ -77,7 +78,7 @@ export default function MapPanel({
     map.on("click", (e) => {
       const target = e.originalEvent.target as HTMLElement | null;
       if (target?.closest(`.${MARKER_CLASS}`)) return; // marker clicks select, they don't drop pins
-      handlersRef.current.onMapClick({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+      handlersRef.current.onMapClick({ lat: e.lngLat.lat, lng: wrapLng(e.lngLat.lng) });
     });
     mapRef.current = map;
     return () => {
@@ -111,7 +112,7 @@ export default function MapPanel({
       const marker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat([s.lng, s.lat]).addTo(map);
       marker.on("dragend", () => {
         const { lat, lng } = marker.getLngLat();
-        handlersRef.current.onStopMove?.(s.id, { lat, lng });
+        handlersRef.current.onStopMove?.(s.id, { lat, lng: wrapLng(lng) });
       });
       return marker;
     });

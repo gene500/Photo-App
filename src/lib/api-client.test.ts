@@ -44,7 +44,7 @@ describe("api client", () => {
   it("adds a proximity bias to geocode requests", async () => {
     fetchMock.mockResolvedValue(Response.json({ places: [] }));
     await api.geocode("Spring", { lat: 36.74, lng: -119.79 });
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/geocode?q=Spring&proximity=-119.79,36.74");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/geocode?q=Spring&proximity=-119.790000,36.740000");
   });
 
   it("reverse geocodes a point", async () => {

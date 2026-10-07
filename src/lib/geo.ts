@@ -15,3 +15,9 @@ export function haversineMeters(
 export function coordsLabel(p: { lat: number; lng: number }): string {
   return `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
 }
+
+/** Normalise a longitude (e.g. from a map panned across the antimeridian) into [-180, 180]. */
+export function wrapLng(lng: number): number {
+  if (lng >= -180 && lng <= 180) return lng;
+  return ((((lng + 180) % 360) + 360) % 360) - 180;
+}

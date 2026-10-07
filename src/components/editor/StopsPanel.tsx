@@ -32,7 +32,7 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, suggestio
   return (
     <aside
       data-snap={snap}
-      className={`absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-2xl border bg-white shadow-xl lg:inset-x-auto lg:left-3 lg:top-3 lg:w-[360px] lg:rounded-xl ${SNAP_CLASS[snap]}`}
+      className={`absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-2xl border bg-white text-gray-900 shadow-xl lg:inset-x-auto lg:left-3 lg:top-3 lg:w-[360px] lg:rounded-xl ${SNAP_CLASS[snap]}`}
     >
       <div className="flex items-start gap-2 border-b p-3">
         {open ? (

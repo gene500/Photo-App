@@ -65,7 +65,7 @@ function StopRow({ stop, index, bestTime, role, onToggleVisited, onDelete, onSel
       ref={setNodeRef}
       data-testid="stop-row"
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex items-start gap-2 rounded border bg-white p-2 ${isDragging ? "opacity-60" : ""}`}
+      className={`flex items-start gap-2 rounded border bg-white p-2 text-gray-900 ${isDragging ? "opacity-60" : ""}`}
     >
       <button type="button" data-testid="drag-handle" aria-label={`Reorder ${stop.name}`} className="cursor-grab touch-none px-1 text-gray-400" {...attributes} {...listeners}>
         ⋮⋮

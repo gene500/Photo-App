@@ -15,7 +15,7 @@ type Props = {
 
 export function StopCard({ stop, bestTime, arrival, onToggleVisited, onOpenDetails, onClose }: Props) {
   return (
-    <section aria-label="Selected stop" className="space-y-2 rounded-xl border bg-white p-3 shadow-lg">
+    <section aria-label="Selected stop" className="space-y-2 rounded-xl border bg-white p-3 text-gray-900 shadow-lg">
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-semibold">{stop.name}</p>
         <button type="button" onClick={onClose} aria-label="Close" className="px-1 text-lg leading-none text-gray-500">

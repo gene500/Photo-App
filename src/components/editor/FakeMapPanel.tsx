@@ -6,6 +6,7 @@ import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import { stopColor } from "@/lib/stop-style";
 import type { Suggestion } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
+import { isHoverPointer } from "./hover-pointer";
 import { createSuggestionPopupContent } from "./suggestion-popup";
 
 /**
@@ -18,9 +19,9 @@ export const FAKE_BOUNDS: Bounds = { minLat: 36, maxLat: 38, minLng: -121, maxLn
 function SuggestionPopup({ suggestion, left, top }: { suggestion: Suggestion; left: number; top: number }) {
   const hostRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const { osmId, name, lat, lng, kind } = suggestion;
+    const { osmId, name, lat, lng, kind, popularity } = suggestion;
     hostRef.current?.replaceChildren(
-      createSuggestionPopupContent({ name, kind }, () => loadPlacePhoto({ key: osmId, name, lat, lng })),
+      createSuggestionPopupContent({ name, kind, popularity }, () => loadPlacePhoto({ key: osmId, name, lat, lng })),
     );
   }, [suggestion]);
   return (
@@ -93,9 +94,9 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
             s.osmId === highlightedSuggestionId ? "h-5 w-5 opacity-100" : "h-3.5 w-3.5 opacity-70"
           }`}
           style={{ left: `${pos(s).left}%`, top: `${pos(s).top}%` }}
-          onMouseEnter={() => setHoveredId(s.osmId)}
+          onPointerEnter={(e) => isHoverPointer(e) && setHoveredId(s.osmId)}
           onFocus={() => setHoveredId(s.osmId)}
-          onMouseLeave={() => setHoveredId(null)}
+          onPointerLeave={() => setHoveredId(null)}
           onBlur={() => setHoveredId(null)}
           onClick={(e) => {
             e.stopPropagation();

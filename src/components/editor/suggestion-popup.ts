@@ -1,3 +1,4 @@
+import { formatPhotoCount } from "@/lib/format";
 import type { PlacePhoto, Suggestion } from "@/lib/types";
 
 // Built with DOM APIs only (textContent / setAttribute, never innerHTML): place names come from OpenStreetMap.
@@ -17,10 +18,10 @@ const capitalize = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 /**
  * Popup body for a suggestion dot: a skeleton while the photo loads, then the photo (or nothing at all when
- * there is none / it fails to load), the name, the kind, and a plain-text Wikipedia credit.
+ * there is none / it fails to load), the name, the kind, an optional muted "≈N photos nearby" caption, and a plain-text photo credit (Flickr, Commons or Wikipedia).
  */
 export function createSuggestionPopupContent(
-  s: Pick<Suggestion, "name" | "kind">,
+  s: Pick<Suggestion, "name" | "kind" | "popularity">,
   loadPhoto: () => Promise<PlacePhoto | null>,
 ): HTMLElement {
   const root = el("div", "suggestion-popup-body w-[220px] overflow-hidden rounded-xl bg-surface text-foreground");
@@ -36,6 +37,12 @@ export function createSuggestionPopupContent(
   name.dataset.testid = "suggestion-popup-name";
   const meta = el("p", "text-xs text-muted", capitalize(s.kind));
   text.append(name, meta);
+  const nearby = formatPhotoCount(s.popularity);
+  if (nearby) {
+    const pop = el("p", "text-[10px] text-muted", nearby);
+    pop.dataset.testid = "suggestion-popup-popularity";
+    text.append(pop);
+  }
   root.append(text);
 
   let visual: HTMLElement = slot; // the skeleton, then the photo
@@ -59,8 +66,8 @@ export function createSuggestionPopupContent(
       img.src = photo.url;
       slot.replaceWith(img);
       visual = img;
-      credit = el("p", "text-[10px] text-muted", `Photo: ${photo.credit}`);
-      meta.after(credit);
+      credit = el("p", "text-[10px] text-muted", photo.credit);
+      text.append(credit);
     },
     dropPhoto,
   );

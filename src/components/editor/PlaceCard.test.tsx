@@ -6,7 +6,7 @@ import { PlaceCard } from "./PlaceCard";
 
 const loadPlacePhoto = vi.fn();
 vi.mock("@/lib/place-photo-cache", () => ({ loadPlacePhoto: (...a: unknown[]) => loadPlacePhoto(...a) }));
-const photo = { url: "https://upload.wikimedia.org/a.jpg", title: "Tunnel View", pageUrl: "https://en.wikipedia.org/wiki/X", credit: "Wikipedia" };
+const photo = { url: "https://upload.wikimedia.org/a.jpg", title: "Tunnel View", pageUrl: "https://en.wikipedia.org/wiki/X", credit: "Photo: Jane Doe via Flickr (CC BY 2.0)" };
 const source = { osmId: "node/1", lat: 37.7, lng: -119.7 };
 
 describe("PlaceCard", () => {
@@ -40,6 +40,7 @@ describe("PlaceCard", () => {
     const img = await screen.findByAltText("Photo of Tunnel View");
     expect(img.getAttribute("src")).toBe(photo.url);
     expect(loadPlacePhoto).toHaveBeenCalledWith({ key: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7 });
+    expect(screen.getByTestId("photo-credit").textContent).toBe("Photo: Jane Doe via Flickr (CC BY 2.0)");
   });
 
   it("shows no image when there is no photo, the lookup fails, or the image errors", async () => {

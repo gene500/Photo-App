@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Suggestion } from "@/lib/types";
@@ -25,6 +25,24 @@ describe("SuggestionsPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(onAccept).toHaveBeenCalledWith(s);
     expect(onDismiss).toHaveBeenCalledWith("node/1");
+  });
+
+  it("shows a muted photo-count caption only when popularity is known and positive", () => {
+    const { rerender } = render(<SuggestionsPanel {...base} status="done" suggestions={[{ ...s, popularity: 1234 }]} />);
+    expect(screen.getByTestId("suggestion-popularity").textContent).toContain("≈1.2k photos nearby");
+    rerender(<SuggestionsPanel {...base} status="done" suggestions={[{ ...s, popularity: 50 }]} />);
+    expect(screen.getByTestId("suggestion-popularity").textContent).toContain("50+ photos nearby");
+    rerender(<SuggestionsPanel {...base} status="done" suggestions={[{ ...s, popularity: 0 }]} />);
+    expect(screen.queryByTestId("suggestion-popularity")).toBeNull();
+    rerender(<SuggestionsPanel {...base} status="done" suggestions={[s]} />);
+    expect(screen.queryByTestId("suggestion-popularity")).toBeNull();
+  });
+
+  it("does not highlight for touch pointers", () => {
+    const onHover = vi.fn();
+    render(<SuggestionsPanel {...base} status="done" suggestions={[s]} onHover={onHover} />);
+    fireEvent.pointerEnter(screen.getByTestId("suggestion-card"), { pointerType: "touch" });
+    expect(onHover).not.toHaveBeenCalledWith("node/1");
   });
 
   it("shows an empty result message", () => {

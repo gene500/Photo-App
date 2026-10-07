@@ -11,6 +11,7 @@ import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import { stopColor } from "@/lib/stop-style";
 import type { LngLat, Suggestion } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
+import { isHoverPointer } from "./hover-pointer";
 import { createSuggestionPopupContent } from "./suggestion-popup";
 
 const ROUTE_SOURCE = "route";
@@ -230,9 +231,10 @@ export default function MapPanel({
         hidePopup(); // touch has no mouseleave; the place card shows the photo from here
         handlersRef.current.onSuggestionClick?.(s.osmId);
       });
-      el.addEventListener("mouseenter", () => showPopup(s));
+      // Pointer events, ignoring touch: a hover-added popup makes iOS WebKit swallow the tap's click.
+      el.addEventListener("pointerenter", (e) => isHoverPointer(e) && showPopup(s));
       el.addEventListener("focus", () => showPopup(s));
-      el.addEventListener("mouseleave", hidePopup);
+      el.addEventListener("pointerleave", hidePopup);
       el.addEventListener("blur", hidePopup);
       return new mapboxgl.Marker({ element: el }).setLngLat([s.lng, s.lat]).addTo(map);
     });

@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnAccent, btnGhost, btnSecondary } from "@/components/ui/styles";
+import { formatPhotoCount } from "@/lib/format";
+import { isHoverPointer } from "./hover-pointer";
 import type { Suggestion } from "@/lib/types";
 
 export type SuggestionsStatus = "idle" | "loading" | "done" | "error";
@@ -61,10 +63,13 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
       )}
       <ul className="space-y-1">
         {suggestions.map((s) => (
-          <li key={s.osmId} data-testid="suggestion-card" onMouseEnter={() => onHover?.(s.osmId)} onMouseLeave={() => onHover?.(null)} onFocus={() => onHover?.(s.osmId)} onBlur={() => onHover?.(null)} className="flex items-center justify-between gap-2 rounded-xl px-2 py-2 hover:bg-hover">
+          <li key={s.osmId} data-testid="suggestion-card" onPointerEnter={(e) => isHoverPointer(e) && onHover?.(s.osmId)} onPointerLeave={() => onHover?.(null)} onFocus={() => onHover?.(s.osmId)} onBlur={() => onHover?.(null)} className="flex items-center justify-between gap-2 rounded-xl px-2 py-2 hover:bg-hover">
             <div className="min-w-0">
               <p data-testid="suggestion-name" className="truncate text-sm font-medium">{s.name}</p>
-              <p className="text-xs capitalize text-muted">{s.kind}</p>
+              <p className="text-xs text-muted">
+                <span className="capitalize">{s.kind}</span>
+                {formatPhotoCount(s.popularity) && <span data-testid="suggestion-popularity"> · {formatPhotoCount(s.popularity)}</span>}
+              </p>
             </div>
             <div className="flex shrink-0 gap-1">
               <button type="button" disabled={accepting.has(s.osmId)} onClick={() => void accept(s)} className={btnAccent}>Accept</button>

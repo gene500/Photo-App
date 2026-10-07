@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PlacePhoto } from "@/lib/types";
 import { createSuggestionPopupContent } from "./suggestion-popup";
 
-const photo: PlacePhoto = { url: "https://upload.wikimedia.org/a.jpg", title: "Half Dome", pageUrl: "https://en.wikipedia.org/wiki/Half_Dome", credit: "Wikipedia" };
+const photo: PlacePhoto = { url: "https://upload.wikimedia.org/a.jpg", title: "Half Dome", pageUrl: "https://en.wikipedia.org/wiki/Half_Dome", credit: "Photo: Wikipedia" };
 const flush = () => new Promise((r) => setTimeout(r, 0));
 const half = { name: "Half Dome", kind: "peak" as const };
 
@@ -16,7 +16,7 @@ describe("createSuggestionPopupContent", () => {
     expect(root.textContent).toContain("Peak");
   });
 
-  it("swaps the skeleton for the photo and credits Wikipedia", async () => {
+  it("swaps the skeleton for the photo and shows its credit text as given", async () => {
     const root = createSuggestionPopupContent(half, async () => photo);
     await flush();
     const img = root.querySelector("img")!;
@@ -24,6 +24,23 @@ describe("createSuggestionPopupContent", () => {
     expect(img.alt).toBe("Half Dome");
     expect(root.querySelector('[data-testid="suggestion-popup-skeleton"]')).toBeNull();
     expect(root.textContent).toContain("Photo: Wikipedia");
+  });
+
+  it("shows the credit for any provider and a photo-count caption when popularity is known", async () => {
+    const flickr = { ...photo, credit: "Photo: Jane Doe via Flickr (CC BY 2.0)" };
+    const root = createSuggestionPopupContent({ ...half, popularity: 87 }, async () => flickr);
+    await flush();
+    expect(root.textContent).toContain("Photo: Jane Doe via Flickr (CC BY 2.0)");
+    expect(root.textContent).not.toContain("Photo: Photo:");
+    expect(root.querySelector('[data-testid="suggestion-popup-popularity"]')?.textContent).toBe("≈87 photos nearby");
+    expect(createSuggestionPopupContent(half, async () => null).querySelector('[data-testid="suggestion-popup-popularity"]')).toBeNull();
+  });
+
+  it("renders a credit containing markup as plain text", async () => {
+    const root = createSuggestionPopupContent(half, async () => ({ ...photo, credit: "Photo: <img src=x onerror=alert(1)> via Flickr" }));
+    await flush();
+    expect(root.querySelectorAll("img")).toHaveLength(1); // only the photo itself
+    expect(root.textContent).toContain("<img src=x");
   });
 
   it("shows just name and kind when there is no photo", async () => {

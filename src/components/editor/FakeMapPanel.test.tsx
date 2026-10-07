@@ -72,19 +72,48 @@ describe("FakeMapPanel", () => {
   });
 
   describe("suggestion photo popup", () => {
-    const photo = { url: "https://upload.wikimedia.org/a.jpg", title: "Fake Viewpoint", pageUrl: "https://en.wikipedia.org/wiki/X", credit: "Wikipedia" };
+    const photo = { url: "https://upload.wikimedia.org/a.jpg", title: "Fake Viewpoint", pageUrl: "https://en.wikipedia.org/wiki/X", credit: "Photo: Jane Doe via Flickr (CC BY 2.0)" };
     const dot = () => screen.getByRole("button", { name: "Suggestion: Fake Viewpoint" });
 
     it("shows the name and photo on hover and removes the popup on leave", async () => {
       loadPlacePhoto.mockResolvedValue(photo);
       render(<FakeMapPanel {...base} suggestions={[suggestion]} />);
       expect(screen.queryByTestId("suggestion-popup")).toBeNull();
-      fireEvent.mouseEnter(dot());
+      fireEvent.pointerEnter(dot());
       expect(screen.getByTestId("suggestion-popup-name").textContent).toBe("Fake Viewpoint");
       await waitFor(() => expect(screen.getByTestId("suggestion-popup").querySelector("img")).not.toBeNull());
       expect(loadPlacePhoto).toHaveBeenCalledWith({ key: "node/1", name: "Fake Viewpoint", lat: 37.2, lng: -119.2 });
-      fireEvent.mouseLeave(dot());
+      fireEvent.pointerLeave(dot());
       expect(screen.queryByTestId("suggestion-popup")).toBeNull();
+    });
+
+    it("ignores touch pointers (iOS would swallow the tap's click) but still hovers with a mouse or pen", () => {
+      render(<FakeMapPanel {...base} suggestions={[suggestion]} />);
+      fireEvent.pointerEnter(dot(), { pointerType: "touch" });
+      expect(screen.queryByTestId("suggestion-popup")).toBeNull();
+      fireEvent.pointerEnter(dot(), { pointerType: "mouse" });
+      expect(screen.getByTestId("suggestion-popup")).toBeTruthy();
+    });
+
+    it("does not hover-open on devices that cannot hover", () => {
+      vi.stubGlobal("matchMedia", (q: string) => ({ matches: q === "(hover: none)" }));
+      try {
+        render(<FakeMapPanel {...base} suggestions={[suggestion]} />);
+        fireEvent.pointerEnter(dot(), { pointerType: "mouse" });
+        expect(screen.queryByTestId("suggestion-popup")).toBeNull();
+        fireEvent.focus(dot()); // keyboard still works
+        expect(screen.getByTestId("suggestion-popup")).toBeTruthy();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it("shows the photo credit and the photo count caption", async () => {
+      loadPlacePhoto.mockResolvedValue(photo);
+      render(<FakeMapPanel {...base} suggestions={[{ ...suggestion, popularity: 1234 }]} />);
+      fireEvent.pointerEnter(dot());
+      await waitFor(() => expect(screen.getByTestId("suggestion-popup").textContent).toContain("Photo: Jane Doe via Flickr (CC BY 2.0)"));
+      expect(screen.getByTestId("suggestion-popup-popularity").textContent).toBe("≈1.2k photos nearby");
     });
 
     it("opens on keyboard focus, closes on blur and when the dot is clicked", () => {
@@ -94,7 +123,7 @@ describe("FakeMapPanel", () => {
       expect(screen.getByTestId("suggestion-popup")).toBeTruthy();
       fireEvent.blur(dot());
       expect(screen.queryByTestId("suggestion-popup")).toBeNull();
-      fireEvent.mouseEnter(dot());
+      fireEvent.pointerEnter(dot());
       fireEvent.click(dot());
       expect(screen.queryByTestId("suggestion-popup")).toBeNull();
     });

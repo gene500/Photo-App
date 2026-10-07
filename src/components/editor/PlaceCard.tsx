@@ -32,10 +32,13 @@ export function PlaceCard({ name, resolving, busy, suggestion, onAdd, onClose }:
     // Suggestions keep a photo-sized minimum height so the card doesn't jump when the photo arrives or is absent.
     <section aria-label="Selected place" className={`flex items-center gap-3 rounded-xl p-3 ${suggestion ? "min-h-[5.5rem]" : ""} ${card}`}>
       {photo && (
-        // eslint-disable-next-line @next/next/no-img-element -- remote Wikipedia thumbnail, validated server-side
+        // eslint-disable-next-line @next/next/no-img-element -- remote thumbnail from an allow-listed host, validated server-side
         <img src={photo.url} alt={`Photo of ${name}`} width={64} height={64} referrerPolicy="no-referrer" onError={() => setFailedUrl(photo.url)} className="h-16 w-16 shrink-0 rounded-xl bg-hover object-cover" />
       )}
-      <p className={`min-w-0 flex-1 text-sm font-medium ${resolving ? "text-muted" : ""}`}>{name}</p>
+      <div className="min-w-0 flex-1">
+        <p className={`text-sm font-medium ${resolving ? "text-muted" : ""}`}>{name}</p>
+        {photo && <p data-testid="photo-credit" className="text-[10px] text-muted">{photo.credit}</p>}
+      </div>
       <button
         type="button"
         onClick={onAdd}

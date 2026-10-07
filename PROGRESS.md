@@ -3,6 +3,20 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
+## 2026-10-07 (map-first UI: implementation plan written)
+
+Wrote the implementation plan via `superpowers:writing-plans`:
+`docs/superpowers/plans/2026-10-07-map-first-ui.md` (10 tasks, 4 phases:
+data model/API, map shell and search, stops panel and editor, e2e/verify/
+docs). One deliberate deviation from the spec wording: the add-stop and
+stop "popups" are React cards under the search bar rather than anchored
+Mapbox popups, so they behave the same on the real and offline maps and are
+unit-testable. Next: human partner approves the plan; then execute it
+task-by-task on branch `map-first-ui` with
+`superpowers:subagent-driven-development` (Sonnet), log progress at each
+phase boundary, and merge/deploy only when typecheck, lint, tests, build and
+e2e all pass.
+
 ## 2026-10-07 (map-first UI: design spec written)
 
 The human partner wanted the app to feel like Google Maps (plan everything

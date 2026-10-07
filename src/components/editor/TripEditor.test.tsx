@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/api-client", () => ({
   api: {
     directions: vi.fn(), addStop: vi.fn(), suggestions: vi.fn(), reorderStops: vi.fn(),
-    updateStop: vi.fn(), deleteStop: vi.fn(), updateTrip: vi.fn(), reverseGeocode: vi.fn(), geocode: vi.fn(), optimizeOrder: vi.fn(),
+    updateStop: vi.fn(), deleteStop: vi.fn(), updateTrip: vi.fn(), reverseGeocode: vi.fn(), placePhoto: vi.fn(), geocode: vi.fn(), optimizeOrder: vi.fn(),
   },
 }));
 vi.mock("./MapView", () => ({
@@ -165,6 +165,7 @@ describe("TripEditor", () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });
     vi.mocked(api.addStop).mockResolvedValue({ stop: newStop({ id: "c", order: 2, name: "Tunnel View", source: "suggested", lat: 37.7, lng: -119.7 }) });
+    vi.mocked(api.placePhoto).mockResolvedValue({ photo: { url: "https://upload.wikimedia.org/tv.jpg", title: "Tunnel View", pageUrl: "https://en.wikipedia.org/wiki/Tunnel_View", credit: "Wikipedia" } });
     render(<TripEditor initialTrip={withStops(seed)} />);
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("km"));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
@@ -185,6 +186,7 @@ describe("TripEditor", () => {
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
     await screen.findByTestId("suggestion-card");
     await userEvent.click(screen.getByRole("button", { name: "click first suggestion" }));
+    expect((await screen.findByAltText("Photo of Tunnel View")).getAttribute("src")).toBe("https://upload.wikimedia.org/tv.jpg");
     await userEvent.click(screen.getByRole("button", { name: "Add stop" }));
     expect(api.addStop).toHaveBeenCalledWith("t1", { name: "Tunnel View", lat: 37.7, lng: -119.7, source: "suggested" });
     await waitFor(() => expect(screen.queryAllByTestId("suggestion-card")).toHaveLength(0));

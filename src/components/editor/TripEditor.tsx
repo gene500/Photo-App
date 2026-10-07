@@ -360,6 +360,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
               name={pending.name}
               resolving={pending.resolving}
               busy={adding}
+              suggestion={pending.osmId ? { osmId: pending.osmId, lat: pending.lat, lng: pending.lng } : undefined}
               onAdd={() => void addPending()}
               onClose={() => {
                 lookupSeq.current++;

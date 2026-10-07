@@ -15,7 +15,7 @@ for the full design. Being implemented from
 
 Second feature round: the app is now map-first (see
 `docs/superpowers/specs/2026-10-07-map-first-ui-design.md` and the plan next to
-it). Built on branch `map-first-ui`, ledger at
+it). Built on branch `map-first-ui` (since merged and deleted; follow-up fixes landed via a `final-fixes` branch), ledger at
 `.superpowers/sdd/2026-10-07-map-first-ui/progress.md` (git-ignored; recover
 from `git log` if gone). Status is in `PROGRESS.md`. Merging to `main`
 auto-deploys to Vercel and applies the Turso migration, so: do not push the

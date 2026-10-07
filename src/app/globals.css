@@ -1,28 +1,74 @@
 @import "tailwindcss";
 
+/* Design tokens. One accent (warm beige): `accent` for fills/lines/rings, `accent-strong` for text/icons
+   that need contrast on the surface, `accent-soft` for quiet backgrounds. */
 :root {
-  --background: #ffffff;
+  --background: #f4f3f0;
+  --surface: #ffffff;
   --foreground: #171717;
+  --muted: #6b6b66;
+  --border: rgb(0 0 0 / 0.07);
+  --accent: #d9c7a3;
+  --accent-strong: #7a6639;
+  --accent-soft: #f3ecdb;
+  --accent-foreground: #3d3320;
+  --route: #b08d57;
+  --ink: #111111;
+  --ink-foreground: #ffffff;
+  --danger: #b42318;
+  --danger-soft: #fdecea;
+  --hover: rgb(0 0 0 / 0.045);
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-route: var(--route);
+  --color-ink: var(--ink);
+  --color-ink-foreground: var(--ink-foreground);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-hover: var(--hover);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0e0e0d;
+    --surface: #1b1b19;
+    --foreground: #ededea;
+    --muted: #a09f98;
+    --border: rgb(255 255 255 / 0.09);
+    --accent: #b9a47a;
+    --accent-strong: #dcc99f;
+    --accent-soft: #34301f;
+    --accent-foreground: #1d1809;
+    --route: #d2b278;
+    --ink: #f2f2ee;
+    --ink-foreground: #111111;
+    --danger: #f19a92;
+    --danger-soft: #3a1f1c;
+    --hover: rgb(255 255 255 / 0.07);
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+}
+
+/* Map tiles are the "quiet light-gray" backdrop; dim them a little in dark mode. */
+@media (prefers-color-scheme: dark) {
+  .mapboxgl-canvas { filter: brightness(0.85); }
 }
 
 /* Phones: keep the map controls and attribution below the floating search bar and clear of the bottom sheet. */

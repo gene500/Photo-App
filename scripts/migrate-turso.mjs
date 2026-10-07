@@ -10,6 +10,17 @@ if (!url) {
   process.exit(0);
 }
 
+/** Prisma migrations are plain `;`-terminated statements (no triggers or semicolons inside literals). */
+function splitStatements(sql) {
+  return sql
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n")
+    .split(";")
+    .map((st) => st.trim())
+    .filter(Boolean);
+}
+
 const db = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
 await db.execute("CREATE TABLE IF NOT EXISTS _applied_migrations (name TEXT PRIMARY KEY, appliedAt TEXT NOT NULL)");
 const applied = new Set((await db.execute("SELECT name FROM _applied_migrations")).rows.map((r) => String(r.name)));
@@ -19,8 +30,14 @@ const names = readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirec
 for (const name of names) {
   if (applied.has(name)) continue;
   const sql = readFileSync(path.join(root, name, "migration.sql"), "utf8");
-  await db.executeMultiple(sql);
-  await db.execute({ sql: "INSERT INTO _applied_migrations (name, appliedAt) VALUES (?, ?)", args: [name, new Date().toISOString()] });
+  // One transaction per migration: its statements and the bookkeeping row commit together or not at all.
+  await db.batch(
+    [
+      ...splitStatements(sql),
+      { sql: "INSERT INTO _applied_migrations (name, appliedAt) VALUES (?, ?)", args: [name, new Date().toISOString()] },
+    ],
+    "write",
+  );
   console.log(`Applied migration ${name}`);
 }
 console.log("Turso migrations up to date.");

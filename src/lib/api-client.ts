@@ -1,4 +1,4 @@
-import type { LngLat, Place, RouteResult, Stop, Suggestion, Trip, TripSummary } from "./types";
+import type { LngLat, Place, PlacePhoto, RouteResult, Stop, Suggestion, Trip, TripSummary } from "./types";
 import type { NewStopInput, StopPatch, TripInput, TripPatch } from "./validation";
 
 export class ApiError extends Error {
@@ -58,4 +58,8 @@ export const api = {
     ),
   reverseGeocode: (lat: number, lng: number) =>
     request<{ place: Place }>(`/api/reverse-geocode?lat=${lat.toFixed(6)}&lng=${lng.toFixed(6)}`),
+  placePhoto: (p: { name: string; lat: number; lng: number }) =>
+    request<{ photo: PlacePhoto | null }>(
+      `/api/place-photo?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}&name=${encodeURIComponent(p.name)}`,
+    ),
 };

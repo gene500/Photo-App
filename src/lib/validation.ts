@@ -91,3 +91,10 @@ export function formatZodError(error: z.ZodError): string {
   const path = issue.path.join(".");
   return path ? `${path}: ${issue.message}` : issue.message;
 }
+
+// Query-string coordinates. Plain decimals only: z.coerce would turn "" or " " into 0 and accept "1e2" or "0x10".
+const decimal = z.string().regex(/^-?\d+(\.\d+)?$/, "Must be a decimal number").transform(Number);
+export const pointQuerySchema = z.object({
+  lat: decimal.pipe(z.number().min(-90).max(90)),
+  lng: decimal.pipe(z.number().min(-180).max(180)),
+});

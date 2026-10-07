@@ -67,6 +67,35 @@ exact for up to 9 stops, nearest-neighbour plus 2-opt/or-opt above that. The
 Matrix API allows at most 25 coordinates per request, which matches the app's
 25-stop limit. **Undo** restores the previous order until the stops change again.
 
+### Light-aware optimization
+
+Each stop has a **Best light** (Any, Sunrise, Golden hour, Sunset; default Any) and
+a **Time here** in minutes (0-480, default 30), both edited in the stop drawer.
+Stops added from a viewpoint or peak suggestion start as Golden hour; attractions
+and manual stops start as Any. When any stop has a preference, **Optimize route**
+chooses the visiting order *and* the departure time (`src/lib/optimize-schedule.ts`):
+
+- A stop's good light is a window on the solar day it is reached: Sunrise = 20 min
+  before sunrise until the end of morning golden hour; Sunset = start of evening
+  golden hour until 20 min after sunset; Golden hour = both. In polar day or night
+  there is no window and no constraint.
+- Score = total drive seconds + 3 x 60 x minutes of missed light (one missed
+  minute costs as much as three minutes of driving). A visit counts as met if
+  `[arrival, arrival + time here]` overlaps a window; otherwise the miss is the
+  gap to the nearest window.
+- Departures tried: the default (sunrise at the first stop) plus every 15 minutes
+  from 1 h before it to 14 h after it. Up to 8 free stops (9 total) the search is
+  exact over all orders; above that it is a deterministic local search (swap,
+  2-opt, or-opt) seeded from nearest-neighbour and sunrise-first/sunset-last orders.
+- With no preferences it is exactly the shortest-drive order and the departure
+  stays at sunrise.
+
+The chosen departure is saved on the trip (`departAt`); the panel shows
+"Starts 5:42 PM" with **Reset to sunrise**. Stops that cannot all be fitted are
+named under the button ("Can't fit 2 stops in their light: A, B."). **Undo**
+restores the previous order and departure. Each row shows the window and arrival,
+or "Misses sunset by 40 min".
+
 ### Photo popups and beige map
 
 Hovering (or keyboard-focusing) a suggestion dot on the map, or hovering its card
@@ -87,9 +116,10 @@ never touched.
 
 Each stop's best shooting window is derived, not stored. The trip's
 departure time is assumed to be sunrise at the first stop on the
-trip's planned date; estimated arrival at each stop is that departure
-plus the cumulative Mapbox Directions leg durations up to that stop
-(no dwell time at earlier stops). The arrival time is then bucketed
+trip's planned date unless the trip has a chosen departure (`departAt`,
+set by light-aware optimization); estimated arrival at each stop is that
+departure plus the cumulative Mapbox Directions leg durations and the
+"time here" minutes (default 30) of every earlier stop. The arrival time is then bucketed
 against that stop's own sunrise/golden-hour/sunset times (computed
 from its coordinates via `suncalc`, for the local solar day the arrival
 falls on, so a trip spanning several days is judged day by day): before

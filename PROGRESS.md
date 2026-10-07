@@ -3,6 +3,23 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
+## 2026-10-08 (light-aware route optimization, branch `light-aware`)
+
+Stops now have a preferred light (`lightPref`: any/sunrise/golden/sunset) and a
+dwell time (`dwellMinutes`, default 30); trips have an optional `departAt`.
+"Optimize route" picks the order and the departure time together
+(`light-windows.ts`, `optimize-schedule.ts`: exact up to 8 free stops, local
+search above; objective = drive seconds + 3 x 60 x missed minutes). Arrival
+estimates now include dwell time at earlier stops (default 30 min shifts every
+displayed arrival after the first stop; one `best-time` test expectation changed
+for that). `POST /api/optimize` takes optional `stops` and `plannedDate` and
+returns `departAt` and `misses`. UI: drawer fields, row hints, "Starts ..." with
+"Reset to sunrise", Undo restores order and departure. Additive migration
+`20261008120000_light_aware_stops` (smoke-tested twice, idempotent, against a
+local libSQL file; existing rows get `any` / 30 / null). Not pushed or merged.
+Still needs a real-Mapbox check (Matrix durations feeding the schedule) and a
+live Turso migration on deploy.
+
 ## 2026-10-07 (beige map + suggestion photo popups, branch `ui-redesign`)
 
 Basemap recoloured to the beige theme at runtime (`map-theme.ts`, pure

@@ -30,6 +30,15 @@ runtime basemap recolour (`src/lib/map-theme.ts`) and the Mapbox popup were neve
 run against real Mapbox (no token in this environment): check them in a browser
 with `NEXT_PUBLIC_MAPBOX_TOKEN` set, including dark mode.
 
+## Light-aware optimization (2026-10-08)
+
+On branch `light-aware` (from `ui-redesign`; not pushed or merged). Adds an
+additive Turso migration (`20261008120000_light_aware_stops`: Stop.lightPref,
+Stop.dwellMinutes, Trip.departAt), so merging to `main` applies it live on the next
+build; it does not drop anything, but verify the build log. Hand-merge note: the
+README/PROGRESS/HANDOFF edits sit next to the photo-popup ones from the other
+branch. Not yet exercised against real Mapbox.
+
 ## Optimize route (2026-10-07)
 
 Built on branch `optimize-route` (not pushed or merged). Uses the Mapbox Matrix

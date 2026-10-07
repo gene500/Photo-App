@@ -38,7 +38,7 @@ Photos: Flickr (dormant unless `FLICKR_API_KEY`; unverified against the live API
 without a Flickr key, a weaker signal). Still needs a real-browser/Mapbox check of
 popups (and an iPhone tap check: first tap on a dot must select it) and, if a key
 ever exists, a live Flickr check. See README "Photo sources".
-
+=======
 ## Light-aware optimization (2026-10-08)
 
 On branch `light-aware` (from `ui-redesign`; not pushed or merged). Adds an

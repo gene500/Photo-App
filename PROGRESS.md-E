@@ -16,7 +16,7 @@ Commons files within 250 m, max 50) and are re-ranked within each kind. Verified
 live: Commons file geosearch + imageinfo and list=geosearch (curl), Wikipedia.
 Flickr is unverified live (no key; Flickr restricts keys to Pro): checked against
 the official docs and fixtures only. Commons popularity is a weaker signal than Flickr.
-
+=======
 ## 2026-10-08 (light-aware route optimization, branch `light-aware`)
 
 Stops now have a preferred light (`lightPref`: any/sunrise/golden/sunset) and a

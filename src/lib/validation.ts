@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isDateOnly } from "./dates";
 
 export const MAX_ROUTE_WAYPOINTS = 25; // Mapbox Directions driving profile limit
+export const MAX_DWELL_MINUTES = 480;
 
 const lat = z.number().min(-90).max(90);
 const lng = z.number().min(-180).max(180);
@@ -16,7 +17,11 @@ export const tripInputSchema = z.object({
 });
 export type TripInput = z.infer<typeof tripInputSchema>;
 
+export const lightPrefSchema = z.enum(["any", "sunrise", "golden", "sunset"]);
+export const dwellMinutesSchema = z.number().int().min(0).max(MAX_DWELL_MINUTES);
+
 export const tripPatchSchema = tripInputSchema
+  .extend({ departAt: z.iso.datetime({ offset: true }).nullable() })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "Nothing to update");
 export type TripPatch = z.infer<typeof tripPatchSchema>;
@@ -27,14 +32,18 @@ export const newStopSchema = z.object({
   lng,
   source: z.enum(["manual", "suggested"]),
   notes: z.string().max(5000).nullable().optional(),
+  lightPref: lightPrefSchema.default("any"),
+  dwellMinutes: dwellMinutesSchema.default(30),
 });
-export type NewStopInput = z.infer<typeof newStopSchema>;
+export type NewStopInput = z.input<typeof newStopSchema>;
 
 export const stopPatchSchema = z
   .object({
     name: z.string().trim().min(1, "Stop name is required").max(200),
     notes: z.string().max(5000).nullable(),
     visited: z.boolean(),
+    lightPref: lightPrefSchema,
+    dwellMinutes: dwellMinutesSchema,
     lat,
     lng,
   })
@@ -63,12 +72,20 @@ export const directionsRequestSchema = z.object({
     .max(MAX_ROUTE_WAYPOINTS, `Routing supports at most ${MAX_ROUTE_WAYPOINTS} stops per trip`),
 });
 
-export const optimizeRequestSchema = z.object({
+export const optimizeRequestSchema = z
+  .object({
   coordinates: z
     .array(lngLat)
     .min(3, "Add at least 3 stops to optimize the route")
     .max(MAX_ROUTE_WAYPOINTS, `Optimizing supports at most ${MAX_ROUTE_WAYPOINTS} stops per trip`),
-});
+    /** Per-coordinate light preference and time spent; same length as `coordinates`. */
+    stops: z.array(z.object({ lightPref: lightPrefSchema, dwellMinutes: dwellMinutesSchema })).optional(),
+    plannedDate: dateOnlySchema.optional(),
+  })
+  .refine((o) => !o.stops || o.stops.length === o.coordinates.length, {
+    path: ["stops"],
+    message: "stops must have one entry per coordinate",
+  });
 
 // Keep this far below the point count where @turf/simplify's recursive
 // Douglas-Peucker implementation (used by buildCorridor) risks a stack

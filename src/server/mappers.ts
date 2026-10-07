@@ -1,12 +1,13 @@
 import type { Stop as StopRow, Trip as TripRow } from "@/generated/prisma/client";
 import { utcToDateOnly } from "@/lib/dates";
-import type { Stop, StopSource, Trip } from "@/lib/types";
+import type { LightPref, Stop, StopSource, Trip } from "@/lib/types";
 
 export function toTripDto(row: TripRow): Trip {
   return {
     id: row.id,
     name: row.name,
     plannedDate: utcToDateOnly(row.plannedDate),
+    departAt: row.departAt ? row.departAt.toISOString() : null,
   };
 }
 
@@ -22,5 +23,7 @@ export function toStopDto(row: StopRow): Stop {
     source: row.source as StopSource,
     photoUrl: row.photoUrl,
     visited: row.visited,
+    lightPref: row.lightPref as LightPref,
+    dwellMinutes: row.dwellMinutes,
   };
 }

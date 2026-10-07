@@ -4,8 +4,8 @@ import {
   type SunWindows,
 } from "./best-time";
 
-const TUNNEL_VIEW = { lat: 37.7156, lng: -119.6773 }; // Yosemite
-const FRESNO = { name: "Fresno", lat: 36.74, lng: -119.79 };
+const TUNNEL_VIEW = { lat: 37.7156, lng: -119.6773, dwellMinutes: 30 }; // Yosemite
+const FRESNO = { name: "Fresno", lat: 36.74, lng: -119.79, dwellMinutes: 30 };
 
 function within2Min(actual: Date | null, expectedIso: string) {
   expect(actual).not.toBeNull();
@@ -84,13 +84,17 @@ describe("estimateArrivals", () => {
     expect(estimateArrivals(at("06:00"), [], 0)).toEqual([]);
   });
 
+  it("adds the time spent at every earlier stop", () => {
+    expect(estimateArrivals(at("06:00"), [3600, 1800], 3, [30, 15, 99])).toEqual([at("06:00"), at("07:30"), at("08:15")]);
+  });
+
   it("returns null when the legs don't line up with the stops", () => {
     expect(estimateArrivals(at("06:00"), [3600], 3)).toBeNull();
   });
 });
 
 describe("computeBestTimes", () => {
-  const stops = [TUNNEL_VIEW, { lat: 37.75, lng: -119.6 }];
+  const stops = [TUNNEL_VIEW, { lat: 37.75, lng: -119.6, dwellMinutes: 30 }];
 
   it("returns one result per stop, defaulting to golden hour without legs", () => {
     const result = computeBestTimes({ plannedDate: "2026-07-01", stops }, null);
@@ -117,7 +121,17 @@ describe("computeArrivals", () => {
 
   it("returns the departure for the first stop and later arrivals after it", () => {
     const [a, b] = computeArrivals({ plannedDate: "2026-07-01", stops: [TUNNEL_VIEW, FRESNO] }, [3600]);
-    expect(b!.getTime() - a!.getTime()).toBe(3600_000);
+    // 1 h drive plus the 30 minutes spent at the first stop.
+    expect(b!.getTime() - a!.getTime()).toBe(5400_000);
+  });
+
+  it("departs at departAt when the trip has one, else at sunrise", () => {
+    const stops = [TUNNEL_VIEW, FRESNO];
+    const [def] = computeArrivals({ plannedDate: "2026-07-01", stops }, [3600]);
+    const [custom, next] = computeArrivals({ plannedDate: "2026-07-01", departAt: "2026-07-01T23:00:00.000Z", stops }, [3600]);
+    expect(custom!.toISOString()).toBe("2026-07-01T23:00:00.000Z");
+    expect(next!.toISOString()).toBe("2026-07-02T00:30:00.000Z");
+    expect(def!.getTime()).not.toBe(custom!.getTime());
   });
 });
 
@@ -130,9 +144,9 @@ describe("describeBestTime", () => {
 
 describe("computeBestTimes across days", () => {
   const stops = [
-    { lat: 34.05, lng: -118.24 }, // Los Angeles
-    { lat: 41.88, lng: -87.63 }, // Chicago
-    { lat: 40.71, lng: -74.0 }, // New York
+    { lat: 34.05, lng: -118.24, dwellMinutes: 30 }, // Los Angeles
+    { lat: 41.88, lng: -87.63, dwellMinutes: 30 }, // Chicago
+    { lat: 40.71, lng: -74.0, dwellMinutes: 30 }, // New York
   ];
   const trip = { plannedDate: "2026-07-01", stops };
   const legs = [30 * 3600, 12 * 3600];

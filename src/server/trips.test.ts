@@ -9,7 +9,15 @@ describe("trips data access", () => {
   it("creates a trip and returns a DTO with a date-only plannedDate", async () => {
     const user = await createTestUser();
     const trip = await createTrip(user.id, sampleTripInput);
-    expect(trip).toEqual({ id: expect.any(String), ...sampleTripInput });
+    expect(trip).toEqual({ id: expect.any(String), ...sampleTripInput, departAt: null });
+  });
+
+  it("sets and clears departAt as an ISO string", async () => {
+    const user = await createTestUser();
+    const trip = await createTrip(user.id, sampleTripInput);
+    const set = await updateTrip(user.id, trip.id, { departAt: "2026-07-01T17:42:00.000Z" });
+    expect(set?.departAt).toBe("2026-07-01T17:42:00.000Z");
+    expect((await updateTrip(user.id, trip.id, { departAt: null }))?.departAt).toBeNull();
   });
 
   it("lists only the caller's trips with stop counts, newest first", async () => {

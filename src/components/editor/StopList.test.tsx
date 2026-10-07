@@ -2,11 +2,13 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { getSunWindows } from "@/lib/best-time";
+import { lightWindows } from "@/lib/light-windows";
 import type { Stop } from "@/lib/types";
 import { reorderIds, StopList } from "./StopList";
 
 const stop = (id: string, name: string, extra: Partial<Stop> = {}): Stop => ({
-  id, tripId: "t1", order: 0, name, lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, ...extra,
+  id, tripId: "t1", order: 0, name, lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 30, ...extra,
 });
 const handlers = { onReorder: vi.fn(), onToggleVisited: vi.fn(), onDelete: vi.fn(), onSelect: vi.fn() };
 
@@ -24,6 +26,26 @@ describe("StopList", () => {
   it("disables browser touch panning on the drag handle so touch drags reach dnd-kit", () => {
     render(<StopList stops={[stop("a", "A")]} bestTimes={[null]} {...handlers} />);
     expect(screen.getByTestId("drag-handle").className).toContain("touch-none");
+  });
+
+  it("shows the light window and arrival for a stop with a preferred light, or how much it is missed", () => {
+    const sunsetStop = { lightPref: "sunset" as const, lat: 37.7, lng: -119.6 };
+    const sun = getSunWindows(37.7, -119.6, "2026-07-01");
+    const [[from, to]] = lightWindows("sunset", sun);
+    render(
+      <StopList
+        stops={[stop("a", "Met", sunsetStop), stop("b", "Missed", sunsetStop), stop("c", "Plain")]}
+        bestTimes={[null, null, null]}
+        arrivals={[new Date(from.getTime() + 600_000), new Date(to.getTime() + 3 * 3600_000), new Date(from.getTime())]}
+        {...handlers}
+      />,
+    );
+    const [met, missed, plain] = screen.getAllByTestId("best-time");
+    expect(met.textContent).toMatch(/^Sunset window .* · arrive /);
+    expect(met.getAttribute("data-light-met")).toBe("true");
+    expect(missed.textContent).toMatch(/^Misses sunset by /);
+    expect(missed.className).toContain("text-danger");
+    expect(plain.textContent).toBe("No daylight"); // any: unchanged best-time line
   });
 
   it("shows an empty state", () => {

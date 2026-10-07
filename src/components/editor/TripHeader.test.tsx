@@ -7,7 +7,7 @@ import type { Trip } from "@/lib/types";
 import { TripHeader } from "./TripHeader";
 
 const trip: Trip = {
-  id: "t1", name: "Sierra loop", plannedDate: "2026-07-01",
+  id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", departAt: null,
 };
 
 describe("TripHeader", () => {

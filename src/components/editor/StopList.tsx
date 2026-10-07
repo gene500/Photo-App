@@ -8,6 +8,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { describeBestTime, type BestTime } from "@/lib/best-time";
+import { describeLightHint } from "@/lib/light-windows";
 import { stopColor } from "@/lib/stop-style";
 import type { Stop } from "@/lib/types";
 
@@ -17,7 +18,7 @@ type Handlers = {
   onSelect: (stopId: string) => void;
 };
 
-type Props = Handlers & { stops: Stop[]; bestTimes: BestTime[]; onReorder: (stopIds: string[]) => void };
+type Props = Handlers & { stops: Stop[]; bestTimes: BestTime[]; arrivals?: (Date | null)[]; onReorder: (stopIds: string[]) => void };
 
 export function reorderIds(ids: string[], activeId: string, overId: string): string[] | null {
   const from = ids.indexOf(activeId);
@@ -26,7 +27,7 @@ export function reorderIds(ids: string[], activeId: string, overId: string): str
   return arrayMove(ids, from, to);
 }
 
-export function StopList({ stops, bestTimes, onReorder, ...handlers }: Props) {
+export function StopList({ stops, bestTimes, arrivals, onReorder, ...handlers }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -47,7 +48,7 @@ export function StopList({ stops, bestTimes, onReorder, ...handlers }: Props) {
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         <ol>
           {stops.map((s, i) => (
-            <StopRow key={s.id} stop={s} index={i} bestTime={bestTimes[i] ?? null}
+            <StopRow key={s.id} stop={s} index={i} bestTime={bestTimes[i] ?? null} arrival={arrivals?.[i] ?? null}
               first={i === 0} last={i === stops.length - 1}
               role={stops.length > 1 ? (i === 0 ? "Start" : i === stops.length - 1 ? "End" : null) : null}
               {...handlers}
@@ -62,8 +63,9 @@ export function StopList({ stops, bestTimes, onReorder, ...handlers }: Props) {
 // Hover-capable pointers reveal the secondary controls on row hover/focus; touch always shows them.
 const REVEAL = "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 focus-visible:!opacity-100";
 
-function StopRow({ stop, index, bestTime, role, first, last, onToggleVisited, onDelete, onSelect }: Handlers & { stop: Stop; index: number; bestTime: BestTime; role: "Start" | "End" | null; first: boolean; last: boolean }) {
+function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVisited, onDelete, onSelect }: Handlers & { stop: Stop; index: number; bestTime: BestTime; arrival: Date | null; role: "Start" | "End" | null; first: boolean; last: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id });
+  const hint = describeLightHint(stop, arrival);
   // The timeline line runs through the dot centre (22px down) and stops at the first/last dot.
   const line = first && last ? "hidden" : first ? "top-[22px] bottom-0" : last ? "top-0 h-[22px]" : "inset-y-0";
   return (
@@ -101,7 +103,18 @@ function StopRow({ stop, index, bestTime, role, first, last, onToggleVisited, on
         </button>
         <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
           {role && <span data-testid="stop-role" className="shrink-0 rounded-md bg-hover px-1.5 py-px text-[11px] font-medium">{role}</span>}
-          <span data-testid="best-time" className="truncate">{describeBestTime(bestTime)}</span>
+          {hint ? (
+            <span data-testid="best-time" data-light-met={hint.met} className={`flex min-w-0 items-center gap-1 ${hint.met ? "" : "text-danger"}`}>
+              {hint.met && (
+                <svg aria-hidden viewBox="0 0 16 16" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 8.5l3.2 3.2L13 4.8" />
+                </svg>
+              )}
+              <span className="truncate">{hint.text}</span>
+            </span>
+          ) : (
+            <span data-testid="best-time" className="truncate">{describeBestTime(bestTime)}</span>
+          )}
         </p>
         {stop.notes && <p className="truncate text-xs text-muted">{stop.notes}</p>}
       </div>

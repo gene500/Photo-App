@@ -16,35 +16,41 @@ model User {
 }
 
 model Trip {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   /// Calendar date stored at UTC midnight; exposed as "YYYY-MM-DD".
   plannedDate DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  /// When the trip leaves the first stop; null = sunrise at the first stop.
+  departAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   stops       Stop[]
 
   @@index([userId])
 }
 
 model Stop {
-  id        String   @id @default(cuid())
-  tripId    String
-  trip      Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  id           String   @id @default(cuid())
+  tripId       String
+  trip         Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
   /// 0-based position in the route sequence; kept contiguous by the data layer.
-  order     Int
-  name      String
-  lat       Float
-  lng       Float
-  notes     String?
+  order        Int
+  name         String
+  lat          Float
+  lng          Float
+  notes        String?
   /// "manual" | "suggested", validated in application code.
-  source    String
-  photoUrl  String?
-  visited   Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  source       String
+  photoUrl     String?
+  visited      Boolean  @default(false)
+  /// "any" | "sunrise" | "golden" | "sunset", validated in application code.
+  lightPref    String   @default("any")
+  /// Minutes spent at the stop (0..480), validated in application code.
+  dwellMinutes Int      @default(30)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([tripId, order])
 }

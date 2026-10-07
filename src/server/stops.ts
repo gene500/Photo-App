@@ -39,6 +39,8 @@ export async function addStop(
         lng: input.lng,
         source: input.source,
         notes: input.notes ?? null,
+        lightPref: input.lightPref,
+        dwellMinutes: input.dwellMinutes,
       },
     });
     return toStopDto(row);

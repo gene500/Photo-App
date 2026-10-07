@@ -5,10 +5,11 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { downsampleRoute } from "@/lib/downsample";
-import { computeArrivals, computeBestTimes } from "@/lib/best-time";
+import { computeArrivals, computeBestTimes, formatClock } from "@/lib/best-time";
+import { defaultLightPref } from "@/lib/light-windows";
 import { formatDistance, formatDuration } from "@/lib/format";
 import { coordsLabel, haversineMeters } from "@/lib/geo";
-import type { LngLat, Place, RouteResult, Stop, StopSource, Suggestion, Trip, TripWithStops } from "@/lib/types";
+import type { LightPref, LngLat, Place, RouteResult, Stop, StopSource, Suggestion, Trip, TripWithStops } from "@/lib/types";
 import type { StopPatch, TripPatch } from "@/lib/validation";
 import { MapView } from "./MapView";
 import { PlaceCard } from "./PlaceCard";
@@ -25,7 +26,7 @@ const ALREADY_A_STOP_M = 100;
 
 type LatLng = { lat: number; lng: number };
 /** A place being considered: a search result, a clicked spot, or a suggestion. */
-type Pending = LatLng & { name: string; source: StopSource; osmId?: string; resolving: boolean };
+type Pending = LatLng & { name: string; source: StopSource; osmId?: string; lightPref?: LightPref; resolving: boolean };
 
 const NO_SUGGESTIONS: Suggestion[] = [];
 const errorMessage = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
@@ -49,7 +50,12 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   const [optimizing, setOptimizing] = useState(false);
   // Remembered so the optimization can be undone. Only honoured while the list still
   // matches `appliedIds`, so any later add/remove/reorder retires it without bookkeeping.
-  const [undo, setUndo] = useState<{ previousIds: string[]; appliedIds: string[] } | null>(null);
+  const [undo, setUndo] = useState<{
+    previousIds: string[];
+    appliedIds: string[];
+    previousDepartAt: string | null;
+    appliedDepartAt: string | null;
+  } | null>(null);
   const [optimizeNote, setOptimizeNote] = useState<{ text: string; idsKey: string } | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const centerRef = useRef<LatLng | null>(null);
@@ -71,6 +77,12 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   useEffect(() => {
     idsKeyRef.current = idsKey;
   }, [idsKey]);
+  // What the optimizer reads besides positions: a change to it mid-flight makes the result stale.
+  const prefsKey = JSON.stringify(stops.map((s) => [s.lightPref, s.dwellMinutes]));
+  const prefsKeyRef = useRef(prefsKey);
+  useEffect(() => {
+    prefsKeyRef.current = prefsKey;
+  }, [prefsKey]);
   const freshSuggestions = suggestionsState?.key === waypointKey ? suggestionsState : null;
   const suggestions = freshSuggestions?.items ?? NO_SUGGESTIONS;
   const suggestionsStatus: SuggestionsStatus = freshSuggestions?.status ?? "idle";
@@ -101,14 +113,14 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   const legDurations = activeRoute ? activeRoute.legs.map((l) => l.duration) : null;
 
   const bestTimes = useMemo(
-    () => computeBestTimes({ plannedDate: trip.plannedDate, stops }, legDurations),
+    () => computeBestTimes({ plannedDate: trip.plannedDate, departAt: trip.departAt, stops }, legDurations),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- legDurations is derived from activeRoute
-    [trip.plannedDate, stops, activeRoute],
+    [trip.plannedDate, trip.departAt, stops, activeRoute],
   );
   const arrivals = useMemo(
-    () => computeArrivals({ plannedDate: trip.plannedDate, stops }, legDurations),
+    () => computeArrivals({ plannedDate: trip.plannedDate, departAt: trip.departAt, stops }, legDurations),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- legDurations is derived from activeRoute
-    [trip.plannedDate, stops, activeRoute],
+    [trip.plannedDate, trip.departAt, stops, activeRoute],
   );
 
   async function saveTrip(patch: TripPatch) {
@@ -116,7 +128,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     setTrip(updated);
   }
 
-  async function addStop(input: { name: string; lat: number; lng: number; source: StopSource }) {
+  async function addStop(input: { name: string; lat: number; lng: number; source: StopSource; lightPref?: LightPref }) {
     try {
       const { stop } = await api.addStop(trip.id, input);
       setStops((prev) => [...prev, stop]);
@@ -155,13 +167,13 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     if (!s) return;
     lookupSeq.current++;
     setCardId(null);
-    setPending({ lat: s.lat, lng: s.lng, name: s.name, source: "suggested", osmId: s.osmId, resolving: false });
+    setPending({ lat: s.lat, lng: s.lng, name: s.name, source: "suggested", osmId: s.osmId, lightPref: defaultLightPref(s.kind), resolving: false });
   }
 
   async function addPending() {
     if (!pending || pending.resolving) return;
     setAdding(true);
-    const placed = await addStop({ name: pending.name, lat: pending.lat, lng: pending.lng, source: pending.source });
+    const placed = await addStop({ name: pending.name, lat: pending.lat, lng: pending.lng, source: pending.source, lightPref: pending.lightPref });
     setAdding(false);
     if (!placed) return;
     if (pending.osmId) takeSuggestion(pending.osmId, placed);
@@ -203,22 +215,50 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     if (optimizing || stops.length < 3) return;
     const startKey = idsKey;
     const startWaypoints = waypointKey;
+    const startPrefs = prefsKey;
     const before = stops;
+    const previousDepartAt = trip.departAt;
     setOptimizing(true);
     setOptimizeNote(null);
     try {
-      const { order } = await api.optimizeOrder(before.map((s): LngLat => [s.lng, s.lat]));
-      if (idsKeyRef.current !== startKey || waypointKeyRef.current !== startWaypoints) {
+      const result = await api.optimizeOrder(before.map((s): LngLat => [s.lng, s.lat]), {
+        stops: before.map((s) => ({ lightPref: s.lightPref, dwellMinutes: s.dwellMinutes })),
+        plannedDate: trip.plannedDate,
+      });
+      if (
+        idsKeyRef.current !== startKey ||
+        waypointKeyRef.current !== startWaypoints ||
+        prefsKeyRef.current !== startPrefs
+      ) {
         setStopsError("Your stops changed while optimizing, so the result was discarded. Try again.");
         return;
       }
-      const ids = order.map((i) => before[i].id);
-      if (ids.join(",") === startKey) {
-        setOptimizeNote({ text: "Already the fastest order", idsKey: startKey });
+      const ids = result.order.map((i) => before[i].id);
+      const misses = (result.misses ?? []).flatMap((m) => (before[m.stopIndex] ? [before[m.stopIndex].name] : []));
+      const missNote = misses.length
+        ? `Can't fit ${misses.length} ${misses.length === 1 ? "stop in its light" : "stops in their light"}: ${misses.join(", ")}.`
+        : null;
+      // null means no stop has a light preference: leave the departure alone.
+      const nextDepartAt = result.departAt ?? previousDepartAt;
+      const orderChanged = ids.join(",") !== startKey;
+      const departChanged = nextDepartAt !== previousDepartAt;
+      if (!orderChanged && !departChanged) {
+        setOptimizeNote({ text: ["Already the fastest order", missNote].filter(Boolean).join(". "), idsKey: startKey });
         return;
       }
       const previousIds = before.map((s) => s.id);
-      if (await reorder(ids)) setUndo({ previousIds, appliedIds: ids });
+      if (orderChanged && !(await reorder(ids))) return;
+      let appliedDepartAt = previousDepartAt;
+      if (departChanged) {
+        try {
+          await saveTrip({ departAt: nextDepartAt });
+          appliedDepartAt = nextDepartAt;
+        } catch (e) {
+          setStopsError(errorMessage(e, "Couldn't save the departure time"));
+        }
+      }
+      setUndo({ previousIds, appliedIds: ids, previousDepartAt, appliedDepartAt });
+      if (missNote) setOptimizeNote({ text: missNote, idsKey: ids.join(",") });
     } catch (e) {
       setStopsError(errorMessage(e, "Couldn't optimize the route"));
     } finally {
@@ -226,7 +266,28 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     }
   }
 
-  const canUndo = undo !== null && undo.appliedIds.join(",") === idsKey;
+  async function undoOptimize() {
+    if (!undo) return;
+    const { previousIds, previousDepartAt } = undo;
+    if (previousIds.join(",") !== idsKey && !(await reorder(previousIds))) return;
+    if (previousDepartAt !== trip.departAt) {
+      try {
+        await saveTrip({ departAt: previousDepartAt });
+      } catch (e) {
+        setStopsError(errorMessage(e, "Couldn't restore the departure time"));
+      }
+    }
+  }
+
+  async function resetDeparture() {
+    try {
+      await saveTrip({ departAt: null });
+    } catch (e) {
+      setStopsError(errorMessage(e, "Couldn't reset the departure time"));
+    }
+  }
+
+  const canUndo = undo !== null && undo.appliedIds.join(",") === idsKey && undo.appliedDepartAt === trip.departAt;
 
   /** Copy only `keys` from the server's stop onto the latest local one, so a response
    *  that raced a reorder can't overwrite `order` (or anything else it didn't change). */
@@ -325,7 +386,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   }
 
   async function acceptSuggestion(s: Suggestion) {
-    const added = await addStop({ name: s.name, lat: s.lat, lng: s.lng, source: "suggested" });
+    const added = await addStop({ name: s.name, lat: s.lat, lng: s.lng, source: "suggested", lightPref: defaultLightPref(s.kind) });
     if (added) takeSuggestion(s.osmId, added);
   }
 
@@ -411,6 +472,14 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
                     : "Add 2 stops to see the route"}
             </p>
             </div>
+            {trip.departAt && (
+              <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
+                <p data-testid="depart-note">Starts {formatClock(new Date(trip.departAt))}</p>
+                <button type="button" onClick={() => void resetDeparture()} className={btnGhost}>
+                  Reset to sunrise
+                </button>
+              </div>
+            )}
             <ErrorBanner
               message={current?.dismissed ? null : activeRouteError}
               onDismiss={() => setRouteResult((r) => (r ? { ...r, dismissed: true } : r))}
@@ -430,7 +499,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
                 {optimizing ? "Optimizing…" : "Optimize route"}
               </button>
               {canUndo && undo && (
-                <button type="button" onClick={() => void reorder(undo.previousIds)} className={btnGhost}>
+                <button type="button" onClick={() => void undoOptimize()} className={btnGhost}>
                   Undo
                 </button>
               )}
@@ -442,6 +511,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
             <StopList
               stops={stops}
               bestTimes={bestTimes}
+              arrivals={arrivals}
               onReorder={(ids) => void reorder(ids)}
               onToggleVisited={(id, visited) => void patchStop(id, { visited })}
               onDelete={(id) => void removeStop(id)}

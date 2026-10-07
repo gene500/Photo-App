@@ -69,22 +69,24 @@ export function classifyBestTime(w: SunWindows, arrival: Date | null): BestTime 
 
 /**
  * Arrival at each stop. The first stop is the departure point; each later stop is
- * departure + cumulative leg durations (seconds). Legs run stop1 -> stop2 -> ...,
- * so there must be stopCount - 1 of them.
+ * departure + cumulative leg durations (seconds) + the minutes spent at every earlier
+ * stop. Legs run stop1 -> stop2 -> ..., so there must be stopCount - 1 of them.
+ * `dwellMinutes[i]` is the time spent at stop i (missing = 0).
  */
 export function estimateArrivals(
   departure: Date,
   legDurations: number[],
   stopCount: number,
+  dwellMinutes: number[] = [],
 ): Date[] | null {
   if (stopCount === 0) return [];
   if (legDurations.length !== stopCount - 1) return null;
   const arrivals: Date[] = [departure];
   let elapsedMs = 0;
-  for (const seconds of legDurations) {
-    elapsedMs += seconds * 1000;
+  legDurations.forEach((seconds, i) => {
+    elapsedMs += seconds * 1000 + (dwellMinutes[i] ?? 0) * 60_000;
     arrivals.push(new Date(departure.getTime() + elapsedMs));
-  }
+  });
   return arrivals;
 }
 
@@ -94,13 +96,26 @@ export function departureTime(first: Pick<Stop, "lat" | "lng">, plannedDate: str
   return w.sunrise ?? new Date(solarDayAnchor(plannedDate, first.lng).getTime() - 4 * 3_600_000);
 }
 
-type TripForTimes = { plannedDate: string; stops: Pick<Stop, "lat" | "lng">[] };
+type TripForTimes = {
+  plannedDate: string;
+  /** ISO instant the trip leaves the first stop; null/absent = sunrise at the first stop. */
+  departAt?: string | null;
+  stops: Pick<Stop, "lat" | "lng" | "dwellMinutes">[];
+};
+
+/** When the trip leaves its first stop: the chosen departure, else sunrise there. */
+export function tripDeparture(trip: TripForTimes): Date {
+  if (trip.departAt) return new Date(trip.departAt);
+  return departureTime(trip.stops[0]!, trip.plannedDate);
+}
 
 /** Estimated arrival per stop, or nulls when there are fewer than 2 stops or no matching route. */
 export function computeArrivals(trip: TripForTimes, legDurations: number[] | null): (Date | null)[] {
   const none = trip.stops.map(() => null);
   if (!legDurations || trip.stops.length < 2) return none;
-  return estimateArrivals(departureTime(trip.stops[0]!, trip.plannedDate), legDurations, trip.stops.length) ?? none;
+  return (
+    estimateArrivals(tripDeparture(trip), legDurations, trip.stops.length, trip.stops.map((s) => s.dwellMinutes)) ?? none
+  );
 }
 
 export function computeBestTimes(trip: TripForTimes, legDurations: number[] | null): BestTime[] {

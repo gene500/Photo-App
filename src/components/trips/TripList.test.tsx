@@ -20,10 +20,12 @@ describe("TripList", () => {
     expect(screen.getByText("No trips yet. Create one below.")).toBeTruthy();
   });
 
-  it("links to each trip with its summary", () => {
+  it("makes the whole row (name and details) one link, with Delete outside it", () => {
     render(<TripList trips={[trip]} />);
-    expect(screen.getByRole("link", { name: "Sierra loop" }).getAttribute("href")).toBe("/trips/t1");
-    expect(screen.getByText("2026-07-01 · 3 stops")).toBeTruthy();
+    const link = screen.getByRole("link", { name: /Sierra loop/ });
+    expect(link.getAttribute("href")).toBe("/trips/t1");
+    expect(link.textContent).toContain("2026-07-01 · 3 stops");
+    expect(link.contains(screen.getByRole("button", { name: "Delete Sierra loop" }))).toBe(false);
   });
 
   it("deletes after confirmation and refreshes", async () => {

@@ -28,10 +28,13 @@ export function TripList({ trips }: { trips: TripSummary[] }) {
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
       <ul className="divide-y rounded border">
         {trips.map((t) => (
-          <li key={t.id} className="flex items-center justify-between gap-3 px-3 py-2">
-            <Link href={`/trips/${t.id}`} className="font-medium hover:underline">{t.name}</Link>
-            <span className="text-sm text-gray-600">{t.plannedDate} · {t.stopCount} stops</span>
-            <button type="button" onClick={() => void remove(t)} aria-label={`Delete ${t.name}`} className="text-sm text-red-700">
+          <li key={t.id} className="flex items-stretch">
+            {/* The whole row (name and details) is the link; only Delete sits outside it. */}
+            <Link href={`/trips/${t.id}`} className="flex flex-1 items-center justify-between gap-3 px-3 py-3 hover:bg-gray-50">
+              <span className="font-medium">{t.name}</span>
+              <span className="text-sm text-gray-600">{t.plannedDate} · {t.stopCount} stops</span>
+            </Link>
+            <button type="button" onClick={() => void remove(t)} aria-label={`Delete ${t.name}`} className="px-4 text-sm text-red-700 hover:bg-red-50">
               Delete
             </button>
           </li>

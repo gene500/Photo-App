@@ -391,7 +391,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
             error={suggestionsError}
             canSearch={activeRoute !== null}
             onFind={() => void findSuggestions()}
-            onAccept={(s) => void acceptSuggestion(s)}
+            onAccept={acceptSuggestion}
             onDismiss={dismissSuggestion}
             onHover={setHighlightedId}
             onDismissError={() => setSuggestionsState(null)}

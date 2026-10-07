@@ -48,6 +48,8 @@ export const api = {
   removePhoto: (stopId: string) => request<{ stop: Stop }>(`/api/stops/${stopId}/photo`, send("DELETE")),
   directions: (coordinates: LngLat[]) =>
     request<{ route: RouteResult }>("/api/directions", send("POST", { coordinates })),
+  optimizeOrder: (coordinates: LngLat[]) =>
+    request<{ order: number[] }>("/api/optimize", send("POST", { coordinates })),
   suggestions: (coordinates: LngLat[]) =>
     request<{ suggestions: Suggestion[] }>("/api/suggestions", send("POST", { coordinates })),
   geocode: (q: string, proximity?: { lat: number; lng: number }) =>

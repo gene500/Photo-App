@@ -46,6 +46,7 @@ export default function MapPanel({
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const stopMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
   const draggingRef = useRef<Set<string>>(new Set());
+  const stopIdsRef = useRef<Set<string>>(new Set());
   const suggestionMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const pendingMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const handlersRef = useRef({ onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange });
@@ -119,6 +120,7 @@ export default function MapPanel({
     const map = mapRef.current;
     if (!map) return;
     const markers = stopMarkersRef.current;
+    stopIdsRef.current = new Set(stops.map((s) => s.id));
     const { add, keep, remove } = diffIds(markers.keys(), stops.map((s) => s.id));
     for (const id of remove) {
       if (draggingRef.current.has(id)) continue; // leave it alone until the drag ends
@@ -152,6 +154,12 @@ export default function MapPanel({
         marker.on("dragstart", () => draggingRef.current.add(id));
         marker.on("dragend", () => {
           draggingRef.current.delete(id);
+          if (!stopIdsRef.current.has(id)) {
+            // The stop was deleted mid-drag: the deferred removal never got another effect run.
+            marker.remove();
+            markers.delete(id);
+            return;
+          }
           const { lat, lng } = marker.getLngLat();
           handlersRef.current.onStopMove?.(id, { lat, lng: wrapLng(lng) });
         });

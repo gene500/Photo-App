@@ -13,6 +13,7 @@ import { getCurrentUserId } from "@/server/session";
 import { DELETE as photoDELETE, POST as photoPOST } from "@/app/api/stops/[id]/photo/route";
 import { DELETE as stopDELETE } from "@/app/api/stops/[id]/route";
 import { GET as uploadGET } from "@/app/api/uploads/[name]/route";
+import { prisma } from "@/server/db";
 import { addStop, deleteStop, getOwnedStop } from "@/server/stops";
 import { createTrip } from "@/server/trips";
 import { MAX_PHOTO_BYTES } from "@/lib/photo-rules";
@@ -146,5 +147,18 @@ describe("photo routes", () => {
     expect(res.status).toBe(404);
     expect(savedUrl).not.toBe("");
     expect(fileOnDisk(savedUrl)).toBe(false);
+  });
+  it("still deletes the old file when the stop is deleted right after a won swap", async () => {
+    const oldUrl = (await (await upload(stopId, new File([PNG], "old.png", { type: "image/png" }))).json()).stop.photoUrl;
+    const realUpdateMany = prisma.stop.updateMany.bind(prisma.stop);
+    const spy = vi.spyOn(prisma.stop, "updateMany").mockImplementationOnce(((args: Parameters<typeof realUpdateMany>[0]) =>
+      realUpdateMany(args).then(async (r) => {
+        await deleteStop(userId, stopId); // stop vanishes between the swap and the re-read
+        return r;
+      })) as unknown as typeof prisma.stop.updateMany);
+    const res = await photoDELETE(new Request("http://x", { method: "DELETE" }), idParams(stopId));
+    spy.mockRestore();
+    expect(res.status).toBe(404);
+    expect(fileOnDisk(oldUrl)).toBe(false);
   });
 });

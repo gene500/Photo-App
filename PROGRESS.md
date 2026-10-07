@@ -26,8 +26,17 @@ simplification in steps for long routes (a real 1,916 km route simplified to 282
 points, over the 200-point guard, so "Find photo spots" failed beyond roughly
 1,000 km) and widens the buffer by the extra simplification error so spots near
 the real road are not missed. Not addressed (out of scope): rate limiting, invite
-codes, security headers, concurrent-upload orphan race, marker rebuild mid-drag,
-antimeridian-crossing routes.
+codes, security headers, antimeridian-crossing routes.
+
+Later on `final-fixes`: photo upload/remove is now a compare-and-swap on `photoUrl`
+(`swapStopPhoto`), so concurrent uploads never orphan a file (the loser deletes its
+own file and returns the current stop; a stop deleted right after a won swap still
+cleans up the old file). Stop markers are diffed by id (`diffIds`) instead of
+rebuilt, so a state update never destroys a marker mid-drag; a stop deleted
+mid-drag has its marker removed at dragend. The marker change is covered only by
+unit tests of the diff helper plus the fake-map e2e: it has NOT been checked in a
+real browser (needs a Mapbox token) -- try dragging a marker while toggling
+Visited, and reorder/delete.
 
 ## 2026-10-07 (map-first UI: built, reviewed, verified — ready to merge)
 

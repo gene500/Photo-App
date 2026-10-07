@@ -66,7 +66,7 @@ export async function updateStop(
 }
 
 export type PhotoSwap =
-  | { status: "swapped"; stop: Stop }
+  | { status: "swapped"; stop: Stop | null } // null: swapped, then the stop was deleted before we re-read it
   | { status: "conflict"; stop: Stop }
   | { status: "gone" };
 
@@ -85,8 +85,8 @@ export async function swapStopPhoto(
     data: { photoUrl: next },
   });
   const current = await getOwnedStop(userId, stopId);
-  if (!current) return { status: "gone" };
-  return count === 1 ? { status: "swapped", stop: current } : { status: "conflict", stop: current };
+  if (count === 1) return { status: "swapped", stop: current };
+  return current ? { status: "conflict", stop: current } : { status: "gone" };
 }
 
 export async function deleteStop(

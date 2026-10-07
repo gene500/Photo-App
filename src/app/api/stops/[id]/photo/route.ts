@@ -36,6 +36,7 @@ export const POST = handle(async (req: Request, { params }: Ctx) => {
     return Response.json({ stop: swap.stop });
   }
   await deletePhotoFile(stop.photoUrl);
+  if (!swap.stop) throw new HttpError(404, "Stop not found"); // deleted right after our swap
   return Response.json({ stop: swap.stop });
 });
 
@@ -48,5 +49,6 @@ export const DELETE = handle(async (_req: Request, { params }: Ctx) => {
   if (swap.status === "gone") throw new HttpError(404, "Stop not found");
   // Only delete the old file if our swap won; otherwise someone else already owns its cleanup.
   if (swap.status === "swapped") await deletePhotoFile(stop.photoUrl);
+  if (!swap.stop) throw new HttpError(404, "Stop not found");
   return Response.json({ stop: swap.stop });
 });

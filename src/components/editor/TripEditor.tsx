@@ -429,6 +429,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
                   Undo
                 </button>
               )}
+              {stops.length < 3 && <p className="text-xs text-gray-500">Add at least 3 stops to optimize the order.</p>}
               {optimizeNote?.idsKey === idsKey && (
                 <p role="status" className="text-xs text-gray-600">{optimizeNote.text}</p>
               )}

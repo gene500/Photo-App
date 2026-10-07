@@ -22,3 +22,4 @@ Plan: `docs/superpowers/plans/2026-10-06-road-trip-photo-planner.md`
 | 10 | Reference photo upload, serving, cleanup | `92b4cb8..3e7d12f` | Approved, 0 Critical/Important, 2 Minor. Security logic (magic bytes, path traversal, MIME-match) independently verified. **Phase 2 complete.** |
 | 11 | Best-time derivation (suncalc) | `b34d748..3eccef6` | Approved, 0 Critical/Important, 2 Minor. Reviewer independently re-ran the solar calculations against real suncalc output. **Phase 3 started.** |
 | 12 | Geo helper, route corridor polygon, Overpass query builder | `581b469..17dd42d` | Approved after 1 fix round (report-only correction distinguishing a forced assertion from an empirical one; no code change). |
+| 13 | Overpass response parsing, dedup, ranking, cap | `cc250d0..616f942` | Approved, 0 Critical/Important, 4 Minor (plan-mandated). All three precisely-disclosed items independently verified. |

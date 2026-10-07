@@ -51,6 +51,6 @@ describe("api client", () => {
     fetchMock.mockResolvedValue(Response.json({ place: { name: "X", lat: 1, lng: 2 } }));
     const { place } = await api.reverseGeocode(1, 2);
     expect(place.name).toBe("X");
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/reverse-geocode?lat=1&lng=2");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/reverse-geocode?lat=1.000000&lng=2.000000");
   });
 });

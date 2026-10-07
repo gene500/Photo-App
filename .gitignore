@@ -62,3 +62,6 @@ next-env.d.ts
 .DS_Store
 .claude/
 .vercel
+
+# SDD ledgers (local working notes)
+.superpowers/

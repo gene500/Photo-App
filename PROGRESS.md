@@ -3,6 +3,27 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
+## 2026-10-07 (map-first UI merged, deployed, final reviews and fixes)
+
+Merged `map-first-ui` into `main` and deployed to Vercel
+(https://photo-app-pi2o.vercel.app). The Turso migration
+`20261007120000_drop_trip_start_end` was applied during the build. Live smoke
+test passed using a throwaway account, and the account was deleted afterwards.
+
+Opus final reviews ran after the merge: a security review, a bug hunt and a
+whole-project review. Fixes on branch `final-fixes`: suggestions request
+downsampled to <= 1500 points (a real 355 km route had 3207, over the server's
+2000 cap, so "Find photo spots" returned 400); best time computed for each
+stop's arrival day on multi-day trips; touch-none on the drag handle for phones;
+e2e server blanks `TURSO_*` as well as the Blob token; README cautions on env
+scoping; dark-mode text on white floating cards; new-trip default date from the
+viewer's local day; the stop drawer sends only changed fields; Accept has a
+per-suggestion busy guard; suggestions are cleared when the stops change and
+late responses ignored; removeStop no longer closes a newer card/drawer; a photo
+upload for a stop deleted mid-flight returns 404 and removes the file; dead
+`boundsFor` removed. Not addressed (out of scope): rate limiting, invite codes,
+security headers.
+
 ## 2026-10-07 (map-first UI: built, reviewed, verified — ready to merge)
 
 Executed the plan on branch `map-first-ui` with
@@ -31,8 +52,9 @@ Deviations/notes: add-stop and stop details are React cards under the search
 bar, not anchored Mapbox popups (same on real and offline maps, unit-testable).
 The final whole-branch review was run on Opus, which contradicts the standing
 "Sonnet only" rule in HANDOFF.md; the controller did it by mistake and is
-disclosing it here. Not verified in a real browser: desktop (>=1024px) layout,
-failed-drag revert, suggestion markers on the real map, landmark click names
+disclosing it here. Playwright runs Desktop Chrome at 1280x720 on the fake map, so the desktop layout
+is covered there; only the desktop view on the real Mapbox map is unverified.
+Not verified in a real browser: failed-drag revert, suggestion markers on the real map, landmark click names
 (Mapbox v6 reverse geocoding returns addresses/places, not POIs), and real
 Mapbox geocode/directions (fake mode was used locally).
 

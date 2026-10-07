@@ -32,15 +32,16 @@ repo, `npm install`, and see `README.md` for setup.
 
 ## Resume procedure
 
-1. Enter the worktree above.
-2. Read the SDD ledger:
-   `.superpowers/sdd/2026-10-06-road-trip-photo-planner/progress.md`
-   — it names which tasks are `complete`, which are mid fix-loop, and the
-   preflight conflict-scan table. Trust it over any memory of "where we were."
-   `HISTORY.md` (committed, durable) has the same per-task completion facts
-   in a simpler form, for a quick skim without the ledger's full detail.
-3. Re-invoke `superpowers:subagent-driven-development` and continue from the
-   first task without a `Task N: complete` line in the ledger.
+There is no worktree any more; work in the main checkout of the repo
+(`/Users/genestone/road-trip-photo-planner`, branch `main`, or a fix branch off it).
+
+1. Read `PROGRESS.md` (newest entry first) for the latest state.
+2. `HISTORY.md` (committed, durable) has per-task completion facts for the
+   original 24-task build. The SDD ledgers under `.superpowers/sdd/` are local
+   and git-ignored; they may be gone, so trust `git log` and `PROGRESS.md`.
+3. For new work, branch off `main`, use
+   `superpowers:subagent-driven-development`, and follow the standing rules
+   below. Never push a non-`main` branch (see the deploy caution above).
 
 ## Standing rules for this project (confirmed by the human partner)
 
@@ -129,5 +130,6 @@ Complete and deployed at https://photo-app-pi2o.vercel.app (Vercel +
 Turso + Vercel Blob). Pushes to `main` redeploy automatically. Env vars
 are managed in Vercel; set them with `vercel env add NAME env --value ...`
 (not via stdin, not by pasting into the web form: both caused stray
-whitespace). Remaining: restrict the Mapbox token to the site URL. See
-`PROGRESS.md`. The sections above are historical context for the build.
+whitespace). Remaining: restrict the Mapbox token to the site URL. The
+map-first UI is merged and deployed (2026-10-07) and the live smoke test
+passed. See `PROGRESS.md`. The sections above are historical context for the build.

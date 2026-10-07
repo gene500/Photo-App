@@ -80,3 +80,14 @@ describe("enrichPopularity", () => {
     expect(failing).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("enrichPopularity budget", () => {
+  it("returns on time and leaves slow counts out", async () => {
+    const list = [{ id: "a", kind: "viewpoint", name: "A", lat: 1, lng: 1 }] as never[];
+    const slow = () => new Promise<number>((r) => setTimeout(() => r(9), 300));
+    const t0 = Date.now();
+    const out = await enrichPopularity(list, { count: slow, budgetMs: 30 });
+    expect(Date.now() - t0).toBeLessThan(250);
+    expect((out[0] as { popularity?: number }).popularity).toBeUndefined();
+  });
+});

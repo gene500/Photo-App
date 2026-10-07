@@ -52,7 +52,7 @@ export type Suggestion = {
   lat: number;
   lng: number;
   kind: SuggestionKind;
-  /** Flickr photos taken nearby (only when a Flickr key is configured); used to rank and to caption. */
+  /** Photos taken nearby (Flickr total when a key is set, else Commons files, capped at 50); used to rank and to caption. */
   popularity?: number;
 };
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
 import { installMemoryStorage, type MemoryStorage } from "../../tests/helpers/memory-storage";
-import { MAX_COPIES, claimOwner, clearAllCopies, listTripCopies, loadTripCopy, saveTripCopy } from "./offline-store";
+import { MAX_COPIES, claimOwner, clearAllCopies, enableOfflineSaving, pruneTripCopies, removeTripCopy, listTripCopies, loadTripCopy, saveTripCopy } from "./offline-store";
 import type { Stop, TripWithStops } from "./types";
 
 const stop = (i: number): Stop => ({
@@ -16,6 +16,7 @@ const at = (n: number) => new Date(Date.UTC(2026, 0, 1, 0, 0, n));
 let mem: MemoryStorage;
 beforeEach(() => {
   mem = installMemoryStorage();
+  mem.setItem("rtpp.offline.owner", "u1"); // a signed-in page has claimed the device
 });
 
 describe("offline-store", () => {
@@ -95,7 +96,36 @@ describe("offline-store", () => {
 
   it("wipes copies of unknown origin when an owner is first claimed", () => {
     saveTripCopy(trip("a"));
+    mem.removeItem("rtpp.offline.owner"); // copies exist but nobody claimed them
     claimOwner("u1");
+    expect(listTripCopies()).toEqual([]);
+  });
+
+  it("refuses to save when no owner is recorded (signed out in another tab)", () => {
+    mem.removeItem("rtpp.offline.owner");
+    expect(saveTripCopy(trip("a"))).toBe(false);
+    expect(listTripCopies()).toEqual([]);
+  });
+
+  it("stops saving in this tab when another tab clears the owner key", () => {
+    window.dispatchEvent(new StorageEvent("storage", { key: "rtpp.offline.owner", newValue: null }));
+    expect(saveTripCopy(trip("a"))).toBe(false);
+    enableOfflineSaving();
+    expect(saveTripCopy(trip("a"))).toBe(true);
+  });
+
+  it("removes one copy, and prunes copies of trips the server no longer has", () => {
+    saveTripCopy(trip("a"), at(1));
+    saveTripCopy(trip("b"), at(2));
+    saveTripCopy(trip("c"), at(3));
+    removeTripCopy("a");
+    expect(loadTripCopy("a")).toBeNull();
+    expect(mem.getItem("rtpp.offline.trip.a")).toBeNull();
+    expect(listTripCopies().map((e) => e.id)).toEqual(["c", "b"]);
+    pruneTripCopies(["c"]);
+    expect(listTripCopies().map((e) => e.id)).toEqual(["c"]);
+    expect(mem.getItem("rtpp.offline.trip.b")).toBeNull();
+    pruneTripCopies([]);
     expect(listTripCopies()).toEqual([]);
   });
 

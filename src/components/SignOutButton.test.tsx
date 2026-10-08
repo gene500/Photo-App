@@ -11,6 +11,7 @@ import { SignOutButton } from "./SignOutButton";
 
 beforeEach(() => {
   installMemoryStorage();
+  localStorage.setItem("rtpp.offline.owner", "u1"); // a signed-in page has claimed the device
   signOut.mockReset();
 });
 

@@ -8,7 +8,7 @@ import { SETTINGS_KEY } from "@/lib/settings";
 vi.mock("@/lib/api-client", () => ({
   api: {
     directions: vi.fn(), addStop: vi.fn(), suggestions: vi.fn(), reorderStops: vi.fn(),
-    updateStop: vi.fn(), deleteStop: vi.fn(), updateTrip: vi.fn(), reverseGeocode: vi.fn(), placePhoto: vi.fn(), geocode: vi.fn(), optimizeOrder: vi.fn(),
+    updateStop: vi.fn(), uploadPhoto: vi.fn(), deleteStop: vi.fn(), updateTrip: vi.fn(), reverseGeocode: vi.fn(), placePhoto: vi.fn(), geocode: vi.fn(), optimizeOrder: vi.fn(),
   },
 }));
 vi.mock("./MapView", () => ({
@@ -295,6 +295,44 @@ describe("TripEditor", () => {
       const card = await screen.findByRole("region", { name: "Selected stop" });
       await userEvent.click(within(card).getByLabelText("Visited"));
       await waitFor(() => expect(screen.queryByTestId("swap-note")).toBeNull());
+    });
+
+    it("retires Undo once a photo was added to the swapped stop", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.placePhoto).mockResolvedValue({ photo: null });
+      vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [sug(1, { name: "Glacier Point", lat: 37.73, lng: -119.57 })] });
+      vi.mocked(api.uploadPhoto).mockResolvedValue({ stop: { ...seed[0], name: "Glacier Point", lat: 37.73, lng: -119.57, source: "suggested", photoUrl: "/api/uploads/new.png" } });
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      let dialog = await openFirstDrawer();
+      await userEvent.click(within(dialog).getByRole("button", { name: "Find alternatives" }));
+      vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: { ...seed[0], name: "Glacier Point", lat: 37.73, lng: -119.57, source: "suggested", visited: false } });
+      await userEvent.click(await within(dialog).findByRole("button", { name: "Swap in Glacier Point" }));
+      expect(await screen.findByTestId("swap-note")).toBeTruthy();
+      await userEvent.click(screen.getByRole("button", { name: "click first marker" }));
+      await userEvent.click(within(await screen.findByRole("region", { name: "Selected stop" })).getByRole("button", { name: "Open details" }));
+      dialog = await screen.findByRole("dialog", { name: "Edit Glacier Point" });
+      await userEvent.upload(within(dialog).getByLabelText("Upload photo"), new File(["x"], "p.png", { type: "image/png" }));
+      await waitFor(() => expect(screen.queryByTestId("swap-note")).toBeNull());
+    });
+
+    it("closes the stop's open drawer when the swap is undone", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.placePhoto).mockResolvedValue({ photo: null });
+      vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [sug(1, { name: "Glacier Point", lat: 37.73, lng: -119.57 })] });
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      let dialog = await openFirstDrawer();
+      await userEvent.click(within(dialog).getByRole("button", { name: "Find alternatives" }));
+      const swappedStop = { ...seed[0], name: "Glacier Point", lat: 37.73, lng: -119.57, source: "suggested" as const, visited: false };
+      vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: swappedStop });
+      await userEvent.click(await within(dialog).findByRole("button", { name: "Swap in Glacier Point" }));
+      const note = await screen.findByTestId("swap-note");
+      await userEvent.click(screen.getByRole("button", { name: "click first marker" }));
+      await userEvent.click(within(await screen.findByRole("region", { name: "Selected stop" })).getByRole("button", { name: "Open details" }));
+      dialog = await screen.findByRole("dialog", { name: "Edit Glacier Point" });
+      await userEvent.type(within(dialog).getByLabelText("Notes"), "unsaved");
+      vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: seed[0] });
+      await userEvent.click(within(note).getByRole("button", { name: "Undo swap" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     });
 
     it("blocks Swap in while the drawer has unsaved edits", async () => {

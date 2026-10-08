@@ -106,7 +106,7 @@ export function SettingsView({ email }: { email: string | null }) {
           name="timeFormat"
           value={settings.timeFormat}
           onChange={(timeFormat) => update({ timeFormat })}
-          options={[{ value: "auto", label: "Device default" }, { value: "12h", label: "12-hour" }, { value: "24h", label: "24-hour" }]}
+          options={[{ value: "auto", label: "Default (12-hour)" }, { value: "12h", label: "12-hour" }, { value: "24h", label: "24-hour" }]}
         />
       </Section>
 

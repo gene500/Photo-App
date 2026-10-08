@@ -491,6 +491,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     try {
       mergeStop((await api.updateStop(swapNote.stopId, swapNote.previous)).stop, ["name", "lat", "lng", "source", "visited"]);
       setSwapNote(null);
+      // An open drawer would keep showing the swapped place's fields; closing it (as a swap does) is the simple fix.
+      setDrawerId((cur) => (cur === swapNote.stopId ? null : cur));
     } catch (e) {
       setStopsError(errorMessage(e, "Couldn't undo the swap"));
     }
@@ -498,7 +500,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
 
   const swapped = swapNote ? stops.find((s) => s.id === swapNote.stopId) : undefined;
   const canUndoSwap = swapNote !== null && swapped !== undefined && swapped.lat === swapNote.applied.lat && swapped.lng === swapNote.applied.lng &&
-    swapped.name === swapNote.applied.name && swapped.visited === swapNote.applied.visited && swapped.source === swapNote.applied.source;
+    swapped.name === swapNote.applied.name && swapped.visited === swapNote.applied.visited && swapped.source === swapNote.applied.source && swapped.photoUrl === null; // a photo added since belongs to the new place
 
   const cardIndex = stops.findIndex((s) => s.id === cardId);
   const cardStop = cardIndex >= 0 ? stops[cardIndex] : null;

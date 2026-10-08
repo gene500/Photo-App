@@ -34,6 +34,13 @@ export function onOfflineSavingDisabled(cb: () => void): () => void {
   return () => void disableListeners.delete(cb);
 }
 
+// Another tab signing out clears the owner key; this tab must then stop saving too (see saveTripCopy).
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key === null || (e.key === OWNER_KEY && e.newValue === null)) disableOfflineSaving();
+  });
+}
+
 function storage(): Storage | null {
   try {
     return typeof localStorage === "undefined" ? null : localStorage;
@@ -63,6 +70,8 @@ function sanitize(trip: TripWithStops): TripWithStops {
 export function saveTripCopy(trip: TripWithStops, now: Date = new Date()): boolean {
   const s = storage();
   if (!s || savingDisabled) return false;
+  // No recorded owner means the copies were cleared (sign-out in another tab) or never claimed: do not bring one back.
+  if (!hasOwner()) return false;
   const savedAt = now.toISOString();
   const payload = JSON.stringify({ savedAt, trip: sanitize(trip) } satisfies TripCopy);
   const entry: TripCopySummary = { id: trip.id, name: trip.name, plannedDate: trip.plannedDate, savedAt, stopCount: trip.stops.length };
@@ -174,6 +183,30 @@ export function clearAllCopies(): void {
   } catch {
     /* storage blocked: nothing more to do */
   }
+}
+
+/** True once a signed-in page has claimed this device's copies (cleared again by sign-out). */
+export function hasOwner(): boolean {
+  const s = storage();
+  try {
+    return !!s && s.getItem(OWNER_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** Deletes one trip's copy (the trip was deleted). */
+export function removeTripCopy(id: string): void {
+  const s = storage();
+  if (s) dropEntry(s, id);
+}
+
+/** Deletes copies of trips that no longer exist on the server (deleted here or on another device). */
+export function pruneTripCopies(existingIds: string[]): void {
+  const s = storage();
+  if (!s) return;
+  const keep = new Set(existingIds);
+  for (const e of readIndex(s)) if (!keep.has(e.id)) dropEntry(s, e.id);
 }
 
 /** Records whose copies these are; if a different user is signed in now, the old user's copies are wiped first. */

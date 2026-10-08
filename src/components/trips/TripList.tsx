@@ -2,19 +2,25 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { api } from "@/lib/api-client";
+import { pruneTripCopies, removeTripCopy } from "@/lib/offline-store";
 import type { TripSummary } from "@/lib/types";
 
 export function TripList({ trips }: { trips: TripSummary[] }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
+  // Offline copies of trips that no longer exist (deleted here or elsewhere) must not stay readable.
+  const idsKey = trips.map((t) => t.id).join(",");
+  useEffect(() => pruneTripCopies(idsKey ? idsKey.split(",") : []), [idsKey]);
+
   async function remove(trip: TripSummary) {
     if (!window.confirm(`Delete "${trip.name}"? This cannot be undone.`)) return;
     try {
       await api.deleteTrip(trip.id);
+      removeTripCopy(trip.id);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't delete the trip");

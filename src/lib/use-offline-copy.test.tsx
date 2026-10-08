@@ -11,6 +11,7 @@ const stops: Stop[] = [];
 
 beforeEach(() => {
   installMemoryStorage();
+  localStorage.setItem("rtpp.offline.owner", "u1"); // a signed-in page has claimed the device
   vi.useFakeTimers();
 });
 afterEach(() => {

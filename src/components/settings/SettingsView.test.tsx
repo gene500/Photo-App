@@ -20,6 +20,7 @@ const saved = () => JSON.parse(storage.getItem(SETTINGS_KEY) ?? "{}");
 
 beforeEach(() => {
   storage = installMemoryStorage();
+  storage.setItem("rtpp.offline.owner", "u1");
   for (const a of ["data-theme", "data-text-size", "data-reduce-motion"]) document.documentElement.removeAttribute(a);
 });
 
@@ -77,5 +78,13 @@ describe("SettingsView", () => {
     expect(screen.getByRole("radio", { name: "System" })).toHaveProperty("checked", true);
     expect(screen.getByRole("radio", { name: "Default" , checked: true })).toBeTruthy();
     expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
+  });
+});
+
+describe("time format labels", () => {
+  it("does not claim to follow the device locale (auto is the 12-hour clock)", async () => {
+    await setup();
+    expect(screen.queryByText("Device default")).toBeNull();
+    expect(screen.getByText("Default (12-hour)")).toBeTruthy();
   });
 });

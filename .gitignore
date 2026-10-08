@@ -65,3 +65,6 @@ next-env.d.ts
 
 # SDD ledgers (local working notes)
 .superpowers/
+
+# generated local map data (rebuild with scripts/build-places.sh)
+/data/

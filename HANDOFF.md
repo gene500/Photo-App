@@ -165,3 +165,17 @@ are managed in Vercel; set them with `vercel env add NAME env --value ...`
 whitespace). Remaining: restrict the Mapbox token to the site URL. The
 map-first UI is merged and deployed (2026-10-07) and the live smoke test
 passed. See `PROGRESS.md`. The sections above are historical context for the build.
+
+
+## Local map data (photo-spot suggestions)
+
+Suggestions are answered from a `Place` table (a copy of OpenStreetMap viewpoints, named peaks and attractions for the 50 states + DC),
+not from the public Overpass servers, which often return 504/429. Overpass is only asked when the search is outside the US boxes
+(`inLocalCoverage` in `src/server/suggestions/local-places.ts`), or the local copy returns fewer than `MIN_LOCAL_PLACES` (5) places;
+if Overpass then fails, the thin local answer is used.
+
+- Build the data: `scripts/build-places.sh` (about 1 hour, 10 GB of downloads, needs `uv`) writes `data/places/*.jsonl` (git-ignored).
+- Load it: `node scripts/import-places.mjs data/places --replace` (set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` to load the live DB, otherwise `DATABASE_URL`).
+- The table is created by migration `20261011120000_local_places`; until it is filled, searches behave exactly as before (Overpass).
+- Refresh every few months. Relations (rare multipolygon attractions) are not included; ways use the centroid of their nodes.
+- Known gap: just inside the US border a search reaching across it (e.g. San Diego near Tijuana) shows only the US side.

@@ -9,7 +9,7 @@ const ORIGIN = "https://app.test";
 
 type Listener = (event: unknown) => void;
 
-function boot(network: (url: string) => Promise<Response>) {
+function boot(network: (url: string) => Promise<Response>, cacheNames: string[] = []) {
   const listeners: Record<string, Listener> = {};
   const store = new Map<string, Response>();
   const puts: string[] = [];
@@ -20,7 +20,10 @@ function boot(network: (url: string) => Promise<Response>) {
       store.set(key, res);
     }),
     add: vi.fn(async () => {}),
+    keys: vi.fn(async () => [...store.keys()].map((url) => ({ url }))),
+    delete: vi.fn(async (req: { url: string }) => store.delete(req.url)),
   };
+  const deletedCaches: string[] = [];
   const fetchFn = vi.fn((req: string | Request) => network(typeof req === "string" ? new URL(req, ORIGIN).href : req.url));
   const sandbox = {
     self: {
@@ -32,8 +35,8 @@ function boot(network: (url: string) => Promise<Response>) {
     caches: {
       open: async () => cache,
       match: async (req: string | Request) => store.get(typeof req === "string" ? new URL(req, ORIGIN).href : req.url),
-      keys: async () => [],
-      delete: async () => true,
+      keys: async () => cacheNames,
+      delete: async (name: string) => { deletedCaches.push(name); return true; },
     },
     fetch: fetchFn,
     URL, Response, Set, Promise, Error,
@@ -43,10 +46,13 @@ function boot(network: (url: string) => Promise<Response>) {
   function fire(url: string, init: { method?: string; mode?: string } = {}) {
     const respondWith = vi.fn();
     const request = { url: new URL(url, ORIGIN).href, method: init.method ?? "GET", mode: init.mode ?? "no-cors" };
-    listeners.fetch({ request, respondWith });
+    listeners.fetch({ request, respondWith, waitUntil: (p: Promise<unknown>) => { pending.push(p); } });
     return { respondWith, request };
   }
-  return { fire, fetchFn, cache, puts, store, listeners };
+  const pending: Promise<unknown>[] = [];
+  /** Lets the event.waitUntil work (cache writes, refreshes) finish. */
+  const settle = async () => { await Promise.all(pending.splice(0)); };
+  return { fire, fetchFn, cache, puts, store, listeners, deletedCaches, settle };
 }
 
 const ok = () => Promise.resolve(new Response("page", { status: 200 }));
@@ -88,6 +94,7 @@ describe("service worker fetch handler", () => {
   it("refreshes the cached shell when /offline itself is visited, and caches no other navigation", async () => {
     const sw = boot(ok);
     await sw.fire("/offline", { mode: "navigate" }).respondWith.mock.calls[0][0];
+    await sw.settle();
     expect(sw.puts).toEqual(["/offline"]);
   });
 
@@ -105,6 +112,7 @@ describe("service worker fetch handler", () => {
       const { respondWith } = sw.fire(url);
       await respondWith.mock.calls[0][0];
     }
+    await sw.settle();
     expect(sw.puts.sort()).toEqual(["/_next/static/chunks/a.js", "/icons/icon-192.png", "/offline"]);
     // Anything else is not handled at all (no respondWith), so it cannot be cached.
     for (const url of ["/trips", "/trips/1", "/login", "/uploads/photo.jpg", "/sw.js"]) {
@@ -134,5 +142,67 @@ describe("service worker fetch handler", () => {
     await done;
     expect(sw.puts).toEqual(["/offline"]);
     expect(sw.cache.add.mock.calls.map((c) => (c as unknown[])[0])).toEqual(["/_next/static/chunks/x.js", "/_next/static/css/y.css"]);
+  });
+
+  it("a rejected cache write never breaks the live response", async () => {
+    const sw = boot(ok);
+    sw.cache.put.mockRejectedValue(new Error("QuotaExceededError"));
+    for (const [url, mode] of [["/_next/static/chunks/a.js", "no-cors"], ["/offline", "navigate"]]) {
+      const { respondWith } = sw.fire(url, { mode });
+      const res = (await respondWith.mock.calls[0][0]) as Response;
+      expect(await res.text()).toBe("page");
+    }
+    await expect(sw.settle()).resolves.toBeUndefined();
+  });
+
+  it("activate deletes only older rtpp-offline- caches, never other apps' caches", async () => {
+    const sw = boot(ok, ["rtpp-offline-v1", "rtpp-offline-v2", "other-app-cache", "workbox-precache"]);
+    let done: Promise<unknown> = Promise.resolve();
+    sw.listeners.activate({ waitUntil: (p: Promise<unknown>) => { done = p; } });
+    await done;
+    expect(sw.deletedCaches).toEqual(["rtpp-offline-v1"]);
+  });
+
+  it("activate refreshes the /offline shell in the background, and a failing refresh does not fail activation", async () => {
+    const sw = boot(ok);
+    let done: Promise<unknown> = Promise.resolve();
+    sw.listeners.activate({ waitUntil: (p: Promise<unknown>) => { done = p; } });
+    await done;
+    expect(sw.puts).toEqual(["/offline"]);
+    const down2 = boot(down);
+    down2.listeners.activate({ waitUntil: (p: Promise<unknown>) => { done = p; } });
+    await expect(done).resolves.toBeUndefined();
+  });
+
+  it("refreshes the shell after the first successful online navigation of a session, only once", async () => {
+    const sw = boot(ok);
+    await sw.fire("/trips/1", { mode: "navigate" }).respondWith.mock.calls[0][0];
+    await sw.settle();
+    expect(sw.puts).toEqual(["/offline"]);
+    await sw.fire("/trips/2", { mode: "navigate" }).respondWith.mock.calls[0][0];
+    await sw.settle();
+    expect(sw.puts).toEqual(["/offline"]);
+  });
+
+  it("trims /_next/static entries to 200, oldest first, keeping the current shell's assets", async () => {
+    const html = `<script src="/_next/static/chunks/current.js"></script>`;
+    const sw = boot(() => Promise.resolve(new Response(html)));
+    for (let i = 0; i < 205; i++) sw.store.set(`${ORIGIN}/_next/static/chunks/old-${i}.js`, new Response("x"));
+    sw.store.set(`${ORIGIN}/_next/static/chunks/current.js`, new Response("x"));
+    // Make "current.js" the oldest entry: it must survive because the shell references it.
+    const first = sw.store.get(`${ORIGIN}/_next/static/chunks/current.js`)!;
+    sw.store.delete(`${ORIGIN}/_next/static/chunks/current.js`);
+    const entries = [...sw.store.entries()];
+    sw.store.clear();
+    sw.store.set(`${ORIGIN}/_next/static/chunks/current.js`, first);
+    for (const [k, v] of entries) sw.store.set(k, v);
+    let done: Promise<unknown> = Promise.resolve();
+    sw.listeners.install({ waitUntil: (p: Promise<unknown>) => { done = p; } });
+    await done;
+    const statics = [...sw.store.keys()].filter((k) => k.includes("/_next/static/"));
+    expect(statics).toHaveLength(200);
+    expect(statics).toContain(`${ORIGIN}/_next/static/chunks/current.js`);
+    expect(statics).not.toContain(`${ORIGIN}/_next/static/chunks/old-0.js`);
+    expect(statics).toContain(`${ORIGIN}/_next/static/chunks/old-204.js`);
   });
 });

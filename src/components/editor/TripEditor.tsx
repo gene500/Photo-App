@@ -619,7 +619,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
               )}
               {stops.length < 3 && <p className="text-xs text-muted">Add at least 3 stops to optimize the order.</p>}
               {optimizeNote?.idsKey === idsKey && (
-                <p role="status" className="text-xs text-muted">{optimizeNote.text}</p>
+                <p role="status" className="anim-fade text-xs text-muted">{optimizeNote.text}</p>
               )}
             </div>
             {swapNote && canUndoSwap && (

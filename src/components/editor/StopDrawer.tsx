@@ -117,7 +117,7 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives 
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-label={`Edit ${stop.name}`} className="fixed inset-y-0 right-0 z-20 w-full max-w-md space-y-4 overflow-y-auto rounded-l-2xl bg-surface p-5 text-foreground shadow-2xl ring-1 ring-border">
+    <div role="dialog" aria-modal="true" aria-label={`Edit ${stop.name}`} className="anim-slide-in fixed inset-y-0 right-0 z-20 w-full max-w-md space-y-4 overflow-y-auto rounded-l-2xl bg-surface p-5 text-foreground shadow-2xl ring-1 ring-border">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Edit stop</h2>
         <button type="button" onClick={onClose} className={btnGhost}>Close</button>

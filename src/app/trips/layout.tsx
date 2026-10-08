@@ -22,7 +22,7 @@ export default async function TripsLayout({ children }: LayoutProps<"/trips">) {
         </div>
       </header>
       <OfflineOwnerSync userId={userId} />
-      <div className="flex-1">{children}</div>
+      <div className="anim-fade flex-1">{children}</div>
     </div>
   );
 }

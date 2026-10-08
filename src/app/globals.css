@@ -97,6 +97,16 @@
 html[data-text-size="large"] { font-size: 112.5%; }
 html[data-text-size="xlarge"] { font-size: 125%; }
 
+/* UI motion: short, subtle entrances. The reduced-motion rules below collapse every duration to ~0. */
+@keyframes rtpp-rise { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes rtpp-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rtpp-slide-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+.anim-rise { animation: rtpp-rise 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.anim-fade { animation: rtpp-fade 260ms ease-out both; }
+.anim-slide-in { animation: rtpp-slide-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.lift { transition: transform 180ms ease, box-shadow 180ms ease; }
+.lift:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgb(0 0 0 / 0.12); }
+
 /* Reduced motion: the Settings toggle, or the device preference. */
 html[data-reduce-motion="true"] *,
 html[data-reduce-motion="true"] *::before,

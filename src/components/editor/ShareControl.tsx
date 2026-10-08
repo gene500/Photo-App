@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost, btnPrimary, btnSecondary, card, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
+import { usePopover } from "./use-popover";
 
 type Props = {
   tripId: string;
@@ -14,7 +15,7 @@ type Props = {
 
 /** "Share" button with a small panel to create, copy and revoke the read-only link. */
 export function ShareControl({ tripId, shareToken, onChange }: Props) {
-  const [open, setOpen] = useState(false);
+  const { open, toggle, rootRef, triggerRef, panelRef, panelId } = usePopover();
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,12 +52,12 @@ export function ShareControl({ tripId, shareToken, onChange }: Props) {
   }
 
   return (
-    <div className="shrink-0">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={btnGhost}>
+    <div ref={rootRef} className="shrink-0">
+      <button ref={triggerRef} type="button" onClick={toggle} aria-expanded={open} aria-controls={open ? panelId : undefined} className={btnGhost}>
         Share
       </button>
       {open && (
-        <section aria-label="Share trip" className={`absolute right-0 top-full z-20 mt-1 w-72 max-w-full space-y-2 p-3 ${card}`}>
+        <div ref={panelRef} id={panelId} role="group" aria-label="Share trip" className={`absolute right-0 top-full z-20 mt-1 w-72 max-w-full space-y-2 p-3 ${card}`}>
           <p className="text-sm text-muted">Anyone with the link can view this trip (without photos).</p>
           {shareToken ? (
             <>
@@ -70,7 +71,7 @@ export function ShareControl({ tripId, shareToken, onChange }: Props) {
             <button type="button" onClick={() => void create()} disabled={busy} className={btnPrimary}>Create link</button>
           )}
           <ErrorBanner message={error} onDismiss={() => setError(null)} />
-        </section>
+        </div>
       )}
     </div>
   );

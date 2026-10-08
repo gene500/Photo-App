@@ -50,4 +50,28 @@ describe("ShareControl", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("Trip not found");
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  describe("popover behaviour", () => {
+    it("uses aria-expanded and aria-controls, moves focus in, and Escape returns it to the trigger", async () => {
+      render(<ShareControl tripId="t1" shareToken={null} onChange={vi.fn()} />);
+      const btn = screen.getByRole("button", { name: "Share" });
+      expect(btn.getAttribute("aria-expanded")).toBe("false");
+      await userEvent.click(btn);
+      expect(btn.getAttribute("aria-expanded")).toBe("true");
+      expect(document.getElementById(btn.getAttribute("aria-controls")!)).toBe(screen.getByRole("group", { name: "Share trip" }));
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Create link" }));
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("group", { name: "Share trip" })).toBeNull();
+      expect(document.activeElement).toBe(btn);
+    });
+
+    it("closes on an outside press but not inside", async () => {
+      render(<div><p>outside</p><ShareControl tripId="t1" shareToken={null} onChange={vi.fn()} /></div>);
+      await userEvent.click(screen.getByRole("button", { name: "Share" }));
+      await userEvent.click(screen.getByText(/Anyone with the link/));
+      expect(screen.getByRole("group", { name: "Share trip" })).toBeTruthy();
+      await userEvent.click(screen.getByText("outside"));
+      expect(screen.queryByRole("group", { name: "Share trip" })).toBeNull();
+    });
+  });
 });

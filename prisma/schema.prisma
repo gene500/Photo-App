@@ -60,3 +60,16 @@ model Stop {
 
   @@index([tripId, order])
 }
+
+// A local copy of OpenStreetMap viewpoints, named peaks and attractions (loaded by scripts/import-places.mjs),
+// so suggestions don't depend on the busy public Overpass servers. `cell` is a 0.1 degree grid square (see places-grid.ts).
+model Place {
+  id   String @id
+  name String
+  kind String
+  lat  Float
+  lng  Float
+  cell Int
+
+  @@index([cell])
+}

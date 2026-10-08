@@ -110,3 +110,47 @@ describe("findSuggestionsAround", () => {
     delete process.env.EXTERNAL_APIS_FAKE;
   });
 });
+
+describe("local copy of the map data", () => {
+  const local = (n: number) => async () => Array.from({ length: n }, (_, i) => ({ type: "node", id: i + 1, lat: 37.2 + i / 1000, lon: -119.6, tags: { tourism: "viewpoint", name: `Spot ${i}` } }));
+
+  beforeEach(() => {
+    clearSuggestionCache();
+    delete process.env.EXTERNAL_APIS_FAKE;
+  });
+
+  it("answers from the local copy without asking Overpass", async () => {
+    const fetchOverpass = vi.fn();
+    const result = await findSuggestionsAround([-119.6, 37.2], { local: local(8), fetchOverpass, enrich: false });
+    expect(result).toHaveLength(8);
+    expect(fetchOverpass).not.toHaveBeenCalled();
+  });
+
+  it("asks Overpass when the copy does not cover the area or is nearly empty", async () => {
+    const fetchOverpass = vi.fn(async () => overpassJson);
+    expect(await findSuggestionsAround([-0.1, 51.5], { local: async () => null, fetchOverpass, enrich: false })).toHaveLength(1);
+    clearSuggestionCache();
+    expect(await findSuggestionsAround([-119.6, 37.2], { local: local(2), fetchOverpass, enrich: false })).toHaveLength(1);
+    expect(fetchOverpass).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to a thin local answer when Overpass fails, and fails only when there is nothing local", async () => {
+    const down = vi.fn().mockRejectedValue(new OverpassError("busy"));
+    expect(await findSuggestionsAround([-119.6, 37.2], { local: local(2), fetchOverpass: down, enrich: false })).toHaveLength(2);
+    clearSuggestionCache();
+    await expect(findSuggestionsAround([-119.6, 37.2], { local: async () => null, fetchOverpass: down, enrich: false })).rejects.toBeInstanceOf(OverpassError);
+  });
+
+  it("a database error in the local lookup quietly falls back to Overpass", async () => {
+    const fetchOverpass = vi.fn(async () => overpassJson);
+    const result = await findSuggestionsAround([-119.6, 37.2], { local: async () => { throw new Error("no such table: Place"); }, fetchOverpass, enrich: false });
+    expect(result).toHaveLength(1);
+  });
+
+  it("route searches use the local copy too", async () => {
+    const fetchOverpass = vi.fn();
+    const result = await findSuggestions(ROUTE, { local: local(6), fetchOverpass, enrich: false });
+    expect(result).toHaveLength(6);
+    expect(fetchOverpass).not.toHaveBeenCalled();
+  });
+});

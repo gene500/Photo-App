@@ -53,8 +53,8 @@ export const api = {
       "/api/optimize",
       send("POST", { coordinates, ...light }),
     ),
-  suggestions: (coordinates: LngLat[]) =>
-    request<{ suggestions: Suggestion[] }>("/api/suggestions", send("POST", { coordinates })),
+  suggestions: (route: LngLat[] | { around: LngLat }) =>
+    request<{ suggestions: Suggestion[] }>("/api/suggestions", send("POST", Array.isArray(route) ? { coordinates: route } : route)),
   geocode: (q: string, proximity?: { lat: number; lng: number }) =>
     request<{ places: Place[] }>(
       `/api/geocode?q=${encodeURIComponent(q)}${proximity ? `&proximity=${proximity.lng.toFixed(6)},${proximity.lat.toFixed(6)}` : ""}`,

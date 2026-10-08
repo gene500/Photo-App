@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LngLat } from "@/lib/types";
 import { OverpassError } from "./overpass";
-import { clearSuggestionCache, findSuggestions, routeCacheKey } from "./service";
+import { clearSuggestionCache, findSuggestions, findSuggestionsAround, routeCacheKey } from "./service";
 
 const ROUTE: LngLat[] = [[-119.79, 36.74], [-119.6, 37.2], [-119.12, 37.96]];
 const overpassJson = { elements: [{ type: "node", id: 1, lat: 37.2, lon: -119.6, tags: { tourism: "viewpoint", name: "Spot" } }] };
@@ -56,5 +56,22 @@ describe("findSuggestions", () => {
       OverpassError,
     );
     expect(fetchOverpass).not.toHaveBeenCalled();
+  });
+});
+
+describe("findSuggestionsAround", () => {
+  beforeEach(() => {
+    clearSuggestionCache();
+    delete process.env.EXTERNAL_APIS_FAKE;
+    delete process.env.FLICKR_API_KEY;
+  });
+
+  it("queries a 24 km circle around the point, caches it apart from a route search", async () => {
+    const fetchOverpass = vi.fn<(query: string) => Promise<typeof overpassJson>>(async () => overpassJson);
+    const result = await findSuggestionsAround([-119.79, 36.74], { fetchOverpass, fetchImpl });
+    expect(result).toHaveLength(1);
+    expect(fetchOverpass.mock.calls[0][0]).toContain("(around:24000,36.74000,-119.79000)");
+    await findSuggestionsAround([-119.79, 36.74], { fetchOverpass, fetchImpl });
+    expect(fetchOverpass).toHaveBeenCalledTimes(1);
   });
 });

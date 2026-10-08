@@ -94,12 +94,18 @@ export const optimizeRequestSchema = z
 // waypoints, and Mapbox Directions is called with overview=full).
 export const MAX_SUGGESTIONS_COORDINATES = 2_000;
 
-export const suggestionsRequestSchema = z.object({
-  coordinates: z
-    .array(lngLat)
-    .min(2, "A route needs at least 2 points")
-    .max(MAX_SUGGESTIONS_COORDINATES, `Route has too many points (max ${MAX_SUGGESTIONS_COORDINATES})`),
-});
+export const suggestionsRequestSchema = z
+  .object({
+    coordinates: z
+      .array(lngLat)
+      .min(2, "A route needs at least 2 points")
+      .max(MAX_SUGGESTIONS_COORDINATES, `Route has too many points (max ${MAX_SUGGESTIONS_COORDINATES})`)
+      .optional(),
+    /** A single point: suggestions within AROUND_RADIUS_KM of it (used while a trip has only one stop). */
+    around: lngLat.optional(),
+  })
+  .refine((v) => (v.coordinates === undefined) !== (v.around === undefined), "Send either a route or a single point");
+
 
 /** First issue as a user-facing string, prefixed with its field path when there is one. */
 export function formatZodError(error: z.ZodError): string {

@@ -85,7 +85,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   }, [prefsKey]);
   const freshSuggestions = suggestionsState?.key === waypointKey ? suggestionsState : null;
   const suggestions = freshSuggestions?.items ?? NO_SUGGESTIONS;
-  const suggestionsStatus: SuggestionsStatus = freshSuggestions?.status ?? "idle";
+  const suggestionsStatus: SuggestionsStatus = freshSuggestions?.status ?? (stops.length === 1 ? "loading" : "idle");
   const suggestionsError = freshSuggestions?.error ?? null;
   useEffect(() => {
     const coordinates = JSON.parse(waypointKey) as LngLat[];
@@ -99,6 +99,29 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
       (e: unknown) => {
         if (cancelled) return;
         setRouteResult({ key: waypointKey, route: null, error: errorMessage(e, "Couldn't load the route"), dismissed: false });
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [waypointKey]);
+
+  // With a single stop there is no route to follow, so look around that stop automatically
+  // (with two or more, suggestions follow the route and are found on request).
+  useEffect(() => {
+    const coordinates = JSON.parse(waypointKey) as LngLat[];
+    if (coordinates.length !== 1) return;
+    const [lng, lat] = coordinates[0];
+    let cancelled = false;
+    api.suggestions({ around: [lng, lat] }).then(
+      ({ suggestions: found }) => {
+        if (cancelled) return;
+        const items = found.filter((s) => haversineMeters({ lat, lng }, s) >= ALREADY_A_STOP_M);
+        setSuggestionsState({ key: waypointKey, items, status: "done", error: null });
+      },
+      (e: unknown) => {
+        if (cancelled) return;
+        setSuggestionsState({ key: waypointKey, items: [], status: "error", error: errorMessage(e, "Couldn't load suggestions. Please retry.") });
       },
     );
     return () => {
@@ -352,6 +375,20 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   // --- Suggestions -----------------------------------------------------------
 
   async function findSuggestions() {
+    if (stops.length === 1) {
+      const key = waypointKey;
+      const { lng, lat } = stops[0];
+      setSuggestionsState({ key, items: [], status: "loading", error: null });
+      try {
+        const { suggestions: found } = await api.suggestions({ around: [lng, lat] });
+        if (waypointKeyRef.current !== key) return;
+        setSuggestionsState({ key, items: found.filter((x) => haversineMeters({ lat, lng }, x) >= ALREADY_A_STOP_M), status: "done", error: null });
+      } catch (e) {
+        if (waypointKeyRef.current !== key) return;
+        setSuggestionsState({ key, items: [], status: "error", error: errorMessage(e, "Couldn't load suggestions. Please retry.") });
+      }
+      return;
+    }
     if (!activeRoute) return;
     const key = waypointKey;
     const placed = stops;
@@ -524,12 +561,12 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
             status={suggestionsStatus}
             suggestions={suggestions}
             error={suggestionsError}
-            canSearch={activeRoute !== null}
+            canSearch={activeRoute !== null || stops.length === 1}
             onFind={() => void findSuggestions()}
             onAccept={acceptSuggestion}
             onDismiss={dismissSuggestion}
             onHover={setHighlightedId}
-            onDismissError={() => setSuggestionsState(null)}
+            onDismissError={() => setSuggestionsState({ key: waypointKey, items: [], status: "idle", error: null })}
           />
         }
         suggestionCount={suggestions.length}

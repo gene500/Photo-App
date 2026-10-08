@@ -101,6 +101,9 @@ or "Misses sunset by 40 min".
 
 ### Photo popups and beige map
 
+With a single stop, suggestions within about 15 miles (24 km) of it load automatically; from
+two stops on they follow the route and are found with "Find photo spots".
+
 Hovering (or keyboard-focusing) a suggestion dot on the map, or hovering its card
 in the panel, shows a popup with a photo of the place; picking a suggestion shows
 the same photo (with its credit) in the place card. On touch devices there is no
@@ -162,6 +165,7 @@ display defaults to evening golden hour. See `src/lib/best-time.ts`.
 
 | Constant | File | Meaning |
 | --- | --- | --- |
+| `AROUND_RADIUS_KM` | `src/server/suggestions/corridor.ts` | Radius (24 km, about 15 miles) searched around a trip's first stop, before there is a route |
 | `CORRIDOR_KM` | `src/server/suggestions/corridor.ts` | Buffer radius (km) around the route searched for OSM suggestions |
 | `SUGGESTION_CAP` | `src/server/suggestions/parse.ts` | Max number of suggestion candidates returned per query |
 | `DUPLICATE_RADIUS_M` | `src/server/suggestions/parse.ts` | Distance (m) under which two candidates are treated as duplicates |

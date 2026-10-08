@@ -61,6 +61,7 @@ const withStops = (stops: Stop[]) => ({ ...trip, stops });
 describe("TripEditor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [] });
     vi.mocked(api.reverseGeocode).mockResolvedValue({ place: { name: "Tunnel View", lat: 37.5, lng: -119.5 } });
   });
 
@@ -159,6 +160,16 @@ describe("TripEditor", () => {
     await userEvent.click(screen.getByRole("button", { name: "Add stop" }));
     expect(api.addStop).toHaveBeenCalledWith("t1", { name: "Fresno, California", lat: 36.74, lng: -119.79, source: "manual" });
     expect((await screen.findAllByTestId("stop-row"))).toHaveLength(1);
+  });
+
+  it("searches around the first stop automatically, and stops doing so once there is a route", async () => {
+    vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });
+    render(<TripEditor initialTrip={withStops([seed[0]])} />);
+    await waitFor(() => expect(api.suggestions).toHaveBeenCalledWith({ around: [-119.79, 36.74] }));
+    expect(api.suggestions).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole("tab", { name: /Suggestions/ }));
+    expect(await screen.findByRole("button", { name: "Accept" })).toBeTruthy();
+    expect(api.directions).not.toHaveBeenCalled();
   });
 
   it("finds suggestions and accepts one from the Suggestions tab", async () => {
@@ -297,7 +308,7 @@ describe("TripEditor", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
     await waitFor(() => expect(api.suggestions).toHaveBeenCalled());
-    const sent = vi.mocked(api.suggestions).mock.calls[0]![0];
+    const sent = vi.mocked(api.suggestions).mock.calls[0]![0] as [number, number][];
     expect(sent.length).toBeLessThanOrEqual(1500);
     expect(sent[0]).toEqual(geometry[0]);
     expect(sent[sent.length - 1]).toEqual(geometry[2999]);

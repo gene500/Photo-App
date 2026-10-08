@@ -49,6 +49,9 @@ export function buildCorridor(route: LngLat[], radiusKm: number = CORRIDOR_KM): 
   return outer.map(([lng, lat]) => [lng, lat] as LngLat);
 }
 
+/** About 15 miles: the search radius around a trip's first stop, before there is a route to follow. */
+export const AROUND_RADIUS_KM = 24;
+
 export function toOverpassPoly(ring: LngLat[]): string {
   return ring.map(([lng, lat]) => `${lat.toFixed(5)} ${lng.toFixed(5)}`).join(" ");
 }
@@ -59,6 +62,18 @@ export function buildOverpassQuery(poly: string, timeoutSec = 10): string {
     "(",
     `  nwr["tourism"~"^(viewpoint|attraction)$"](poly:"${poly}");`,
     `  node["natural"="peak"](poly:"${poly}");`,
+    ");",
+    "out center 500;",
+  ].join("\n");
+}
+
+export function buildOverpassAroundQuery(lng: number, lat: number, radiusKm: number = AROUND_RADIUS_KM, timeoutSec = 10): string {
+  const around = `(around:${Math.round(radiusKm * 1000)},${lat.toFixed(5)},${lng.toFixed(5)})`;
+  return [
+    `[out:json][timeout:${timeoutSec}];`,
+    "(",
+    `  nwr["tourism"~"^(viewpoint|attraction)$"]${around};`,
+    `  node["natural"="peak"]${around};`,
     ");",
     "out center 500;",
   ].join("\n");

@@ -53,7 +53,9 @@ Open a trip while online and a read-only copy is kept in this browser (localStor
 saved shortly after each change; the share token and uploaded photo URLs are never stored). Without a connection,
 open `/offline` to browse the saved trips: stops, notes, shot lists, planned date and each stop's best light
 window. There is no map offline (Mapbox terms forbid storing tiles) and no drive times (they need the routing API).
-Copies are cleared on sign-out and whenever a different user signs in on the device.
+Copies are cleared on sign-out and whenever a different user signs in on the device. They are stored as plaintext
+in localStorage until then (anyone with access to the browser profile can read them), so sign out on a shared device;
+sign-out also switches saving off so a pending autosave cannot bring a copy back, and the login page wipes any leftovers.
 
 `public/sw.js` is a minimal service worker (registered at scope `/` in production builds, or in dev with
 `NEXT_PUBLIC_SW=1`, which the e2e server sets). It caches only the static `/offline` page and `/_next/static` and

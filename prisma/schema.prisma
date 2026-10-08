@@ -34,29 +34,29 @@ model Trip {
 }
 
 model Stop {
-  id           String   @id @default(cuid())
-  tripId       String
-  trip         Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  tripId        String
+  trip          Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
   /// 0-based position in the route sequence; kept contiguous by the data layer.
-  order        Int
-  name         String
-  lat          Float
-  lng          Float
-  notes        String?
+  order         Int
+  name          String
+  lat           Float
+  lng           Float
+  notes         String?
   /// "manual" | "suggested", validated in application code.
-  source       String
-  photoUrl     String?
-  visited      Boolean  @default(false)
+  source        String
+  photoUrl      String?
+  visited       Boolean  @default(false)
   /// "any" | "sunrise" | "golden" | "sunset", validated in application code.
-  lightPref    String   @default("any")
+  lightPref     String   @default("any")
   /// Minutes spent at the stop (0..480), validated in application code.
-  dwellMinutes Int      @default(30)
+  dwellMinutes  Int      @default(30)
   /// Free-text shot notes (max 2000 chars, validated in application code).
-  shotNotes    String?
+  shotNotes     String?
   /// JSON array of { text, done }, serialized and validated at the server boundary.
-  shotChecklist String  @default("[]")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  shotChecklist String   @default("[]")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([tripId, order])
 }

@@ -51,7 +51,7 @@ export function PlaceCard({ name, resolving, busy, suggestion, visit, onAdd, onC
             Golden hour {formatClock(golden, undefined, settings.timeFormat)} · {weather.text}
           </p>
         )}
-        {photo && <p data-testid="photo-credit" className="text-[10px] text-muted">{photo.credit}</p>}
+        {photo && <p data-testid="photo-credit" className="text-xs text-muted">{photo.credit}</p>}
       </div>
       <button
         type="button"

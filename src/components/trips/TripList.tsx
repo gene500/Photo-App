@@ -61,7 +61,7 @@ function DateStub({ iso }: { iso: string }) {
   const month = MONTHS[Number(m) - 1];
   if (!month || !y || !d) return null;
   return (
-    <time dateTime={iso} title={iso} className="flex h-14 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-accent-soft text-accent-foreground">
+    <time dateTime={iso} title={iso} className="flex h-14 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-accent-soft text-accent-strong">
       <span className="text-xs leading-none">{month}</span>
       <span className="font-display text-xl font-semibold leading-tight">{Number(d)}</span>
     </time>

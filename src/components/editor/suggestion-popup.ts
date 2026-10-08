@@ -39,7 +39,7 @@ export function createSuggestionPopupContent(
   text.append(name, meta);
   const nearby = formatPhotoCount(s.popularity);
   if (nearby) {
-    const pop = el("p", "text-[10px] text-muted", nearby);
+    const pop = el("p", "text-xs text-muted", nearby);
     pop.dataset.testid = "suggestion-popup-popularity";
     text.append(pop);
   }
@@ -66,7 +66,7 @@ export function createSuggestionPopupContent(
       img.src = photo.url;
       slot.replaceWith(img);
       visual = img;
-      credit = el("p", "text-[10px] text-muted", photo.credit);
+      credit = el("p", "text-xs text-muted", photo.credit);
       text.append(credit);
     },
     dropPhoto,

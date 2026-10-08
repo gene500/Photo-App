@@ -4,11 +4,12 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMemoryStorage } from "../../../tests/helpers/memory-storage";
 import { SETTINGS_KEY } from "@/lib/settings";
+import { resetPlacePhotoCache } from "@/lib/place-photo-cache";
 
 vi.mock("@/lib/api-client", () => ({
   api: {
     directions: vi.fn(), addStop: vi.fn(), suggestions: vi.fn(), reorderStops: vi.fn(),
-    updateStop: vi.fn(), uploadPhoto: vi.fn(), deleteStop: vi.fn(), updateTrip: vi.fn(), reverseGeocode: vi.fn(), placePhoto: vi.fn(), geocode: vi.fn(), optimizeOrder: vi.fn(),
+    updateStop: vi.fn(), uploadPhoto: vi.fn(), deleteStop: vi.fn(), updateTrip: vi.fn(), reverseGeocode: vi.fn(), suggestionPopularity: vi.fn(), placePhoto: vi.fn(async () => ({ photo: null })), geocode: vi.fn(), optimizeOrder: vi.fn(),
   },
 }));
 vi.mock("./MapView", () => ({
@@ -63,6 +64,7 @@ const withStops = (stops: Stop[]) => ({ ...trip, stops });
 describe("TripEditor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetPlacePhotoCache();
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [] });
     vi.mocked(api.reverseGeocode).mockResolvedValue({ place: { name: "Tunnel View", lat: 37.5, lng: -119.5 } });
   });
@@ -172,6 +174,24 @@ describe("TripEditor", () => {
     await userEvent.click(screen.getByRole("tab", { name: /Suggestions/ }));
     expect(await screen.findByRole("button", { name: "Accept" })).toBeTruthy();
     expect(api.directions).not.toHaveBeenCalled();
+  });
+
+  it("shows the first 5 suggestions at once and reveals the rest 5 at a time as popularity arrives", async () => {
+    const found = Array.from({ length: 12 }, (_, i) => ({ osmId: `node/${i + 1}`, name: `Spot ${i + 1}`, lat: 37.7 + i / 100, lng: -119.7, kind: "viewpoint" as const }));
+    vi.mocked(api.suggestions).mockResolvedValue({ suggestions: found });
+    const releases: Array<() => void> = [];
+    vi.mocked(api.suggestionPopularity).mockImplementation(
+      (places) => new Promise((resolve) => releases.push(() => resolve({ counts: places.map(() => 1) }))),
+    );
+    render(<TripEditor initialTrip={withStops([seed[0]])} />);
+    await userEvent.click(screen.getByRole("tab", { name: /Suggestions/ }));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(5));
+    await waitFor(() => expect(releases).toHaveLength(1));
+    await act(async () => releases[0]());
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(10));
+    await waitFor(() => expect(releases).toHaveLength(2));
+    await act(async () => releases[1]());
+    await waitFor(() => expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(12));
   });
 
   it("retries the around search by hand after an error", async () => {

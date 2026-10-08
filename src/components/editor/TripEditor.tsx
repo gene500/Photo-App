@@ -7,7 +7,7 @@ import { btnGhost } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { downsampleRoute } from "@/lib/downsample";
 import { prefetchPlacePhotos } from "@/lib/place-photo-cache";
-import { loadPopularityInBatches, rankSuggestions } from "@/lib/suggestion-popularity";
+import { loadPopularityInBatches, POPULARITY_BATCH, rankSuggestions } from "@/lib/suggestion-popularity";
 import { computeArrivals, computeBestTimes, formatClock } from "@/lib/best-time";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useOfflineCopy } from "@/lib/use-offline-copy";
@@ -56,7 +56,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const [flyTo, setFlyTo] = useState<(LatLng & { nonce: number }) | null>(null);
   // Tagged with the waypoints they were found for, like routeResult: a change of stops
   // makes them stale, so they are simply not shown (and a late response is dropped).
-  const [suggestionsState, setSuggestionsState] = useState<{ key: string; items: Suggestion[]; status: SuggestionsStatus; error: string | null } | null>(null);
+  const [suggestionsState, setSuggestionsState] = useState<{ key: string; items: Suggestion[]; status: SuggestionsStatus; error: string | null; shown?: number } | null>(null);
   const [optimizing, setOptimizing] = useState(false);
   // Remembered so the optimization can be undone. Only honoured while the list still
   // matches `appliedIds`, so any later add/remove/reorder retires it without bookkeeping.
@@ -107,24 +107,35 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     prefsKeyRef.current = prefsKey;
   }, [prefsKey]);
   const freshSuggestions = suggestionsState?.key === waypointKey ? suggestionsState : null;
-  const suggestions = freshSuggestions?.items ?? NO_SUGGESTIONS;
+  const allSuggestions = freshSuggestions?.items ?? NO_SUGGESTIONS;
+  // Only the first chunk is shown at first; the rest is revealed 5 at a time as popularity ranks it (undefined = all).
+  const shownCount = freshSuggestions?.shown;
+  const suggestions = useMemo(() => (shownCount === undefined ? allSuggestions : allSuggestions.slice(0, shownCount)), [allSuggestions, shownCount]);
   const suggestionsStatus: SuggestionsStatus = freshSuggestions?.status ?? (stops.length === 1 ? "loading" : "idle");
   const suggestionsError = freshSuggestions?.error ?? null;
   // Places show up as soon as they are found; popularity then fills in 10 at a time and re-ranks the list.
   const suggestionItemsRef = useRef<Suggestion[]>(NO_SUGGESTIONS);
   useEffect(() => {
-    suggestionItemsRef.current = suggestions;
-  }, [suggestions]);
+    suggestionItemsRef.current = allSuggestions;
+  }, [allSuggestions]);
   const popularityKey = freshSuggestions?.status === "done" ? freshSuggestions.key : null;
   useEffect(() => {
     if (popularityKey === null) return;
-    return loadPopularityInBatches(suggestionItemsRef.current, (counts) => {
-      setSuggestionsState((prev) =>
-        prev && prev.key === popularityKey
-          ? { ...prev, items: rankSuggestions(prev.items.map((s) => (counts.has(s.osmId) ? { ...s, popularity: counts.get(s.osmId) } : s))) }
-          : prev,
-      );
-    });
+    return loadPopularityInBatches(
+      suggestionItemsRef.current,
+      (counts) => {
+        setSuggestionsState((prev) =>
+          prev && prev.key === popularityKey
+            ? {
+                ...prev,
+                items: rankSuggestions(prev.items.map((s) => (counts.has(s.osmId) ? { ...s, popularity: counts.get(s.osmId) } : s))),
+                shown: prev.shown === undefined ? undefined : prev.shown + POPULARITY_BATCH,
+              }
+            : prev,
+        );
+      },
+      () => setSuggestionsState((prev) => (prev && prev.key === popularityKey ? { ...prev, shown: undefined } : prev)),
+    );
   }, [popularityKey]);
   // As soon as places are found, fetch their photos in the background so popups and cards open with the picture ready.
   useEffect(() => {
@@ -161,7 +172,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       ({ suggestions: found }) => {
         if (cancelled) return;
         const items = found.filter((s) => haversineMeters({ lat, lng }, s) >= ALREADY_A_STOP_M);
-        setSuggestionsState({ key: waypointKey, items, status: "done", error: null });
+        setSuggestionsState({ key: waypointKey, items, status: "done", error: null, shown: POPULARITY_BATCH });
       },
       (e: unknown) => {
         if (cancelled) return;
@@ -428,7 +439,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       try {
         const { suggestions: found } = await api.suggestions({ around: [lng, lat] }, { enrich: false });
         if (waypointKeyRef.current !== key) return;
-        setSuggestionsState({ key, items: found.filter((x) => haversineMeters({ lat, lng }, x) >= ALREADY_A_STOP_M), status: "done", error: null });
+        setSuggestionsState({ key, items: found.filter((x) => haversineMeters({ lat, lng }, x) >= ALREADY_A_STOP_M), status: "done", error: null, shown: POPULARITY_BATCH });
       } catch (e) {
         if (waypointKeyRef.current !== key) return;
         setSuggestionsState({ key, items: [], status: "error", error: errorMessage(e, "Couldn't load suggestions. Please retry.") });
@@ -443,7 +454,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const { suggestions: found } = await api.suggestions(downsampleRoute(activeRoute.geometry), { enrich: false });
       if (waypointKeyRef.current !== key) return;
       const items = found.filter((s) => !placed.some((st) => haversineMeters(st, s) < ALREADY_A_STOP_M));
-      setSuggestionsState({ key, items, status: "done", error: null });
+      setSuggestionsState({ key, items, status: "done", error: null, shown: POPULARITY_BATCH });
     } catch (e) {
       if (waypointKeyRef.current !== key) return;
       setSuggestionsState({ key, items: [], status: "error", error: errorMessage(e, "Couldn't load suggestions. Please retry.") });

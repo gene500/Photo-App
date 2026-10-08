@@ -19,13 +19,15 @@ describe("loadPopularityInBatches", () => {
     suggestionPopularity.mockReset();
   });
 
-  it("asks 10 places at a time, in order, and reports each batch", async () => {
+  it("asks 5 places at a time, in order, reports each batch, then says it is done", async () => {
     suggestionPopularity.mockImplementation(async (places: unknown[]) => ({ counts: places.map(() => 5) }));
     const items = Array.from({ length: 25 }, (_, i) => s(i));
     const batches: number[] = [];
-    loadPopularityInBatches(items, (found) => batches.push(found.size));
-    await vi.waitFor(() => expect(batches).toEqual([10, 10, 5]));
-    expect(suggestionPopularity.mock.calls.map((c) => c[0].length)).toEqual([10, 10, 5]);
+    const onDone = vi.fn();
+    loadPopularityInBatches(items, (found) => batches.push(found.size), onDone);
+    await vi.waitFor(() => expect(onDone).toHaveBeenCalledTimes(1));
+    expect(batches).toEqual([5, 5, 5, 5, 5]);
+    expect(suggestionPopularity.mock.calls.map((c) => c[0].length)).toEqual([5, 5, 5, 5, 5]);
   });
 
   it("skips places that already have a count, caps at the first 40, and ignores unknown counts", async () => {
@@ -33,20 +35,21 @@ describe("loadPopularityInBatches", () => {
     const items = [s(0, "viewpoint", 12), ...Array.from({ length: 60 }, (_, i) => s(i + 1))];
     const batches: Map<string, number>[] = [];
     loadPopularityInBatches(items, (found) => batches.push(found));
-    await vi.waitFor(() => expect(suggestionPopularity).toHaveBeenCalledTimes(4));
+    await vi.waitFor(() => expect(suggestionPopularity).toHaveBeenCalledTimes(8));
     const asked = suggestionPopularity.mock.calls.reduce((n, c) => n + c[0].length, 0);
     expect(asked).toBe(POPULARITY_MAX - 1);
     expect(batches[0].has("node/1")).toBe(false); // first of the batch came back null
   });
 
   it("stops after cancel and survives a failed batch", async () => {
-    suggestionPopularity.mockRejectedValueOnce(new Error("boom")).mockResolvedValue({ counts: Array(10).fill(1) });
+    suggestionPopularity.mockRejectedValueOnce(new Error("boom")).mockReturnValueOnce(new Promise(() => {}));
     const items = Array.from({ length: 20 }, (_, i) => s(i));
     const onBatch = vi.fn();
     const cancel = loadPopularityInBatches(items, onBatch);
     await vi.waitFor(() => expect(suggestionPopularity).toHaveBeenCalledTimes(2));
     cancel();
     await new Promise((r) => setTimeout(r, 20));
-    expect(onBatch.mock.calls.length).toBeLessThanOrEqual(1);
+    expect(onBatch).toHaveBeenCalledTimes(1); // the failed batch still reports (empty) so the list keeps revealing
+    expect(suggestionPopularity).toHaveBeenCalledTimes(2);
   });
 });

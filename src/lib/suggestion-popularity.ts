@@ -1,7 +1,8 @@
 import { api } from "./api-client";
 import type { Suggestion, SuggestionKind } from "./types";
 
-export const POPULARITY_BATCH = 10;
+/** The first chunk shows right away; each further chunk of this size is revealed as its popularity arrives. */
+export const POPULARITY_BATCH = 5;
 /** Only the first 40 suggestions are ranked by popularity (the same cap the server used). */
 export const POPULARITY_MAX = 40;
 
@@ -16,10 +17,11 @@ export function rankSuggestions(items: Suggestion[]): Suggestion[] {
 }
 
 /**
- * Looks up popularity for suggestions that lack it, 10 at a time (one request per batch), calling `onBatch` after each so the
- * list can be re-ranked as it fills in. Returns a cancel function. A failed batch is skipped: popularity is only a ranking bonus.
+ * Looks up popularity for suggestions that lack it, 5 at a time (one request per batch), calling `onBatch` after each (with the
+ * counts found, possibly none) so the list can be re-ranked and the next chunk revealed. `onDone` follows the last batch.
+ * Returns a cancel function. A failed batch is skipped: popularity is only a ranking bonus.
  */
-export function loadPopularityInBatches(items: readonly Suggestion[], onBatch: (counts: Map<string, number>) => void): () => void {
+export function loadPopularityInBatches(items: readonly Suggestion[], onBatch: (counts: Map<string, number>) => void, onDone?: () => void): () => void {
   const todo = items.slice(0, POPULARITY_MAX).filter((s) => s.popularity === undefined);
   let cancelled = false;
   void (async () => {
@@ -33,11 +35,12 @@ export function loadPopularityInBatches(items: readonly Suggestion[], onBatch: (
           const n = counts[j];
           if (typeof n === "number") found.set(s.osmId, n);
         });
-        if (found.size > 0) onBatch(found);
+        onBatch(found);
       } catch {
-        /* skip this batch */
+        if (!cancelled) onBatch(new Map());
       }
     }
+    if (!cancelled) onDone?.();
   })();
   return () => {
     cancelled = true;

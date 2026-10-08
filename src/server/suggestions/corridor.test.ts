@@ -73,9 +73,9 @@ describe("toOverpassPoly", () => {
 describe("buildOverpassQuery", () => {
   it("queries viewpoints, attractions and peaks within the polygon", () => {
     const q = buildOverpassQuery("1 2 3 4 5 6");
-    expect(q).toContain("[out:json][timeout:10];");
+    expect(q).toContain("[out:json][timeout:25];");
     expect(q).toContain('nwr["tourism"~"^(viewpoint|attraction)$"](poly:"1 2 3 4 5 6");');
-    expect(q).toContain('node["natural"="peak"](poly:"1 2 3 4 5 6");');
+    expect(q).toContain('node["natural"="peak"]["name"](poly:"1 2 3 4 5 6");');
     expect(q).toContain("out center 500;");
   });
 });

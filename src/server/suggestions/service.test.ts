@@ -85,7 +85,7 @@ describe("findSuggestionsAround", () => {
     expect(query).toContain("(around:24000,36.74000,-119.79000)");
     // Viewpoints, peaks and attractions are capped separately so dense attractions can't crowd the rest out.
     expect(query).toContain('nwr["tourism"="viewpoint"]');
-    expect(query).toContain('node["natural"="peak"]');
+    expect(query).toContain('node["natural"="peak"]["name"]');
     expect(query).toContain('nwr["tourism"="attraction"]');
     expect(query.match(/ out center \d+;/g)).toHaveLength(3);
     await findSuggestionsAround([-119.79, 36.74], { fetchOverpass, fetchImpl });

@@ -1,5 +1,5 @@
 /** D4 */
-export const OVERPASS_TIMEOUT_MS = 12_000;
+export const OVERPASS_TIMEOUT_MS = 28_000;
 export const OVERPASS_RETRY_DELAY_MS = 1_000;
 
 export class OverpassError extends Error {

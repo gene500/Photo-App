@@ -4,6 +4,7 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { btnGhost, card } from "@/components/ui/styles";
 import { computeBestTimes, describeBestTime, formatClock, tripDeparture } from "@/lib/best-time";
+import { formatSavedAt } from "@/lib/format";
 import { lightLabel } from "@/lib/light-windows";
 import { listTripCopies, loadTripCopy } from "@/lib/offline-store";
 import { stopColor } from "@/lib/stop-style";
@@ -75,7 +76,7 @@ function TripCopyView({ copy, onBack }: { copy: NonNullable<ReturnType<typeof lo
     <div className="space-y-4">
       <button type="button" onClick={onBack} className={btnGhost}>‹ All saved trips</button>
       <p role="status" className="rounded-xl bg-accent-soft px-4 py-3 text-sm text-accent-foreground dark:text-foreground">
-        You&apos;re offline - showing your saved copy from {new Date(copy.savedAt).toLocaleString()}
+        You&apos;re offline - showing your saved copy from {formatSavedAt(copy.savedAt, tf)}
       </p>
       <p className="text-sm text-muted">
         Planned for {trip.plannedDate}

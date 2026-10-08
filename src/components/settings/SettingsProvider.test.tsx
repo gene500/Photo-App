@@ -89,4 +89,28 @@ describe("SettingsProvider", () => {
     await userEvent.click(screen.getByText("dark"));
     expect(screen.getByTestId("out").textContent).toBe("dark|default|km");
   });
+
+  it("does not stay in memory-only mode after a quota failure: a later write persists", async () => {
+    await setup();
+    storage.failWrites = () => true;
+    await userEvent.click(screen.getByText("dark"));
+    expect(screen.getByTestId("out").textContent).toBe("dark|default|km");
+    expect(storage.getItem(SETTINGS_KEY)).toBeNull();
+    storage.failWrites = null;
+    await userEvent.click(screen.getByText("big"));
+    expect(JSON.parse(storage.getItem(SETTINGS_KEY)!)).toMatchObject({ theme: "dark", textSize: "xlarge" });
+  });
+
+  it("picks up another tab's change through the storage event after a failed write", async () => {
+    await setup();
+    storage.failWrites = () => true;
+    await userEvent.click(screen.getByText("dark"));
+    storage.failWrites = null;
+    act(() => {
+      storage.setItem(SETTINGS_KEY, JSON.stringify({ theme: "light", distanceUnit: "mi" }));
+      window.dispatchEvent(new StorageEvent("storage", { key: SETTINGS_KEY }));
+    });
+    expect(screen.getByTestId("out").textContent).toBe("light|default|mi");
+    expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+  });
 });

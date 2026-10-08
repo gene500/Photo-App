@@ -8,22 +8,26 @@ type Ctx = { settings: Settings; update: (patch: Partial<Settings>) => void; res
 // Outside a provider (unit tests of leaf components) the hook just yields the defaults.
 const SettingsContext = createContext<Ctx>({ settings: DEFAULT_SETTINGS, update: () => {}, reset: () => {} });
 
-// A tiny external store over localStorage. `memory` is the fallback when storage is blocked or full, so a change
-// still applies for the rest of the visit; `memoryOnly` flips once a write fails so reads stop trusting storage.
+// A tiny external store over localStorage. `memory` is what reads fall back to when storage cannot be read at all.
+// When a write fails (quota) but reads still work, `unsaved` holds the change for the rest of the visit; it is
+// dropped as soon as storage moves on (another tab wrote, or a later write succeeds), so a blip is never permanent.
 let memory: Settings = DEFAULT_SETTINGS;
-let memoryOnly = false;
+let unsaved: Settings | null = null;
+let unsavedBase: string | null = null; // the stored value when the write failed
 let cachedRaw: string | null | undefined;
 let cached: Settings = DEFAULT_SETTINGS;
 const listeners = new Set<() => void>();
 
 function getSnapshot(): Settings {
-  if (memoryOnly) return memory;
   let raw: string | null;
   try {
     raw = window.localStorage.getItem(SETTINGS_KEY);
   } catch {
-    memoryOnly = true;
-    return memory;
+    return memory; // unreadable right now; try again on the next read
+  }
+  if (unsaved) {
+    if (raw === unsavedBase) return unsaved;
+    unsaved = null;
   }
   if (raw !== cachedRaw) {
     cachedRaw = raw;
@@ -51,8 +55,14 @@ function write(next: Settings): void {
   memory = next;
   try {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+    unsaved = null;
   } catch {
-    memoryOnly = true;
+    unsaved = next;
+    try {
+      unsavedBase = window.localStorage.getItem(SETTINGS_KEY);
+    } catch {
+      unsavedBase = null;
+    }
   }
   listeners.forEach((cb) => cb());
 }

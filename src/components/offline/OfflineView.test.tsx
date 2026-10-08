@@ -3,6 +3,8 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { installMemoryStorage } from "../../../tests/helpers/memory-storage";
+import { SettingsProvider } from "@/components/settings/SettingsProvider";
+import { SETTINGS_KEY } from "@/lib/settings";
 import { saveTripCopy } from "@/lib/offline-store";
 import type { Stop, TripWithStops } from "@/lib/types";
 import { OfflineView } from "./OfflineView";
@@ -63,5 +65,15 @@ describe("OfflineView", () => {
     expect(screen.getAllByTestId("offline-stop")[0].className).toContain("text-foreground");
     expect(screen.getByRole("status").className).toContain("bg-accent-soft");
     expect(container.innerHTML).not.toContain("bg-white");
+  });
+
+  it("shows the saved time in the chosen time format", async () => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ timeFormat: "24h" }));
+    saveTripCopy(trip, new Date("2026-06-20T15:07:00Z"));
+    render(<SettingsProvider><OfflineView /></SettingsProvider>);
+    await userEvent.click(await screen.findByRole("button", { name: /Yosemite loop/ }));
+    const banner = screen.getByRole("status").textContent ?? "";
+    expect(banner).toMatch(/\d{2}:\d{2}/);
+    expect(banner).not.toMatch(/AM|PM/);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDistance, formatDuration, formatPhotoCount } from "./format";
+import { formatDistance, formatDuration, formatPhotoCount, formatRadiusKm } from "./format";
 
 describe("format", () => {
   it("formats distance in whole km", () => {
@@ -21,5 +21,17 @@ describe("formatPhotoCount", () => {
     expect(formatPhotoCount(1234)).toBe("≈1.2k photos nearby");
     expect(formatPhotoCount(2000)).toBe("≈2k photos nearby");
     expect(formatPhotoCount(12500)).toBe("≈12.5k photos nearby");
+  });
+});
+
+describe("units", () => {
+  it("formats distance in miles", () => {
+    expect(formatDistance(160_934, "mi")).toBe("100 mi");
+    expect(formatDistance(140_400, "mi")).toBe("87 mi");
+    expect(formatDistance(140_400, "km")).toBe("140 km");
+  });
+  it("converts a km radius", () => {
+    expect(formatRadiusKm(10)).toBe("10 km");
+    expect(formatRadiusKm(10, "mi")).toBe("6 mi");
   });
 });

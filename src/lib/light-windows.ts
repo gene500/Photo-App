@@ -1,4 +1,5 @@
 import { formatClock, getSunWindows, solarDateAt, type SunWindows } from "./best-time";
+import type { SuggestionLightPref, TimeFormat } from "./settings";
 import type { LightPref, Stop, SuggestionKind } from "./types";
 
 export type LightWindow = [start: Date, end: Date];
@@ -69,7 +70,8 @@ export function forecastInstant(pref: LightPref, lat: number, lng: number, arriv
 }
 
 /** New stops from a suggestion start with a sensible light: scenic spots in golden light. */
-export function defaultLightPref(kind: SuggestionKind): LightPref {
+export function defaultLightPref(kind: SuggestionKind, setting: SuggestionLightPref = "auto"): LightPref {
+  if (setting === "any") return "any";
   return kind === "viewpoint" || kind === "peak" ? "golden" : "any";
 }
 
@@ -77,9 +79,10 @@ const LIGHT_LABEL: Record<LightPref, string> = { any: "Any", sunrise: "Sunrise",
 export const lightLabel = (pref: LightPref) => LIGHT_LABEL[pref];
 
 /** "6:12–7:05 PM": the AM/PM suffix is shown once when both ends share it. */
-function clockRange(a: Date, b: Date, timeZone?: string): string {
-  const from = formatClock(a, timeZone);
-  const to = formatClock(b, timeZone);
+function clockRange(a: Date, b: Date, timeZone?: string, timeFormat: TimeFormat = "auto"): string {
+  const from = formatClock(a, timeZone, timeFormat);
+  const to = formatClock(b, timeZone, timeFormat);
+  if (timeFormat === "24h") return `${from}–${to}`;
   const suffix = (s: string) => s.slice(-2);
   return suffix(from) === suffix(to) ? `${from.slice(0, -3)}–${to}` : `${from}–${to}`;
 }
@@ -95,6 +98,7 @@ export function describeLightHint(
   stop: Pick<Stop, "lat" | "lng" | "lightPref" | "dwellMinutes">,
   arrival: Date | null,
   timeZone?: string,
+  timeFormat: TimeFormat = "auto",
 ): LightHint | null {
   if (stop.lightPref === "any" || !arrival) return null;
   const windows = windowsForArrival(stop.lightPref, stop.lat, stop.lng, arrival);
@@ -106,7 +110,7 @@ export function describeLightHint(
     windows.find(([s, e]) => arrival.getTime() + stop.dwellMinutes * MS_MIN >= s.getTime() && arrival.getTime() <= e.getTime()) ??
     windows[0]!;
   return {
-    text: `${label} window ${clockRange(hit[0], hit[1], timeZone)} · arrive ${formatClock(arrival, timeZone)}`,
+    text: `${label} window ${clockRange(hit[0], hit[1], timeZone, timeFormat)} · arrive ${formatClock(arrival, timeZone, timeFormat)}`,
     met: true,
   };
 }

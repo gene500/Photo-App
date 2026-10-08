@@ -1,5 +1,14 @@
-export function formatDistance(meters: number): string {
-  return `${Math.round(meters / 1000)} km`;
+import type { DistanceUnit } from "./settings";
+
+const METERS_PER_MILE = 1609.344;
+
+export function formatDistance(meters: number, unit: DistanceUnit = "km"): string {
+  return unit === "mi" ? `${Math.round(meters / METERS_PER_MILE)} mi` : `${Math.round(meters / 1000)} km`;
+}
+
+/** A whole-number radius in km shown in the chosen unit ("10 km" / "6 mi"). */
+export function formatRadiusKm(km: number, unit: DistanceUnit = "km"): string {
+  return formatDistance(km * 1000, unit);
 }
 
 export function formatDuration(seconds: number): string {

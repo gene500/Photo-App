@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { installMemoryStorage } from "../../../tests/helpers/memory-storage";
+import { SETTINGS_KEY } from "@/lib/settings";
 import type { PublicTrip } from "@/lib/types";
 import { SharedTripView } from "./SharedTripView";
 
@@ -45,5 +47,17 @@ describe("SharedTripView", () => {
   it("handles a trip with no stops", () => {
     render(<SharedTripView trip={{ ...trip, stops: [] }} />);
     expect(screen.getByText("No stops yet.")).toBeTruthy();
+  });
+});
+
+describe("SharedTripView with saved settings", () => {
+  it("honours the 24-hour clock without needing an account", async () => {
+    installMemoryStorage().setItem(SETTINGS_KEY, JSON.stringify({ timeFormat: "24h" }));
+    vi.resetModules();
+    const { SettingsProvider } = await import("@/components/settings/SettingsProvider");
+    const { SharedTripView: View } = await import("./SharedTripView");
+    render(<SettingsProvider><View trip={{ ...trip, departAt: "2026-07-01T14:05:00Z" }} /></SettingsProvider>);
+    expect(screen.getAllByTestId("shared-time").every((el) => !/[AP]M/.test(el.textContent ?? ""))).toBe(true);
+    expect(document.body.textContent).not.toMatch(/Starts \d{1,2}:\d{2} [AP]M/);
   });
 });

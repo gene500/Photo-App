@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* `dark:` follows the Settings theme: explicit dark, or the OS when the theme is "system". */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
 /* Design tokens. One accent (warm beige): `accent` for fills/lines/rings, `accent-strong` for text/icons
    that need contrast on the surface, `accent-soft` for quiet backgrounds. */
 :root {
@@ -40,8 +52,10 @@
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
+/* Dark palette. "system" (no data-theme) follows the OS; an explicit data-theme on <html> (set from Settings)
+   wins either way. Keep the two blocks identical. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --background: #0e0e0d;
     --surface: #1b1b19;
     --foreground: #ededea;
@@ -59,6 +73,47 @@
     --hover: rgb(255 255 255 / 0.07);
   }
 }
+:root[data-theme="dark"] {
+  --background: #0e0e0d;
+  --surface: #1b1b19;
+  --foreground: #ededea;
+  --muted: #a09f98;
+  --border: rgb(255 255 255 / 0.09);
+  --accent: #b9a47a;
+  --accent-strong: #dcc99f;
+  --accent-soft: #34301f;
+  --accent-foreground: #1d1809;
+  --route: #d2b278;
+  --ink: #f2f2ee;
+  --ink-foreground: #111111;
+  --danger: #f19a92;
+  --danger-soft: #3a1f1c;
+  --hover: rgb(255 255 255 / 0.07);
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* Text size (Settings): rem-based sizing scales from the root font size. */
+html[data-text-size="large"] { font-size: 112.5%; }
+html[data-text-size="xlarge"] { font-size: 125%; }
+
+/* Reduced motion: the Settings toggle, or the device preference. */
+html[data-reduce-motion="true"] *,
+html[data-reduce-motion="true"] *::before,
+html[data-reduce-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 body {
   background: var(--background);
@@ -68,8 +123,9 @@ body {
 
 /* Map tiles are the "quiet light-gray" backdrop; dim them a little in dark mode. */
 @media (prefers-color-scheme: dark) {
-  .mapboxgl-canvas { filter: brightness(0.85); }
+  :root:not([data-theme="light"]) .mapboxgl-canvas { filter: brightness(0.85); }
 }
+:root[data-theme="dark"] .mapboxgl-canvas { filter: brightness(0.85); }
 
 /* Photo popup over a suggestion dot: the card itself is styled with tokens in suggestion-popup.ts; here we
    strip Mapbox's default bubble. It never takes the pointer, so moving off the dot always closes it. */

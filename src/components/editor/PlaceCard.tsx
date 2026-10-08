@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSettings } from "@/components/settings/SettingsProvider";
 import { btnPrimary, card } from "@/components/ui/styles";
 import { formatClock, getSunWindows } from "@/lib/best-time";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
@@ -14,6 +15,7 @@ type Visit = { lat: number; lng: number; plannedDate: string };
 type Props = { name: string; resolving: boolean; busy: boolean; suggestion?: Source; visit?: Visit; onAdd: () => void; onClose: () => void };
 
 export function PlaceCard({ name, resolving, busy, suggestion, visit, onAdd, onClose }: Props) {
+  const { settings } = useSettings();
   const osmId = suggestion?.osmId;
   const lat = suggestion?.lat;
   const lng = suggestion?.lng;
@@ -46,7 +48,7 @@ export function PlaceCard({ name, resolving, busy, suggestion, visit, onAdd, onC
         <p className={`text-sm font-medium ${resolving ? "text-muted" : ""}`}>{name}</p>
         {golden && weather && (
           <p data-testid="place-weather" data-light-quality={weather.quality ?? undefined} className={`text-xs ${weather.quality === "poor" ? "text-danger" : "text-muted"}`}>
-            Golden hour {formatClock(golden)} · {weather.text}
+            Golden hour {formatClock(golden, undefined, settings.timeFormat)} · {weather.text}
           </p>
         )}
         {photo && <p data-testid="photo-credit" className="text-[10px] text-muted">{photo.credit}</p>}

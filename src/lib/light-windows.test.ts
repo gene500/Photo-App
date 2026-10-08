@@ -112,3 +112,20 @@ describe("forecastInstant", () => {
     expect(forecastInstant("sunset", 85, 10, arrival)).toBe(arrival); // midnight sun: no windows
   });
 });
+
+describe("settings: time format and suggestion light", () => {
+  const stop = { lat: 0, lng: 0, lightPref: "sunset" as const, dwellMinutes: 0 };
+  it("24h hint has no AM/PM and a plain range", () => {
+    const hint = describeLightHint(stop, new Date("2026-07-01T17:50:00Z"), "UTC", "24h");
+    expect(hint?.text).toMatch(/window \d{2}:\d{2}–\d{2}:\d{2} · arrive 17:50$/);
+  });
+  it("12h and auto hints are the same", () => {
+    const a = describeLightHint(stop, new Date("2026-07-01T17:50:00Z"), "UTC");
+    expect(describeLightHint(stop, new Date("2026-07-01T17:50:00Z"), "UTC", "12h")).toEqual(a);
+    expect(a?.text).toMatch(/PM/);
+  });
+  it("'any' suggestion light overrides the kind default", () => {
+    expect(defaultLightPref("viewpoint", "any")).toBe("any");
+    expect(defaultLightPref("peak", "auto")).toBe("golden");
+  });
+});

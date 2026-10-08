@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
+import { useSettings } from "@/components/settings/SettingsProvider";
 import { btnGhost, card } from "@/components/ui/styles";
 import { computeBestTimes, describeBestTime, formatClock, tripDeparture } from "@/lib/best-time";
 import { lightLabel } from "@/lib/light-windows";
@@ -64,6 +65,8 @@ export function OfflineView() {
 
 function TripCopyView({ copy, onBack }: { copy: NonNullable<ReturnType<typeof loadTripCopy>>; onBack: () => void }) {
   const { trip } = copy;
+  const { settings } = useSettings();
+  const tf = settings.timeFormat;
   // No route durations offline, so arrival times are unknown: each stop shows its best light window for the planned date.
   const bestTimes = useMemo(() => computeBestTimes({ plannedDate: trip.plannedDate, departAt: trip.departAt, stops: trip.stops }, null), [trip]);
   const departs = trip.stops.length > 0 ? tripDeparture({ plannedDate: trip.plannedDate, departAt: trip.departAt, stops: trip.stops }) : null;
@@ -76,7 +79,7 @@ function TripCopyView({ copy, onBack }: { copy: NonNullable<ReturnType<typeof lo
       </p>
       <p className="text-sm text-muted">
         Planned for {trip.plannedDate}
-        {departs && <> · Leaves {trip.departAt ? "" : "~"}{formatClock(departs)}</>}
+        {departs && <> · Leaves {trip.departAt ? "" : "~"}{formatClock(departs, undefined, tf)}</>}
       </p>
       {trip.stops.length === 0 ? (
         <p className="text-sm text-muted">This trip has no stops.</p>
@@ -96,7 +99,7 @@ function TripCopyView({ copy, onBack }: { copy: NonNullable<ReturnType<typeof lo
                   {s.visited && <span className="ml-2 text-xs font-normal text-muted">Visited</span>}
                 </p>
                 <p className="text-xs text-muted">
-                  {describeBestTime(bestTimes[i] ?? null)}
+                  {describeBestTime(bestTimes[i] ?? null, undefined, tf)}
                   {s.dwellMinutes > 0 && <> · Stay {s.dwellMinutes} min</>}
                 </p>
                 {s.lightPref !== "any" && <p className="text-xs text-muted">Best at {lightLabel(s.lightPref).toLowerCase()}</p>}

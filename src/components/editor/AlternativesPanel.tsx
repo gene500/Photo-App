@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { useSettings } from "@/components/settings/SettingsProvider";
 import { btnAccent, btnSecondary } from "@/components/ui/styles";
-import { formatPhotoCount } from "@/lib/format";
+import { formatPhotoCount, formatRadiusKm } from "@/lib/format";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import type { PlacePhoto, Suggestion } from "@/lib/types";
 import type { SuggestionsStatus } from "./SuggestionsPanel";
@@ -40,6 +41,7 @@ function Thumb({ s }: { s: Suggestion }) {
 }
 
 export function AlternativesPanel({ status, alternatives, error, onFind, onSwap, onDismissError }: Props) {
+  const { settings } = useSettings();
   const [swapping, setSwapping] = useState<string | null>(null);
   async function swap(s: Suggestion) {
     if (swapping) return;
@@ -59,7 +61,7 @@ export function AlternativesPanel({ status, alternatives, error, onFind, onSwap,
         </button>
       </div>
       {status === "error" && error && <ErrorBanner message={error} onDismiss={onDismissError} />}
-      {status === "done" && alternatives.length === 0 && <p className="text-sm text-muted">No other photo spots within 10 km.</p>}
+      {status === "done" && alternatives.length === 0 && <p className="text-sm text-muted">No other photo spots within {formatRadiusKm(10, settings.distanceUnit)}.</p>}
       <ul className="space-y-1">
         {alternatives.map((s) => (
           <li key={s.osmId} data-testid="alternative-card" className="flex items-center gap-2 rounded-xl py-1">

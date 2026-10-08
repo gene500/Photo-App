@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { useSettings } from "@/components/settings/SettingsProvider";
 import { btnGhost } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { downsampleRoute } from "@/lib/downsample";
 import { computeArrivals, computeBestTimes, formatClock } from "@/lib/best-time";
+import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useOfflineCopy } from "@/lib/use-offline-copy";
 import { defaultLightPref } from "@/lib/light-windows";
 import { formatDistance, formatDuration } from "@/lib/format";
@@ -37,6 +39,7 @@ const errorMessage = (e: unknown, fallback: string) => (e instanceof Error ? e.m
 
 export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops; /** Signed-in user; enables the offline copy. */ userId?: string }) {
   const { stops: initialStops, ...initialFields } = initialTrip;
+  const { settings } = useSettings();
   const [trip, setTrip] = useState<Trip>(initialFields);
   const [stops, setStops] = useState<Stop[]>(initialStops);
   useOfflineCopy(trip, stops, userId);
@@ -170,7 +173,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
 
   async function addStop(input: { name: string; lat: number; lng: number; source: StopSource; lightPref?: LightPref }) {
     try {
-      const { stop } = await api.addStop(trip.id, input);
+      // Only a changed default is sent; otherwise the server's own default (30) applies, exactly as before.
+      const dwell = settings.defaultDwellMinutes === DEFAULT_SETTINGS.defaultDwellMinutes ? {} : { dwellMinutes: settings.defaultDwellMinutes };
+      const { stop } = await api.addStop(trip.id, { ...dwell, ...input });
       setStops((prev) => [...prev, stop]);
       return stop;
     } catch (e) {
@@ -207,7 +212,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     if (!s) return;
     lookupSeq.current++;
     setCardId(null);
-    setPending({ lat: s.lat, lng: s.lng, name: s.name, source: "suggested", osmId: s.osmId, lightPref: defaultLightPref(s.kind), resolving: false });
+    setPending({ lat: s.lat, lng: s.lng, name: s.name, source: "suggested", osmId: s.osmId, lightPref: defaultLightPref(s.kind, settings.suggestionLightPref), resolving: false });
   }
 
   async function addPending() {
@@ -440,7 +445,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }
 
   async function acceptSuggestion(s: Suggestion) {
-    const added = await addStop({ name: s.name, lat: s.lat, lng: s.lng, source: "suggested", lightPref: defaultLightPref(s.kind) });
+    const added = await addStop({ name: s.name, lat: s.lat, lng: s.lng, source: "suggested", lightPref: defaultLightPref(s.kind, settings.suggestionLightPref) });
     if (added) takeSuggestion(s.osmId, added);
   }
 
@@ -515,7 +520,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         onCenterChange={handleCenter}
       />
 
-      <div className="pointer-events-none absolute inset-x-3 top-3 z-[15] space-y-2 lg:inset-x-auto lg:left-[388px] lg:w-[460px]">
+      <div className="pointer-events-none absolute inset-x-3 top-3 z-[15] space-y-2 lg:inset-x-auto lg:left-[24.25rem] lg:w-[28.75rem] lg:max-w-[calc(100vw-29rem)]">
         <div className="pointer-events-auto">
           <SearchBar getProximity={() => centerRef.current} onSelect={selectSearchResult} />
         </div>
@@ -569,7 +574,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
             <span aria-hidden>·</span>
             <p data-testid="route-status">
               {activeRoute
-                ? `${formatDistance(activeRoute.distance)} · ${formatDuration(activeRoute.duration)}`
+                ? `${formatDistance(activeRoute.distance, settings.distanceUnit)} · ${formatDuration(activeRoute.duration)}`
                 : activeRouteError
                   ? "Route unavailable"
                   : enoughForRoute
@@ -579,7 +584,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
             </div>
             {trip.departAt && (
               <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
-                <p data-testid="depart-note">Starts {formatClock(new Date(trip.departAt))}</p>
+                <p data-testid="depart-note">Starts {formatClock(new Date(trip.departAt), undefined, settings.timeFormat)}</p>
                 <button type="button" onClick={() => void resetDeparture()} className={btnGhost}>
                   Reset to sunrise
                 </button>

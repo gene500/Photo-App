@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { installMemoryStorage } from "../../../tests/helpers/memory-storage";
+import { SETTINGS_KEY } from "@/lib/settings";
 
 vi.mock("@/lib/api-client", () => ({
   api: {
@@ -603,5 +605,42 @@ describe("TripEditor", () => {
       await user.click(screen.getByRole("button", { name: "reorder" }));
       await waitFor(() => expect(screen.queryByRole("button", { name: "Undo" })).toBeNull());
     });
+  });
+});
+
+describe("TripEditor with saved settings", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [] });
+    vi.mocked(api.reverseGeocode).mockResolvedValue({ place: { name: "Tunnel View", lat: 37.5, lng: -119.5 } });
+    installMemoryStorage();
+  });
+  afterEach(() => vi.resetModules());
+
+  async function renderWith(saved: object, initialTrip: TripWithStops) {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(saved));
+    vi.resetModules();
+    const { SettingsProvider } = await import("@/components/settings/SettingsProvider");
+    const { TripEditor: Editor } = await import("./TripEditor");
+    render(<SettingsProvider><Editor initialTrip={initialTrip} /></SettingsProvider>);
+  }
+
+  it("shows the route distance in miles", async () => {
+    const { api: freshApi } = await import("@/lib/api-client");
+    vi.mocked(freshApi.suggestions).mockResolvedValue({ suggestions: [] });
+    vi.mocked(freshApi.directions).mockResolvedValue({ route });
+    await renderWith({ distanceUnit: "mi" }, withStops(seed));
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toBe("62 mi · 1 h 0 min"));
+  });
+
+  it("new stops use the default dwell setting", async () => {
+    const { api: freshApi } = await import("@/lib/api-client");
+    vi.mocked(freshApi.suggestions).mockResolvedValue({ suggestions: [] });
+    vi.mocked(freshApi.reverseGeocode).mockResolvedValue({ place: { name: "Tunnel View", lat: 37.5, lng: -119.5 } });
+    vi.mocked(freshApi.addStop).mockResolvedValue({ stop: newStop({ id: "c", name: "Tunnel View", dwellMinutes: 90 }) });
+    await renderWith({ defaultDwellMinutes: 90 }, trip);
+    await userEvent.click(screen.getByText("drop pin"));
+    await userEvent.click(await screen.findByRole("button", { name: "Add stop" }));
+    expect(freshApi.addStop).toHaveBeenCalledWith("t1", { dwellMinutes: 90, name: "Tunnel View", lat: 37.5, lng: -119.5, source: "manual" });
   });
 });

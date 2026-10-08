@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  classifyBestTime, computeArrivals, computeBestTimes, describeBestTime, estimateArrivals, getSunWindows, solarDayAnchor,
+  classifyBestTime, computeArrivals, computeBestTimes, describeBestTime, estimateArrivals, formatClock, getSunWindows, solarDayAnchor,
   type SunWindows,
 } from "./best-time";
 
@@ -164,5 +164,18 @@ describe("computeBestTimes across days", () => {
   it("keeps single-day trips on the planned date", () => {
     const sameDay = computeBestTimes({ plannedDate: "2026-07-01", stops: stops.slice(0, 2) }, [3600]);
     expect(sameDay[1]?.at.toISOString().slice(0, 10)).toBe("2026-07-01");
+  });
+});
+
+describe("formatClock time formats", () => {
+  const d = new Date("2026-07-01T19:05:00Z");
+  it("auto and 12h keep the en-US clock", () => {
+    expect(formatClock(d, "UTC")).toBe("7:05 PM");
+    expect(formatClock(d, "UTC", "12h")).toBe("7:05 PM");
+  });
+  it("24h uses h23, including midnight", () => {
+    expect(formatClock(d, "UTC", "24h")).toBe("19:05");
+    expect(formatClock(new Date("2026-07-01T00:07:00Z"), "UTC", "24h")).toBe("00:07");
+    expect(describeBestTime({ window: "sunset", at: d }, "UTC", "24h")).toBe("Sunset · 19:05");
   });
 });

@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { MapView } from "@/components/editor/MapView";
+import { useSettings } from "@/components/settings/SettingsProvider";
 import { card } from "@/components/ui/styles";
 import { computeArrivals, computeBestTimes, describeBestTime, formatClock } from "@/lib/best-time";
 import { describeLightHint, lightLabel } from "@/lib/light-windows";
@@ -16,6 +17,8 @@ const subscribe = () => noop;
 export function SharedTripView({ trip }: { trip: PublicTrip }) {
   // Clock times use the viewer's time zone, so they are only rendered once mounted (no server/client mismatch).
   const mounted = useSyncExternalStore(subscribe, () => true, () => false);
+  const { settings } = useSettings();
+  const tf = settings.timeFormat;
   const [selected, setSelected] = useState<string | null>(null);
 
   // The map takes Stop objects; the keys are made from the order, never from database ids.
@@ -51,13 +54,13 @@ export function SharedTripView({ trip }: { trip: PublicTrip }) {
         />
       </div>
 
-      <aside className={`absolute inset-x-0 bottom-0 z-10 flex h-[55dvh] flex-col overflow-hidden rounded-b-none rounded-t-2xl lg:inset-x-auto lg:bottom-3 lg:left-3 lg:top-3 lg:h-auto lg:w-[380px] lg:rounded-2xl ${card}`}>
+      <aside className={`absolute inset-x-0 bottom-0 z-10 flex h-[55dvh] flex-col overflow-hidden rounded-b-none rounded-t-2xl lg:inset-x-auto lg:bottom-3 lg:left-3 lg:top-3 lg:h-auto lg:w-[23.75rem] lg:rounded-2xl ${card}`}>
         <header className="space-y-0.5 px-4 pb-2 pt-3">
           <p className="text-xs font-medium uppercase tracking-wide text-muted">Shared trip · view only</p>
           <h1 className="text-lg font-semibold">{trip.name}</h1>
           <p className="text-sm text-muted">
             Planned for {trip.plannedDate}
-            {mounted && trip.departAt && <> · Starts {formatClock(new Date(trip.departAt))}</>}
+            {mounted && trip.departAt && <> · Starts {formatClock(new Date(trip.departAt), undefined, tf)}</>}
           </p>
         </header>
         {trip.stops.length === 0 ? (
@@ -66,7 +69,7 @@ export function SharedTripView({ trip }: { trip: PublicTrip }) {
           <>
             <ol className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-2">
               {mapStops.map((s, i) => {
-                const hint = mounted ? describeLightHint(s, arrivals[i] ?? null) : null;
+                const hint = mounted ? describeLightHint(s, arrivals[i] ?? null, undefined, tf) : null;
                 const arrival = arrivals[i] ?? null;
                 return (
                   <li key={s.id} data-testid="shared-stop" className={`flex items-start gap-3 rounded-xl p-2 ${s.id === selected ? "bg-hover" : ""}`}>
@@ -83,8 +86,8 @@ export function SharedTripView({ trip }: { trip: PublicTrip }) {
                       </button>
                       {mounted && (
                         <p className="text-xs text-muted" data-testid="shared-time">
-                          {hint ? hint.text : describeBestTime(bestTimes[i] ?? null)}
-                          {arrival && !hint && <> · Arrive ~{formatClock(arrival)}</>}
+                          {hint ? hint.text : describeBestTime(bestTimes[i] ?? null, undefined, tf)}
+                          {arrival && !hint && <> · Arrive ~{formatClock(arrival, undefined, tf)}</>}
                         </p>
                       )}
                       {s.lightPref !== "any" && <p className="text-xs text-muted">Best at {lightLabel(s.lightPref).toLowerCase()}</p>}

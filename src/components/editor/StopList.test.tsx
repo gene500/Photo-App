@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getSunWindows } from "@/lib/best-time";
 import { lightWindows } from "@/lib/light-windows";
 import type { Stop } from "@/lib/types";
 import { reorderIds, StopList } from "./StopList";
+
+const useWeatherLine = vi.fn();
+vi.mock("@/lib/use-weather", () => ({ useWeatherLine: (...a: unknown[]) => useWeatherLine(...a) }));
 
 const stop = (id: string, name: string, extra: Partial<Stop> = {}): Stop => ({
   id, tripId: "t1", order: 0, name, lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 30, shotNotes: null, shotChecklist: [], ...extra,
@@ -23,6 +26,26 @@ describe("reorderIds", () => {
 });
 
 describe("StopList", () => {
+  beforeEach(() => useWeatherLine.mockReturnValue(null));
+
+  it("shows the forecast under a stop with a preferred light and an arrival, and asks only for those", () => {
+    useWeatherLine.mockImplementation((_lat, _lng, at) => (at ? { text: "mostly clear, 15% rain", quality: "poor" } : null));
+    render(
+      <StopList
+        stops={[stop("a", "Sunset", { lightPref: "sunset" }), stop("b", "Plain")]}
+        bestTimes={[null, null]}
+        arrivals={[new Date("2026-07-01T20:00:00Z"), new Date("2026-07-01T21:00:00Z")]}
+        {...handlers}
+      />,
+    );
+    const weather = screen.getAllByTestId("stop-weather");
+    expect(weather).toHaveLength(1);
+    expect(weather[0].textContent).toBe("mostly clear, 15% rain");
+    expect(weather[0].className).toContain("text-danger");
+    expect(useWeatherLine).toHaveBeenCalledWith(37, -119, new Date("2026-07-01T20:00:00Z"), "sunset");
+    expect(useWeatherLine).toHaveBeenCalledWith(37, -119, null, "any");
+  });
+
   it("disables browser touch panning on the drag handle so touch drags reach dnd-kit", () => {
     render(<StopList stops={[stop("a", "A")]} bestTimes={[null]} {...handlers} />);
     expect(screen.getByTestId("drag-handle").className).toContain("touch-none");

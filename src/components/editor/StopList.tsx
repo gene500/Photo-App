@@ -10,6 +10,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { describeBestTime, type BestTime } from "@/lib/best-time";
 import { describeLightHint } from "@/lib/light-windows";
 import { stopColor } from "@/lib/stop-style";
+import { useWeatherLine } from "@/lib/use-weather";
 import type { Stop } from "@/lib/types";
 
 type Handlers = {
@@ -66,6 +67,8 @@ const REVEAL = "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hove
 function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVisited, onDelete, onSelect }: Handlers & { stop: Stop; index: number; bestTime: BestTime; arrival: Date | null; role: "Start" | "End" | null; first: boolean; last: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id });
   const hint = describeLightHint(stop, arrival);
+  // Forecast at the arrival, only for stops that care about light; silent while loading or when it fails.
+  const weather = useWeatherLine(stop.lat, stop.lng, stop.lightPref !== "any" ? arrival : null, stop.lightPref);
   // The timeline line runs through the dot centre (22px down) and stops at the first/last dot.
   const line = first && last ? "hidden" : first ? "top-[22px] bottom-0" : last ? "top-0 h-[22px]" : "inset-y-0";
   return (
@@ -116,6 +119,11 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
             <span data-testid="best-time" className="truncate">{describeBestTime(bestTime)}</span>
           )}
         </p>
+        {weather && (
+          <p data-testid="stop-weather" data-light-quality={weather.quality ?? undefined} className={`truncate text-xs ${weather.quality === "poor" ? "text-danger" : "text-muted"}`}>
+            {weather.text}
+          </p>
+        )}
         {stop.notes && <p className="truncate text-xs text-muted">{stop.notes}</p>}
       </div>
       {stop.photoUrl ? (

@@ -1,5 +1,5 @@
 import { coordsLabel, haversineMeters } from "@/lib/geo";
-import type { LngLat, Place, PlacePhoto, RouteResult, Suggestion } from "@/lib/types";
+import type { LngLat, Place, PlacePhoto, RouteResult, Suggestion, WeatherForecast } from "@/lib/types";
 
 /** EXTERNAL_APIS_FAKE=1 swaps Mapbox/Overpass for canned data (e2e tests, offline dev). */
 export function isFakeExternal(): boolean {
@@ -61,4 +61,14 @@ export function fakePlacePhoto(p: { name: string }): PlacePhoto {
     pageUrl: "https://en.wikipedia.org/wiki/Special:Random",
     credit: "Photo: Wikipedia",
   };
+}
+
+/** Deterministic 24-hour forecast (no network): the cloud cover drifts through the day, seeded by place and date. */
+export function fakeWeather(p: { lat: number; lng: number }, date: string): WeatherForecast {
+  const seed = [...`${p.lat.toFixed(2)},${p.lng.toFixed(2)},${date}`].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) % 1000, 11);
+  const hours = Array.from({ length: 24 }, (_, h) => {
+    const cloud = Math.round(((seed + h * 37) % 60) + 5); // 5..64: clear to mostly cloudy
+    return { time: `${date}T${String(h).padStart(2, "0")}:00`, cloudPct: cloud, rainPct: (seed + h * 11) % 30, tempC: 12 + (h < 14 ? h : 28 - h) * 0.8 };
+  });
+  return { available: true, utcOffsetSeconds: Math.round(p.lng / 15) * 3600, hours };
 }

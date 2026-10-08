@@ -133,3 +133,5 @@ export const pointQuerySchema = z.object({
   lat: decimal.pipe(z.number().min(-90).max(90)),
   lng: decimal.pipe(z.number().min(-180).max(180)),
 });
+
+export const weatherQuerySchema = pointQuerySchema.extend({ date: dateOnlySchema });

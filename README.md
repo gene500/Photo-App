@@ -177,6 +177,21 @@ The Mapbox `light-v11` basemap is recoloured to the beige theme at runtime
 (`src/lib/map-theme.ts`, applied on style load); our own `route*` layers are
 never touched.
 
+## Weather and light-window forecast
+
+A stop with a preferred light (sunrise, golden hour, sunset) and an estimated
+arrival shows the forecast for that hour under its row and on the selected-stop
+card, e.g. "mostly clear, 15% rain"; the add-place card shows the evening
+golden-hour forecast for the trip date. Data comes from Open-Meteo (free, no
+key, fixed host `api.open-meteo.com`) through the signed-in-only
+`GET /api/weather?lat&lng&date`, cached 30 minutes per ~1 km and day.
+Forecasts reach about 16 days ahead: later dates show "Forecast not available
+yet" without calling upstream; a failed lookup shows nothing. Open-Meteo
+labels hours in the location's local time, so `src/lib/weather.ts` converts
+with `utc_offset_seconds` before matching them to arrival instants. The
+public share page does not show weather. Offline mode returns canned data.
+No new environment variables.
+
 ## 6. How best time is computed
 
 Each stop's best shooting window is derived, not stored. The trip's

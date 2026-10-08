@@ -97,3 +97,9 @@ export type PlacePhoto = {
   /** Display text, e.g. "Photo: Jane Doe via Flickr (CC BY 2.0)". Plain text, never HTML. */
   credit: string;
 };
+
+/** One forecast hour. `time` is the location's LOCAL wall-clock time ("2026-07-01T19:00"), as Open-Meteo reports it. */
+export type WeatherHour = { time: string; cloudPct: number | null; rainPct: number | null; tempC: number | null };
+export type WeatherForecast =
+  | { available: true; utcOffsetSeconds: number; hours: WeatherHour[] }
+  | { available: false; reason: "out_of_range" | "unavailable" };

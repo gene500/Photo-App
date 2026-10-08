@@ -2,14 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { btnPrimary, card } from "@/components/ui/styles";
+import { formatClock, getSunWindows } from "@/lib/best-time";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
+import { useWeatherLine } from "@/lib/use-weather";
 import type { PlacePhoto } from "@/lib/types";
 
 /** Set when the place came from a suggestion: its photo is looked up lazily (shared cache with the map popup). */
 type Source = { osmId: string; lat: number; lng: number };
-type Props = { name: string; resolving: boolean; busy: boolean; suggestion?: Source; onAdd: () => void; onClose: () => void };
+/** Where and on which day the place would be visited: its evening golden-hour forecast is shown. */
+type Visit = { lat: number; lng: number; plannedDate: string };
+type Props = { name: string; resolving: boolean; busy: boolean; suggestion?: Source; visit?: Visit; onAdd: () => void; onClose: () => void };
 
-export function PlaceCard({ name, resolving, busy, suggestion, onAdd, onClose }: Props) {
+export function PlaceCard({ name, resolving, busy, suggestion, visit, onAdd, onClose }: Props) {
   const osmId = suggestion?.osmId;
   const lat = suggestion?.lat;
   const lng = suggestion?.lng;
@@ -28,6 +32,9 @@ export function PlaceCard({ name, resolving, busy, suggestion, onAdd, onClose }:
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const photo = osmId !== undefined && loaded?.key === osmId && loaded.photo?.url !== failedUrl ? loaded.photo : null;
 
+  const golden = visit ? getSunWindows(visit.lat, visit.lng, visit.plannedDate).goldenHour : null;
+  const weather = useWeatherLine(visit?.lat ?? 0, visit?.lng ?? 0, golden, "golden");
+
   return (
     // Suggestions keep a photo-sized minimum height so the card doesn't jump when the photo arrives or is absent.
     <section aria-label="Selected place" className={`flex items-center gap-3 rounded-xl p-3 ${suggestion ? "min-h-[5.5rem]" : ""} ${card}`}>
@@ -37,6 +44,11 @@ export function PlaceCard({ name, resolving, busy, suggestion, onAdd, onClose }:
       )}
       <div className="min-w-0 flex-1">
         <p className={`text-sm font-medium ${resolving ? "text-muted" : ""}`}>{name}</p>
+        {golden && weather && (
+          <p data-testid="place-weather" data-light-quality={weather.quality ?? undefined} className={`text-xs ${weather.quality === "poor" ? "text-danger" : "text-muted"}`}>
+            Golden hour {formatClock(golden)} · {weather.text}
+          </p>
+        )}
         {photo && <p data-testid="photo-credit" className="text-[10px] text-muted">{photo.credit}</p>}
       </div>
       <button

@@ -1,4 +1,4 @@
-import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, Stop, Suggestion, Trip, TripSummary } from "./types";
+import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, Stop, Suggestion, Trip, TripSummary, WeatherForecast } from "./types";
 import type { NewStopInput, StopPatch, TripInput, TripPatch } from "./validation";
 
 export class ApiError extends Error {
@@ -67,4 +67,6 @@ export const api = {
     request<{ photo: PlacePhoto | null }>(
       `/api/place-photo?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}&name=${encodeURIComponent(p.name)}`,
     ),
+  weather: (p: { lat: number; lng: number; date: string }) =>
+    request<{ forecast: WeatherForecast }>(`/api/weather?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}&date=${p.date}`),
 };

@@ -7,10 +7,30 @@ import { PlaceCard } from "./PlaceCard";
 const loadPlacePhoto = vi.fn();
 vi.mock("@/lib/place-photo-cache", () => ({ loadPlacePhoto: (...a: unknown[]) => loadPlacePhoto(...a) }));
 const photo = { url: "https://upload.wikimedia.org/a.jpg", title: "Tunnel View", pageUrl: "https://en.wikipedia.org/wiki/X", credit: "Photo: Jane Doe via Flickr (CC BY 2.0)" };
+const useWeatherLine = vi.fn();
+vi.mock("@/lib/use-weather", () => ({ useWeatherLine: (...a: unknown[]) => useWeatherLine(...a) }));
 const source = { osmId: "node/1", lat: 37.7, lng: -119.7 };
 
 describe("PlaceCard", () => {
-  beforeEach(() => loadPlacePhoto.mockReset());
+  beforeEach(() => {
+    loadPlacePhoto.mockReset();
+    useWeatherLine.mockReset();
+    useWeatherLine.mockReturnValue(null);
+  });
+
+  it("shows the golden-hour forecast for the planned day when a visit is given", () => {
+    useWeatherLine.mockReturnValue({ text: "clear, 0% rain", quality: "good" });
+    render(<PlaceCard name="Tunnel View" resolving={false} busy={false} visit={{ lat: 37.7, lng: -119.7, plannedDate: "2026-07-01" }} onAdd={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByTestId("place-weather").textContent).toMatch(/^Golden hour \d{1,2}:\d{2} (AM|PM) · clear, 0% rain$/);
+    const [lat, lng, at, pref] = useWeatherLine.mock.calls.at(-1)!;
+    expect([lat, lng, pref]).toEqual([37.7, -119.7, "golden"]);
+    expect(at).toBeInstanceOf(Date);
+  });
+
+  it("shows no forecast line without a visit or while it is unavailable", () => {
+    render(<PlaceCard name="X" resolving={false} busy={false} onAdd={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByTestId("place-weather")).toBeNull();
+  });
 
   it("shows the place name and adds it as a stop", async () => {
     const onAdd = vi.fn();

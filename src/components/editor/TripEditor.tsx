@@ -459,6 +459,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
               resolving={pending.resolving}
               busy={adding}
               suggestion={pending.osmId ? { osmId: pending.osmId, lat: pending.lat, lng: pending.lng } : undefined}
+              visit={{ lat: pending.lat, lng: pending.lng, plannedDate: trip.plannedDate }}
               onAdd={() => void addPending()}
               onClose={() => {
                 lookupSeq.current++;

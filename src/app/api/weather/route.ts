@@ -10,7 +10,7 @@ export const GET = handle(async (req: Request) => {
     lng: params.get("lng") ?? undefined,
     date: params.get("date") ?? undefined,
   });
-  // Weather is decorative: failures are a 200 "unavailable". Browser cache: 30 min for a forecast, 5 min otherwise.
+  // Weather is decorative: failures are a 200 "unavailable". Browser cache: 30 min for a forecast, 5 min for a settled "out of range", 1 min for a failure.
   const forecast = await getForecast(q.lat, q.lng, q.date);
-  return Response.json({ forecast }, { headers: { "Cache-Control": `private, max-age=${forecast.available ? 1800 : 300}` } });
+  return Response.json({ forecast }, { headers: { "Cache-Control": `private, max-age=${forecast.available ? 1800 : forecast.reason === "out_of_range" ? 300 : 60}` } });
 });

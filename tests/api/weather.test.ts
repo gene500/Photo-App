@@ -36,6 +36,12 @@ describe("GET /api/weather", () => {
     expect(res.headers.get("Cache-Control")).toBe("private, max-age=300");
   });
 
+  it("caches a failed lookup for only a minute", async () => {
+    vi.mocked(getForecast).mockResolvedValue({ available: false, reason: "unavailable" });
+    const res = await GET(url("lat=1&lng=2&date=2026-07-01"));
+    expect(res.headers.get("Cache-Control")).toBe("private, max-age=60");
+  });
+
   it.each([
     "lng=2&date=2026-07-01",
     "lat=1&date=2026-07-01",

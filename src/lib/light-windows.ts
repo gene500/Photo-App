@@ -55,7 +55,8 @@ export function windowsForArrival(pref: LightPref, lat: number, lng: number, arr
  * Without a preference or any window (polar) it is the arrival itself.
  */
 export function forecastInstant(pref: LightPref, lat: number, lng: number, arrival: Date): Date {
-  const windows = windowsForArrival(pref, lat, lng, arrival);
+  // The previous solar day's windows count too: at 1 am the sunset that just ended is nearer than the one 18 h away.
+  const windows = [...windowsForArrival(pref, lat, lng, new Date(arrival.getTime() - 86_400_000)), ...windowsForArrival(pref, lat, lng, arrival)];
   const t = arrival.getTime();
   let best: LightWindow | null = null;
   let bestGap = Infinity;

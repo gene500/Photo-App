@@ -42,7 +42,7 @@ describe("forecast cache", () => {
     await lookup(37.7712, -122.4, "2026-07-01", "2026-06-30");
     await lookup(37.7749, -122.4, "2026-07-01", "2026-06-30");
     expect(f).toHaveBeenCalledTimes(1);
-    await lookup(37.7749, -122.4, "2026-07-02");
+    await lookup(37.7749, -122.4, "2026-07-02", "2026-06-30");
     expect(f).toHaveBeenCalledTimes(2);
     expect(weatherCacheKey(37.7749, -122.4, "d")).toBe("37.77,-122.40|d");
   });
@@ -60,9 +60,9 @@ describe("forecast cache", () => {
     await lookup(1, 2, "2026-07-10", "2026-07-05");
     const q = new URL((f.mock.calls[0] as unknown as [string])[0]).searchParams;
     expect([q.get("start_date"), q.get("end_date")]).toEqual(["2026-07-09", "2026-07-11"]);
-    await lookup(1, 2, "2026-07-20", "2026-07-05");
+    await lookup(1, 2, "2026-07-19", "2026-07-05");
     const q2 = new URL((f.mock.calls[1] as unknown as [string])[0]).searchParams;
-    expect([q2.get("start_date"), q2.get("end_date")]).toEqual(["2026-07-19", "2026-07-20"]);
+    expect([q2.get("start_date"), q2.get("end_date")]).toEqual(["2026-07-18", "2026-07-19"]);
   });
 
   it("expires after 30 minutes; an unavailable answer is remembered for 60 s only", async () => {
@@ -97,10 +97,10 @@ describe("forecast cache", () => {
 });
 
 describe("getForecast", () => {
-  it("short-circuits dates outside today..today+15 without any request", async () => {
+  it("short-circuits dates outside yesterday..today+14 without any request", async () => {
     const spy = vi.spyOn(globalThis, "fetch");
     try {
-      expect(await getForecast(1, 2, "2026-10-23", "2026-10-07")).toEqual({ available: false, reason: "out_of_range" });
+      expect(await getForecast(1, 2, "2026-10-22", "2026-10-07")).toEqual({ available: false, reason: "out_of_range" });
       expect(await getForecast(1, 2, "2026-10-05", "2026-10-07")).toEqual({ available: false, reason: "out_of_range" });
       expect(spy).not.toHaveBeenCalled();
     } finally {

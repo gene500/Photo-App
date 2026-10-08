@@ -106,6 +106,12 @@ describe("forecastInstant", () => {
     expect(forecastInstant("golden", lat, lng, new Date("2026-07-01T23:30:00Z"))).toEqual(mid(eStart, eEnd)); // 4:30 pm
   });
 
+  it("for an overnight arrival (1 am, sunset) reads the evening that just ended, not the one 18 hours away", () => {
+    const [[pStart, pEnd]] = lightWindows("sunset", getSunWindows(lat, lng, "2026-06-30"));
+    const arrival = new Date("2026-07-01T08:00:00Z"); // 1 am local
+    expect(forecastInstant("sunset", lat, lng, arrival)).toEqual(mid(pStart, pEnd));
+  });
+
   it("is the arrival itself for 'any' and when the sun gives no window", () => {
     const arrival = new Date("2026-07-01T21:00:00Z");
     expect(forecastInstant("any", lat, lng, arrival)).toBe(arrival);

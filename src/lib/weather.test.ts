@@ -115,10 +115,10 @@ describe("labels and light quality", () => {
 });
 
 describe("inForecastRange", () => {
-  it("covers yesterday (UTC runs ahead of the Americas) through today + 15 only", () => {
+  it("covers yesterday (UTC runs ahead of the Americas) through today + 14 only", () => {
     expect(inForecastRange("2026-10-07", "2026-10-07")).toBe(true);
-    expect(inForecastRange("2026-10-22", "2026-10-07")).toBe(true);
-    expect(inForecastRange("2026-10-23", "2026-10-07")).toBe(false);
+    expect(inForecastRange("2026-10-21", "2026-10-07")).toBe(true);
+    expect(inForecastRange("2026-10-22", "2026-10-07")).toBe(false);
     expect(inForecastRange("2026-10-06", "2026-10-07")).toBe(true);
     expect(inForecastRange("2026-10-05", "2026-10-07")).toBe(false);
   });
@@ -129,9 +129,9 @@ describe("forecastSpan", () => {
     expect(forecastSpan("2026-10-12", "2026-10-07")).toEqual({ start: "2026-10-11", end: "2026-10-13" });
     expect(addDays("2026-12-31", 1)).toBe("2027-01-01");
   });
-  it("is clamped to yesterday..today+15", () => {
+  it("is clamped to yesterday..today+14", () => {
     expect(forecastSpan("2026-10-07", "2026-10-07")).toEqual({ start: "2026-10-06", end: "2026-10-08" });
     expect(forecastSpan("2026-10-06", "2026-10-07")).toEqual({ start: "2026-10-06", end: "2026-10-07" });
-    expect(forecastSpan("2026-10-22", "2026-10-07")).toEqual({ start: "2026-10-21", end: "2026-10-22" });
+    expect(forecastSpan("2026-10-21", "2026-10-07")).toEqual({ start: "2026-10-20", end: "2026-10-21" });
   });
 });

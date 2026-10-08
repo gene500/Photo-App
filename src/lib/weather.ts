@@ -1,7 +1,11 @@
 import type { LightPref, WeatherForecast, WeatherHour } from "./types";
 
-/** Open-Meteo forecasts reach about 16 days ahead: today through today + 15 (plus yesterday, see inForecastRange). */
-export const FORECAST_DAYS = 15;
+/**
+ * Open-Meteo serves 16 days counted from the location's own local today, which can be a day behind the server's UTC
+ * date. So the newest day we ask for is UTC today + 14 (15 would be past the horizon where the local date lags);
+ * inForecastRange and forecastSpan share this limit. Yesterday is also allowed, see inForecastRange.
+ */
+export const FORECAST_DAYS = 14;
 /** An hour further than this from the asked instant is "no data" rather than a stale guess. */
 const MAX_GAP_MS = 90 * 60_000;
 

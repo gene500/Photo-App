@@ -17,8 +17,10 @@ export function forecastKey(lat: number, lng: number, date: string): string {
 /** Resolves to the day's forecast, or null when the lookup failed (weather is decorative, so never throws). */
 export function loadForecast(lat: number, lng: number, date: string): Promise<WeatherForecast | null> {
   const key = forecastKey(lat, lng, date);
+  const now = Date.now();
+  for (const [k, e] of cache) if (e.expiresAt <= now) cache.delete(k); // evict expired entries so the map cannot grow all session
   const hit = cache.get(key);
-  if (hit && hit.expiresAt > Date.now()) return hit.promise;
+  if (hit) return hit.promise;
   const entry = {
     expiresAt: Infinity,
     promise: api
@@ -36,6 +38,9 @@ export function loadForecast(lat: number, lng: number, date: string): Promise<We
   cache.set(key, entry);
   return entry.promise;
 }
+
+/** Entries currently held (for tests). */
+export const cacheSize = () => cache.size;
 
 export function resetWeatherCache(): void {
   cache.clear();

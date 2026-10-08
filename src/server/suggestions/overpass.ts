@@ -17,21 +17,33 @@ type Deps = {
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-function overpassUrl(): string {
-  return process.env.OVERPASS_URL ?? "https://overpass-api.de/api/interpreter";
+/** Public Overpass instances, tried in turn: one busy or rate-limiting a shared host (as Vercel's are) shouldn't fail the search. */
+export const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
+
+function overpassUrls(): string[] {
+  return process.env.OVERPASS_URL ? [process.env.OVERPASS_URL] : OVERPASS_ENDPOINTS;
 }
 
-/** One attempt plus one retry on network error, timeout, 429, or 5xx. */
+/**
+ * Tries each endpoint in turn, moving on at once after a network error, timeout, 429 or 5xx; if every one fails, waits a
+ * second and gives the first endpoint one more go. A 4xx other than 429 (a bad query) fails immediately.
+ */
 export async function fetchOverpass(query: string, deps: Deps = {}): Promise<unknown> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const sleep = deps.sleep ?? defaultSleep;
   const timeoutMs = deps.timeoutMs ?? OVERPASS_TIMEOUT_MS;
+  const urls = overpassUrls();
+  const attempts = [...urls, urls[0]];
   let lastError = "Overpass request failed";
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0) await sleep(OVERPASS_RETRY_DELAY_MS);
+  for (let attempt = 0; attempt < attempts.length; attempt++) {
+    if (attempt === attempts.length - 1) await sleep(OVERPASS_RETRY_DELAY_MS);
     try {
-      const res = await fetchImpl(overpassUrl(), {
+      const res = await fetchImpl(attempts[attempt], {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",

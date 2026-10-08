@@ -8,6 +8,8 @@ export type StopSource = "manual" | "suggested";
 
 export type LightPref = "any" | "sunrise" | "golden" | "sunset";
 
+export type ShotItem = { text: string; done: boolean };
+
 export type Stop = {
   id: string;
   tripId: string;
@@ -23,6 +25,10 @@ export type Stop = {
   lightPref: LightPref;
   /** Minutes spent at the stop (0..480). */
   dwellMinutes: number;
+  /** Free-text notes on the shots wanted here (max 2000 chars). */
+  shotNotes: string | null;
+  /** Shots to get at this stop (up to 20). */
+  shotChecklist: ShotItem[];
 };
 
 export type Trip = {

@@ -11,7 +11,7 @@ import { StopDrawer } from "./StopDrawer";
 
 const stop: Stop = {
   id: "s1", tripId: "t1", order: 0, name: "Tunnel View", lat: 37.7156, lng: -119.6773,
-  notes: null, source: "suggested", photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 30,
+  notes: null, source: "suggested", photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 30, shotNotes: null, shotChecklist: [],
 };
 
 describe("StopDrawer", () => {
@@ -58,6 +58,60 @@ describe("StopDrawer", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).not.toHaveBeenCalled();
     expect((await screen.findByRole("alert")).textContent).toContain("0 to 480");
+  });
+
+  it("adds checklist items with Enter, ticks and deletes them, and saves the whole list", async () => {
+    const onSave = vi.fn(async () => {});
+    render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    const add = screen.getByLabelText("Add a shot");
+    await userEvent.type(add, "Wide from the rail{Enter}");
+    await userEvent.type(add, "Detail of bark{Enter}");
+    await userEvent.type(add, "Oops{Enter}");
+    expect((add as HTMLInputElement).value).toBe("");
+    await userEvent.click(screen.getByLabelText("Wide from the rail"));
+    await userEvent.click(screen.getByRole("button", { name: "Delete shot Oops" }));
+    await userEvent.type(screen.getByLabelText("Shot notes"), "Bring tripod");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({
+      shotNotes: "Bring tripod",
+      shotChecklist: [{ text: "Wide from the rail", done: true }, { text: "Detail of bark", done: false }],
+    });
+  });
+
+  it("keeps a typed but unconfirmed shot on save and ignores blank ones", async () => {
+    const onSave = vi.fn(async () => {});
+    const { unmount } = render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText("Add a shot"), "Last light");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({ shotChecklist: [{ text: "Last light", done: false }] });
+    unmount();
+    onSave.mockClear();
+    render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText("Add a shot"), "   {Enter}");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("shows existing shots and sends nothing when they are untouched", async () => {
+    const onSave = vi.fn(async () => {});
+    const withShots = { ...stop, shotNotes: "Golden hour", shotChecklist: [{ text: "Silhouette", done: true }] };
+    render(<StopDrawer stop={withShots} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    expect((screen.getByLabelText("Silhouette") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("Shot notes") as HTMLTextAreaElement).value).toBe("Golden hour");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("stops accepting shots at 20", async () => {
+    const full = { ...stop, shotChecklist: Array.from({ length: 20 }, (_, i) => ({ text: `s${i}`, done: false })) };
+    render(<StopDrawer stop={full} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    expect((screen.getByLabelText("Add a shot") as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it("labels an existing photo as the reference photo", () => {
+    render(<StopDrawer stop={{ ...stop, photoUrl: "/api/uploads/x.png" }} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    expect(screen.getByText("Reference photo")).toBeTruthy();
+    expect(screen.getByAltText("Reference for Tunnel View")).toBeTruthy();
   });
 
   it("closes without saving when nothing changed", async () => {

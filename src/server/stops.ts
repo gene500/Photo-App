@@ -20,6 +20,11 @@ export class TooManyStopsError extends Error {
 
 export type StopUpdate = StopPatch & { photoUrl?: string | null };
 
+/** The checklist column holds JSON text; everything else in a patch maps straight to columns. */
+function toStopData({ shotChecklist, ...rest }: StopUpdate) {
+  return shotChecklist === undefined ? rest : { ...rest, shotChecklist: JSON.stringify(shotChecklist) };
+}
+
 export async function addStop(
   userId: string,
   tripId: string,
@@ -41,6 +46,8 @@ export async function addStop(
         notes: input.notes ?? null,
         lightPref: input.lightPref,
         dwellMinutes: input.dwellMinutes,
+        shotNotes: input.shotNotes ?? null,
+        shotChecklist: JSON.stringify(input.shotChecklist ?? []),
       },
     });
     return toStopDto(row);
@@ -59,7 +66,7 @@ export async function updateStop(
 ): Promise<Stop | null> {
   if (!(await getOwnedStop(userId, stopId))) return null;
   try {
-    return toStopDto(await prisma.stop.update({ where: { id: stopId }, data: patch }));
+    return toStopDto(await prisma.stop.update({ where: { id: stopId }, data: toStopData(patch) }));
   } catch (e) {
     // Deleted between the ownership check and the update (Prisma "record not found").
     if (typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2025") return null;

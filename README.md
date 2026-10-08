@@ -99,6 +99,15 @@ named under the button ("Can't fit 2 stops in their light: A, B."). **Undo**
 restores the previous order and departure. Each row shows the window and arrival,
 or "Misses sunset by 40 min".
 
+### Shot list per stop
+
+The stop drawer has a **Shot list** section: free-text **Shot notes** (up to 2000
+characters) and a checklist of up to 20 shots (1 to 120 characters each). Type a
+shot and press Enter to add it, tick it off, or delete it with the x. It saves with
+the rest of the drawer (only changed fields are sent). The selected-stop card shows
+"2/5 shots" when the list is not empty. The uploaded stop photo is the **Reference
+photo**. Stored as `shotNotes` and a JSON `shotChecklist` column (additive migration).
+
 ### Photo popups and beige map
 
 With a single stop, suggestions within about 15 miles (24 km) of it load automatically; from

@@ -33,6 +33,26 @@ describe("stops data access", () => {
     expect(patched).toMatchObject({ lightPref: "golden", dwellMinutes: 0 });
   });
 
+  it("stores shot notes and checklist, defaulting to empty, and round-trips patches", async () => {
+    const { user, trip, stops } = await tripWithStops(["a"]);
+    expect(stops[0]).toMatchObject({ shotNotes: null, shotChecklist: [] });
+    const list = [{ text: "Reflection shot", done: false }, { text: "Long exposure", done: true }];
+    const b = await addStop(user.id, trip.id, { ...pin("b"), shotNotes: "Tripod", shotChecklist: list });
+    expect(b).toMatchObject({ shotNotes: "Tripod", shotChecklist: list });
+    const patched = await updateStop(user.id, stops[0].id, { shotChecklist: list, shotNotes: "ND filter" });
+    expect(patched).toMatchObject({ shotNotes: "ND filter", shotChecklist: list });
+    expect((await getOwnedStop(user.id, stops[0].id))?.shotChecklist).toEqual(list);
+    // Patching other fields leaves the checklist alone; null clears the notes.
+    expect(await updateStop(user.id, stops[0].id, { visited: true, shotNotes: null })).toMatchObject({ shotNotes: null, shotChecklist: list });
+    expect((await updateStop(user.id, stops[0].id, { shotChecklist: [] }))?.shotChecklist).toEqual([]);
+  });
+
+  it("does not let another user patch a stop's shot list", async () => {
+    const { stops } = await tripWithStops(["a"]);
+    const intruder = await createTestUser();
+    expect(await updateStop(intruder.id, stops[0].id, { shotChecklist: [{ text: "x", done: false }] })).toBeNull();
+  });
+
   it("refuses to add a stop to another user's trip", async () => {
     const { trip } = await tripWithStops([]);
     const intruder = await createTestUser();

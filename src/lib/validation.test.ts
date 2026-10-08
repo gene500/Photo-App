@@ -87,6 +87,34 @@ describe("light-aware fields", () => {
   });
 });
 
+describe("shot list fields", () => {
+  const item = { text: "Wide from the rail", done: false };
+  it("defaults to nothing and accepts notes and a checklist", () => {
+    const parsed = newStopSchema.parse({ name: "a", lat: 1, lng: 2, source: "manual" });
+    expect(parsed.shotNotes).toBeUndefined();
+    expect(parsed.shotChecklist).toBeUndefined();
+    expect(stopPatchSchema.parse({ shotNotes: "Bring the 70-200", shotChecklist: [item] })).toEqual({ shotNotes: "Bring the 70-200", shotChecklist: [item] });
+    expect(stopPatchSchema.parse({ shotNotes: null })).toEqual({ shotNotes: null });
+    expect(newStopSchema.parse({ name: "a", lat: 1, lng: 2, source: "manual", shotChecklist: [item] }).shotChecklist).toEqual([item]);
+  });
+  it("limits notes to 2000 characters", () => {
+    expect(stopPatchSchema.safeParse({ shotNotes: "x".repeat(2000) }).success).toBe(true);
+    expect(stopPatchSchema.safeParse({ shotNotes: "x".repeat(2001) }).success).toBe(false);
+  });
+  it("limits the checklist to 20 items of 1 to 120 characters", () => {
+    const many = (n: number) => Array.from({ length: n }, () => item);
+    expect(stopPatchSchema.safeParse({ shotChecklist: many(20) }).success).toBe(true);
+    expect(stopPatchSchema.safeParse({ shotChecklist: many(21) }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ shotChecklist: [{ text: "x".repeat(120), done: true }] }).success).toBe(true);
+    expect(stopPatchSchema.safeParse({ shotChecklist: [{ text: "x".repeat(121), done: true }] }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ shotChecklist: [{ text: "   ", done: true }] }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ shotChecklist: [{ text: "ok" }] }).success).toBe(false);
+  });
+  it("ignores unknown keys on items", () => {
+    expect(stopPatchSchema.parse({ shotChecklist: [{ text: " a ", done: true, evil: 1 }] })).toEqual({ shotChecklist: [{ text: "a", done: true }] });
+  });
+});
+
 describe("signupSchema", () => {
   it("normalizes the email", () => {
     expect(signupSchema.parse({ email: "  Foo@Bar.COM ", password: "longenough" })).toEqual({

@@ -5,8 +5,8 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost, btnPrimary, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { checkPhotoFile, PHOTO_TYPES } from "@/lib/photo-rules";
-import type { LightPref, Stop } from "@/lib/types";
-import { MAX_DWELL_MINUTES, type StopPatch } from "@/lib/validation";
+import type { LightPref, ShotItem, Stop } from "@/lib/types";
+import { MAX_DWELL_MINUTES, MAX_SHOT_ITEMS, MAX_SHOT_NOTES, MAX_SHOT_TEXT, type StopPatch } from "@/lib/validation";
 
 type Props = {
   stop: Stop;
@@ -20,12 +20,15 @@ const LIGHT_OPTIONS: [LightPref, string][] = [["any", "Any"], ["sunrise", "Sunri
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
-  const [initial] = useState({ name: stop.name, notes: stop.notes ?? null, visited: stop.visited, lightPref: stop.lightPref, dwellMinutes: stop.dwellMinutes });
+  const [initial] = useState({ name: stop.name, notes: stop.notes ?? null, visited: stop.visited, lightPref: stop.lightPref, dwellMinutes: stop.dwellMinutes, shotNotes: stop.shotNotes, shotChecklist: JSON.stringify(stop.shotChecklist) });
   const [name, setName] = useState(stop.name);
   const [notes, setNotes] = useState(stop.notes ?? "");
   const [visited, setVisited] = useState(stop.visited);
   const [lightPref, setLightPref] = useState<LightPref>(stop.lightPref);
   const [dwell, setDwell] = useState(String(stop.dwellMinutes));
+  const [shotNotes, setShotNotes] = useState(stop.shotNotes ?? "");
+  const [shots, setShots] = useState<ShotItem[]>(stop.shotChecklist);
+  const [newShot, setNewShot] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -47,6 +50,12 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
       if (visited !== initial.visited) patch.visited = visited;
       if (lightPref !== initial.lightPref) patch.lightPref = lightPref;
       if (dwellMinutes !== initial.dwellMinutes) patch.dwellMinutes = dwellMinutes;
+      const nextShotNotes = shotNotes.trim() === "" ? null : shotNotes;
+      if (nextShotNotes !== initial.shotNotes) patch.shotNotes = nextShotNotes;
+      // A shot typed but not yet confirmed with Enter is kept rather than silently dropped.
+      const pending = newShot.trim();
+      const nextShots = pending !== "" && shots.length < MAX_SHOT_ITEMS ? [...shots, { text: pending.slice(0, MAX_SHOT_TEXT), done: false }] : shots;
+      if (JSON.stringify(nextShots) !== initial.shotChecklist) patch.shotChecklist = nextShots;
       if (Object.keys(patch).length > 0) await onSave(patch);
       onClose();
     } catch (e) {
@@ -54,6 +63,13 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
     } finally {
       setBusy(false);
     }
+  }
+
+  function addShot() {
+    const text = newShot.trim();
+    if (text === "" || shots.length >= MAX_SHOT_ITEMS) return;
+    setShots([...shots, { text, done: false }]);
+    setNewShot("");
   }
 
   async function upload(file: File) {
@@ -116,6 +132,48 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
           <input type="number" inputMode="numeric" min={0} max={MAX_DWELL_MINUTES} step={5} value={dwell} onChange={(e) => setDwell(e.target.value)} className={inputClass} />
         </label>
       </div>
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium">Shot list</legend>
+        <label className="block">
+          <span className="text-sm text-muted">Shot notes</span>
+          <textarea rows={3} maxLength={MAX_SHOT_NOTES} value={shotNotes} onChange={(e) => setShotNotes(e.target.value)} className={inputClass} />
+        </label>
+        {shots.length > 0 && (
+          <ul className="space-y-1">
+            {shots.map((shot, i) => (
+              <li key={i} className="flex items-center gap-2">
+                <label className="flex min-h-9 min-w-0 flex-1 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 shrink-0 accent-accent-strong"
+                    checked={shot.done}
+                    onChange={(e) => setShots(shots.map((s, j) => (j === i ? { ...s, done: e.target.checked } : s)))}
+                  />
+                  <span className={`min-w-0 break-words ${shot.done ? "text-muted line-through" : ""}`}>{shot.text}</span>
+                </label>
+                <button type="button" onClick={() => setShots(shots.filter((_, j) => j !== i))} aria-label={`Delete shot ${shot.text}`} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg leading-none text-muted hover:bg-hover">
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <input
+          aria-label="Add a shot"
+          placeholder={shots.length >= MAX_SHOT_ITEMS ? `Up to ${MAX_SHOT_ITEMS} shots` : "Add a shot, press Enter"}
+          maxLength={MAX_SHOT_TEXT}
+          disabled={shots.length >= MAX_SHOT_ITEMS}
+          value={newShot}
+          onChange={(e) => setNewShot(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addShot();
+            }
+          }}
+          className={inputClass}
+        />
+      </fieldset>
       <label className="flex min-h-9 items-center gap-2 text-sm">
         <input type="checkbox" className="h-4 w-4 accent-accent-strong" checked={visited} onChange={(e) => setVisited(e.target.checked)} />
         Visited

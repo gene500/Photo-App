@@ -24,6 +24,11 @@ export function StopCard({ stop, bestTime, arrival, onToggleVisited, onOpenDetai
         </button>
       </div>
       <p className="text-xs text-muted">{describeBestTime(bestTime)}</p>
+      {stop.shotChecklist.length > 0 && (
+        <p data-testid="shot-summary" className="text-xs text-muted">
+          {stop.shotChecklist.filter((s) => s.done).length}/{stop.shotChecklist.length} shots
+        </p>
+      )}
       {arrival && <p className="text-xs text-muted">Arrive ~{formatClock(arrival)}</p>}
       <div className="flex items-center justify-between">
         <label className="flex min-h-9 items-center gap-2 text-sm">

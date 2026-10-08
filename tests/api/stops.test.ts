@@ -65,6 +65,23 @@ describe("stop routes", () => {
     expect((await res.json()).stop).toMatchObject({ visited: true, notes: "ND filter" });
   });
 
+  it("patches and returns the shot list, and rejects over-limit input", async () => {
+    const { stop } = await add("a");
+    const list = [{ text: "Sunrise wide", done: false }, { text: "Detail of rock", done: true }];
+    const res = await PATCH(jsonRequest("PATCH", `/api/stops/${stop.id}`, { shotNotes: "Arrive early", shotChecklist: list }), idParams(stop.id));
+    expect((await res.json()).stop).toMatchObject({ shotNotes: "Arrive early", shotChecklist: list });
+    const tooMany = Array.from({ length: 21 }, () => ({ text: "x", done: false }));
+    expect((await PATCH(jsonRequest("PATCH", `/api/stops/${stop.id}`, { shotChecklist: tooMany }), idParams(stop.id))).status).toBe(400);
+    expect((await PATCH(jsonRequest("PATCH", `/api/stops/${stop.id}`, { shotNotes: "x".repeat(2001) }), idParams(stop.id))).status).toBe(400);
+  });
+
+  it("returns 404 patching another user's shot list", async () => {
+    const { stop } = await add("a");
+    signInAs((await createTestUser()).id);
+    const res = await PATCH(jsonRequest("PATCH", `/api/stops/${stop.id}`, { shotChecklist: [{ text: "x", done: false }] }), idParams(stop.id));
+    expect(res.status).toBe(404);
+  });
+
   it("returns 404 patching another user's stop", async () => {
     const { stop } = await add("a");
     signInAs((await createTestUser()).id);

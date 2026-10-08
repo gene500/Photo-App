@@ -49,6 +49,10 @@ model Stop {
   lightPref    String   @default("any")
   /// Minutes spent at the stop (0..480), validated in application code.
   dwellMinutes Int      @default(30)
+  /// Free-text shot notes (max 2000 chars, validated in application code).
+  shotNotes    String?
+  /// JSON array of { text, done }, serialized and validated at the server boundary.
+  shotChecklist String  @default("[]")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

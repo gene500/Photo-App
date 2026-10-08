@@ -17,6 +17,14 @@ export const tripInputSchema = z.object({
 });
 export type TripInput = z.infer<typeof tripInputSchema>;
 
+export const MAX_SHOT_ITEMS = 20;
+export const MAX_SHOT_TEXT = 120;
+export const MAX_SHOT_NOTES = 2000;
+export const shotChecklistSchema = z
+  .array(z.object({ text: z.string().trim().min(1, "Shot text is required").max(MAX_SHOT_TEXT), done: z.boolean() }))
+  .max(MAX_SHOT_ITEMS);
+export const shotNotesSchema = z.string().max(MAX_SHOT_NOTES);
+
 export const lightPrefSchema = z.enum(["any", "sunrise", "golden", "sunset"]);
 export const dwellMinutesSchema = z.number().int().min(0).max(MAX_DWELL_MINUTES);
 
@@ -34,6 +42,8 @@ export const newStopSchema = z.object({
   notes: z.string().max(5000).nullable().optional(),
   lightPref: lightPrefSchema.default("any"),
   dwellMinutes: dwellMinutesSchema.default(30),
+  shotNotes: shotNotesSchema.nullable().optional(),
+  shotChecklist: shotChecklistSchema.optional(),
 });
 export type NewStopInput = z.input<typeof newStopSchema>;
 
@@ -44,6 +54,8 @@ export const stopPatchSchema = z
     visited: z.boolean(),
     lightPref: lightPrefSchema,
     dwellMinutes: dwellMinutesSchema,
+    shotNotes: shotNotesSchema.nullable(),
+    shotChecklist: shotChecklistSchema,
     lat,
     lng,
   })

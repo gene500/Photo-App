@@ -1,8 +1,8 @@
-# Road Trip Photo Planner
+# Photo Op Planner
 
 ## 1. What it is
 
-A web app for planning road trips around photo opportunities: plot a
+A web app for planning photo ops: plot a
 route, discover and curate scenic/photo-worthy stops along it, and see
 the best time of day to shoot each one.
 

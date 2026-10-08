@@ -37,6 +37,17 @@ describe("findSuggestions", () => {
     expect(fetchOverpass).toHaveBeenCalledTimes(1);
   });
 
+  it("enrich:false answers without any popularity lookup, and a later full request reuses the raw Overpass result", async () => {
+    const fetchOverpass = vi.fn(async () => overpassJson);
+    const noPopularity = vi.fn() as unknown as typeof fetch;
+    const fast = await findSuggestions(ROUTE, { fetchOverpass, fetchImpl: noPopularity, enrich: false });
+    expect(fast).toEqual([{ osmId: "node/1", name: "Spot", lat: 37.2, lng: -119.6, kind: "viewpoint" }]);
+    expect(noPopularity).not.toHaveBeenCalled();
+    const full = await findSuggestions(ROUTE, { fetchOverpass, fetchImpl });
+    expect(full[0].popularity).toBe(3);
+    expect(fetchOverpass).toHaveBeenCalledTimes(1);
+  });
+
   it("keys the cache on coordinates rounded to 4 decimals", () => {
     expect(routeCacheKey([[1.00001, 2], [3, 4]])).toBe(routeCacheKey([[1.00002, 2], [3, 4]]));
     expect(routeCacheKey([[1.001, 2], [3, 4]])).not.toBe(routeCacheKey([[1.002, 2], [3, 4]]));

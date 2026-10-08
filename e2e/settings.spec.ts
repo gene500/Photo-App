@@ -9,7 +9,7 @@ async function signup(page: Page, tag: string) {
 }
 
 const bodyBg = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-const LIGHT_BG = "rgb(244, 243, 240)";
+const LIGHT_BG = "rgb(236, 230, 216)";
 const DARK_BG = "rgb(14, 14, 13)";
 
 test("settings: theme, text size, units and reset persist per device", async ({ page }) => {

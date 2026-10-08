@@ -28,7 +28,7 @@ function num(n: number): string | null {
 export function buildGpx({ name, stops, route }: { name: string; stops: ExportStop[]; route?: LngLat[] | null }): string {
   const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    '<gpx version="1.1" creator="Road Trip Photo Planner" xmlns="http://www.topografix.com/GPX/1/1">',
+    '<gpx version="1.1" creator="Photo Op Planner" xmlns="http://www.topografix.com/GPX/1/1">',
     `  <metadata><name>${esc(name)}</name></metadata>`,
   ];
   for (const s of stops) {

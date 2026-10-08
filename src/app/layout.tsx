@@ -22,8 +22,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Road Trip Photo Planner",
-  description: "Plan road trips around photo stops.",
+  title: "Photo Op Planner",
+  description: "Plan photo ops: scenic stops, the best light, and the route between them.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

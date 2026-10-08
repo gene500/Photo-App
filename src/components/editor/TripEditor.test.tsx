@@ -167,7 +167,7 @@ describe("TripEditor", () => {
   it("searches around the first stop automatically, without a button or a route", async () => {
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });
     render(<TripEditor initialTrip={withStops([seed[0]])} />);
-    await waitFor(() => expect(api.suggestions).toHaveBeenCalledWith({ around: [-119.79, 36.74] }));
+    await waitFor(() => expect(api.suggestions).toHaveBeenCalledWith({ around: [-119.79, 36.74] }, { enrich: false }));
     expect(api.suggestions).toHaveBeenCalledTimes(1);
     await userEvent.click(screen.getByRole("tab", { name: /Suggestions/ }));
     expect(await screen.findByRole("button", { name: "Accept" })).toBeTruthy();
@@ -181,7 +181,7 @@ describe("TripEditor", () => {
     await userEvent.click(screen.getByRole("tab", { name: /Suggestions/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
     expect(await screen.findByRole("button", { name: "Accept" })).toBeTruthy();
-    expect(api.suggestions).toHaveBeenLastCalledWith({ around: [-119.79, 36.74] });
+    expect(api.suggestions).toHaveBeenLastCalledWith({ around: [-119.79, 36.74] }, { enrich: false });
   });
 
   it("finds suggestions and accepts one from the Suggestions tab", async () => {

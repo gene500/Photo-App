@@ -54,7 +54,7 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
   return (
     <div
       data-testid="map"
-      className={`relative h-full min-h-[50vh] w-full overflow-hidden bg-[#eceae6] ${readOnly ? "" : "cursor-crosshair"}`}
+      className={`relative h-full min-h-[50vh] w-full overflow-hidden bg-[#e4dccb] ${readOnly ? "" : "cursor-crosshair"}`}
       onClick={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         onMapClick(pixelToLatLng(bounds, e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height));

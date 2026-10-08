@@ -7,9 +7,11 @@ import { fetchOverpass, OverpassError } from "./overpass";
 import { parseOverpassResponse } from "./parse";
 import { enrichPopularity } from "./popularity";
 
-export const SUGGESTION_CACHE_TTL_MS = 5 * 60_000;
+export const SUGGESTION_CACHE_TTL_MS = 30 * 60_000;
 
+/** Enriched (ranked by popularity) results, and the raw Overpass results they are built from. */
 const cache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS);
+const rawCache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS);
 
 export function routeCacheKey(route: LngLat[]): string {
   const canonical = route.map(([lng, lat]) => `${lng.toFixed(4)},${lat.toFixed(4)}`).join(";");
@@ -18,17 +20,24 @@ export function routeCacheKey(route: LngLat[]): string {
 
 export function clearSuggestionCache(): void {
   cache.clear();
+  rawCache.clear();
 }
 
-type Deps = { fetchOverpass?: (query: string) => Promise<unknown>; fetchImpl?: typeof fetch };
+type Deps = { fetchOverpass?: (query: string) => Promise<unknown>; fetchImpl?: typeof fetch; /** false: skip popularity (the caller ranks it later). */ enrich?: boolean };
 
 async function runSearch(key: string, buildQuery: () => string, deps: Deps): Promise<Suggestion[]> {
-  const cached = cache.get(key);
-  if (cached) return cached;
-  const json = await (deps.fetchOverpass ?? fetchOverpass)(buildQuery());
+  const enrich = deps.enrich !== false;
+  const done = enrich ? cache.get(key) : (cache.get(key) ?? rawCache.get(key));
+  if (done) return done;
+  let parsed = rawCache.get(key);
+  if (!parsed) {
+    parsed = parseOverpassResponse(await (deps.fetchOverpass ?? fetchOverpass)(buildQuery()));
+    rawCache.set(key, parsed);
+  }
+  if (!enrich) return parsed;
   // Popularity is a bonus: enrichPopularity never throws, but guard anyway so it can never fail the request.
-  const parsed = parseOverpassResponse(json);
-  const suggestions = await enrichPopularity(parsed, { fetchImpl: deps.fetchImpl }).catch(() => parsed);
+  const base = parsed;
+  const suggestions = await enrichPopularity(base, { fetchImpl: deps.fetchImpl }).catch(() => base);
   cache.set(key, suggestions);
   return suggestions;
 }

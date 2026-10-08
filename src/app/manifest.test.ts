@@ -6,7 +6,7 @@ import manifest from "./manifest";
 describe("web app manifest", () => {
   const m = manifest();
   it("is an installable standalone app with a beige theme", () => {
-    expect(m.name).toBe("Road Trip Photo Planner");
+    expect(m.name).toBe("Photo Op Planner");
     expect(m.short_name).toBeTruthy();
     expect(m.display).toBe("standalone");
     expect(m.theme_color).toBe("#d9c7a3");

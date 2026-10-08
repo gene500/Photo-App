@@ -19,7 +19,7 @@ const PRIVATE: Pick<Metadata, "robots" | "referrer"> = {
 export async function generateMetadata({ params }: PageProps<"/s/[token]">): Promise<Metadata> {
   const { token } = await params;
   const trip = await load(token);
-  return { ...PRIVATE, title: trip ? `${trip.name} · Road Trip Photo Planner` : "Not found" };
+  return { ...PRIVATE, title: trip ? `${trip.name} · Photo Op Planner` : "Not found" };
 }
 
 /** Public, login-free, read-only view of a shared trip. */

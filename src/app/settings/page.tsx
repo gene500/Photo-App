@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { SettingsView } from "@/components/settings/SettingsView";
 import { getCurrentUser } from "@/server/session";
 
-export const metadata: Metadata = { title: "Settings · Road Trip Photo Planner" };
+export const metadata: Metadata = { title: "Settings · Photo Op Planner" };
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();

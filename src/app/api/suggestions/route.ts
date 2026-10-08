@@ -5,11 +5,11 @@ import { findSuggestions, findSuggestionsAround } from "@/server/suggestions/ser
 
 export const POST = handle(async (req: Request) => {
   await requireUserId();
-  const { coordinates, around, radiusKm } = suggestionsRequestSchema.parse(await readJson(req));
+  const { coordinates, around, radiusKm, enrich } = suggestionsRequestSchema.parse(await readJson(req));
   try {
-    if (coordinates) return Response.json({ suggestions: await findSuggestions(coordinates) });
+    if (coordinates) return Response.json({ suggestions: await findSuggestions(coordinates, { enrich }) });
     // Without a radius the service default applies (and keeps the call shape of a plain "around" search).
-    const found = radiusKm === undefined ? await findSuggestionsAround(around!) : await findSuggestionsAround(around!, {}, radiusKm);
+    const found = radiusKm === undefined ? await findSuggestionsAround(around!, { enrich }) : await findSuggestionsAround(around!, { enrich }, radiusKm);
     return Response.json({ suggestions: found });
   } catch (e) {
     if (e instanceof OverpassError) throw new HttpError(502, "Couldn't load suggestions. Please retry.");

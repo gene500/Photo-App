@@ -7,6 +7,7 @@ import { btnGhost } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { downsampleRoute } from "@/lib/downsample";
 import { prefetchPlacePhotos } from "@/lib/place-photo-cache";
+import { loadPopularityInBatches, rankSuggestions } from "@/lib/suggestion-popularity";
 import { computeArrivals, computeBestTimes, formatClock } from "@/lib/best-time";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useOfflineCopy } from "@/lib/use-offline-copy";
@@ -109,6 +110,22 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const suggestions = freshSuggestions?.items ?? NO_SUGGESTIONS;
   const suggestionsStatus: SuggestionsStatus = freshSuggestions?.status ?? (stops.length === 1 ? "loading" : "idle");
   const suggestionsError = freshSuggestions?.error ?? null;
+  // Places show up as soon as they are found; popularity then fills in 10 at a time and re-ranks the list.
+  const suggestionItemsRef = useRef<Suggestion[]>(NO_SUGGESTIONS);
+  useEffect(() => {
+    suggestionItemsRef.current = suggestions;
+  }, [suggestions]);
+  const popularityKey = freshSuggestions?.status === "done" ? freshSuggestions.key : null;
+  useEffect(() => {
+    if (popularityKey === null) return;
+    return loadPopularityInBatches(suggestionItemsRef.current, (counts) => {
+      setSuggestionsState((prev) =>
+        prev && prev.key === popularityKey
+          ? { ...prev, items: rankSuggestions(prev.items.map((s) => (counts.has(s.osmId) ? { ...s, popularity: counts.get(s.osmId) } : s))) }
+          : prev,
+      );
+    });
+  }, [popularityKey]);
   // As soon as places are found, fetch their photos in the background so popups and cards open with the picture ready.
   useEffect(() => {
     if (suggestions.length === 0) return;
@@ -140,7 +157,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     if (coordinates.length !== 1) return;
     const [lng, lat] = coordinates[0];
     let cancelled = false;
-    api.suggestions({ around: [lng, lat] }).then(
+    api.suggestions({ around: [lng, lat] }, { enrich: false }).then(
       ({ suggestions: found }) => {
         if (cancelled) return;
         const items = found.filter((s) => haversineMeters({ lat, lng }, s) >= ALREADY_A_STOP_M);
@@ -409,7 +426,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const { lng, lat } = stops[0];
       setSuggestionsState({ key, items: [], status: "loading", error: null });
       try {
-        const { suggestions: found } = await api.suggestions({ around: [lng, lat] });
+        const { suggestions: found } = await api.suggestions({ around: [lng, lat] }, { enrich: false });
         if (waypointKeyRef.current !== key) return;
         setSuggestionsState({ key, items: found.filter((x) => haversineMeters({ lat, lng }, x) >= ALREADY_A_STOP_M), status: "done", error: null });
       } catch (e) {
@@ -423,7 +440,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     const placed = stops;
     setSuggestionsState({ key, items: [], status: "loading", error: null });
     try {
-      const { suggestions: found } = await api.suggestions(downsampleRoute(activeRoute.geometry));
+      const { suggestions: found } = await api.suggestions(downsampleRoute(activeRoute.geometry), { enrich: false });
       if (waypointKeyRef.current !== key) return;
       const items = found.filter((s) => !placed.some((st) => haversineMeters(st, s) < ALREADY_A_STOP_M));
       setSuggestionsState({ key, items, status: "done", error: null });

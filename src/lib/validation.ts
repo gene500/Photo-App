@@ -122,10 +122,18 @@ export const suggestionsRequestSchema = z
     around: lngLat.optional(),
     /** Search radius for `around` (default AROUND_RADIUS_KM); alternatives for one stop use a small local one. */
     radiusKm: z.number().int().min(1).max(MAX_AROUND_RADIUS_KM).optional(),
+    /** false: answer as soon as the places are found, without waiting for popularity (the client asks for it in batches). */
+    enrich: z.boolean().optional(),
   })
   .refine((v) => (v.coordinates === undefined) !== (v.around === undefined), "Send either a route or a single point")
   .refine((v) => v.radiusKm === undefined || v.around !== undefined, { path: ["radiusKm"], message: "radiusKm only applies to a single point" });
 
+/** Popularity is looked up for at most this many places per request; the client asks in batches. */
+export const POPULARITY_BATCH_SIZE = 10;
+
+export const popularityRequestSchema = z.object({
+  places: z.array(z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) })).min(1).max(POPULARITY_BATCH_SIZE),
+});
 
 /** First issue as a user-facing string, prefixed with its field path when there is one. */
 export function formatZodError(error: z.ZodError): string {

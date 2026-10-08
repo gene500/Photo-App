@@ -14,7 +14,7 @@ test("a saved trip can be reopened from the trips list, and the header goes back
   await page.getByRole("button", { name: "Add stop" }).click();
   await expect(page.getByTestId("stop-row")).toHaveCount(1);
 
-  await page.getByRole("link", { name: "Road Trip Photo Planner" }).click();
+  await page.getByRole("link", { name: "Photo Op Planner" }).click();
   await expect(page).toHaveURL(/\/trips$/);
   // Click the details side of the row, not the name: the whole row is the link.
   await page.getByText(/1 stops$/).click();

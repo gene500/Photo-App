@@ -23,7 +23,7 @@ describe("POST /api/suggestions", () => {
     vi.mocked(findSuggestionsAround).mockResolvedValue([{ osmId: "node/2", name: "Near", lat: 37, lng: -119, kind: "peak" }]);
     const ok = await POST(jsonRequest("POST", "/api/suggestions", { around: [-119.79, 36.74] }));
     expect((await ok.json()).suggestions).toHaveLength(1);
-    expect(findSuggestionsAround).toHaveBeenCalledWith([-119.79, 36.74]);
+    expect(findSuggestionsAround).toHaveBeenCalledWith([-119.79, 36.74], { enrich: undefined });
     expect((await POST(jsonRequest("POST", "/api/suggestions", { ...body, around: [-119, 36] }))).status).toBe(400);
     expect((await POST(jsonRequest("POST", "/api/suggestions", {}))).status).toBe(400);
     expect((await POST(jsonRequest("POST", "/api/suggestions", { around: [500, 36] }))).status).toBe(400);

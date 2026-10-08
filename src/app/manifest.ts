@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Road Trip Photo Planner",
+    name: "Photo Op Planner",
     short_name: "Photo Trips",
-    description: "Plan road trips around photo stops.",
+    description: "Plan photo ops: scenic stops, the best light, and the route between them.",
     start_url: "/trips",
     scope: "/",
     display: "standalone",

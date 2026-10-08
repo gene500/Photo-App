@@ -15,21 +15,21 @@
 /* Design tokens. One accent (warm beige): `accent` for fills/lines/rings, `accent-strong` for text/icons
    that need contrast on the surface, `accent-soft` for quiet backgrounds. */
 :root {
-  --background: #f4f3f0;
-  --surface: #ffffff;
-  --foreground: #171717;
-  --muted: #6b6b66;
-  --border: rgb(0 0 0 / 0.07);
-  --accent: #d9c7a3;
-  --accent-strong: #7a6639;
-  --accent-soft: #f3ecdb;
+  --background: #ece6d8;
+  --surface: #f7f3e9;
+  --foreground: #1f1b14;
+  --muted: #655e4f;
+  --border: rgb(61 48 25 / 0.13);
+  --accent: #d4bd8f;
+  --accent-strong: #6f5a2c;
+  --accent-soft: #e6d9bb;
   --accent-foreground: #3d3320;
-  --route: #b08d57;
-  --ink: #111111;
-  --ink-foreground: #ffffff;
-  --danger: #b42318;
-  --danger-soft: #fdecea;
-  --hover: rgb(0 0 0 / 0.045);
+  --route: #a8834b;
+  --ink: #26201a;
+  --ink-foreground: #faf6ec;
+  --danger: #a82a1e;
+  --danger-soft: #f5e0d8;
+  --hover: rgb(61 48 25 / 0.07);
 }
 
 @theme inline {

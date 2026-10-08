@@ -10,7 +10,7 @@ export default async function TripsLayout({ children }: LayoutProps<"/trips">) {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex min-h-12 items-center justify-between gap-2 bg-surface px-4 shadow-sm">
-        <Link href="/trips" className="min-w-0 truncate text-sm font-semibold tracking-tight">Road Trip Photo Planner</Link>
+        <Link href="/trips" className="min-w-0 truncate text-sm font-semibold tracking-tight">Photo Op Planner</Link>
         <div className="flex shrink-0 items-center">
           <Link href="/settings" aria-label="Settings" title="Settings" className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted transition hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-strong">
             <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">

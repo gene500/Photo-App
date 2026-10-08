@@ -12,7 +12,7 @@ export const POPULARITY_BUDGET_MS = 4000;
 type Counter = (s: Suggestion, fetchImpl: typeof fetch) => Promise<number | undefined>;
 
 /** Flickr totals when a key is configured (strong signal), else the number of Commons files nearby (weaker, max 50). */
-function defaultCounter(): Counter {
+export function defaultCounter(): Counter {
   return flickrKey()
     ? (s, f) => getFlickrPhotoCount(s, f, POPULARITY_TIMEOUT_MS)
     : (s, f) => getCommonsPhotoCount(s, f, POPULARITY_TIMEOUT_MS);

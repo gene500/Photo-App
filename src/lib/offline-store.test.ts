@@ -98,4 +98,37 @@ describe("offline-store", () => {
     claimOwner("u1");
     expect(listTripCopies()).toEqual([]);
   });
+
+  it("fills defaults for fields older copies lack", () => {
+    saveTripCopy(trip("a"), at(1));
+    const raw = JSON.parse(mem.getItem("rtpp.offline.trip.a")!);
+    for (const st of raw.trip.stops) { delete st.shotChecklist; delete st.shotNotes; delete st.lightPref; delete st.dwellMinutes; }
+    mem.setItem("rtpp.offline.trip.a", JSON.stringify(raw));
+    const s0 = loadTripCopy("a")!.trip.stops[0];
+    expect(s0.shotChecklist).toEqual([]);
+    expect(s0.shotNotes).toBeNull();
+    expect(s0.lightPref).toBe("any");
+    expect(s0.dwellMinutes).toBe(0);
+  });
+
+  it("drops a copy whose stops are malformed, and its index entry", () => {
+    saveTripCopy(trip("a"), at(1));
+    saveTripCopy(trip("b"), at(2));
+    const raw = JSON.parse(mem.getItem("rtpp.offline.trip.a")!);
+    raw.trip.stops[1].lat = "north";
+    mem.setItem("rtpp.offline.trip.a", JSON.stringify(raw));
+    expect(loadTripCopy("a")).toBeNull();
+    expect(mem.getItem("rtpp.offline.trip.a")).toBeNull();
+    expect(listTripCopies().map((e) => e.id)).toEqual(["b"]);
+    mem.setItem("rtpp.offline.trip.b", JSON.stringify({ savedAt: "x", trip: { id: "b", name: "B", plannedDate: "d", stops: [null] } }));
+    expect(loadTripCopy("b")).toBeNull();
+    expect(listTripCopies()).toEqual([]);
+  });
+
+  it("removes an index entry whose payload is missing", () => {
+    saveTripCopy(trip("a"), at(1));
+    mem.removeItem("rtpp.offline.trip.a");
+    expect(loadTripCopy("a")).toBeNull();
+    expect(listTripCopies()).toEqual([]);
+  });
 });

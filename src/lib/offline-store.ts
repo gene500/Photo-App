@@ -2,7 +2,7 @@
 // Private trip data lives here, so: no tokens or emails are ever stored (the share token is stripped),
 // copies are wiped on sign-out and when a different user signs in, and everything is best-effort
 // (storage can be missing, full or blocked; nothing here ever throws).
-import type { TripWithStops } from "@/lib/types";
+import type { ShotItem, Stop, TripWithStops } from "@/lib/types";
 
 const PREFIX = "rtpp.offline.";
 const INDEX_KEY = `${PREFIX}index`;
@@ -93,15 +93,69 @@ export function listTripCopies(): TripCopySummary[] {
   return s ? readIndex(s) : [];
 }
 
+const LIGHT_PREFS = ["any", "sunrise", "golden", "sunset"] as const;
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
+/** Shallow validation of one stored stop; fills defaults for fields older copies lack. Null when it cannot be shown safely. */
+function normalizeStop(raw: unknown, tripId: string, order: number): Stop | null {
+  if (!isObj(raw) || typeof raw.id !== "string" || typeof raw.name !== "string" || !finite(raw.lat) || !finite(raw.lng)) return null;
+  const checklist = Array.isArray(raw.shotChecklist)
+    ? raw.shotChecklist.filter((i): i is ShotItem => isObj(i) && typeof i.text === "string" && typeof i.done === "boolean").map((i) => ({ text: i.text, done: i.done }))
+    : [];
+  return {
+    id: raw.id,
+    tripId: typeof raw.tripId === "string" ? raw.tripId : tripId,
+    order: finite(raw.order) ? raw.order : order,
+    name: raw.name,
+    lat: raw.lat,
+    lng: raw.lng,
+    notes: typeof raw.notes === "string" ? raw.notes : null,
+    source: raw.source === "suggested" ? "suggested" : "manual",
+    photoUrl: null,
+    visited: raw.visited === true,
+    lightPref: (LIGHT_PREFS as readonly unknown[]).includes(raw.lightPref) ? (raw.lightPref as Stop["lightPref"]) : "any",
+    dwellMinutes: finite(raw.dwellMinutes) ? raw.dwellMinutes : 0,
+    shotNotes: typeof raw.shotNotes === "string" ? raw.shotNotes : null,
+    shotChecklist: checklist,
+  };
+}
+
+function dropEntry(s: Storage, id: string): void {
+  try {
+    s.removeItem(tripKey(id));
+    const rest = readIndex(s).filter((e) => e.id !== id);
+    s.setItem(INDEX_KEY, JSON.stringify(rest));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** The stored copy, validated; a corrupt or half-written one (or an index entry whose payload is gone) is dropped and null returned. */
 export function loadTripCopy(id: string): TripCopy | null {
   const s = storage();
   if (!s) return null;
   try {
-    const parsed: unknown = JSON.parse(s.getItem(tripKey(id)) ?? "null");
-    const c = parsed as TripCopy | null;
-    if (!c || typeof c.savedAt !== "string" || !c.trip || typeof c.trip.id !== "string" || !Array.isArray(c.trip.stops)) return null;
-    return c;
+    const raw = s.getItem(tripKey(id));
+    if (raw === null) {
+      if (readIndex(s).some((e) => e.id === id)) dropEntry(s, id); // index/payload drift
+      return null;
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (isObj(parsed) && typeof parsed.savedAt === "string" && isObj(parsed.trip)) {
+      const t = parsed.trip;
+      if (typeof t.id === "string" && typeof t.name === "string" && typeof t.plannedDate === "string" && Array.isArray(t.stops)) {
+        const stops = t.stops.map((st, i) => normalizeStop(st, t.id as string, i));
+        if (stops.every((st): st is Stop => st !== null)) {
+          const trip: TripWithStops = { id: t.id, name: t.name, plannedDate: t.plannedDate, departAt: typeof t.departAt === "string" ? t.departAt : null, shareToken: null, stops };
+          return { savedAt: parsed.savedAt, trip };
+        }
+      }
+    }
+    dropEntry(s, id);
+    return null;
   } catch {
+    dropEntry(s, id);
     return null;
   }
 }

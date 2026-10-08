@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/offline/ServiceWorkerRegister";
 import { InitScript } from "@/components/settings/InitScript";
 import { SettingsProvider } from "@/components/settings/SettingsProvider";
@@ -7,6 +7,12 @@ import "./globals.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+// Display face for headings and trip names: a grotesque with some road-sign weight; Geist stays for body text.
+const display = Bricolage_Grotesque({
+  variable: "--font-display-face",
   subsets: ["latin"],
 });
 
@@ -24,7 +30,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${display.variable} h-full antialiased`}
       // The inline script below sets data-theme / data-text-size / data-reduce-motion before hydration.
       suppressHydrationWarning
     >

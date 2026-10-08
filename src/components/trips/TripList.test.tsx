@@ -51,7 +51,9 @@ describe("TripList", () => {
     render(<TripList trips={[trip]} />);
     const link = screen.getByRole("link", { name: /Sierra loop/ });
     expect(link.getAttribute("href")).toBe("/trips/t1");
-    expect(link.textContent).toContain("2026-07-01 · 3 stops");
+    expect(link.textContent).toContain("3 stops");
+    expect(link.querySelector("time")?.getAttribute("datetime")).toBe("2026-07-01");
+    expect(link.querySelector("time")?.textContent).toBe("Jul1");
     expect(link.contains(screen.getByRole("button", { name: "Delete Sierra loop" }))).toBe(false);
   });
 

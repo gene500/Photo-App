@@ -50,6 +50,7 @@
   --color-hover: var(--hover);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-display-face), var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 /* Dark palette. "system" (no data-theme) follows the OS; an explicit data-theme on <html> (set from Settings)
@@ -124,6 +125,8 @@ html[data-reduce-motion="true"] *::after {
     scroll-behavior: auto !important;
   }
 }
+
+h1, h2, .font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
 
 body {
   background: var(--background);

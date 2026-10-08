@@ -7,7 +7,7 @@ import { getWikipediaPhoto } from "./wikimedia";
 
 export type PhotoProvider = (place: PlaceQuery, fetchImpl: typeof fetch) => Promise<PlacePhoto | null>;
 
-/** Tried in order; the first hit wins. Flickr skips itself when FLICKR_API_KEY is not set. */
+/** Run together; the first in this order that has a photo wins. Flickr skips itself when FLICKR_API_KEY is not set. */
 export const PHOTO_PROVIDERS: readonly PhotoProvider[] = [getFlickrPhoto, getCommonsPhoto, getWikipediaPhoto];
 
 export const PHOTO_CACHE_MAX = 500;
@@ -31,13 +31,16 @@ export function createPlacePhotoLookup(opts: { providers?: readonly PhotoProvide
 
   async function run(place: PlaceQuery): Promise<PlacePhoto | null> {
     const fetchImpl = opts.fetchImpl ?? fetch;
-    for (const provider of providers) {
-      try {
-        const photo = await provider(place, fetchImpl);
-        if (photo) return photo;
-      } catch {
-        /* a failing provider never blocks the next one */
-      }
+    // Every provider starts at once, so the slow ones overlap instead of queueing; priority still decides the winner
+    // (the first provider in order that has a photo), and a lower one is never waited on once a higher one has hit.
+    const attempts = providers.map((provider) =>
+      Promise.resolve()
+        .then(() => provider(place, fetchImpl))
+        .catch(() => null), // a failing provider never blocks the next one
+    );
+    for (const attempt of attempts) {
+      const photo = await attempt;
+      if (photo) return photo;
     }
     return null;
   }

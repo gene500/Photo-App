@@ -6,13 +6,25 @@ const photo = (credit: string): PlacePhoto => ({ url: "https://upload.wikimedia.
 const place = { name: "Half Dome", lat: 37.7459, lng: -119.5332 };
 
 describe("provider pipeline", () => {
-  it("tries providers in order and the first hit wins", async () => {
+  it("priority decides the winner even when a lower provider answers first", async () => {
     const a = vi.fn(async () => null);
-    const b = vi.fn(async () => photo("b"));
+    const b = vi.fn(() => new Promise<PlacePhoto>((r) => setTimeout(() => r(photo("b")), 20)));
     const c = vi.fn(async () => photo("c"));
     const lookup = createPlacePhotoLookup({ providers: [a, b, c] });
     expect((await lookup(place))?.credit).toBe("b");
-    expect(c).not.toHaveBeenCalled();
+  });
+
+  it("starts every provider at once instead of one after another", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const slow = vi.fn(async () => (await gate, null));
+    const fast = vi.fn(async () => photo("fast"));
+    const pending = createPlacePhotoLookup({ providers: [slow, fast] })(place);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fast).toHaveBeenCalledTimes(1); // started while the first provider was still waiting
+    release();
+    expect((await pending)?.credit).toBe("fast");
   });
 
   it("falls through providers that return null or throw", async () => {

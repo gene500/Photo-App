@@ -6,6 +6,7 @@ import { useSettings } from "@/components/settings/SettingsProvider";
 import { btnGhost } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { downsampleRoute } from "@/lib/downsample";
+import { prefetchPlacePhotos } from "@/lib/place-photo-cache";
 import { computeArrivals, computeBestTimes, formatClock } from "@/lib/best-time";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useOfflineCopy } from "@/lib/use-offline-copy";
@@ -108,6 +109,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const suggestions = freshSuggestions?.items ?? NO_SUGGESTIONS;
   const suggestionsStatus: SuggestionsStatus = freshSuggestions?.status ?? (stops.length === 1 ? "loading" : "idle");
   const suggestionsError = freshSuggestions?.error ?? null;
+  // As soon as places are found, fetch their photos in the background so popups and cards open with the picture ready.
+  useEffect(() => {
+    if (suggestions.length === 0) return;
+    return prefetchPlacePhotos(suggestions.map((s) => ({ key: s.osmId, name: s.name, lat: s.lat, lng: s.lng })));
+  }, [suggestions]);
   useEffect(() => {
     const coordinates = JSON.parse(waypointKey) as LngLat[];
     if (coordinates.length < 2) return;

@@ -4,6 +4,9 @@ import { cache } from "react";
 import { SharedTripView } from "@/components/share/SharedTripView";
 import { getSharedTrip } from "@/server/share";
 
+// A revoked link must stop working immediately, so this page is never cached or prerendered.
+export const dynamic = "force-dynamic";
+
 // Page and metadata both need the trip; React.cache makes that one query per request.
 const load = cache(getSharedTrip);
 

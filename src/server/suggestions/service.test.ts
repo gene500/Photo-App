@@ -70,8 +70,23 @@ describe("findSuggestionsAround", () => {
     const fetchOverpass = vi.fn<(query: string) => Promise<typeof overpassJson>>(async () => overpassJson);
     const result = await findSuggestionsAround([-119.79, 36.74], { fetchOverpass, fetchImpl });
     expect(result).toHaveLength(1);
-    expect(fetchOverpass.mock.calls[0][0]).toContain("(around:24000,36.74000,-119.79000)");
+    const query = fetchOverpass.mock.calls[0][0];
+    expect(query).toContain("(around:24000,36.74000,-119.79000)");
+    // Viewpoints, peaks and attractions are capped separately so dense attractions can't crowd the rest out.
+    expect(query).toContain('nwr["tourism"="viewpoint"]');
+    expect(query).toContain('node["natural"="peak"]');
+    expect(query).toContain('nwr["tourism"="attraction"]');
+    expect(query.match(/ out center \d+;/g)).toHaveLength(3);
     await findSuggestionsAround([-119.79, 36.74], { fetchOverpass, fetchImpl });
     expect(fetchOverpass).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns the fake suggestions in offline mode without calling Overpass", async () => {
+    process.env.EXTERNAL_APIS_FAKE = "1";
+    const fetchOverpass = vi.fn();
+    const result = await findSuggestionsAround([-119.79, 36.74], { fetchOverpass });
+    expect(result).toHaveLength(3);
+    expect(fetchOverpass).not.toHaveBeenCalled();
+    delete process.env.EXTERNAL_APIS_FAKE;
   });
 });

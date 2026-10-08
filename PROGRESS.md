@@ -423,3 +423,6 @@ auth pages, trip editor, map views).
   `docs/superpowers/specs/2026-10-06-road-trip-photo-planner-design.md`.
 - Next: write the implementation plan (`superpowers:writing-plans`),
   then execute it.
+
+## First-stop suggestions (15 miles)
+A trip with one stop auto-loads suggestions within 24 km (`AROUND_RADIUS_KM`) via `POST /api/suggestions {around}`; 2+ stops use the route corridor as before. The around query caps each kind separately (200 viewpoints / 200 peaks / 150 attractions) so dense attractions cannot crowd out viewpoints. Rulings: after accepting a suggestion at 1 stop the circle results stay visible (re-tagged to the new key) rather than vanishing. Known gap: a manual route search whose response is discarded can leave "Searching…" until the stops change (pre-existing). Not verified against live Overpass.

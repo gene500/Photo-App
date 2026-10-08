@@ -66,6 +66,20 @@ describe("stopPatchSchema", () => {
 
   it("rejects out-of-range coordinates", () => {
     expect(stopPatchSchema.safeParse({ lat: 95, lng: 0 }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ lat: 0, lng: -181 }).success).toBe(false);
+  });
+
+  it("accepts a swap: name, place, source and clearing the photo", () => {
+    const swap = { name: "  Tunnel View ", lat: 37.7, lng: -119.6, source: "suggested", visited: false, photoUrl: null };
+    expect(stopPatchSchema.parse(swap)).toEqual({ ...swap, name: "Tunnel View" });
+  });
+
+  it("validates name, source and photoUrl like stop creation", () => {
+    expect(stopPatchSchema.safeParse({ name: "   " }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ name: "x".repeat(201) }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ source: "other" }).success).toBe(false);
+    // A photo can only be cleared here; setting one goes through the upload route.
+    expect(stopPatchSchema.safeParse({ photoUrl: "/api/uploads/x.png" }).success).toBe(false);
   });
 });
 

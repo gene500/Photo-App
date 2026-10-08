@@ -55,7 +55,7 @@ export const api = {
       "/api/optimize",
       send("POST", { coordinates, ...light }),
     ),
-  suggestions: (route: LngLat[] | { around: LngLat }) =>
+  suggestions: (route: LngLat[] | { around: LngLat; radiusKm?: number }) =>
     request<{ suggestions: Suggestion[] }>("/api/suggestions", send("POST", Array.isArray(route) ? { coordinates: route } : route)),
   geocode: (q: string, proximity?: { lat: number; lng: number }) =>
     request<{ places: Place[] }>(

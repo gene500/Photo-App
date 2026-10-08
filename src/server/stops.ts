@@ -18,7 +18,7 @@ export class TooManyStopsError extends Error {
   }
 }
 
-export type StopUpdate = StopPatch & { photoUrl?: string | null };
+export type StopUpdate = Omit<StopPatch, "photoUrl"> & { photoUrl?: string | null };
 
 /** The checklist column holds JSON text; everything else in a patch maps straight to columns. */
 function toStopData({ shotChecklist, ...rest }: StopUpdate) {

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { LngLat, Suggestion } from "@/lib/types";
 import { fakeSuggestions, isFakeExternal } from "../external/fake";
 import { TtlCache } from "./cache";
-import { buildCorridor, buildOverpassAroundQuery, buildOverpassQuery, toOverpassPoly } from "./corridor";
+import { AROUND_RADIUS_KM, buildCorridor, buildOverpassAroundQuery, buildOverpassQuery, toOverpassPoly } from "./corridor";
 import { fetchOverpass, OverpassError } from "./overpass";
 import { parseOverpassResponse } from "./parse";
 import { enrichPopularity } from "./popularity";
@@ -49,7 +49,7 @@ export async function findSuggestions(route: LngLat[], deps: Deps = {}): Promise
 }
 
 /** Suggestions in a circle around one point (a trip's first stop, before there is a route). */
-export async function findSuggestionsAround(point: LngLat, deps: Deps = {}): Promise<Suggestion[]> {
+export async function findSuggestionsAround(point: LngLat, deps: Deps = {}, radiusKm: number = AROUND_RADIUS_KM): Promise<Suggestion[]> {
   if (isFakeExternal()) return fakeSuggestions([point]);
-  return runSearch(`around:${routeCacheKey([point])}`, () => buildOverpassAroundQuery(point[0], point[1]), deps);
+  return runSearch(`around:${radiusKm}:${routeCacheKey([point])}`, () => buildOverpassAroundQuery(point[0], point[1], radiusKm), deps);
 }

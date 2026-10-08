@@ -81,6 +81,15 @@ describe("findSuggestionsAround", () => {
     expect(fetchOverpass).toHaveBeenCalledTimes(1);
   });
 
+  it("uses a custom radius and caches it apart from the default one", async () => {
+    const fetchOverpass = vi.fn<(query: string) => Promise<typeof overpassJson>>(async () => overpassJson);
+    await findSuggestionsAround([-119.79, 36.74], { fetchOverpass, fetchImpl }, 10);
+    expect(fetchOverpass.mock.calls[0][0]).toContain("(around:10000,36.74000,-119.79000)");
+    await findSuggestionsAround([-119.79, 36.74], { fetchOverpass, fetchImpl });
+    expect(fetchOverpass).toHaveBeenCalledTimes(2);
+    expect(fetchOverpass.mock.calls[1][0]).toContain("(around:24000,");
+  });
+
   it("returns the fake suggestions in offline mode without calling Overpass", async () => {
     process.env.EXTERNAL_APIS_FAKE = "1";
     const fetchOverpass = vi.fn();

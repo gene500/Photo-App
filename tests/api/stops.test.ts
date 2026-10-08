@@ -89,6 +89,37 @@ describe("stop routes", () => {
     expect(res.status).toBe(404);
   });
 
+  it("swaps a stop's place in place, keeping order, notes and shot list", async () => {
+    await add("first");
+    const { stop } = await add("second");
+    const list = [{ text: "Wide", done: true }];
+    await PATCH(jsonRequest("PATCH", `/api/stops/${stop.id}`, { notes: "ND filter", shotNotes: "Early", shotChecklist: list, visited: true }), idParams(stop.id));
+    const res = await PATCH(
+      jsonRequest("PATCH", `/api/stops/${stop.id}`, { name: " Glacier Point ", lat: 37.73, lng: -119.57, source: "suggested", visited: false, photoUrl: null }),
+      idParams(stop.id),
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).stop).toMatchObject({
+      order: 1, name: "Glacier Point", lat: 37.73, lng: -119.57, source: "suggested", visited: false, photoUrl: null,
+      notes: "ND filter", shotNotes: "Early", shotChecklist: list,
+    });
+  });
+
+  it("rejects invalid name, coordinates, source and photoUrl with 400", async () => {
+    const { stop } = await add("a");
+    for (const bad of [{ name: "  " }, { lat: 91 }, { lng: -181 }, { source: "x" }, { photoUrl: "/api/uploads/x.png" }]) {
+      expect((await PATCH(jsonRequest("PATCH", `/api/stops/${stop.id}`, bad), idParams(stop.id))).status).toBe(400);
+    }
+  });
+
+  it("returns 404 swapping another user's stop, and leaves it unchanged", async () => {
+    const { stop } = await add("a");
+    signInAs((await createTestUser()).id);
+    const res = await PATCH(jsonRequest("PATCH", `/api/stops/${stop.id}`, { name: "Hijack", lat: 1, lng: 2, source: "suggested", photoUrl: null }), idParams(stop.id));
+    expect(res.status).toBe(404);
+    expect((await getTrip(userId, tripId))!.stops[0]).toMatchObject({ name: "a", lat: 37.7, lng: -119.6, source: "manual" });
+  });
+
   it("deletes a stop (204)", async () => {
     const { stop } = await add("a");
     const res = await DELETE(jsonRequest("DELETE", `/api/stops/${stop.id}`), idParams(stop.id));

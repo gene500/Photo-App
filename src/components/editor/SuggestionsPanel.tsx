@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnAccent, btnGhost, btnSecondary } from "@/components/ui/styles";
 import { formatPhotoCount } from "@/lib/format";
@@ -25,6 +25,23 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
   // Accepts in flight, per suggestion. The ref guards synchronously (two clicks can land
   // before a re-render); the state disables the button.
   const inFlight = useRef(new Set<string>());
+  // Cards that move when popularity re-ranks the list slide to their new spot instead of jumping (FLIP).
+  const listRef = useRef<HTMLUListElement>(null);
+  const tops = useRef(new Map<string, number>());
+  useLayoutEffect(() => {
+    const next = new Map<string, number>();
+    for (const el of listRef.current?.children ?? []) {
+      const id = (el as HTMLElement).dataset.id;
+      if (!id) continue;
+      const top = (el as HTMLElement).offsetTop;
+      next.set(id, top);
+      const before = tops.current.get(id);
+      if (before !== undefined && before !== top && typeof el.animate === "function" && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+        el.animate([{ transform: `translateY(${before - top}px)` }, { transform: "none" }], { duration: 260, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
+      }
+    }
+    tops.current = next;
+  }, [suggestions]);
   const [accepting, setAccepting] = useState<ReadonlySet<string>>(new Set());
   async function accept(sug: Suggestion) {
     if (inFlight.current.has(sug.osmId)) return;
@@ -61,9 +78,9 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
       {status === "done" && suggestions.length === 0 && (
         <p className="text-sm text-muted">No more suggestions along this route.</p>
       )}
-      <ul className="space-y-1">
-        {suggestions.map((s) => (
-          <li key={s.osmId} data-testid="suggestion-card" onPointerEnter={(e) => isHoverPointer(e) && onHover?.(s.osmId)} onPointerLeave={() => onHover?.(null)} onFocus={() => onHover?.(s.osmId)} onBlur={() => onHover?.(null)} className="flex items-center justify-between gap-2 rounded-xl px-2 py-2 hover:bg-hover">
+      <ul ref={listRef} className="space-y-1">
+        {suggestions.map((s, i) => (
+          <li key={s.osmId} data-testid="suggestion-card" data-id={s.osmId} style={{ animationDelay: `${(i % 5) * 50}ms` }} onPointerEnter={(e) => isHoverPointer(e) && onHover?.(s.osmId)} onPointerLeave={() => onHover?.(null)} onFocus={() => onHover?.(s.osmId)} onBlur={() => onHover?.(null)} className="anim-rise flex items-center justify-between gap-2 rounded-xl px-2 py-2 hover:bg-hover">
             <div className="min-w-0">
               <p data-testid="suggestion-name" className="truncate text-sm font-medium">{s.name}</p>
               <p className="text-xs text-muted">

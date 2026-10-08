@@ -73,6 +73,8 @@ export default function MapPanel({
   const draggingRef = useRef<Set<string>>(new Set());
   const stopIdsRef = useRef<Set<string>>(new Set());
   const suggestionMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  // Suggestion dots already on the map, so only newly revealed ones fade in when the markers are rebuilt.
+  const seenSuggestionsRef = useRef(new Set<string>());
   const pendingMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const popupRef = useRef<mapboxgl.Popup | null>(null);
   const handlersRef = useRef({ onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange });
@@ -241,12 +243,20 @@ export default function MapPanel({
     };
     hidePopup(); // the markers below are rebuilt, so any open popup's dot is gone
     for (const m of suggestionMarkersRef.current) m.remove();
+    if (suggestions.length === 0) seenSuggestionsRef.current.clear();
+    let fresh = 0;
     suggestionMarkersRef.current = suggestions.map((s) => {
+      const isNew = !seenSuggestionsRef.current.has(s.osmId);
+      seenSuggestionsRef.current.add(s.osmId);
       const big = s.osmId === highlightedSuggestionId;
       const el = markerElement(
         `rounded-full border-2 border-white bg-accent shadow ${big ? "h-5 w-5" : "h-3.5 w-3.5 opacity-70"}`,
         `Suggestion: ${s.name}`,
       );
+      if (isNew) {
+        el.classList.add("anim-dot-in");
+        el.style.animationDelay = `${Math.min(fresh++, 10) * 45}ms`;
+      }
       el.addEventListener("click", () => {
         hidePopup(); // touch has no mouseleave; the place card shows the photo from here
         handlersRef.current.onSuggestionClick?.(s.osmId);

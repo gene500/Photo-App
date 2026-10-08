@@ -104,6 +104,8 @@ html[data-text-size="xlarge"] { font-size: 125%; }
 @keyframes rtpp-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rtpp-slide-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
 .anim-rise { animation: rtpp-rise 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.anim-dot-in { animation: rtpp-dot-in 320ms ease-out backwards; }
+@keyframes rtpp-dot-in { from { opacity: 0; } }
 .anim-fade { animation: rtpp-fade 260ms ease-out both; }
 .anim-slide-in { animation: rtpp-slide-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .lift { transition: transform 180ms ease, box-shadow 180ms ease; }

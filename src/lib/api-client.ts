@@ -34,6 +34,8 @@ export const api = {
   createTrip: (input: TripInput) => request<{ trip: Trip }>("/api/trips", send("POST", input)),
   updateTrip: (id: string, patch: TripPatch) => request<{ trip: Trip }>(`/api/trips/${id}`, send("PATCH", patch)),
   deleteTrip: (id: string) => request<void>(`/api/trips/${id}`, send("DELETE")),
+  createShare: (tripId: string) => request<{ shareToken: string }>(`/api/trips/${tripId}/share`, send("POST")),
+  revokeShare: (tripId: string) => request<void>(`/api/trips/${tripId}/share`, send("DELETE")),
   addStop: (tripId: string, input: NewStopInput) =>
     request<{ stop: Stop }>(`/api/trips/${tripId}/stops`, send("POST", input)),
   updateStop: (id: string, patch: StopPatch) => request<{ stop: Stop }>(`/api/stops/${id}`, send("PATCH", patch)),

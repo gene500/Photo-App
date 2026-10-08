@@ -5,9 +5,10 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost, btnPrimary, btnSecondary, inputClass } from "@/components/ui/styles";
 import type { Trip } from "@/lib/types";
 import type { TripPatch } from "@/lib/validation";
+import { ShareControl } from "./ShareControl";
 
 
-export function TripHeader({ trip, onSave }: { trip: Trip; onSave: (patch: TripPatch) => Promise<void> }) {
+export function TripHeader({ trip, onSave, onShareChange }: { trip: Trip; onSave: (patch: TripPatch) => Promise<void>; onShareChange?: (shareToken: string | null) => void }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(trip.name);
   const [plannedDate, setPlannedDate] = useState(trip.plannedDate);
@@ -39,7 +40,10 @@ export function TripHeader({ trip, onSave }: { trip: Trip; onSave: (patch: TripP
       <header>
         <div className="flex items-start justify-between gap-2">
           <h1 className="min-w-0 truncate text-lg font-semibold leading-9">{trip.name}</h1>
-          <button type="button" onClick={beginEdit} className={`${btnGhost} shrink-0`}>Edit trip</button>
+          <div className="flex shrink-0">
+            <button type="button" onClick={beginEdit} className={btnGhost}>Edit trip</button>
+            {onShareChange && <ShareControl tripId={trip.id} shareToken={trip.shareToken} onChange={onShareChange} />}
+          </div>
         </div>
         <p className="text-sm text-muted">Planned for {trip.plannedDate}</p>
       </header>

@@ -9,7 +9,7 @@ describe("trips data access", () => {
   it("creates a trip and returns a DTO with a date-only plannedDate", async () => {
     const user = await createTestUser();
     const trip = await createTrip(user.id, sampleTripInput);
-    expect(trip).toEqual({ id: expect.any(String), ...sampleTripInput, departAt: null });
+    expect(trip).toEqual({ id: expect.any(String), ...sampleTripInput, departAt: null, shareToken: null });
   });
 
   it("sets and clears departAt as an ISO string", async () => {

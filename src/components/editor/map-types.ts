@@ -3,6 +3,8 @@ import type { LngLat, Stop, Suggestion } from "@/lib/types";
 export type LatLng = { lat: number; lng: number };
 
 export type MapViewProps = {
+  /** Public share view: markers cannot be dragged. */
+  readOnly?: boolean;
   stops: Stop[];
   routeGeometry: LngLat[] | null;
   /** Temporary pin for a search result / clicked spot / suggestion being considered. */

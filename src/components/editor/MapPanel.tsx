@@ -47,7 +47,7 @@ function viewPadding(): mapboxgl.PaddingOptions {
 }
 
 export default function MapPanel({
-  stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, flyTo,
+  stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, flyTo, readOnly,
   onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -175,7 +175,7 @@ export default function MapPanel({
         el.style.background = stopColor(s);
         const id = s.id;
         el.addEventListener("click", () => handlersRef.current.onStopClick(id));
-        const marker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat([s.lng, s.lat]).addTo(map);
+        const marker = new mapboxgl.Marker({ element: el, draggable: !readOnly }).setLngLat([s.lng, s.lat]).addTo(map);
         marker.on("dragstart", () => draggingRef.current.add(id));
         marker.on("dragend", () => {
           draggingRef.current.delete(id);
@@ -191,6 +191,7 @@ export default function MapPanel({
         markers.set(id, marker);
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- readOnly is fixed for the life of the map
   }, [stops, selectedId]);
 
   // Remove all stop markers on unmount (the map teardown also drops them; this clears our bookkeeping).

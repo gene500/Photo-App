@@ -38,6 +38,22 @@ export type Trip = {
   plannedDate: string;
   /** ISO instant the trip leaves the first stop; null = sunrise at the first stop. */
   departAt: string | null;
+  /** Read-only share token; only ever sent to the trip's owner. */
+  shareToken: string | null;
+};
+
+/** One stop as shown on the public share page: no ids, no uploaded photo. */
+export type PublicStop = Pick<
+  Stop,
+  "order" | "name" | "lat" | "lng" | "notes" | "source" | "visited" | "lightPref" | "dwellMinutes" | "shotNotes" | "shotChecklist"
+>;
+
+/** The sanitized, read-only view of a shared trip. Nothing here identifies or can modify the owner's data. */
+export type PublicTrip = {
+  name: string;
+  plannedDate: string;
+  departAt: string | null;
+  stops: PublicStop[];
 };
 
 export type TripWithStops = Trip & { stops: Stop[] };

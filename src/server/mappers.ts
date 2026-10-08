@@ -1,6 +1,6 @@
 import type { Stop as StopRow, Trip as TripRow } from "@/generated/prisma/client";
 import { utcToDateOnly } from "@/lib/dates";
-import type { LightPref, ShotItem, Stop, StopSource, Trip } from "@/lib/types";
+import type { LightPref, PublicStop, PublicTrip, ShotItem, Stop, StopSource, Trip } from "@/lib/types";
 
 export function toTripDto(row: TripRow): Trip {
   return {
@@ -8,6 +8,7 @@ export function toTripDto(row: TripRow): Trip {
     name: row.name,
     plannedDate: utcToDateOnly(row.plannedDate),
     departAt: row.departAt ? row.departAt.toISOString() : null,
+    shareToken: row.shareToken,
   };
 }
 
@@ -42,5 +43,33 @@ export function toStopDto(row: StopRow): Stop {
     dwellMinutes: row.dwellMinutes,
     shotNotes: row.shotNotes,
     shotChecklist: parseShotChecklist(row.shotChecklist),
+  };
+}
+
+/**
+ * The only mapper the public share page uses. It picks fields explicitly (never spreads a row), so a
+ * column added later stays private until it is listed here. No ids, no userId, no photoUrl, no token.
+ */
+export function toPublicTripDto(row: TripRow & { stops: StopRow[] }): PublicTrip {
+  const stops: PublicStop[] = [...row.stops]
+    .sort((a, b) => a.order - b.order)
+    .map((s) => ({
+      order: s.order,
+      name: s.name,
+      lat: s.lat,
+      lng: s.lng,
+      notes: s.notes,
+      source: s.source as StopSource,
+      visited: s.visited,
+      lightPref: s.lightPref as LightPref,
+      dwellMinutes: s.dwellMinutes,
+      shotNotes: s.shotNotes,
+      shotChecklist: parseShotChecklist(s.shotChecklist),
+    }));
+  return {
+    name: row.name,
+    plannedDate: utcToDateOnly(row.plannedDate),
+    departAt: row.departAt ? row.departAt.toISOString() : null,
+    stops,
   };
 }

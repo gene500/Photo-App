@@ -7,7 +7,7 @@ import type { Trip } from "@/lib/types";
 import { TripHeader } from "./TripHeader";
 
 const trip: Trip = {
-  id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", departAt: null,
+  id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", departAt: null, shareToken: null,
 };
 
 describe("TripHeader", () => {
@@ -34,5 +34,13 @@ describe("TripHeader", () => {
     await userEvent.click(screen.getByRole("button", { name: "Edit trip" }));
     await userEvent.click(screen.getByRole("button", { name: "Save trip" }));
     expect((await screen.findByRole("alert")).textContent).toContain("Trip not found");
+  });
+
+  it("shows the Share control only when the editor wires it up, and reports changes", async () => {
+    const { rerender } = render(<TripHeader trip={trip} onSave={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
+    const onShareChange = vi.fn();
+    rerender(<TripHeader trip={trip} onSave={vi.fn()} onShareChange={onShareChange} />);
+    expect(screen.getByRole("button", { name: "Share" })).toBeTruthy();
   });
 });

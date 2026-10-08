@@ -11,7 +11,7 @@ import type { TripSummary } from "@/lib/types";
 import { TripList } from "./TripList";
 
 const trip: TripSummary = {
-  id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", departAt: null, stopCount: 3, updatedAt: "2026-06-01T00:00:00Z",
+  id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", departAt: null, shareToken: null, stopCount: 3, updatedAt: "2026-06-01T00:00:00Z",
 };
 
 describe("TripList", () => {

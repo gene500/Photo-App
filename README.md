@@ -108,6 +108,19 @@ the rest of the drawer (only changed fields are sent). The selected-stop card sh
 "2/5 shots" when the list is not empty. The uploaded stop photo is the **Reference
 photo**. Stored as `shotNotes` and a JSON `shotChecklist` column (additive migration).
 
+### Read-only share link
+
+The **Share** button in the trip header creates a link (`/s/<token>`) anyone can open
+without an account: the map with numbered pins and a straight route line, and the stops
+with notes, shot lists and estimated arrival/light hints. **Revoke link** kills it at
+once (the URL then 404s); sharing again issues a new token. The token is 32 random
+bytes (43 base64url chars) stored in `Trip.shareToken` (nullable, unique; additive
+migration `20261010120000_share_token`). The public page reads a dedicated sanitized
+DTO (`toPublicTripDto`): no email, user id, database ids or uploaded photos, and it is
+`noindex, nofollow` with `referrer: no-referrer`. `/api/directions` stays login-only, so
+the shared view uses straight lines and distance-based time estimates. Owner-only API:
+`POST /api/trips/[id]/share` (create or return the existing token) and `DELETE` (revoke).
+
 ### Photo popups and beige map
 
 With a single stop, suggestions within about 15 miles (24 km) of it load automatically; from

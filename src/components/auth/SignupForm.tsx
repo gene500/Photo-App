@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
+import { enableOfflineSaving } from "@/lib/offline-store";
 import { btnPrimary, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 
@@ -22,6 +23,7 @@ export function SignupForm() {
       await api.signup(email, password);
       const res = await signIn("credentials", { email, password, redirect: false });
       if (!res || res.error) throw new Error("Account created, but signing in failed. Try logging in.");
+      enableOfflineSaving();
       router.push("/trips");
       router.refresh();
     } catch (e) {

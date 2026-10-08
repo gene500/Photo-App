@@ -15,6 +15,25 @@ export const MAX_COPIES = 20;
 export type TripCopySummary = { id: string; name: string; plannedDate: string; savedAt: string; stopCount: number };
 export type TripCopy = { savedAt: string; trip: TripWithStops };
 
+// Sign-out switches saving off for the rest of this page's life: a debounced save that is still pending (or an
+// in-flight autosave) must not re-create a copy after clearAllCopies() ran during the async signOut. Login re-enables it.
+let savingDisabled = false;
+const disableListeners = new Set<() => void>();
+
+export function disableOfflineSaving(): void {
+  savingDisabled = true;
+  disableListeners.forEach((cb) => cb());
+}
+export function enableOfflineSaving(): void {
+  savingDisabled = false;
+}
+export const offlineSavingDisabled = () => savingDisabled;
+/** Called when saving is switched off (so pending timers can be cancelled). */
+export function onOfflineSavingDisabled(cb: () => void): () => void {
+  disableListeners.add(cb);
+  return () => void disableListeners.delete(cb);
+}
+
 function storage(): Storage | null {
   try {
     return typeof localStorage === "undefined" ? null : localStorage;
@@ -43,7 +62,7 @@ function sanitize(trip: TripWithStops): TripWithStops {
 /** Saves (or refreshes) the copy of a trip and keeps the 20 most recent. Returns false when nothing could be stored. */
 export function saveTripCopy(trip: TripWithStops, now: Date = new Date()): boolean {
   const s = storage();
-  if (!s) return false;
+  if (!s || savingDisabled) return false;
   const savedAt = now.toISOString();
   const payload = JSON.stringify({ savedAt, trip: sanitize(trip) } satisfies TripCopy);
   const entry: TripCopySummary = { id: trip.id, name: trip.name, plannedDate: trip.plannedDate, savedAt, stopCount: trip.stops.length };
@@ -106,7 +125,7 @@ export function clearAllCopies(): void {
 /** Records whose copies these are; if a different user is signed in now, the old user's copies are wiped first. */
 export function claimOwner(userId: string): void {
   const s = storage();
-  if (!s) return;
+  if (!s || savingDisabled) return;
   try {
     const owner = s.getItem(OWNER_KEY);
     if (owner !== null && owner !== userId) clearAllCopies();

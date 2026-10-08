@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { claimOwner, saveTripCopy } from "@/lib/offline-store";
+import { claimOwner, offlineSavingDisabled, onOfflineSavingDisabled, saveTripCopy } from "@/lib/offline-store";
 import type { Stop, Trip } from "@/lib/types";
 
 const SAVE_DELAY_MS = 1500;
@@ -10,11 +10,17 @@ const SAVE_DELAY_MS = 1500;
 export function useOfflineCopy(trip: Trip, stops: Stop[], userId: string | undefined, delayMs = SAVE_DELAY_MS) {
   useEffect(() => {
     if (!userId) return;
+    if (offlineSavingDisabled()) return;
     const t = setTimeout(() => {
+      if (offlineSavingDisabled()) return;
       if (typeof navigator !== "undefined" && navigator.onLine === false) return;
       claimOwner(userId);
       saveTripCopy({ ...trip, stops });
     }, delayMs);
-    return () => clearTimeout(t);
+    const stopListening = onOfflineSavingDisabled(() => clearTimeout(t)); // signing out cancels the pending save
+    return () => {
+      clearTimeout(t);
+      stopListening();
+    };
   }, [trip, stops, userId, delayMs]);
 }

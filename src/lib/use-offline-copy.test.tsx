@@ -2,7 +2,7 @@
 import { renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMemoryStorage } from "../../tests/helpers/memory-storage";
-import { listTripCopies, loadTripCopy, saveTripCopy } from "./offline-store";
+import { clearAllCopies, disableOfflineSaving, enableOfflineSaving, listTripCopies, loadTripCopy, saveTripCopy } from "./offline-store";
 import type { Stop, Trip } from "./types";
 import { useOfflineCopy } from "./use-offline-copy";
 
@@ -14,6 +14,7 @@ beforeEach(() => {
   vi.useFakeTimers();
 });
 afterEach(() => {
+  enableOfflineSaving();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -40,5 +41,25 @@ describe("useOfflineCopy", () => {
     renderHook(() => useOfflineCopy(trip, stops, "u1"));
     vi.advanceTimersByTime(2000);
     expect(listTripCopies().map((e) => e.id)).toEqual(["t1"]);
+  });
+
+  it("sign-out race: a pending save cannot re-create the copy after the copies were cleared", () => {
+    saveTripCopy({ ...trip, stops: [] });
+    renderHook(() => useOfflineCopy(trip, stops, "u1"));
+    vi.advanceTimersByTime(1000); // the debounce is still pending when Sign out is clicked
+    disableOfflineSaving();
+    clearAllCopies();
+    vi.advanceTimersByTime(5000); // ...and fires while the async signOut is still in flight
+    expect(listTripCopies()).toEqual([]);
+    expect(localStorage.getItem("rtpp.offline.owner")).toBeNull();
+    expect(saveTripCopy({ ...trip, stops: [] })).toBe(false); // direct saves are blocked too
+  });
+
+  it("saves again once saving is re-enabled (after a login)", () => {
+    disableOfflineSaving();
+    enableOfflineSaving();
+    renderHook(() => useOfflineCopy(trip, stops, "u1"));
+    vi.advanceTimersByTime(2000);
+    expect(listTripCopies()).toHaveLength(1);
   });
 });

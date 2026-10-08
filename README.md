@@ -180,12 +180,12 @@ never touched.
 ## Weather and light-window forecast
 
 A stop with a preferred light (sunrise, golden hour, sunset) and an estimated
-arrival shows the forecast for that hour under its row and on the selected-stop
-card, e.g. "mostly clear, 15% rain"; the add-place card shows the evening
+arrival shows the forecast at the middle of its light window (the window the
+visit is in, else the nearest) under its row and on the selected-stop card, e.g. "mostly clear, 15% rain"; the add-place card shows the evening
 golden-hour forecast for the trip date. Data comes from Open-Meteo (free, no
 key, fixed host `api.open-meteo.com`) through the signed-in-only
-`GET /api/weather?lat&lng&date`, cached 30 minutes per ~1 km and day.
-Forecasts reach about 16 days ahead: later dates show "Forecast not available
+`GET /api/weather?lat&lng&date`, cached 30 minutes per ~1 km and day (failures 60 s); each request covers the day before to the day after.
+Forecasts reach about 16 days ahead (yesterday is also accepted, since the server date is UTC): later dates show "Forecast not available
 yet" without calling upstream; a failed lookup shows nothing. Open-Meteo
 labels hours in the location's local time, so `src/lib/weather.ts` converts
 with `utc_offset_seconds` before matching them to arrival instants. The

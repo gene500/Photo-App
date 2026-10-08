@@ -1,4 +1,4 @@
-import { inForecastRange, parseOpenMeteo } from "@/lib/weather";
+import { forecastSpan, inForecastRange, parseOpenMeteo } from "@/lib/weather";
 import type { WeatherForecast } from "@/lib/types";
 import { fakeWeather, isFakeExternal } from "./fake";
 import { PHOTO_USER_AGENT } from "./photo-http";
@@ -8,6 +8,8 @@ const API = "https://api.open-meteo.com/v1/forecast";
 export const WEATHER_TIMEOUT_MS = 5000;
 export const WEATHER_CACHE_MAX = 500;
 export const WEATHER_TTL_MS = 30 * 60_000;
+/** An upstream failure is remembered briefly so a flapping Open-Meteo is not hammered. */
+export const WEATHER_FAILURE_TTL_MS = 60_000;
 
 /** Same ~1 km grid as the cache key, so every request that shares a key asks upstream for the same point. */
 const round2 = (n: number) => n.toFixed(2);
@@ -19,7 +21,8 @@ export function weatherCacheKey(lat: number, lng: number, date: string): string 
 export async function fetchForecast(
   lat: number,
   lng: number,
-  date: string,
+  start: string,
+  end: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<WeatherForecast> {
   try {
@@ -28,8 +31,8 @@ export async function fetchForecast(
       longitude: round2(lng),
       hourly: "cloud_cover,precipitation_probability,temperature_2m",
       timezone: "auto",
-      start_date: date,
-      end_date: date,
+      start_date: start,
+      end_date: end,
     });
     const res = await fetchImpl(`${API}?${params}`, {
       headers: { "User-Agent": PHOTO_USER_AGENT, Accept: "application/json" },
@@ -44,14 +47,14 @@ export async function fetchForecast(
 
 /**
  * Forecast lookup with a bounded in-memory LRU (30 min) and in-flight de-duplication. Only real forecasts are
- * cached: a failure is retried on the next request.
+ * cached for 30 min; an unavailable answer for 60 s.
  */
 export function createForecastLookup(opts: { fetchImpl?: typeof fetch; now?: () => number } = {}) {
   const now = opts.now ?? Date.now;
   const store = new Map<string, { forecast: WeatherForecast; expiresAt: number }>(); // insertion order = recency
   const inFlight = new Map<string, Promise<WeatherForecast>>();
 
-  function lookup(lat: number, lng: number, date: string): Promise<WeatherForecast> {
+  function lookup(lat: number, lng: number, date: string, today = new Date().toISOString().slice(0, 10)): Promise<WeatherForecast> {
     const key = weatherCacheKey(lat, lng, date);
     const hit = store.get(key);
     if (hit) {
@@ -63,12 +66,11 @@ export function createForecastLookup(opts: { fetchImpl?: typeof fetch; now?: () 
     }
     const pending = inFlight.get(key);
     if (pending) return pending;
-    const p = fetchForecast(lat, lng, date, opts.fetchImpl)
+    const span = forecastSpan(date, today);
+    const p = fetchForecast(lat, lng, span.start, span.end, opts.fetchImpl)
       .then((forecast) => {
-        if (forecast.available) {
-          store.set(key, { forecast, expiresAt: now() + WEATHER_TTL_MS });
-          while (store.size > WEATHER_CACHE_MAX) store.delete(store.keys().next().value as string);
-        }
+        store.set(key, { forecast, expiresAt: now() + (forecast.available ? WEATHER_TTL_MS : WEATHER_FAILURE_TTL_MS) });
+        while (store.size > WEATHER_CACHE_MAX) store.delete(store.keys().next().value as string);
         return forecast;
       })
       .finally(() => inFlight.delete(key));
@@ -81,9 +83,12 @@ export function createForecastLookup(opts: { fetchImpl?: typeof fetch; now?: () 
 
 const shared = createForecastLookup();
 
-/** Hourly cloud, rain chance and temperature for one day at a point; out-of-horizon dates never reach upstream. */
+/** Hourly cloud, rain chance and temperature around one day (the day before through the day after) at a point; out-of-horizon dates never reach upstream. */
 export async function getForecast(lat: number, lng: number, date: string, today = new Date().toISOString().slice(0, 10)): Promise<WeatherForecast> {
   if (!inForecastRange(date, today)) return { available: false, reason: "out_of_range" };
-  if (isFakeExternal()) return fakeWeather({ lat, lng }, date);
-  return shared(lat, lng, date);
+  if (isFakeExternal()) {
+    const { start, end } = forecastSpan(date, today);
+    return fakeWeather({ lat, lng }, start, end);
+  }
+  return shared(lat, lng, date, today);
 }

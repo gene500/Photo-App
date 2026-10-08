@@ -48,6 +48,26 @@ export function windowsForArrival(pref: LightPref, lat: number, lng: number, arr
   return lightWindows(pref, getSunWindows(lat, lng, solarDateAt(arrival, lng)));
 }
 
+/**
+ * When to read the weather for a stop: the middle of the light window the visit is in, else of the nearest one
+ * (for golden, the nearer of morning and evening), so a sunset stop reached at 2 pm is judged by the 7 pm sky.
+ * Without a preference or any window (polar) it is the arrival itself.
+ */
+export function forecastInstant(pref: LightPref, lat: number, lng: number, arrival: Date): Date {
+  const windows = windowsForArrival(pref, lat, lng, arrival);
+  const t = arrival.getTime();
+  let best: LightWindow | null = null;
+  let bestGap = Infinity;
+  for (const w of windows) {
+    const gap = t < w[0].getTime() ? w[0].getTime() - t : t > w[1].getTime() ? t - w[1].getTime() : 0;
+    if (gap < bestGap) {
+      best = w;
+      bestGap = gap;
+    }
+  }
+  return best ? new Date((best[0].getTime() + best[1].getTime()) / 2) : arrival;
+}
+
 /** New stops from a suggestion start with a sensible light: scenic spots in golden light. */
 export function defaultLightPref(kind: SuggestionKind): LightPref {
   return kind === "viewpoint" || kind === "peak" ? "golden" : "any";

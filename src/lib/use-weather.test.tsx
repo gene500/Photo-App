@@ -5,6 +5,7 @@ import type { WeatherForecast } from "./types";
 
 const loadForecast = vi.fn();
 vi.mock("./weather-cache", () => ({ loadForecast: (...a: unknown[]) => loadForecast(...a) }));
+import { forecastInstant } from "./light-windows";
 import { useWeatherLine, weatherLine } from "./use-weather";
 
 const day = (offset: number) => new Date(Date.now() + offset * 86_400_000);
@@ -45,9 +46,22 @@ describe("useWeatherLine", () => {
     at.setUTCHours(12, 0, 0, 0);
     const date = dateOf(at);
     loadForecast.mockResolvedValue(forecastFor(date));
-    const { result } = renderHook(() => useWeatherLine(0, 0, at, "sunset"));
-    await waitFor(() => expect(result.current).toEqual({ text: "clear, 15% rain", quality: "good" }));
+    const { result } = renderHook(() => useWeatherLine(0, 0, at, "any"));
+    await waitFor(() => expect(result.current).toEqual({ text: "clear, 15% rain", quality: null }));
     expect(loadForecast).toHaveBeenCalledWith(0, 0, date);
+  });
+
+  it("reads a sunset stop's weather at the middle of its window, not at the 2 pm arrival", async () => {
+    const arrival = day(3);
+    arrival.setUTCHours(14, 0, 0, 0);
+    const mid = forecastInstant("sunset", 0, 0, arrival);
+    expect(mid.getTime() - arrival.getTime()).toBeGreaterThan(2 * 3600_000);
+    const hour = (d: Date, cloudPct: number) => ({ time: `${d.toISOString().slice(0, 13)}:00`, cloudPct, rainPct: 5, tempC: 20 });
+    const midHour = new Date(Math.round(mid.getTime() / 3600_000) * 3600_000);
+    loadForecast.mockResolvedValue({ available: true, utcOffsetSeconds: 0, hours: [hour(arrival, 3), hour(midHour, 95)] });
+    const { result } = renderHook(() => useWeatherLine(0, 0, arrival, "sunset"));
+    await waitFor(() => expect(result.current).toEqual({ text: "overcast, 5% rain", quality: "poor" }));
+    expect(loadForecast).toHaveBeenCalledWith(0, 0, dateOf(mid));
   });
 
   it("stays silent when the fetch fails", async () => {
@@ -59,9 +73,9 @@ describe("useWeatherLine", () => {
   });
 
   it("answers 'not available yet' beyond the horizon without a request, and nothing for the past", () => {
-    const far = renderHook(() => useWeatherLine(0, 0, day(40), "sunset"));
+    const far = renderHook(() => useWeatherLine(0, 0, day(40), "any"));
     expect(far.result.current?.text).toBe("Forecast not available yet");
-    const past = renderHook(() => useWeatherLine(0, 0, day(-40), "sunset"));
+    const past = renderHook(() => useWeatherLine(0, 0, day(-40), "any"));
     expect(past.result.current).toBeNull();
     expect(loadForecast).not.toHaveBeenCalled();
   });

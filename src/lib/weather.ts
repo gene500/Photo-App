@@ -1,15 +1,34 @@
 import type { LightPref, WeatherForecast, WeatherHour } from "./types";
 
-/** Open-Meteo forecasts reach about 16 days ahead: today through today + 15. */
+/** Open-Meteo forecasts reach about 16 days ahead: today through today + 15 (plus yesterday, see inForecastRange). */
 export const FORECAST_DAYS = 15;
 /** An hour further than this from the asked instant is "no data" rather than a stale guess. */
 const MAX_GAP_MS = 90 * 60_000;
 
-/** True when `date` (YYYY-MM-DD) is within the forecast horizon counted from `today` (YYYY-MM-DD). */
+const dayNumber = (s: string) => Date.parse(`${s}T00:00:00Z`) / 86_400_000;
+
+export function addDays(date: string, n: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * True when `date` (YYYY-MM-DD) is yesterday through the forecast horizon counted from `today`. Yesterday is
+ * allowed because `today` is the server's UTC date, which runs a day ahead of a viewer in the Americas.
+ */
 export function inForecastRange(date: string, today: string): boolean {
-  const day = (s: string) => Date.parse(`${s}T00:00:00Z`) / 86_400_000;
-  const diff = day(date) - day(today);
-  return diff >= 0 && diff <= FORECAST_DAYS;
+  const diff = dayNumber(date) - dayNumber(today);
+  return diff >= -1 && diff <= FORECAST_DAYS;
+}
+
+/**
+ * The days to request for `date`: the day before through the day after, so a window near midnight (or in a zone far
+ * from its longitude's solar time) still finds its hour. Clamped to the range Open-Meteo serves.
+ */
+export function forecastSpan(date: string, today: string): { start: string; end: string } {
+  const lo = addDays(today, -1);
+  const hi = addDays(today, FORECAST_DAYS);
+  const clamp = (d: string) => (d < lo ? lo : d > hi ? hi : d);
+  return { start: clamp(addDays(date, -1)), end: clamp(addDays(date, 1)) };
 }
 
 /**

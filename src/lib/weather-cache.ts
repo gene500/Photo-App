@@ -4,6 +4,9 @@ import type { WeatherForecast } from "./types";
 /** A failed lookup is remembered this long so a re-render or reselect doesn't refetch every time. */
 export const WEATHER_FAILURE_TTL_MS = 60_000;
 
+/** A forecast is reused this long; after that the next look refetches (forecasts change). */
+export const WEATHER_SUCCESS_TTL_MS = 30 * 60_000;
+
 // One fetch per place-and-day per session; stops on the same ~1 km grid share it, and the in-flight promise is shared.
 const cache = new Map<string, { promise: Promise<WeatherForecast | null>; expiresAt: number }>();
 
@@ -21,7 +24,8 @@ export function loadForecast(lat: number, lng: number, date: string): Promise<We
     promise: api
       .weather({ lat, lng, date })
       .then((r) => {
-        if (!r.forecast.available && r.forecast.reason === "unavailable") entry.expiresAt = Date.now() + WEATHER_FAILURE_TTL_MS;
+        const unavailable = !r.forecast.available && r.forecast.reason === "unavailable";
+        entry.expiresAt = Date.now() + (unavailable ? WEATHER_FAILURE_TTL_MS : WEATHER_SUCCESS_TTL_MS);
         return r.forecast;
       })
       .catch(() => {

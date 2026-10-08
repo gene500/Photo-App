@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ExternalServiceError, geocode, getDirections, getDurationMatrix, reverseGeocode } from "./mapbox";
+import { clearDirectionsCache, ExternalServiceError, geocode, getDirections, getDurationMatrix, reverseGeocode } from "./mapbox";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const okRoute = {
@@ -16,9 +16,20 @@ describe("mapbox", () => {
   beforeEach(() => {
     process.env.MAPBOX_TOKEN = "test-token";
     delete process.env.EXTERNAL_APIS_FAKE;
+    clearDirectionsCache();
   });
   afterEach(() => {
     delete process.env.MAPBOX_TOKEN;
+  });
+
+  it("serves a repeat request for the same stops from memory, but never caches a failure", async () => {
+    const stops: [number, number][] = [[-1, -1], [-2, -2]];
+    const failing = vi.fn(async () => json({ code: "NoRoute" }, 200));
+    await expect(getDirections(stops, failing)).rejects.toThrow();
+    const fetchImpl = vi.fn(async () => json(okRoute));
+    const first = await getDirections(stops, fetchImpl);
+    expect(await getDirections(stops, fetchImpl)).toEqual(first);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("requests a driving route with GeoJSON geometry", async () => {

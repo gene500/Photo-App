@@ -1,5 +1,6 @@
 import type { LngLat, Place, RouteResult } from "@/lib/types";
 import { coordsLabel } from "@/lib/geo";
+import { TtlCache } from "../suggestions/cache";
 import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakeReverseGeocode, isFakeExternal } from "./fake";
 
 const MAPBOX_BASE = "https://api.mapbox.com";
@@ -40,9 +41,19 @@ async function getJson<T>(url: string, fetchImpl: typeof fetch, unreachable: str
   return { ok: res.ok, body };
 }
 
+/** Routes between the same stops are asked for on every page open; Mapbox charges per request and takes a second. */
+const DIRECTIONS_TTL_MS = 10 * 60_000;
+const directionsCache = new TtlCache<RouteResult>(DIRECTIONS_TTL_MS, 200);
+
+export function clearDirectionsCache(): void {
+  directionsCache.clear();
+}
+
 export async function getDirections(coords: LngLat[], fetchImpl: typeof fetch = fetch): Promise<RouteResult> {
   if (isFakeExternal()) return fakeDirections(coords);
   const path = coords.map(([lng, lat]) => `${lng.toFixed(6)},${lat.toFixed(6)}`).join(";");
+  const cached = directionsCache.get(path);
+  if (cached) return cached;
   const url =
     `${MAPBOX_BASE}/directions/v5/mapbox/driving/${path}` +
     `?geometries=geojson&overview=full&access_token=${encodeURIComponent(token())}`;
@@ -53,12 +64,14 @@ export async function getDirections(coords: LngLat[], fetchImpl: typeof fetch = 
       body?.code === "NoRoute" ? "No driving route found between these points" : "Routing failed. Please try again.",
     );
   }
-  return {
+  const result: RouteResult = {
     geometry: route.geometry.coordinates,
     legs: route.legs.map((l) => ({ distance: l.distance, duration: l.duration })),
     distance: route.distance,
     duration: route.duration,
   };
+  directionsCache.set(path, result);
+  return result;
 }
 
 type MatrixResponse = { code?: string; durations?: (number | null)[][] };

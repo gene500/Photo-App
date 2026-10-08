@@ -7,6 +7,8 @@
 const CACHE_PREFIX = "rtpp-offline-";
 const CACHE = CACHE_PREFIX + "v2";
 const OFFLINE_URL = "/offline";
+// Dev builds reuse asset names between edits, so only production builds answer assets from the cache first.
+const IS_DEV = new URL(self.location.href).searchParams.has("dev");
 const MAX_STATIC_ENTRIES = 200;
 
 const isStaticAsset = (path) => path.startsWith("/_next/static/") || path.startsWith("/icons/");
@@ -23,7 +25,8 @@ async function precacheShell(cache) {
   // The assets the shell references, so it can render without a network.
   const assets = new Set();
   for (const m of html.matchAll(/(?:src|href)="(\/_next\/static\/[^"#]+)/g)) assets.add(m[1]);
-  await Promise.all([...assets].map((a) => cache.add(a).catch(() => {})));
+  // Hashed assets never change, so only the ones not already stored are downloaded (a visit used to re-fetch the whole shell).
+  await Promise.all([...assets].map(async (a) => ((await cache.match(a)) ? undefined : cache.add(a).catch(() => {}))));
   await pruneStatic(cache, assets);
 }
 
@@ -99,8 +102,26 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  if (!IS_DEV && path.startsWith("/_next/static/")) {
+    // Content-hashed, so a cached copy is always current: answer from the cache and only go to the network on a miss.
+    event.respondWith(
+      caches.match(request, { ignoreSearch: true }).then(
+        (hit) =>
+          hit ??
+          fetch(request).then((res) => {
+            if (res.ok && res.type !== "opaque") {
+              const copy = res.clone();
+              event.waitUntil(quietly(caches.open(CACHE).then((cache) => cache.put(request, copy))));
+            }
+            return res;
+          }),
+      ),
+    );
+    return;
+  }
+
   if (path === OFFLINE_URL || isStaticAsset(path)) {
-    // Network first (hashed assets never change, and in dev they do), cache as the fallback.
+    // Network first (the shell changes between deploys), cache as the fallback.
     event.respondWith(
       fetch(request)
         .then((res) => {

@@ -9,7 +9,7 @@ const ORIGIN = "https://app.test";
 
 type Listener = (event: unknown) => void;
 
-function boot(network: (url: string) => Promise<Response>, cacheNames: string[] = []) {
+function boot(network: (url: string) => Promise<Response>, cacheNames: string[] = [], dev = false) {
   const listeners: Record<string, Listener> = {};
   const store = new Map<string, Response>();
   const puts: string[] = [];
@@ -20,6 +20,7 @@ function boot(network: (url: string) => Promise<Response>, cacheNames: string[] 
       store.set(key, res);
     }),
     add: vi.fn(async () => {}),
+    match: vi.fn(async (req: string | Request) => store.get(typeof req === "string" ? new URL(req, ORIGIN).href : req.url)),
     keys: vi.fn(async () => [...store.keys()].map((url) => ({ url }))),
     delete: vi.fn(async (req: { url: string }) => store.delete(req.url)),
   };
@@ -27,7 +28,7 @@ function boot(network: (url: string) => Promise<Response>, cacheNames: string[] 
   const fetchFn = vi.fn((req: string | Request) => network(typeof req === "string" ? new URL(req, ORIGIN).href : req.url));
   const sandbox = {
     self: {
-      location: { origin: ORIGIN },
+      location: { origin: ORIGIN, href: `${ORIGIN}/sw.js${dev ? "?dev=1" : ""}` },
       addEventListener: (type: string, fn: Listener) => { listeners[type] = fn; },
       skipWaiting: async () => {},
       clients: { claim: async () => {} },
@@ -204,5 +205,36 @@ describe("service worker fetch handler", () => {
     expect(statics).toContain(`${ORIGIN}/_next/static/chunks/current.js`);
     expect(statics).not.toContain(`${ORIGIN}/_next/static/chunks/old-0.js`);
     expect(statics).toContain(`${ORIGIN}/_next/static/chunks/old-204.js`);
+  });
+
+  it("answers hashed /_next/static assets from the cache without touching the network, and fetches and stores them on a miss", async () => {
+    const sw = boot(ok);
+    sw.store.set(`${ORIGIN}/_next/static/chunks/abc123.js`, new Response("cached"));
+    sw.fetchFn.mockClear();
+    const hit = sw.fire("/_next/static/chunks/abc123.js");
+    expect(await hit.respondWith.mock.calls[0][0].then((r: Response) => r.text())).toBe("cached");
+    expect(sw.fetchFn).not.toHaveBeenCalled();
+    const miss = sw.fire("/_next/static/chunks/new456.js");
+    await miss.respondWith.mock.calls[0][0];
+    await sw.settle();
+    expect(sw.fetchFn).toHaveBeenCalledTimes(1);
+    expect(sw.puts).toContain("/_next/static/chunks/new456.js");
+  });
+
+  it("in a dev build still goes to the network first, because dev asset names are reused between edits", async () => {
+    const sw = boot(() => Promise.resolve(new Response("fresh")), [], true);
+    sw.store.set(`${ORIGIN}/_next/static/chunks/abc123.js`, new Response("stale"));
+    const res = sw.fire("/_next/static/chunks/abc123.js");
+    expect(await res.respondWith.mock.calls[0][0].then((r: Response) => r.text())).toBe("fresh");
+  });
+
+  it("the shell refresh only downloads assets that are not already cached", async () => {
+    const html = '<script src="/_next/static/chunks/old.js"></script><script src="/_next/static/chunks/new.js"></script>';
+    const sw = boot((url) => Promise.resolve(new Response(url.endsWith("/offline") ? html : "x")));
+    sw.store.set(`${ORIGIN}/_next/static/chunks/old.js`, new Response("have it"));
+    sw.cache.add.mockClear();
+    await (sw.listeners.install as (e: unknown) => void)({ waitUntil: (p: Promise<unknown>) => p.then(() => {}) });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(sw.cache.add.mock.calls.map((c) => (c as unknown as [string])[0])).toEqual(["/_next/static/chunks/new.js"]);
   });
 });

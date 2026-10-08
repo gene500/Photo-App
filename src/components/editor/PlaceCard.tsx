@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSettings } from "@/components/settings/SettingsProvider";
-import { btnPrimary, card } from "@/components/ui/styles";
+import { btnPrimary, card, btnIcon } from "@/components/ui/styles";
 import { formatClock, getSunWindows } from "@/lib/best-time";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import { useWeatherLine } from "@/lib/use-weather";
@@ -61,7 +61,7 @@ export function PlaceCard({ name, resolving, busy, suggestion, visit, onAdd, onC
       >
         Add stop
       </button>
-      <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg leading-none text-muted hover:bg-hover">
+      <button type="button" onClick={onClose} aria-label="Close" className={btnIcon}>
         ×
       </button>
     </section>

@@ -56,10 +56,9 @@ export function SharedTripView({ trip }: { trip: PublicTrip }) {
 
       <aside className={`absolute inset-x-0 bottom-0 z-10 flex h-[55dvh] flex-col overflow-hidden rounded-b-none rounded-t-2xl lg:inset-x-auto lg:bottom-3 lg:left-3 lg:top-3 lg:h-auto lg:w-[23.75rem] lg:rounded-2xl ${card}`}>
         <header className="space-y-0.5 px-4 pb-2 pt-3">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted">Shared trip · view only</p>
           <h1 className="text-lg font-semibold">{trip.name}</h1>
           <p className="text-sm text-muted">
-            Planned for {trip.plannedDate}
+            View only · planned for {trip.plannedDate}
             {mounted && trip.departAt && <> · Starts {formatClock(new Date(trip.departAt), undefined, tf)}</>}
           </p>
         </header>

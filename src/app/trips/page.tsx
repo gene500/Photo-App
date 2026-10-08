@@ -10,7 +10,7 @@ export default async function TripsPage() {
   const trips = await listTrips(userId);
   return (
     <main className="mx-auto max-w-2xl space-y-8 px-4 py-10">
-      <h1 className="text-2xl font-semibold tracking-tight">Your trips</h1>
+      <h1 className="text-2xl font-semibold">Your trips</h1>
       <TripList trips={trips} />
       <NewTripForm />
     </main>

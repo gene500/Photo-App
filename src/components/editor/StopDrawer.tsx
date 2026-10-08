@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
-import { btnGhost, btnPrimary, inputClass } from "@/components/ui/styles";
+import { btnGhost, btnPrimary, inputClass, btnIcon } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { checkPhotoFile, PHOTO_TYPES } from "@/lib/photo-rules";
 import type { LightPref, ShotItem, Stop, Suggestion } from "@/lib/types";
@@ -169,7 +169,7 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives 
                   />
                   <span className={`min-w-0 break-words ${shot.done ? "text-muted line-through" : ""}`}>{shot.text}</span>
                 </label>
-                <button type="button" onClick={() => setShots(shots.filter((_, j) => j !== i))} aria-label={`Delete shot ${shot.text}`} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg leading-none text-muted hover:bg-hover">
+                <button type="button" onClick={() => setShots(shots.filter((_, j) => j !== i))} aria-label={`Delete shot ${shot.text}`} className={btnIcon}>
                   ×
                 </button>
               </li>

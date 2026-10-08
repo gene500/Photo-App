@@ -63,7 +63,7 @@ export function SettingsView({ email }: { email: string | null }) {
   return (
     <main className="mx-auto max-w-2xl space-y-5 px-4 py-8">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <h1 className="text-2xl font-semibold">Settings</h1>
         <Link href="/trips" className="inline-flex min-h-9 items-center rounded-lg px-2 text-sm text-muted hover:bg-hover hover:text-foreground">‹ Trips</Link>
       </div>
       <p className="text-sm text-muted">These are saved on this device only.</p>

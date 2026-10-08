@@ -2,7 +2,7 @@
 
 import { describeBestTime, formatClock } from "@/lib/best-time";
 import { useSettings } from "@/components/settings/SettingsProvider";
-import { btnSecondary, card } from "@/components/ui/styles";
+import { btnSecondary, card, btnIcon } from "@/components/ui/styles";
 import { useWeatherLine } from "@/lib/use-weather";
 import type { BestTime } from "@/lib/best-time";
 import type { Stop } from "@/lib/types";
@@ -23,7 +23,7 @@ export function StopCard({ stop, bestTime, arrival, onToggleVisited, onOpenDetai
     <section aria-label="Selected stop" className={`space-y-2 rounded-xl p-3 ${card}`}>
       <div className="flex items-start justify-between gap-2">
         <p className="py-1.5 text-sm font-semibold">{stop.name}</p>
-        <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg leading-none text-muted hover:bg-hover">
+        <button type="button" onClick={onClose} aria-label="Close" className={btnIcon}>
           ×
         </button>
       </div>

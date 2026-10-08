@@ -126,7 +126,13 @@ html[data-reduce-motion="true"] *::after {
   }
 }
 
-h1, h2, .font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
+h1, h2, h3, legend, .font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
+
+/* One visible keyboard focus ring everywhere; components may add their own offsets. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
 
 body {
   background: var(--background);

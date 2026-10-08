@@ -21,3 +21,7 @@ export const inputClass =
 
 /** Floating white surface. */
 export const card = "anim-rise rounded-2xl bg-surface text-foreground shadow-lg ring-1 ring-border";
+
+/** Round icon-only button (close, delete-row). */
+export const btnIcon =
+  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg leading-none text-muted transition active:scale-[0.94] hover:bg-hover hover:text-foreground";

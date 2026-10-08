@@ -30,8 +30,7 @@ export function OfflineView() {
   return (
     <main className="mx-auto w-full max-w-2xl space-y-4 px-4 py-8">
       <header className="space-y-1">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">Road Trip Photo Planner</p>
-        <h1 className="text-2xl font-semibold tracking-tight">{copy ? copy.trip.name : "Saved trips"}</h1>
+        <h1 className="text-2xl font-semibold">{copy ? copy.trip.name : "Saved trips"}</h1>
       </header>
 
       {!mounted ? null : copy ? (

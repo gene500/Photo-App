@@ -6,6 +6,7 @@ import { btnGhost } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { downsampleRoute } from "@/lib/downsample";
 import { computeArrivals, computeBestTimes, formatClock } from "@/lib/best-time";
+import { useOfflineCopy } from "@/lib/use-offline-copy";
 import { defaultLightPref } from "@/lib/light-windows";
 import { formatDistance, formatDuration } from "@/lib/format";
 import { coordsLabel, haversineMeters } from "@/lib/geo";
@@ -34,10 +35,11 @@ type Pending = LatLng & { name: string; source: StopSource; osmId?: string; ligh
 const NO_SUGGESTIONS: Suggestion[] = [];
 const errorMessage = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
-export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
+export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops; /** Signed-in user; enables the offline copy. */ userId?: string }) {
   const { stops: initialStops, ...initialFields } = initialTrip;
   const [trip, setTrip] = useState<Trip>(initialFields);
   const [stops, setStops] = useState<Stop[]>(initialStops);
+  useOfflineCopy(trip, stops, userId);
   // The outcome of the last route fetch, tagged with the waypoints it was for so a
   // stale result is never shown for different stops.
   const [routeResult, setRouteResult] = useState<{ key: string; route: RouteResult | null; error: string | null; dismissed: boolean } | null>(null);

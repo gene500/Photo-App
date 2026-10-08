@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
   // Share links carry a secret in the URL: keep them out of caches, search indexes and Referer headers.
   async headers() {
     return [
+      // The worker script itself must always be revalidated so an update reaches users.
+      { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }] },
       {
         source: "/s/:path*",
         headers: [

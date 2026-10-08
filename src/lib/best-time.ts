@@ -1,4 +1,5 @@
 import { getTimes } from "suncalc";
+import type { TimeFormat } from "./settings";
 import type { Stop } from "./types";
 
 export type BestTimeWindow = "sunrise" | "golden hour" | "midday" | "sunset";
@@ -128,13 +129,14 @@ export function computeBestTimes(trip: TripForTimes, legDurations: number[] | nu
   });
 }
 
-/** "7:45 PM" in the viewer's time zone (or the one given, for tests). */
-export function formatClock(date: Date, timeZone?: string): string {
-  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone });
+/** "7:45 PM" in the viewer's time zone (or the one given, for tests); "19:45" for 24h, "auto" is the 12-hour default. */
+export function formatClock(date: Date, timeZone?: string, timeFormat: TimeFormat = "auto"): string {
+  const hourCycle = timeFormat === "24h" ? "h23" : timeFormat === "12h" ? "h12" : undefined;
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone, hourCycle });
 }
 
-export function describeBestTime(best: BestTime, timeZone?: string): string {
+export function describeBestTime(best: BestTime, timeZone?: string, timeFormat: TimeFormat = "auto"): string {
   if (!best) return "No daylight";
   const label = best.window.charAt(0).toUpperCase() + best.window.slice(1);
-  return `${label} · ${formatClock(best.at, timeZone)}`;
+  return `${label} · ${formatClock(best.at, timeZone, timeFormat)}`;
 }

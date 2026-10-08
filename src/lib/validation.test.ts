@@ -66,6 +66,20 @@ describe("stopPatchSchema", () => {
 
   it("rejects out-of-range coordinates", () => {
     expect(stopPatchSchema.safeParse({ lat: 95, lng: 0 }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ lat: 0, lng: -181 }).success).toBe(false);
+  });
+
+  it("accepts a swap: name, place, source and clearing the photo", () => {
+    const swap = { name: "  Tunnel View ", lat: 37.7, lng: -119.6, source: "suggested", visited: false, photoUrl: null };
+    expect(stopPatchSchema.parse(swap)).toEqual({ ...swap, name: "Tunnel View" });
+  });
+
+  it("validates name, source and photoUrl like stop creation", () => {
+    expect(stopPatchSchema.safeParse({ name: "   " }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ name: "x".repeat(201) }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ source: "other" }).success).toBe(false);
+    // A photo can only be cleared here; setting one goes through the upload route.
+    expect(stopPatchSchema.safeParse({ photoUrl: "/api/uploads/x.png" }).success).toBe(false);
   });
 });
 
@@ -84,6 +98,34 @@ describe("light-aware fields", () => {
     expect(tripPatchSchema.parse({ departAt: null })).toEqual({ departAt: null });
     expect(tripPatchSchema.parse({ departAt: "2026-07-01T17:42:00Z" })).toEqual({ departAt: "2026-07-01T17:42:00Z" });
     expect(tripPatchSchema.safeParse({ departAt: "tomorrow" }).success).toBe(false);
+  });
+});
+
+describe("shot list fields", () => {
+  const item = { text: "Wide from the rail", done: false };
+  it("defaults to nothing and accepts notes and a checklist", () => {
+    const parsed = newStopSchema.parse({ name: "a", lat: 1, lng: 2, source: "manual" });
+    expect(parsed.shotNotes).toBeUndefined();
+    expect(parsed.shotChecklist).toBeUndefined();
+    expect(stopPatchSchema.parse({ shotNotes: "Bring the 70-200", shotChecklist: [item] })).toEqual({ shotNotes: "Bring the 70-200", shotChecklist: [item] });
+    expect(stopPatchSchema.parse({ shotNotes: null })).toEqual({ shotNotes: null });
+    expect(newStopSchema.parse({ name: "a", lat: 1, lng: 2, source: "manual", shotChecklist: [item] }).shotChecklist).toEqual([item]);
+  });
+  it("limits notes to 2000 characters", () => {
+    expect(stopPatchSchema.safeParse({ shotNotes: "x".repeat(2000) }).success).toBe(true);
+    expect(stopPatchSchema.safeParse({ shotNotes: "x".repeat(2001) }).success).toBe(false);
+  });
+  it("limits the checklist to 20 items of 1 to 120 characters", () => {
+    const many = (n: number) => Array.from({ length: n }, () => item);
+    expect(stopPatchSchema.safeParse({ shotChecklist: many(20) }).success).toBe(true);
+    expect(stopPatchSchema.safeParse({ shotChecklist: many(21) }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ shotChecklist: [{ text: "x".repeat(120), done: true }] }).success).toBe(true);
+    expect(stopPatchSchema.safeParse({ shotChecklist: [{ text: "x".repeat(121), done: true }] }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ shotChecklist: [{ text: "   ", done: true }] }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ shotChecklist: [{ text: "ok" }] }).success).toBe(false);
+  });
+  it("ignores unknown keys on items", () => {
+    expect(stopPatchSchema.parse({ shotChecklist: [{ text: " a ", done: true, evil: 1 }] })).toEqual({ shotChecklist: [{ text: "a", done: true }] });
   });
 });
 

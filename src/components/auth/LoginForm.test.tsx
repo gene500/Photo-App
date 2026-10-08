@@ -8,6 +8,8 @@ const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, refresh }) }));
 vi.mock("next-auth/react", () => ({ signIn: vi.fn() }));
 import { signIn } from "next-auth/react";
+import { installMemoryStorage } from "../../../tests/helpers/memory-storage";
+import { listTripCopies, offlineSavingDisabled, disableOfflineSaving, saveTripCopy } from "@/lib/offline-store";
 import { LoginForm } from "./LoginForm";
 
 async function submit() {
@@ -17,7 +19,7 @@ async function submit() {
 }
 
 describe("LoginForm", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); installMemoryStorage(); });
 
   it("shows an inline error for bad credentials", async () => {
     vi.mocked(signIn).mockResolvedValue({ error: "CredentialsSignin", ok: false, status: 401, url: null, code: undefined } as never);
@@ -33,5 +35,16 @@ describe("LoginForm", () => {
     await submit();
     expect(signIn).toHaveBeenCalledWith("credentials", { email: "ann@example.com", password: "correct-horse", redirect: false });
     expect(push).toHaveBeenCalledWith("/trips");
+  });
+
+  it("wipes leftover offline copies when the login page opens, and re-enables saving after a login", async () => {
+    saveTripCopy({ id: "t", name: "T", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] });
+    disableOfflineSaving();
+    vi.mocked(signIn).mockResolvedValue({ error: undefined, ok: true, status: 200, url: "/trips" } as never);
+    render(<LoginForm />);
+    expect(listTripCopies()).toEqual([]);
+    expect(offlineSavingDisabled()).toBe(true);
+    await submit();
+    expect(offlineSavingDisabled()).toBe(false);
   });
 });

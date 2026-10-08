@@ -17,6 +17,14 @@ export const tripInputSchema = z.object({
 });
 export type TripInput = z.infer<typeof tripInputSchema>;
 
+export const MAX_SHOT_ITEMS = 20;
+export const MAX_SHOT_TEXT = 120;
+export const MAX_SHOT_NOTES = 2000;
+export const shotChecklistSchema = z
+  .array(z.object({ text: z.string().trim().min(1, "Shot text is required").max(MAX_SHOT_TEXT), done: z.boolean() }))
+  .max(MAX_SHOT_ITEMS);
+export const shotNotesSchema = z.string().max(MAX_SHOT_NOTES);
+
 export const lightPrefSchema = z.enum(["any", "sunrise", "golden", "sunset"]);
 export const dwellMinutesSchema = z.number().int().min(0).max(MAX_DWELL_MINUTES);
 
@@ -34,6 +42,8 @@ export const newStopSchema = z.object({
   notes: z.string().max(5000).nullable().optional(),
   lightPref: lightPrefSchema.default("any"),
   dwellMinutes: dwellMinutesSchema.default(30),
+  shotNotes: shotNotesSchema.nullable().optional(),
+  shotChecklist: shotChecklistSchema.optional(),
 });
 export type NewStopInput = z.input<typeof newStopSchema>;
 
@@ -44,8 +54,13 @@ export const stopPatchSchema = z
     visited: z.boolean(),
     lightPref: lightPrefSchema,
     dwellMinutes: dwellMinutesSchema,
+    shotNotes: shotNotesSchema.nullable(),
+    shotChecklist: shotChecklistSchema,
     lat,
     lng,
+    source: z.enum(["manual", "suggested"]),
+    /** Only null (clear the reference photo, e.g. when a stop is swapped for another place); uploads go through the photo route. */
+    photoUrl: z.null(),
   })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "Nothing to update");
@@ -94,6 +109,8 @@ export const optimizeRequestSchema = z
 // waypoints, and Mapbox Directions is called with overview=full).
 export const MAX_SUGGESTIONS_COORDINATES = 2_000;
 
+export const MAX_AROUND_RADIUS_KM = 30;
+
 export const suggestionsRequestSchema = z
   .object({
     coordinates: z
@@ -103,8 +120,11 @@ export const suggestionsRequestSchema = z
       .optional(),
     /** A single point: suggestions within AROUND_RADIUS_KM of it (used while a trip has only one stop). */
     around: lngLat.optional(),
+    /** Search radius for `around` (default AROUND_RADIUS_KM); alternatives for one stop use a small local one. */
+    radiusKm: z.number().int().min(1).max(MAX_AROUND_RADIUS_KM).optional(),
   })
-  .refine((v) => (v.coordinates === undefined) !== (v.around === undefined), "Send either a route or a single point");
+  .refine((v) => (v.coordinates === undefined) !== (v.around === undefined), "Send either a route or a single point")
+  .refine((v) => v.radiusKm === undefined || v.around !== undefined, { path: ["radiusKm"], message: "radiusKm only applies to a single point" });
 
 
 /** First issue as a user-facing string, prefixed with its field path when there is one. */
@@ -121,3 +141,5 @@ export const pointQuerySchema = z.object({
   lat: decimal.pipe(z.number().min(-90).max(90)),
   lng: decimal.pipe(z.number().min(-180).max(180)),
 });
+
+export const weatherQuerySchema = pointQuerySchema.extend({ date: dateOnlySchema });

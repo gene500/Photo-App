@@ -1,4 +1,5 @@
 import { formatClock, getSunWindows, solarDateAt, type SunWindows } from "./best-time";
+import type { SuggestionLightPref, TimeFormat } from "./settings";
 import type { LightPref, Stop, SuggestionKind } from "./types";
 
 export type LightWindow = [start: Date, end: Date];
@@ -48,8 +49,30 @@ export function windowsForArrival(pref: LightPref, lat: number, lng: number, arr
   return lightWindows(pref, getSunWindows(lat, lng, solarDateAt(arrival, lng)));
 }
 
+/**
+ * When to read the weather for a stop: the middle of the light window the visit is in, else of the nearest one
+ * (for golden, the nearer of morning and evening), so a sunset stop reached at 2 pm is judged by the 7 pm sky.
+ * Without a preference or any window (polar) it is the arrival itself.
+ */
+export function forecastInstant(pref: LightPref, lat: number, lng: number, arrival: Date): Date {
+  // The previous solar day's windows count too: at 1 am the sunset that just ended is nearer than the one 18 h away.
+  const windows = [...windowsForArrival(pref, lat, lng, new Date(arrival.getTime() - 86_400_000)), ...windowsForArrival(pref, lat, lng, arrival)];
+  const t = arrival.getTime();
+  let best: LightWindow | null = null;
+  let bestGap = Infinity;
+  for (const w of windows) {
+    const gap = t < w[0].getTime() ? w[0].getTime() - t : t > w[1].getTime() ? t - w[1].getTime() : 0;
+    if (gap < bestGap) {
+      best = w;
+      bestGap = gap;
+    }
+  }
+  return best ? new Date((best[0].getTime() + best[1].getTime()) / 2) : arrival;
+}
+
 /** New stops from a suggestion start with a sensible light: scenic spots in golden light. */
-export function defaultLightPref(kind: SuggestionKind): LightPref {
+export function defaultLightPref(kind: SuggestionKind, setting: SuggestionLightPref = "auto"): LightPref {
+  if (setting === "any") return "any";
   return kind === "viewpoint" || kind === "peak" ? "golden" : "any";
 }
 
@@ -57,9 +80,10 @@ const LIGHT_LABEL: Record<LightPref, string> = { any: "Any", sunrise: "Sunrise",
 export const lightLabel = (pref: LightPref) => LIGHT_LABEL[pref];
 
 /** "6:12–7:05 PM": the AM/PM suffix is shown once when both ends share it. */
-function clockRange(a: Date, b: Date, timeZone?: string): string {
-  const from = formatClock(a, timeZone);
-  const to = formatClock(b, timeZone);
+function clockRange(a: Date, b: Date, timeZone?: string, timeFormat: TimeFormat = "auto"): string {
+  const from = formatClock(a, timeZone, timeFormat);
+  const to = formatClock(b, timeZone, timeFormat);
+  if (timeFormat === "24h") return `${from}–${to}`;
   const suffix = (s: string) => s.slice(-2);
   return suffix(from) === suffix(to) ? `${from.slice(0, -3)}–${to}` : `${from}–${to}`;
 }
@@ -75,6 +99,7 @@ export function describeLightHint(
   stop: Pick<Stop, "lat" | "lng" | "lightPref" | "dwellMinutes">,
   arrival: Date | null,
   timeZone?: string,
+  timeFormat: TimeFormat = "auto",
 ): LightHint | null {
   if (stop.lightPref === "any" || !arrival) return null;
   const windows = windowsForArrival(stop.lightPref, stop.lat, stop.lng, arrival);
@@ -86,7 +111,7 @@ export function describeLightHint(
     windows.find(([s, e]) => arrival.getTime() + stop.dwellMinutes * MS_MIN >= s.getTime() && arrival.getTime() <= e.getTime()) ??
     windows[0]!;
   return {
-    text: `${label} window ${clockRange(hit[0], hit[1], timeZone)} · arrive ${formatClock(arrival, timeZone)}`,
+    text: `${label} window ${clockRange(hit[0], hit[1], timeZone, timeFormat)} · arrive ${formatClock(arrival, timeZone, timeFormat)}`,
     met: true,
   };
 }

@@ -8,6 +8,8 @@ const env = {
   DATABASE_URL: "file:./e2e.db",
   EXTERNAL_APIS_FAKE: "1",
   NEXT_PUBLIC_MAP_FAKE: "1",
+  // Register the offline service worker in dev for the offline e2e.
+  NEXT_PUBLIC_SW: "1",
   NEXT_DIST_DIR: ".next-e2e",
   NEXTAUTH_URL: `http://localhost:${PORT}`,
   NEXTAUTH_SECRET: "e2e-only-secret",

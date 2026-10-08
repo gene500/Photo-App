@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { clearAllCopies, enableOfflineSaving } from "@/lib/offline-store";
 import { btnPrimary, inputClass } from "@/components/ui/styles";
 
 
@@ -13,6 +14,8 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Nobody is signed in on this page, so no offline copy should be on the device (belt and braces for sign-out).
+  useEffect(() => clearAllCopies(), []);
 
   async function submit() {
     setPending(true);
@@ -23,6 +26,7 @@ export function LoginForm() {
       setError("Invalid email or password");
       return;
     }
+    enableOfflineSaving();
     router.push("/trips");
     router.refresh();
   }

@@ -7,7 +7,7 @@ import { FakeMapPanel } from "./FakeMapPanel";
 const loadPlacePhoto = vi.fn();
 vi.mock("@/lib/place-photo-cache", () => ({ loadPlacePhoto: (...a: unknown[]) => loadPlacePhoto(...a) }));
 
-const stop: Stop = { id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 30 };
+const stop: Stop = { id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 30, shotNotes: null, shotChecklist: [] };
 const suggestion: Suggestion = { osmId: "node/1", name: "Fake Viewpoint", lat: 37.2, lng: -119.2, kind: "viewpoint" };
 const base = { stops: [] as Stop[], routeGeometry: null, onMapClick: vi.fn(), onStopClick: vi.fn() };
 

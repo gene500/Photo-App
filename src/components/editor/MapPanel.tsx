@@ -6,6 +6,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
 import { diffIds } from "@/lib/diff-ids";
 import { wrapLng } from "@/lib/geo";
+import { useSettings } from "@/components/settings/SettingsProvider";
 import { applyMapTheme } from "@/lib/map-theme";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import { stopColor } from "@/lib/stop-style";
@@ -38,18 +39,34 @@ function markerElement(className: string, label: string, text = ""): HTMLButtonE
   return el;
 }
 
+/** The root font size relative to 16px (text size in Settings): the left card is rem-wide, so the padding must follow. */
+function rootScale(): number {
+  const px = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  return Number.isFinite(px) && px > 0 ? px / 16 : 1;
+}
+
 // Keep fitted/flown-to points clear of what floats over the map: the bottom sheet on phones, the left card on desktop.
 function viewPadding(): mapboxgl.PaddingOptions {
   const phone = typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
   return phone
     ? { top: 72, right: 24, left: 24, bottom: Math.round(window.innerHeight * 0.45) }
-    : { top: 72, right: 64, bottom: 64, left: 400 };
+    : { top: 72, right: 64, bottom: 64, left: Math.round(400 * rootScale()) };
+}
+
+/** The theme in effect now: the Settings override on <html>, else the OS preference. */
+function isDarkNow(): boolean {
+  const t = document.documentElement.getAttribute("data-theme");
+  if (t) return t === "dark";
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
 }
 
 export default function MapPanel({
-  stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, flyTo,
+  stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, flyTo, readOnly,
   onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange,
 }: MapViewProps) {
+  const { settings } = useSettings();
+  // Read when the map is created: a change in Settings applies on the next load (the route layers are added once).
+  const mapStyleRef = useRef(settings.mapStyle);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const stopMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
@@ -73,7 +90,7 @@ export default function MapPanel({
     const map = new mapboxgl.Map({
       container: containerRef.current,
       accessToken: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
-      style: "mapbox://styles/mapbox/light-v11",
+      style: mapStyleRef.current === "standard" && isDarkNow() ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/light-v11",
       center: initialRef.current.center,
       zoom: initialRef.current.zoom,
       attributionControl: false,
@@ -87,7 +104,9 @@ export default function MapPanel({
       handlersRef.current.onCenterChange?.({ lat: c.lat, lng: wrapLng(c.lng) });
     };
     // Recolour the stock light style to the beige theme; `style.load` covers any later style swap.
-    const theme = () => applyMapTheme(map);
+    const theme = () => {
+      if (mapStyleRef.current === "beige") applyMapTheme(map);
+    };
     map.on("style.load", theme);
     map.on("load", () => {
       theme();
@@ -175,7 +194,7 @@ export default function MapPanel({
         el.style.background = stopColor(s);
         const id = s.id;
         el.addEventListener("click", () => handlersRef.current.onStopClick(id));
-        const marker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat([s.lng, s.lat]).addTo(map);
+        const marker = new mapboxgl.Marker({ element: el, draggable: !readOnly }).setLngLat([s.lng, s.lat]).addTo(map);
         marker.on("dragstart", () => draggingRef.current.add(id));
         marker.on("dragend", () => {
           draggingRef.current.delete(id);
@@ -191,6 +210,7 @@ export default function MapPanel({
         markers.set(id, marker);
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- readOnly is fixed for the life of the map
   }, [stops, selectedId]);
 
   // Remove all stop markers on unmount (the map teardown also drops them; this clears our bookkeeping).

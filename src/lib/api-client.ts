@@ -1,4 +1,4 @@
-import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, Stop, Suggestion, Trip, TripSummary } from "./types";
+import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, Stop, Suggestion, Trip, TripSummary, WeatherForecast } from "./types";
 import type { NewStopInput, StopPatch, TripInput, TripPatch } from "./validation";
 
 export class ApiError extends Error {
@@ -34,6 +34,8 @@ export const api = {
   createTrip: (input: TripInput) => request<{ trip: Trip }>("/api/trips", send("POST", input)),
   updateTrip: (id: string, patch: TripPatch) => request<{ trip: Trip }>(`/api/trips/${id}`, send("PATCH", patch)),
   deleteTrip: (id: string) => request<void>(`/api/trips/${id}`, send("DELETE")),
+  createShare: (tripId: string) => request<{ shareToken: string }>(`/api/trips/${tripId}/share`, send("POST")),
+  revokeShare: (tripId: string) => request<void>(`/api/trips/${tripId}/share`, send("DELETE")),
   addStop: (tripId: string, input: NewStopInput) =>
     request<{ stop: Stop }>(`/api/trips/${tripId}/stops`, send("POST", input)),
   updateStop: (id: string, patch: StopPatch) => request<{ stop: Stop }>(`/api/stops/${id}`, send("PATCH", patch)),
@@ -53,7 +55,7 @@ export const api = {
       "/api/optimize",
       send("POST", { coordinates, ...light }),
     ),
-  suggestions: (route: LngLat[] | { around: LngLat }) =>
+  suggestions: (route: LngLat[] | { around: LngLat; radiusKm?: number }) =>
     request<{ suggestions: Suggestion[] }>("/api/suggestions", send("POST", Array.isArray(route) ? { coordinates: route } : route)),
   geocode: (q: string, proximity?: { lat: number; lng: number }) =>
     request<{ places: Place[] }>(
@@ -65,4 +67,6 @@ export const api = {
     request<{ photo: PlacePhoto | null }>(
       `/api/place-photo?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}&name=${encodeURIComponent(p.name)}`,
     ),
+  weather: (p: { lat: number; lng: number; date: string }) =>
+    request<{ forecast: WeatherForecast }>(`/api/weather?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}&date=${p.date}`),
 };

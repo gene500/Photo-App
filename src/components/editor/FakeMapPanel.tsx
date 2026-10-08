@@ -34,7 +34,7 @@ function SuggestionPopup({ suggestion, left, top }: { suggestion: Suggestion; le
 }
 
 /** No-network stand-in for Mapbox GL: used in e2e and when no token is configured. */
-export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, onMapClick, onStopClick, onSuggestionClick, onCenterChange }: MapViewProps) {
+export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, readOnly, onMapClick, onStopClick, onSuggestionClick, onCenterChange }: MapViewProps) {
   // The suggestion whose dot is hovered or focused; the panel's highlighted card also opens its popup.
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   useEffect(() => {
@@ -54,7 +54,7 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
   return (
     <div
       data-testid="map"
-      className="relative h-full min-h-[50vh] w-full cursor-crosshair overflow-hidden bg-[#eceae6]"
+      className={`relative h-full min-h-[50vh] w-full overflow-hidden bg-[#eceae6] ${readOnly ? "" : "cursor-crosshair"}`}
       onClick={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         onMapClick(pixelToLatLng(bounds, e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height));

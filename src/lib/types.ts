@@ -8,6 +8,8 @@ export type StopSource = "manual" | "suggested";
 
 export type LightPref = "any" | "sunrise" | "golden" | "sunset";
 
+export type ShotItem = { text: string; done: boolean };
+
 export type Stop = {
   id: string;
   tripId: string;
@@ -23,6 +25,10 @@ export type Stop = {
   lightPref: LightPref;
   /** Minutes spent at the stop (0..480). */
   dwellMinutes: number;
+  /** Free-text notes on the shots wanted here (max 2000 chars). */
+  shotNotes: string | null;
+  /** Shots to get at this stop (up to 20). */
+  shotChecklist: ShotItem[];
 };
 
 export type Trip = {
@@ -32,6 +38,22 @@ export type Trip = {
   plannedDate: string;
   /** ISO instant the trip leaves the first stop; null = sunrise at the first stop. */
   departAt: string | null;
+  /** Read-only share token; only ever sent to the trip's owner. */
+  shareToken: string | null;
+};
+
+/** One stop as shown on the public share page: no ids, no uploaded photo. */
+export type PublicStop = Pick<
+  Stop,
+  "order" | "name" | "lat" | "lng" | "notes" | "source" | "visited" | "lightPref" | "dwellMinutes" | "shotNotes" | "shotChecklist"
+>;
+
+/** The sanitized, read-only view of a shared trip. Nothing here identifies or can modify the owner's data. */
+export type PublicTrip = {
+  name: string;
+  plannedDate: string;
+  departAt: string | null;
+  stops: PublicStop[];
 };
 
 export type TripWithStops = Trip & { stops: Stop[] };
@@ -75,3 +97,9 @@ export type PlacePhoto = {
   /** Display text, e.g. "Photo: Jane Doe via Flickr (CC BY 2.0)". Plain text, never HTML. */
   credit: string;
 };
+
+/** One forecast hour. `time` is the location's LOCAL wall-clock time ("2026-07-01T19:00"), as Open-Meteo reports it. */
+export type WeatherHour = { time: string; cloudPct: number | null; rainPct: number | null; tempC: number | null };
+export type WeatherForecast =
+  | { available: true; utcOffsetSeconds: number; hours: WeatherHour[] }
+  | { available: false; reason: "out_of_range" | "unavailable" };

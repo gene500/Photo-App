@@ -9,5 +9,5 @@ export default async function TripPage({ params }: PageProps<"/trips/[id]">) {
   const { id } = await params;
   const trip = await getTrip(userId, id);
   if (!trip) notFound();
-  return <TripEditor initialTrip={trip} />;
+  return <TripEditor initialTrip={trip} userId={userId} />;
 }

@@ -11,7 +11,7 @@ vi.mock("@/server/photos", async (importOriginal) => {
 import { deletePhotoFile, savePhoto } from "@/server/photos";
 import { getCurrentUserId } from "@/server/session";
 import { DELETE as photoDELETE, POST as photoPOST } from "@/app/api/stops/[id]/photo/route";
-import { DELETE as stopDELETE } from "@/app/api/stops/[id]/route";
+import { DELETE as stopDELETE, PATCH as stopPATCH } from "@/app/api/stops/[id]/route";
 import { GET as uploadGET } from "@/app/api/uploads/[name]/route";
 import { prisma } from "@/server/db";
 import { addStop, deleteStop, getOwnedStop } from "@/server/stops";
@@ -85,6 +85,16 @@ describe("photo routes", () => {
     const url = (await (await upload(stopId, new File([PNG], "a.png", { type: "image/png" }))).json()).stop.photoUrl;
     const res = await photoDELETE(new Request("http://localhost", { method: "DELETE" }), idParams(stopId));
     expect((await res.json()).stop.photoUrl).toBeNull();
+    expect(fileOnDisk(url)).toBe(false);
+  });
+
+  it("swapping a stop (patch with photoUrl null) clears the photo and deletes the file", async () => {
+    const url = (await (await upload(stopId, new File([PNG], "a.png", { type: "image/png" }))).json()).stop.photoUrl;
+    const res = await stopPATCH(
+      new Request("http://localhost", { method: "PATCH", body: JSON.stringify({ name: "Elsewhere", lat: 38, lng: -120, source: "suggested", photoUrl: null }) }),
+      idParams(stopId),
+    );
+    expect((await res.json()).stop).toMatchObject({ name: "Elsewhere", photoUrl: null });
     expect(fileOnDisk(url)).toBe(false);
   });
 

@@ -18,7 +18,19 @@ export class TooManyStopsError extends Error {
   }
 }
 
-export type StopUpdate = StopPatch & { photoUrl?: string | null };
+export type StopUpdate = Omit<StopPatch, "photoUrl"> & { photoUrl?: string | null };
+
+/** Shot notes are stored trimmed; whitespace-only becomes null. */
+const cleanShotNotes = (v: string | null): string | null => (v === null || v.trim() === "" ? null : v.trim());
+
+/** The checklist column holds JSON text; shot notes are trimmed; everything else in a patch maps straight to columns. */
+function toStopData({ shotChecklist, shotNotes, ...rest }: StopUpdate) {
+  return {
+    ...rest,
+    ...(shotNotes === undefined ? {} : { shotNotes: cleanShotNotes(shotNotes) }),
+    ...(shotChecklist === undefined ? {} : { shotChecklist: JSON.stringify(shotChecklist) }),
+  };
+}
 
 export async function addStop(
   userId: string,
@@ -41,6 +53,8 @@ export async function addStop(
         notes: input.notes ?? null,
         lightPref: input.lightPref,
         dwellMinutes: input.dwellMinutes,
+        shotNotes: cleanShotNotes(input.shotNotes ?? null),
+        shotChecklist: JSON.stringify(input.shotChecklist ?? []),
       },
     });
     return toStopDto(row);
@@ -59,7 +73,7 @@ export async function updateStop(
 ): Promise<Stop | null> {
   if (!(await getOwnedStop(userId, stopId))) return null;
   try {
-    return toStopDto(await prisma.stop.update({ where: { id: stopId }, data: patch }));
+    return toStopDto(await prisma.stop.update({ where: { id: stopId }, data: toStopData(patch) }));
   } catch (e) {
     // Deleted between the ownership check and the update (Prisma "record not found").
     if (typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2025") return null;

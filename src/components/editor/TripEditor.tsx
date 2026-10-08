@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { useSettings } from "@/components/settings/SettingsProvider";
 import { btnGhost } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { downsampleRoute } from "@/lib/downsample";
 import { computeArrivals, computeBestTimes, formatClock } from "@/lib/best-time";
+import { DEFAULT_SETTINGS } from "@/lib/settings";
+import { useOfflineCopy } from "@/lib/use-offline-copy";
 import { defaultLightPref } from "@/lib/light-windows";
 import { formatDistance, formatDuration } from "@/lib/format";
 import { coordsLabel, haversineMeters } from "@/lib/geo";
@@ -23,6 +26,9 @@ import { TripHeader } from "./TripHeader";
 
 /** Hide suggestions that sit on top of an existing stop. */
 const ALREADY_A_STOP_M = 100;
+/** Alternatives for a stop are local: a tighter circle than the first-stop suggestions, and a short list. */
+const ALTERNATIVES_RADIUS_KM = 10;
+const MAX_ALTERNATIVES = 8;
 
 type LatLng = { lat: number; lng: number };
 /** A place being considered: a search result, a clicked spot, or a suggestion. */
@@ -31,10 +37,12 @@ type Pending = LatLng & { name: string; source: StopSource; osmId?: string; ligh
 const NO_SUGGESTIONS: Suggestion[] = [];
 const errorMessage = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
-export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
+export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops; /** Signed-in user; enables the offline copy. */ userId?: string }) {
   const { stops: initialStops, ...initialFields } = initialTrip;
+  const { settings } = useSettings();
   const [trip, setTrip] = useState<Trip>(initialFields);
   const [stops, setStops] = useState<Stop[]>(initialStops);
+  useOfflineCopy(trip, stops, userId);
   // The outcome of the last route fetch, tagged with the waypoints it was for so a
   // stale result is never shown for different stops.
   const [routeResult, setRouteResult] = useState<{ key: string; route: RouteResult | null; error: string | null; dismissed: boolean } | null>(null);
@@ -57,6 +65,19 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     appliedDepartAt: string | null;
   } | null>(null);
   const [optimizeNote, setOptimizeNote] = useState<{ text: string; idsKey: string } | null>(null);
+  // Alternatives found for one stop, tagged with the stop and the waypoints they were found for (stale ones are not shown).
+  const [alternativesState, setAlternativesState] = useState<{ stopId: string; key: string; items: Suggestion[]; status: SuggestionsStatus; error: string | null } | null>(null);
+  const alternativesSeq = useRef(0);
+  // The last swap, kept client-side so it can be undone once. Honoured only while the stop is still where the swap put it.
+  const [swapNote, setSwapNote] = useState<{
+    stopId: string;
+    fromName: string;
+    toName: string;
+    previous: { name: string; lat: number; lng: number; source: StopSource; visited: boolean };
+    /** What the swap wrote; Undo is offered only while the stop still matches all of it, so it cannot overwrite newer edits. */
+    applied: LatLng & { name: string; visited: boolean; source: StopSource };
+    lostPhoto: boolean;
+  } | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const centerRef = useRef<LatLng | null>(null);
   const lookupSeq = useRef(0);
@@ -153,7 +174,9 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
 
   async function addStop(input: { name: string; lat: number; lng: number; source: StopSource; lightPref?: LightPref }) {
     try {
-      const { stop } = await api.addStop(trip.id, input);
+      // Only a changed default is sent; otherwise the server's own default (30) applies, exactly as before.
+      const dwell = settings.defaultDwellMinutes === DEFAULT_SETTINGS.defaultDwellMinutes ? {} : { dwellMinutes: settings.defaultDwellMinutes };
+      const { stop } = await api.addStop(trip.id, { ...dwell, ...input });
       setStops((prev) => [...prev, stop]);
       return stop;
     } catch (e) {
@@ -190,7 +213,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
     if (!s) return;
     lookupSeq.current++;
     setCardId(null);
-    setPending({ lat: s.lat, lng: s.lng, name: s.name, source: "suggested", osmId: s.osmId, lightPref: defaultLightPref(s.kind), resolving: false });
+    setPending({ lat: s.lat, lng: s.lng, name: s.name, source: "suggested", osmId: s.osmId, lightPref: defaultLightPref(s.kind, settings.suggestionLightPref), resolving: false });
   }
 
   async function addPending() {
@@ -423,13 +446,66 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
   }
 
   async function acceptSuggestion(s: Suggestion) {
-    const added = await addStop({ name: s.name, lat: s.lat, lng: s.lng, source: "suggested", lightPref: defaultLightPref(s.kind) });
+    const added = await addStop({ name: s.name, lat: s.lat, lng: s.lng, source: "suggested", lightPref: defaultLightPref(s.kind, settings.suggestionLightPref) });
     if (added) takeSuggestion(s.osmId, added);
   }
+
+  // --- Alternatives ----------------------------------------------------------
+
+  async function findAlternatives(stop: Stop) {
+    const key = waypointKey;
+    const placed = stops;
+    const seq = ++alternativesSeq.current;
+    setAlternativesState({ stopId: stop.id, key, items: [], status: "loading", error: null });
+    try {
+      const { suggestions: found } = await api.suggestions({ around: [stop.lng, stop.lat], radiusKm: ALTERNATIVES_RADIUS_KM });
+      if (seq !== alternativesSeq.current) return;
+      // Drops the stop itself too: it sits within ALREADY_A_STOP_M of itself.
+      const items = found.filter((s) => !placed.some((st) => haversineMeters(st, s) < ALREADY_A_STOP_M)).slice(0, MAX_ALTERNATIVES);
+      setAlternativesState({ stopId: stop.id, key, items, status: "done", error: null });
+    } catch (e) {
+      if (seq !== alternativesSeq.current) return;
+      setAlternativesState({ stopId: stop.id, key, items: [], status: "error", error: errorMessage(e, "Couldn't load alternatives. Please retry.") });
+    }
+  }
+
+  /** Replace a stop's place in place (same order, notes and shot list kept). The old upload no longer
+   *  matches the place, so the server clears it; waypointKey changes, which refreshes route, arrivals and weather. */
+  async function swapStop(stop: Stop, alt: Suggestion) {
+    const previous = { name: stop.name, lat: stop.lat, lng: stop.lng, source: stop.source, visited: stop.visited };
+    try {
+      const { stop: saved } = await api.updateStop(stop.id, { name: alt.name, lat: alt.lat, lng: alt.lng, source: "suggested", visited: false, photoUrl: null });
+      mergeStop(saved, ["name", "lat", "lng", "source", "visited", "photoUrl"]);
+      alternativesSeq.current++;
+      setAlternativesState(null);
+      setSwapNote({ stopId: stop.id, fromName: previous.name, toName: saved.name, previous, applied: { lat: saved.lat, lng: saved.lng, name: saved.name, visited: saved.visited, source: saved.source }, lostPhoto: stop.photoUrl !== null });
+      setDrawerId(null);
+      setCardId((cur) => (cur === stop.id ? null : cur));
+    } catch (e) {
+      setStopsError(errorMessage(e, "Couldn't swap the stop"));
+    }
+  }
+
+  async function undoSwap() {
+    if (!swapNote) return;
+    try {
+      mergeStop((await api.updateStop(swapNote.stopId, swapNote.previous)).stop, ["name", "lat", "lng", "source", "visited"]);
+      setSwapNote(null);
+      // An open drawer would keep showing the swapped place's fields; closing it (as a swap does) is the simple fix.
+      setDrawerId((cur) => (cur === swapNote.stopId ? null : cur));
+    } catch (e) {
+      setStopsError(errorMessage(e, "Couldn't undo the swap"));
+    }
+  }
+
+  const swapped = swapNote ? stops.find((s) => s.id === swapNote.stopId) : undefined;
+  const canUndoSwap = swapNote !== null && swapped !== undefined && swapped.lat === swapNote.applied.lat && swapped.lng === swapNote.applied.lng &&
+    swapped.name === swapNote.applied.name && swapped.visited === swapNote.applied.visited && swapped.source === swapNote.applied.source && swapped.photoUrl === null; // a photo added since belongs to the new place
 
   const cardIndex = stops.findIndex((s) => s.id === cardId);
   const cardStop = cardIndex >= 0 ? stops[cardIndex] : null;
   const drawerStop = stops.find((s) => s.id === drawerId) ?? null;
+  const freshAlternatives = alternativesState?.stopId === drawerId && alternativesState.key === waypointKey ? alternativesState : null;
 
   return (
     <div className="relative h-[calc(100dvh-3rem)] overflow-hidden">
@@ -448,7 +524,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
         onCenterChange={handleCenter}
       />
 
-      <div className="pointer-events-none absolute inset-x-3 top-3 z-[15] space-y-2 lg:inset-x-auto lg:left-[388px] lg:w-[460px]">
+      <div className="pointer-events-none absolute inset-x-3 top-3 z-[15] space-y-2 lg:inset-x-auto lg:left-[24.25rem] lg:w-[28.75rem] lg:max-w-[calc(100vw-29rem)]">
         <div className="pointer-events-auto">
           <SearchBar getProximity={() => centerRef.current} onSelect={selectSearchResult} />
         </div>
@@ -459,6 +535,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
               resolving={pending.resolving}
               busy={adding}
               suggestion={pending.osmId ? { osmId: pending.osmId, lat: pending.lat, lng: pending.lng } : undefined}
+              visit={{ lat: pending.lat, lng: pending.lng, plannedDate: trip.plannedDate }}
               onAdd={() => void addPending()}
               onClose={() => {
                 lookupSeq.current++;
@@ -488,7 +565,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
       )}
 
       <StopsPanel
-        header={<TripHeader trip={trip} onSave={saveTrip} />}
+        header={<TripHeader trip={trip} onSave={saveTrip} onShareChange={(shareToken) => setTrip((t) => ({ ...t, shareToken }))} exportData={{ stops, route: activeRoute?.geometry ?? null }} />}
         collapsedSummary={
           activeRoute
             ? `${stops.length} ${stops.length === 1 ? "stop" : "stops"} · ${formatDuration(activeRoute.duration)}`
@@ -501,7 +578,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
             <span aria-hidden>·</span>
             <p data-testid="route-status">
               {activeRoute
-                ? `${formatDistance(activeRoute.distance)} · ${formatDuration(activeRoute.duration)}`
+                ? `${formatDistance(activeRoute.distance, settings.distanceUnit)} · ${formatDuration(activeRoute.duration)}`
                 : activeRouteError
                   ? "Route unavailable"
                   : enoughForRoute
@@ -511,7 +588,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
             </div>
             {trip.departAt && (
               <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
-                <p data-testid="depart-note">Starts {formatClock(new Date(trip.departAt))}</p>
+                <p data-testid="depart-note">Starts {formatClock(new Date(trip.departAt), undefined, settings.timeFormat)}</p>
                 <button type="button" onClick={() => void resetDeparture()} className={btnGhost}>
                   Reset to sunrise
                 </button>
@@ -545,6 +622,14 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
                 <p role="status" className="text-xs text-muted">{optimizeNote.text}</p>
               )}
             </div>
+            {swapNote && canUndoSwap && (
+              <div role="status" data-testid="swap-note" className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
+                <p>Swapped {swapNote.fromName} for {swapNote.toName}{swapNote.lostPhoto ? " (reference photo removed)" : ""}</p>
+                <button type="button" onClick={() => void undoSwap()} className={btnGhost}>
+                  Undo swap
+                </button>
+              </div>
+            )}
             <StopList
               stops={stops}
               bestTimes={bestTimes}
@@ -579,6 +664,14 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
           onClose={() => setDrawerId(null)}
           onSave={async (patch) => mergeStop((await api.updateStop(drawerStop.id, patch)).stop, Object.keys(patch) as (keyof Stop)[])}
           onPhotoChange={(stop) => mergeStop(stop, ["photoUrl"])}
+          alternatives={{
+            status: freshAlternatives?.status ?? "idle",
+            items: freshAlternatives?.items ?? NO_SUGGESTIONS,
+            error: freshAlternatives?.error ?? null,
+            onFind: () => void findAlternatives(drawerStop),
+            onSwap: (alt) => swapStop(drawerStop, alt),
+            onDismissError: () => setAlternativesState(null),
+          }}
         />
       )}
     </div>

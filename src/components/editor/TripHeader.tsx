@@ -39,9 +39,11 @@ export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: 
 
   if (!editing) {
     return (
-      <header>
-        <div className="flex items-start justify-between gap-2">
-          <h1 className="min-w-0 truncate text-lg font-semibold leading-9">{trip.name}</h1>
+      // The Export/Share popovers anchor to this header (not their own button), so they stay inside the panel when the buttons wrap.
+      <header className="relative">
+        {/* Wraps: with large text the buttons move under the name instead of squeezing it to nothing. */}
+        <div className="flex flex-wrap items-start justify-between gap-x-2">
+          <h1 className="min-w-0 max-w-full flex-1 basis-28 truncate text-lg font-semibold leading-9">{trip.name}</h1>
           <div className="flex shrink-0 flex-wrap justify-end">
             <button type="button" onClick={beginEdit} className={btnGhost}>Edit trip</button>
             {exportData && <ExportControl tripName={trip.name} stops={exportData.stops} route={exportData.route} />}

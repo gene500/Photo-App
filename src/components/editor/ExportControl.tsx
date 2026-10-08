@@ -35,7 +35,7 @@ export function ExportControl({ tripName, stops, route }: Props) {
   }
 
   return (
-    <div className="relative shrink-0">
+    <div className="shrink-0">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -48,7 +48,7 @@ export function ExportControl({ tripName, stops, route }: Props) {
         Export
       </button>
       {open && enough && (
-        <div aria-label="Export trip" className={`absolute right-0 top-full z-20 mt-1 w-56 max-w-[calc(100vw-2rem)] p-1 ${card}`}>
+        <div aria-label="Export trip" className={`absolute right-0 top-full z-20 mt-1 w-56 max-w-full p-1 ${card}`}>
           <button type="button" onClick={downloadGpx} className={item}>Download GPX</button>
           {google?.map((g) => (
             <a key={g.url} href={g.url} target="_blank" rel="noopener noreferrer" className={item}>

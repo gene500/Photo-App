@@ -133,6 +133,9 @@ A "Swapped A for B · Undo swap" row appears in the stop list; undo restores the
 source and visited flag (not the deleted photo) and is forgotten on reload or when the stop moves.
 `POST /api/suggestions` accepts an optional `radiusKm` (1 to 30, with `around` only).
 
+### Settings (per device)
+`/settings` (login required; gear icon in the trips/editor header) stores display preferences in this browser's localStorage under `rtpp.settings.v1` (never sent to the server, no DB change; the app works with storage blocked, changes then last for the visit). Theme (System/Light/Dark), text size (Default/Large 112.5%/Extra large 125% of the root font size), reduce motion (the device's own preference is always honoured too), distance (km/mi), time format (device default = the en-US 12-hour clock as before, 12h, 24h), map style (beige recolour or the stock Mapbox style; read when the map loads), minutes for a new stop (0-480) and whether suggested stops get an automatic best light or "any". Also: clear saved offline copies, the signed-in email, sign out, reset to defaults. An inline script in the root layout `<head>` (constant string) sets `data-theme`, `data-text-size` and `data-reduce-motion` on `<html>` before first paint, so every page including `/s/*`, `/offline` and `/login` honours them; `globals.css` lets an explicit `data-theme` beat the OS colour scheme (and Tailwind's `dark:` variant follows it). Changes made in another tab apply live.
+
 ### Read-only share link
 
 The **Share** button in the trip header creates a link (`/s/<token>`) anyone can open

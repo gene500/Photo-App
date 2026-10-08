@@ -51,12 +51,12 @@ export function ShareControl({ tripId, shareToken, onChange }: Props) {
   }
 
   return (
-    <div className="relative shrink-0">
+    <div className="shrink-0">
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className={btnGhost}>
         Share
       </button>
       {open && (
-        <section aria-label="Share trip" className={`absolute right-0 top-full z-20 mt-1 w-72 space-y-2 p-3 ${card}`}>
+        <section aria-label="Share trip" className={`absolute right-0 top-full z-20 mt-1 w-72 max-w-full space-y-2 p-3 ${card}`}>
           <p className="text-sm text-muted">Anyone with the link can view this trip (without photos).</p>
           {shareToken ? (
             <>

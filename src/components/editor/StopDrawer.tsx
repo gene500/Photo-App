@@ -5,7 +5,9 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost, btnPrimary, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { checkPhotoFile, PHOTO_TYPES } from "@/lib/photo-rules";
-import type { LightPref, ShotItem, Stop } from "@/lib/types";
+import type { LightPref, ShotItem, Stop, Suggestion } from "@/lib/types";
+import { AlternativesPanel } from "./AlternativesPanel";
+import type { SuggestionsStatus } from "./SuggestionsPanel";
 import { MAX_DWELL_MINUTES, MAX_SHOT_ITEMS, MAX_SHOT_NOTES, MAX_SHOT_TEXT, type StopPatch } from "@/lib/validation";
 
 type Props = {
@@ -13,13 +15,15 @@ type Props = {
   onClose: () => void;
   onSave: (patch: StopPatch) => Promise<void>;
   onPhotoChange: (stop: Stop) => void;
+  /** Nearby alternatives for this stop; the panel is shown only when the editor provides it. */
+  alternatives?: { status: SuggestionsStatus; items: Suggestion[]; error: string | null; onFind: () => void; onSwap: (s: Suggestion) => void | Promise<void>; onDismissError: () => void };
 };
 
 const LIGHT_OPTIONS: [LightPref, string][] = [["any", "Any"], ["sunrise", "Sunrise"], ["golden", "Golden hour"], ["sunset", "Sunset"]];
 
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
-export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
+export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives }: Props) {
   const [initial] = useState({ name: stop.name, notes: stop.notes ?? null, visited: stop.visited, lightPref: stop.lightPref, dwellMinutes: stop.dwellMinutes, shotNotes: stop.shotNotes, shotChecklist: JSON.stringify(stop.shotChecklist) });
   const [name, setName] = useState(stop.name);
   const [notes, setNotes] = useState(stop.notes ?? "");
@@ -110,6 +114,9 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange }: Props) {
       <p className="text-xs text-muted">
         {stop.source === "suggested" ? "Suggested from OpenStreetMap" : "Manual pin"} · {stop.lat.toFixed(4)}, {stop.lng.toFixed(4)}
       </p>
+      {alternatives && (
+        <AlternativesPanel status={alternatives.status} alternatives={alternatives.items} error={alternatives.error} onFind={alternatives.onFind} onSwap={alternatives.onSwap} onDismissError={alternatives.onDismissError} />
+      )}
       <label className="block">
         <span className="text-sm text-muted">Name</span>
         <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />

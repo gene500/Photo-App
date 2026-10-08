@@ -225,6 +225,72 @@ describe("TripEditor", () => {
     expect(await screen.findByRole("dialog", { name: "Edit A" })).toBeTruthy();
   });
 
+  describe("alternatives", () => {
+    const sug = (n: number, over: Partial<import("@/lib/types").Suggestion> = {}) => ({ osmId: `node/${n}`, name: `Spot ${n}`, lat: 36.8 + n * 0.01, lng: -119.7, kind: "viewpoint" as const, ...over });
+    async function openFirstDrawer() {
+      await userEvent.click(screen.getByRole("button", { name: "click first marker" }));
+      const card = await screen.findByRole("region", { name: "Selected stop" });
+      await userEvent.click(within(card).getByRole("button", { name: "Open details" }));
+      return screen.findByRole("dialog", { name: "Edit A" });
+    }
+
+    it("lists up to 8 nearby alternatives (10 km), leaving out spots on top of a stop", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.placePhoto).mockResolvedValue({ photo: null });
+      const many = Array.from({ length: 12 }, (_, i) => sug(i + 1));
+      // The first result sits on stop B and the second on stop A itself.
+      vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [sug(90, { lat: 37.96, lng: -119.12 }), sug(91, { lat: 36.74, lng: -119.79 }), ...many] });
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      const dialog = await openFirstDrawer();
+      await userEvent.click(within(dialog).getByRole("button", { name: "Find alternatives" }));
+      await waitFor(() => expect(within(dialog).getAllByTestId("alternative-card")).toHaveLength(8));
+      expect(api.suggestions).toHaveBeenLastCalledWith({ around: [-119.79, 36.74], radiusKm: 10 });
+      expect(within(dialog).getAllByTestId("alternative-name")[0].textContent).toBe("Spot 1");
+      expect(within(dialog).queryByText("Spot 90")).toBeNull();
+      expect(within(dialog).queryByText("Spot 91")).toBeNull();
+    });
+
+    it("swaps a stop in place (no photo, not visited), then undoes it", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.placePhoto).mockResolvedValue({ photo: null });
+      vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [sug(1, { name: "Glacier Point", lat: 37.73, lng: -119.57 })] });
+      const withPhoto = [newStop({ ...seed[0], photoUrl: "/api/uploads/x.png", visited: true, notes: "ND filter" }), seed[1]];
+      render(<TripEditor initialTrip={withStops(withPhoto)} />);
+      const dialog = await openFirstDrawer();
+      await userEvent.click(within(dialog).getByRole("button", { name: "Find alternatives" }));
+      vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: { ...withPhoto[0], name: "Glacier Point", lat: 37.73, lng: -119.57, source: "suggested", visited: false, photoUrl: null } });
+      await userEvent.click(await within(dialog).findByRole("button", { name: "Swap in Glacier Point" }));
+      expect(api.updateStop).toHaveBeenLastCalledWith("a", { name: "Glacier Point", lat: 37.73, lng: -119.57, source: "suggested", visited: false, photoUrl: null });
+      const note = await screen.findByTestId("swap-note");
+      expect(note.textContent).toContain("Swapped A for Glacier Point");
+      expect(note.textContent).toContain("reference photo removed");
+      expect(screen.queryByRole("dialog")).toBeNull();
+      // Same slot, new place, and the route is asked for again with the new waypoint.
+      expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("Glacier Point");
+      await waitFor(() => expect(api.directions).toHaveBeenLastCalledWith([[-119.57, 37.73], [-119.12, 37.96]]));
+
+      vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: { ...withPhoto[0], photoUrl: null } });
+      await userEvent.click(within(note).getByRole("button", { name: "Undo swap" }));
+      expect(api.updateStop).toHaveBeenLastCalledWith("a", { name: "A", lat: 36.74, lng: -119.79, source: "manual", visited: true });
+      await waitFor(() => expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("A"));
+      expect(screen.queryByTestId("swap-note")).toBeNull();
+    });
+
+    it("keeps the stop and shows the error when the swap fails", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.placePhoto).mockResolvedValue({ photo: null });
+      vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [sug(1, { name: "Glacier Point" })] });
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      const dialog = await openFirstDrawer();
+      await userEvent.click(within(dialog).getByRole("button", { name: "Find alternatives" }));
+      vi.mocked(api.updateStop).mockRejectedValueOnce(new Error("nope"));
+      await userEvent.click(await within(dialog).findByRole("button", { name: "Swap in Glacier Point" }));
+      expect(await screen.findByText("nope")).toBeTruthy();
+      expect(screen.queryByTestId("swap-note")).toBeNull();
+      expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("A");
+    });
+  });
+
   it("saves a dragged marker's coordinates and reverts with an error if it fails", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: { ...seed[0], lat: 38, lng: -118 } });

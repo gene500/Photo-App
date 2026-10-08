@@ -108,6 +108,17 @@ the rest of the drawer (only changed fields are sent). The selected-stop card sh
 "2/5 shots" when the list is not empty. The uploaded stop photo is the **Reference
 photo**. Stored as `shotNotes` and a JSON `shotChecklist` column (additive migration).
 
+### Alternative stops
+
+Open a stop's details and press "Find alternatives" to list up to 8 photo spots within 10 km of it
+(same ranking, popularity caption and thumbnail as suggestions; spots within 100 m of any current stop
+are left out). "Swap in" replaces the stop's name and place in place: its order, notes and shot list
+are kept, while it becomes unvisited, `suggested`, and loses its uploaded reference photo (that file is
+deleted, as the old photo no longer matches the place). The route, arrival times and weather refresh.
+A "Swapped A for B · Undo swap" row appears in the stop list; undo restores the previous name, place,
+source and visited flag (not the deleted photo) and is forgotten on reload or when the stop moves.
+`POST /api/suggestions` accepts an optional `radiusKm` (1 to 30, with `around` only).
+
 ### Read-only share link
 
 The **Share** button in the trip header creates a link (`/s/<token>`) anyone can open

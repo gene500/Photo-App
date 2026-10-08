@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost, btnPrimary, btnSecondary, inputClass } from "@/components/ui/styles";
-import type { Trip } from "@/lib/types";
+import type { ExportStop } from "@/lib/export";
+import type { LngLat, Trip } from "@/lib/types";
 import type { TripPatch } from "@/lib/validation";
+import { ExportControl } from "./ExportControl";
 import { ShareControl } from "./ShareControl";
 
 
-export function TripHeader({ trip, onSave, onShareChange }: { trip: Trip; onSave: (patch: TripPatch) => Promise<void>; onShareChange?: (shareToken: string | null) => void }) {
+export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: Trip; onSave: (patch: TripPatch) => Promise<void>; onShareChange?: (shareToken: string | null) => void; exportData?: { stops: ExportStop[]; route: LngLat[] | null } }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(trip.name);
   const [plannedDate, setPlannedDate] = useState(trip.plannedDate);
@@ -40,8 +42,9 @@ export function TripHeader({ trip, onSave, onShareChange }: { trip: Trip; onSave
       <header>
         <div className="flex items-start justify-between gap-2">
           <h1 className="min-w-0 truncate text-lg font-semibold leading-9">{trip.name}</h1>
-          <div className="flex shrink-0">
+          <div className="flex shrink-0 flex-wrap justify-end">
             <button type="button" onClick={beginEdit} className={btnGhost}>Edit trip</button>
+            {exportData && <ExportControl tripName={trip.name} stops={exportData.stops} route={exportData.route} />}
             {onShareChange && <ShareControl tripId={trip.id} shareToken={trip.shareToken} onChange={onShareChange} />}
           </div>
         </div>

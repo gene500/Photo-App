@@ -43,4 +43,11 @@ describe("TripHeader", () => {
     rerender(<TripHeader trip={trip} onSave={vi.fn()} onShareChange={onShareChange} />);
     expect(screen.getByRole("button", { name: "Share" })).toBeTruthy();
   });
+
+  it("shows the Export control only when export data is given", () => {
+    const { rerender } = render(<TripHeader trip={trip} onSave={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Export" })).toBeNull();
+    rerender(<TripHeader trip={trip} onSave={vi.fn()} exportData={{ stops: [], route: null }} />);
+    expect((screen.getByRole("button", { name: "Export" }) as HTMLButtonElement).disabled).toBe(true);
+  });
 });

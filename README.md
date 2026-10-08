@@ -121,6 +121,16 @@ DTO (`toPublicTripDto`): no email, user id, database ids or uploaded photos, and
 the shared view uses straight lines and distance-based time estimates. Owner-only API:
 `POST /api/trips/[id]/share` (create or return the existing token) and `DELETE` (revoke).
 
+### Export and navigation links
+
+The **Export** menu in the trip header (enabled with 2+ stops) downloads a GPX 1.1 file
+(a waypoint per stop with its notes, plus a track along the driven route when one is
+loaded) and opens the trip in Google Maps or Apple Maps. It is all built in the browser
+from the loaded stops (`src/lib/export.ts`), no server route. Google allows 11 points per
+link, so longer trips get "Part 1/2", "Part 2/2" links that share an end point. User text
+is XML-escaped and stripped of characters illegal in XML 1.0; the file name is reduced to
+`[A-Za-z0-9_-]`; URLs use `URLSearchParams` only.
+
 ### Photo popups and beige map
 
 With a single stop, suggestions within about 15 miles (24 km) of it load automatically; from

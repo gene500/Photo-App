@@ -488,7 +488,7 @@ export function TripEditor({ initialTrip }: { initialTrip: TripWithStops }) {
       )}
 
       <StopsPanel
-        header={<TripHeader trip={trip} onSave={saveTrip} onShareChange={(shareToken) => setTrip((t) => ({ ...t, shareToken }))} />}
+        header={<TripHeader trip={trip} onSave={saveTrip} onShareChange={(shareToken) => setTrip((t) => ({ ...t, shareToken }))} exportData={{ stops, route: activeRoute?.geometry ?? null }} />}
         collapsedSummary={
           activeRoute
             ? `${stops.length} ${stops.length === 1 ? "stop" : "stops"} · ${formatDuration(activeRoute.duration)}`

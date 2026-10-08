@@ -46,7 +46,7 @@ export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: 
           <h1 className="min-w-0 max-w-full flex-1 basis-28 truncate text-lg font-semibold leading-9">{trip.name}</h1>
           <div className="flex shrink-0 flex-wrap justify-end">
             <button type="button" onClick={beginEdit} className={btnGhost}>Edit trip</button>
-            {exportData && <ExportControl tripName={trip.name} stops={exportData.stops} route={exportData.route} />}
+            {exportData && <ExportControl tripName={trip.name} plannedDate={trip.plannedDate} stops={exportData.stops} route={exportData.route} />}
             {onShareChange && <ShareControl tripId={trip.id} shareToken={trip.shareToken} onChange={onShareChange} />}
           </div>
         </div>

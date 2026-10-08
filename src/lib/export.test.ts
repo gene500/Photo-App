@@ -46,12 +46,42 @@ describe("buildGpx", () => {
   });
 });
 
+describe("buildGpx numbers and hostile text", () => {
+  it("writes plain decimals (no exponent) and trims trailing zeros", () => {
+    const gpx = buildGpx({ name: "n", stops: [{ name: "a", lat: 4e-7, lng: -1e-9, notes: null }, { name: "b", lat: 40.12345678901, lng: 100, notes: null }] });
+    expect(gpx).not.toMatch(/e[-+]?\d/i);
+    expect(gpx).toContain('<wpt lat="0.0000004" lon="0">');
+    expect(gpx).toContain('<wpt lat="40.1234568" lon="100">');
+  });
+
+  it("skips points with non-finite coordinates", () => {
+    const gpx = buildGpx({ name: "n", stops: [{ name: "bad", lat: NaN, lng: 1, notes: null }, { name: "ok", lat: 1, lng: 2, notes: null }], route: [[Infinity, 1], [3, 4]] });
+    expect(gpx.match(/<wpt /g)).toHaveLength(1);
+    expect(gpx.match(/<trkpt /g)).toHaveLength(1);
+    expect(gpx).not.toMatch(/NaN|Infinity/);
+  });
+
+  it("round-trips hostile characters through a real XML parser", () => {
+    const hostile = `A&B <script>"q" 'z' ]]> \u0000\u0007\u001f ok`;
+    const gpx = buildGpx({ name: hostile, stops: [{ name: hostile, lat: 1, lng: 2, notes: hostile }], route: [[2, 1], [3, 2]] });
+    const doc = new DOMParser().parseFromString(gpx, "application/xml");
+    expect(doc.getElementsByTagName("parsererror")).toHaveLength(0);
+    const expected = `A&B <script>"q" 'z' ]]>  ok`;
+    expect(doc.querySelector("metadata > name")?.textContent).toBe(expected);
+    expect(doc.querySelector("wpt > name")?.textContent).toBe(expected);
+    expect(doc.querySelector("wpt > desc")?.textContent).toBe(expected);
+    expect(doc.getElementsByTagName("script")).toHaveLength(0);
+  });
+});
+
 describe("gpxFileName", () => {
   it("sanitizes the trip name", () => {
     expect(gpxFileName("Big Sur / 2026: \"best\"?")).toBe("Big-Sur-2026-best.gpx");
     expect(gpxFileName("../../etc/passwd")).toBe("etc-passwd.gpx");
-    expect(gpxFileName("   ")).toBe("trip.gpx");
-    expect(gpxFileName("日本\u0000")).toBe("trip.gpx");
+    expect(gpxFileName("   ", "2026-07-01")).toBe("trip-2026-07-01.gpx");
+    expect(gpxFileName("日本\u0000", "2026-07-01")).toBe("trip-2026-07-01.gpx");
+    expect(gpxFileName("日本")).toMatch(/^trip-\d{4}-\d{2}-\d{2}\.gpx$/);
+    expect(gpxFileName("日本 Alps", "2026-07-01")).toBe("Alps.gpx");
     expect(gpxFileName("a".repeat(200)).length).toBeLessThanOrEqual(64);
   });
 });
@@ -87,6 +117,17 @@ describe("googleMapsUrl", () => {
     expect(p2.get("origin")).toBe("41,-121");
     expect(p2.get("destination")).toBe("41.1,-121.1");
     expect(p2.has("waypoints")).toBe(false);
+  });
+  it("11 stops fit one link (9 waypoints); 12 and 22 split into linked parts", () => {
+    expect(googleMapsUrl(mk(11))).toHaveLength(1);
+    expect(new URL(googleMapsUrl(mk(11))![0].url).searchParams.get("waypoints")!.split("|")).toHaveLength(9);
+    const r22 = googleMapsUrl(mk(22))!;
+    expect(r22).toHaveLength(3); // stops 0-10, 10-20, 20-21
+    const origins = r22.map((p) => new URL(p.url).searchParams);
+    expect(origins[1].get("origin")).toBe(origins[0].get("destination"));
+    expect(origins[2].get("origin")).toBe(origins[1].get("destination"));
+    expect(origins[2].get("destination")).toBe("42.1,-122.1"); // the last stop
+    for (const q of origins) expect((q.get("waypoints") ?? "").split("|").filter(Boolean).length).toBeLessThanOrEqual(9);
   });
   it("single link has no part label", () => {
     expect(googleMapsUrl(mk(11))![0].label).toBe("");

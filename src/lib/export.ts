@@ -17,7 +17,12 @@ function esc(text: string): string {
     .replace(/'/g, "&apos;");
 }
 
-const num = (n: number) => (Number.isFinite(n) ? String(n) : "0");
+/** A plain decimal with up to 7 places ("40.5", never "4e-7"); null for NaN/Infinity so the point is skipped. */
+function num(n: number): string | null {
+  if (!Number.isFinite(n)) return null;
+  const t = n.toFixed(7).replace(/\.?0+$/, "");
+  return t === "-0" || t === "" ? "0" : t;
+}
 
 /** GPX 1.1: a waypoint per stop plus, when given, one track along the driven route. No timestamps. */
 export function buildGpx({ name, stops, route }: { name: string; stops: ExportStop[]; route?: LngLat[] | null }): string {
@@ -27,30 +32,35 @@ export function buildGpx({ name, stops, route }: { name: string; stops: ExportSt
     `  <metadata><name>${esc(name)}</name></metadata>`,
   ];
   for (const s of stops) {
-    lines.push(`  <wpt lat="${num(s.lat)}" lon="${num(s.lng)}">`, `    <name>${esc(s.name)}</name>`);
+    const lat = num(s.lat), lon = num(s.lng);
+    if (lat === null || lon === null) continue;
+    lines.push(`  <wpt lat="${lat}" lon="${lon}">`, `    <name>${esc(s.name)}</name>`);
     if (s.notes) lines.push(`    <desc>${esc(s.notes)}</desc>`);
     lines.push("  </wpt>");
   }
   if (route && route.length > 0) {
     lines.push("  <trk>", `    <name>${esc(name)}</name>`, "    <trkseg>");
-    for (const [lng, lat] of route) lines.push(`      <trkpt lat="${num(lat)}" lon="${num(lng)}"/>`);
+    for (const [lng, lat] of route) {
+      const la = num(lat), lo = num(lng);
+      if (la !== null && lo !== null) lines.push(`      <trkpt lat="${la}" lon="${lo}"/>`);
+    }
     lines.push("    </trkseg>", "  </trk>");
   }
   lines.push("</gpx>", "");
   return lines.join("\n");
 }
 
-/** A safe download name: ASCII letters, digits, dashes and underscores only. */
-export function gpxFileName(tripName: string): string {
+/** A safe download name: ASCII letters, digits, dashes and underscores only; `trip-<date>.gpx` when nothing usable is left. */
+export function gpxFileName(tripName: string, date: string = new Date().toISOString().slice(0, 10)): string {
   const slug = tripName
     .replace(/[^A-Za-z0-9_]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60)
     .replace(/-+$/, "");
-  return `${slug || "trip"}.gpx`;
+  return `${slug || `trip-${date.replace(/[^0-9-]/g, "")}`}.gpx`;
 }
 
-const point = (s: ExportStop) => `${s.lat},${s.lng}`;
+const point = (s: ExportStop) => `${num(s.lat) ?? 0},${num(s.lng) ?? 0}`;
 
 // Google's directions link allows an origin, a destination and at most 9 waypoints between.
 const GOOGLE_MAX_WAYPOINTS = 9;

@@ -7,6 +7,8 @@ import { usePopover } from "./use-popover";
 
 type Props = {
   tripName: string;
+  /** Trip date ("YYYY-MM-DD"); names the file when the trip name has no usable characters. */
+  plannedDate?: string;
   stops: ExportStop[];
   /** Driven route line, when one is loaded; becomes the GPX track. */
   route: LngLat[] | null;
@@ -15,7 +17,7 @@ type Props = {
 const item = "block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent-strong";
 
 /** "Export" button with a small menu: GPX download and Google / Apple Maps directions. Needs 2+ stops. */
-export function ExportControl({ tripName, stops, route }: Props) {
+export function ExportControl({ tripName, plannedDate, stops, route }: Props) {
   const { open, setOpen, close, toggle, rootRef, triggerRef, panelRef, panelId } = usePopover();
   const enough = stops.length >= 2;
   if (open && !enough) setOpen(false); // stops were removed while the menu was open
@@ -27,7 +29,7 @@ export function ExportControl({ tripName, stops, route }: Props) {
     const href = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = href;
-    a.download = gpxFileName(tripName);
+    a.download = gpxFileName(tripName, plannedDate);
     document.body.appendChild(a);
     a.click();
     a.remove();

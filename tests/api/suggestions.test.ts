@@ -34,7 +34,7 @@ describe("POST /api/suggestions", () => {
     const ok = await POST(jsonRequest("POST", "/api/suggestions", { around: [-119.79, 36.74], radiusKm: 10 }));
     expect(ok.status).toBe(200);
     expect(findSuggestionsAround).toHaveBeenLastCalledWith([-119.79, 36.74], {}, 10);
-    for (const radiusKm of [0, 0.5, 31, "10", null]) {
+    for (const radiusKm of [0, 0.5, 10.5, 31, "10", null]) {
       expect((await POST(jsonRequest("POST", "/api/suggestions", { around: [-119.79, 36.74], radiusKm }))).status).toBe(400);
     }
     expect((await POST(jsonRequest("POST", "/api/suggestions", { ...body, radiusKm: 10 }))).status).toBe(400);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost, btnPrimary, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
@@ -21,6 +21,10 @@ type Props = {
 
 const LIGHT_OPTIONS: [LightPref, string][] = [["any", "Any"], ["sunrise", "Sunrise"], ["golden", "Golden hour"], ["sunset", "Sunset"]];
 
+// Checklist rows carry a local id (never sent to the server) so React keys survive deleting or reordering rows.
+type ShotRow = ShotItem & { id: number };
+const plain = (rows: ShotRow[]): ShotItem[] => rows.map(({ text, done }) => ({ text, done }));
+
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives }: Props) {
@@ -31,10 +35,17 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives 
   const [lightPref, setLightPref] = useState<LightPref>(stop.lightPref);
   const [dwell, setDwell] = useState(String(stop.dwellMinutes));
   const [shotNotes, setShotNotes] = useState(stop.shotNotes ?? "");
-  const [shots, setShots] = useState<ShotItem[]>(stop.shotChecklist);
+  const nextId = useRef(stop.shotChecklist.length);
+  const [shots, setShots] = useState<ShotRow[]>(() => stop.shotChecklist.map((s, i) => ({ ...s, id: i })));
   const [newShot, setNewShot] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Swapping replaces the stop and closes the drawer, which would silently throw typed edits away; so it waits for Save.
+  const dirty =
+    name !== initial.name || (notes.trim() === "" ? null : notes) !== initial.notes || visited !== initial.visited || lightPref !== initial.lightPref ||
+    dwell !== String(stop.dwellMinutes) || (shotNotes.trim() === "" ? null : shotNotes) !== initial.shotNotes ||
+    JSON.stringify(plain(shots)) !== initial.shotChecklist || newShot.trim() !== "";
 
   async function save() {
     setBusy(true);
@@ -58,7 +69,7 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives 
       if (nextShotNotes !== initial.shotNotes) patch.shotNotes = nextShotNotes;
       // A shot typed but not yet confirmed with Enter is kept rather than silently dropped.
       const pending = newShot.trim();
-      const nextShots = pending !== "" && shots.length < MAX_SHOT_ITEMS ? [...shots, { text: pending.slice(0, MAX_SHOT_TEXT), done: false }] : shots;
+      const nextShots = plain(pending !== "" && shots.length < MAX_SHOT_ITEMS ? [...shots, { id: -1, text: pending.slice(0, MAX_SHOT_TEXT), done: false }] : shots);
       if (JSON.stringify(nextShots) !== initial.shotChecklist) patch.shotChecklist = nextShots;
       if (Object.keys(patch).length > 0) await onSave(patch);
       onClose();
@@ -72,7 +83,7 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives 
   function addShot() {
     const text = newShot.trim();
     if (text === "" || shots.length >= MAX_SHOT_ITEMS) return;
-    setShots([...shots, { text, done: false }]);
+    setShots([...shots, { id: nextId.current++, text, done: false }]);
     setNewShot("");
   }
 
@@ -115,7 +126,7 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives 
         {stop.source === "suggested" ? "Suggested from OpenStreetMap" : "Manual pin"} · {stop.lat.toFixed(4)}, {stop.lng.toFixed(4)}
       </p>
       {alternatives && (
-        <AlternativesPanel status={alternatives.status} alternatives={alternatives.items} error={alternatives.error} onFind={alternatives.onFind} onSwap={alternatives.onSwap} onDismissError={alternatives.onDismissError} />
+        <AlternativesPanel status={alternatives.status} alternatives={alternatives.items} error={alternatives.error} onFind={alternatives.onFind} onSwap={alternatives.onSwap} onDismissError={alternatives.onDismissError} swapBlockedReason={dirty ? "Save or close your edits before swapping this stop." : undefined} />
       )}
       <label className="block">
         <span className="text-sm text-muted">Name</span>
@@ -148,7 +159,7 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives 
         {shots.length > 0 && (
           <ul className="space-y-1">
             {shots.map((shot, i) => (
-              <li key={i} className="flex items-center gap-2">
+              <li key={shot.id} className="flex items-center gap-2">
                 <label className="flex min-h-9 min-w-0 flex-1 items-center gap-2 text-sm">
                   <input
                     type="checkbox"

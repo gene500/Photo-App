@@ -16,6 +16,8 @@ type Props = {
   onFind: () => void;
   onSwap: (s: Suggestion) => void | Promise<void>;
   onDismissError: () => void;
+  /** When set, "Swap in" is disabled and this explains why (e.g. unsaved edits in the drawer). */
+  swapBlockedReason?: string;
 };
 
 /** Thumbnail from the shared place-photo cache; a missing or broken photo just leaves the space empty. */
@@ -40,7 +42,7 @@ function Thumb({ s }: { s: Suggestion }) {
   );
 }
 
-export function AlternativesPanel({ status, alternatives, error, onFind, onSwap, onDismissError }: Props) {
+export function AlternativesPanel({ status, alternatives, error, onFind, onSwap, onDismissError, swapBlockedReason }: Props) {
   const { settings } = useSettings();
   const [swapping, setSwapping] = useState<string | null>(null);
   async function swap(s: Suggestion) {
@@ -62,6 +64,7 @@ export function AlternativesPanel({ status, alternatives, error, onFind, onSwap,
       </div>
       {status === "error" && error && <ErrorBanner message={error} onDismiss={onDismissError} />}
       {status === "done" && alternatives.length === 0 && <p className="text-sm text-muted">No other photo spots within {formatRadiusKm(10, settings.distanceUnit)}.</p>}
+      {swapBlockedReason && alternatives.length > 0 && <p className="text-xs text-muted">{swapBlockedReason}</p>}
       <ul className="space-y-1">
         {alternatives.map((s) => (
           <li key={s.osmId} data-testid="alternative-card" className="flex items-center gap-2 rounded-xl py-1">
@@ -73,7 +76,7 @@ export function AlternativesPanel({ status, alternatives, error, onFind, onSwap,
                 {formatPhotoCount(s.popularity) && <span data-testid="alternative-popularity"> · {formatPhotoCount(s.popularity)}</span>}
               </p>
             </div>
-            <button type="button" disabled={swapping !== null} onClick={() => void swap(s)} aria-label={`Swap in ${s.name}`} className={btnAccent}>
+            <button type="button" disabled={swapping !== null || !!swapBlockedReason} title={swapBlockedReason} onClick={() => void swap(s)} aria-label={`Swap in ${s.name}`} className={btnAccent}>
               Swap in
             </button>
           </li>

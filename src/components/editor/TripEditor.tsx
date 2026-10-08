@@ -74,7 +74,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     fromName: string;
     toName: string;
     previous: { name: string; lat: number; lng: number; source: StopSource; visited: boolean };
-    applied: LatLng;
+    /** What the swap wrote; Undo is offered only while the stop still matches all of it, so it cannot overwrite newer edits. */
+    applied: LatLng & { name: string; visited: boolean; source: StopSource };
     lostPhoto: boolean;
   } | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
@@ -477,7 +478,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       mergeStop(saved, ["name", "lat", "lng", "source", "visited", "photoUrl"]);
       alternativesSeq.current++;
       setAlternativesState(null);
-      setSwapNote({ stopId: stop.id, fromName: previous.name, toName: saved.name, previous, applied: { lat: saved.lat, lng: saved.lng }, lostPhoto: stop.photoUrl !== null });
+      setSwapNote({ stopId: stop.id, fromName: previous.name, toName: saved.name, previous, applied: { lat: saved.lat, lng: saved.lng, name: saved.name, visited: saved.visited, source: saved.source }, lostPhoto: stop.photoUrl !== null });
       setDrawerId(null);
       setCardId((cur) => (cur === stop.id ? null : cur));
     } catch (e) {
@@ -496,7 +497,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }
 
   const swapped = swapNote ? stops.find((s) => s.id === swapNote.stopId) : undefined;
-  const canUndoSwap = swapNote !== null && swapped !== undefined && swapped.lat === swapNote.applied.lat && swapped.lng === swapNote.applied.lng;
+  const canUndoSwap = swapNote !== null && swapped !== undefined && swapped.lat === swapNote.applied.lat && swapped.lng === swapNote.applied.lng &&
+    swapped.name === swapNote.applied.name && swapped.visited === swapNote.applied.visited && swapped.source === swapNote.applied.source;
 
   const cardIndex = stops.findIndex((s) => s.id === cardId);
   const cardStop = cardIndex >= 0 ? stops[cardIndex] : null;

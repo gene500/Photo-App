@@ -121,7 +121,7 @@ export const suggestionsRequestSchema = z
     /** A single point: suggestions within AROUND_RADIUS_KM of it (used while a trip has only one stop). */
     around: lngLat.optional(),
     /** Search radius for `around` (default AROUND_RADIUS_KM); alternatives for one stop use a small local one. */
-    radiusKm: z.number().min(1).max(MAX_AROUND_RADIUS_KM).optional(),
+    radiusKm: z.number().int().min(1).max(MAX_AROUND_RADIUS_KM).optional(),
   })
   .refine((v) => (v.coordinates === undefined) !== (v.around === undefined), "Send either a route or a single point")
   .refine((v) => v.radiusKm === undefined || v.around !== undefined, { path: ["radiusKm"], message: "radiusKm only applies to a single point" });

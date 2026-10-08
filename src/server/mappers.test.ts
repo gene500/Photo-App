@@ -9,6 +9,12 @@ const row: StopRow = {
 };
 
 describe("toStopDto shot list", () => {
+  it("caps an oversized stored checklist to 20 items of 120 characters", () => {
+    const big = Array.from({ length: 30 }, (_, i) => ({ text: "x".repeat(200) + i, done: false }));
+    const out = parseShotChecklist(JSON.stringify(big));
+    expect(out).toHaveLength(20);
+    expect(out[0].text).toHaveLength(120);
+  });
   it("round-trips the stored JSON checklist", () => {
     const list = [{ text: "Wide", done: true }, { text: "Detail", done: false }];
     expect(toStopDto({ ...row, shotChecklist: JSON.stringify(list) })).toMatchObject({ shotNotes: "Tripod", shotChecklist: list });

@@ -12,16 +12,21 @@ export function toTripDto(row: TripRow): Trip {
   };
 }
 
-/** The checklist is stored as JSON text; anything unreadable degrades to an empty list. */
+const MAX_READ_ITEMS = 20;
+const MAX_READ_TEXT = 120;
+
+/** The checklist is stored as JSON text; anything unreadable degrades to an empty list, and an oversized one is capped (20 items, 120 chars each). */
 export function parseShotChecklist(raw: string): ShotItem[] {
   try {
     const v: unknown = JSON.parse(raw);
     if (!Array.isArray(v)) return [];
-    return v.flatMap((i) =>
-      typeof i === "object" && i !== null && typeof i.text === "string" && typeof i.done === "boolean"
-        ? [{ text: i.text, done: i.done }]
-        : [],
-    );
+    return v
+      .flatMap((i) =>
+        typeof i === "object" && i !== null && typeof i.text === "string" && typeof i.done === "boolean"
+          ? [{ text: i.text.slice(0, MAX_READ_TEXT), done: i.done }]
+          : [],
+      )
+      .slice(0, MAX_READ_ITEMS);
   } catch {
     return [];
   }

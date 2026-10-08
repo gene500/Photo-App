@@ -20,9 +20,16 @@ export class TooManyStopsError extends Error {
 
 export type StopUpdate = Omit<StopPatch, "photoUrl"> & { photoUrl?: string | null };
 
-/** The checklist column holds JSON text; everything else in a patch maps straight to columns. */
-function toStopData({ shotChecklist, ...rest }: StopUpdate) {
-  return shotChecklist === undefined ? rest : { ...rest, shotChecklist: JSON.stringify(shotChecklist) };
+/** Shot notes are stored trimmed; whitespace-only becomes null. */
+const cleanShotNotes = (v: string | null): string | null => (v === null || v.trim() === "" ? null : v.trim());
+
+/** The checklist column holds JSON text; shot notes are trimmed; everything else in a patch maps straight to columns. */
+function toStopData({ shotChecklist, shotNotes, ...rest }: StopUpdate) {
+  return {
+    ...rest,
+    ...(shotNotes === undefined ? {} : { shotNotes: cleanShotNotes(shotNotes) }),
+    ...(shotChecklist === undefined ? {} : { shotChecklist: JSON.stringify(shotChecklist) }),
+  };
 }
 
 export async function addStop(
@@ -46,7 +53,7 @@ export async function addStop(
         notes: input.notes ?? null,
         lightPref: input.lightPref,
         dwellMinutes: input.dwellMinutes,
-        shotNotes: input.shotNotes ?? null,
+        shotNotes: cleanShotNotes(input.shotNotes ?? null),
         shotChecklist: JSON.stringify(input.shotChecklist ?? []),
       },
     });

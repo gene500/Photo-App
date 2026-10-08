@@ -47,6 +47,13 @@ describe("stops data access", () => {
     expect((await updateStop(user.id, stops[0].id, { shotChecklist: [] }))?.shotChecklist).toEqual([]);
   });
 
+  it("trims shot notes and stores null for whitespace-only", async () => {
+    const { user, trip, stops } = await tripWithStops(["a"]);
+    expect(await updateStop(user.id, stops[0].id, { shotNotes: "  Tripod \n" })).toMatchObject({ shotNotes: "Tripod" });
+    expect(await updateStop(user.id, stops[0].id, { shotNotes: "   \n " })).toMatchObject({ shotNotes: null });
+    expect(await addStop(user.id, trip.id, { ...pin("b"), shotNotes: "  " })).toMatchObject({ shotNotes: null });
+  });
+
   it("does not let another user patch a stop's shot list", async () => {
     const { stops } = await tripWithStops(["a"]);
     const intruder = await createTestUser();

@@ -20,6 +20,17 @@ beforeEach(() => {
 });
 
 describe("offline-store", () => {
+  it("drops a copy whose dates are corrupt instead of showing Invalid Date", () => {
+    saveTripCopy(trip("a"), at(1));
+    const stored = JSON.parse(mem.getItem("rtpp.offline.trip.a")!);
+    mem.setItem("rtpp.offline.trip.a", JSON.stringify({ ...stored, trip: { ...stored.trip, plannedDate: "garbage" } }));
+    expect(loadTripCopy("a")).toBeNull();
+    saveTripCopy(trip("b"), at(2));
+    const b = JSON.parse(mem.getItem("rtpp.offline.trip.b")!);
+    mem.setItem("rtpp.offline.trip.b", JSON.stringify({ ...b, trip: { ...b.trip, departAt: "zzz" } }));
+    expect(loadTripCopy("b")).toBeNull();
+  });
+
   it("round-trips a trip and lists it", () => {
     expect(saveTripCopy(trip("a"), at(1))).toBe(true);
     const copy = loadTripCopy("a");

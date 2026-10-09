@@ -29,6 +29,7 @@ rmSync(".e2e-uploads", { recursive: true, force: true });
 execSync("npx prisma migrate deploy", { stdio: "inherit", env });
 
 // E2E_PROD=1 runs the production build instead of the dev server, so the strict (no unsafe-eval) CSP is exercised.
+// Use it with e2e/csp.spec.ts only: RATE_LIMIT_DISABLED is ignored in production, so the real signup limit (5/hour/IP) applies.
 const prod = process.env.E2E_PROD === "1";
 if (prod) execSync("npx next build", { stdio: "inherit", env });
 const child = spawn("npx", ["next", prod ? "start" : "dev", "--port", PORT], { stdio: "inherit", env });

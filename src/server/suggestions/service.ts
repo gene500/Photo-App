@@ -6,7 +6,7 @@ import { AROUND_RADIUS_KM, buildCorridor, buildOverpassAroundQuery, buildOverpas
 import { localPlacesAround, localPlacesInRing } from "./local-places";
 import { fetchOverpass, OverpassError } from "./overpass";
 import { parseOverpassResponse } from "./parse";
-import { enrichPopularity } from "./popularity";
+import { enrichPopularity, resetSharedCounter } from "./popularity";
 
 export const SUGGESTION_CACHE_TTL_MS = 30 * 60_000;
 
@@ -25,6 +25,7 @@ export function routeCacheKey(route: LngLat[]): string {
 export function clearSuggestionCache(): void {
   cache.clear();
   rawCache.clear();
+  resetSharedCounter();
 }
 
 type Deps = {

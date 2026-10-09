@@ -13,6 +13,8 @@ type Deps = {
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   timeoutMs?: number;
+  /** Delay before the next mirror is also asked; Infinity means strictly one after another. */
+  hedgeMs?: number;
 };
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -28,45 +30,93 @@ function overpassUrls(): string[] {
   return process.env.OVERPASS_URL ? [process.env.OVERPASS_URL] : OVERPASS_ENDPOINTS;
 }
 
+/** How long a mirror gets before the next one is also started (the first answer wins). */
+export const OVERPASS_HEDGE_MS = 1_500;
+
+class FatalOverpassError extends OverpassError {}
+
 /**
- * Tries each endpoint in turn, moving on at once after a network error, timeout, 429 or 5xx; if every one fails, waits a
- * second and gives the first endpoint one more go. A 4xx other than 429 (a bad query) fails immediately.
+ * Asks the mirrors for the same query, starting the next one when the previous has failed (network error, timeout, 429,
+ * 5xx, or a runtime-error remark) or has not answered within `hedgeMs`; the first good answer wins and the others are
+ * abandoned. A slow-but-working main server therefore still answers, while a stalled one costs ~1.5 s, not its full
+ * timeout. If every mirror fails, waits a second and gives the first one more go. A 4xx other than 429 (a bad query)
+ * fails immediately.
  */
 export async function fetchOverpass(query: string, deps: Deps = {}): Promise<unknown> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const sleep = deps.sleep ?? defaultSleep;
   const timeoutMs = deps.timeoutMs ?? OVERPASS_TIMEOUT_MS;
+  const hedgeMs = deps.hedgeMs ?? OVERPASS_HEDGE_MS;
   const urls = overpassUrls();
-  const attempts = [...urls, urls[0]];
-  let lastError = "Overpass request failed";
+  const body = new URLSearchParams({ data: query }).toString();
 
-  for (let attempt = 0; attempt < attempts.length; attempt++) {
-    if (attempt === attempts.length - 1) await sleep(OVERPASS_RETRY_DELAY_MS);
+  async function ask(url: string, signal: AbortSignal): Promise<unknown> {
+    let res: Response;
     try {
-      const res = await fetchImpl(attempts[attempt], {
+      res = await fetchImpl(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": "road-trip-photo-planner/0.1",
-        },
-        body: new URLSearchParams({ data: query }).toString(),
-        signal: AbortSignal.timeout(timeoutMs),
+        headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "road-trip-photo-planner/0.1" },
+        body,
+        signal: AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
       });
-      if (res.ok) {
-        const json = await res.json();
-        // Overpass reports a query that timed out or ran out of memory as a 200 with a remark and empty or partial elements.
-        const remark = (json as { remark?: unknown } | null)?.remark;
-        if (typeof remark === "string" && /runtime error/i.test(remark)) {
-          lastError = `Overpass: ${remark}`;
-          continue;
-        }
-        return json;
-      }
-      lastError = `Overpass responded ${res.status}`;
-      if (res.status !== 429 && res.status < 500) break;
     } catch (e) {
-      lastError = e instanceof Error ? e.message : String(e);
+      throw new OverpassError(e instanceof Error ? e.message : String(e));
     }
+    if (!res.ok) {
+      const err = new OverpassError(`Overpass responded ${res.status}`);
+      throw res.status !== 429 && res.status < 500 ? new FatalOverpassError(err.message) : err;
+    }
+    let json: unknown;
+    try {
+      json = await res.json();
+    } catch (e) {
+      throw new OverpassError(e instanceof Error ? e.message : String(e));
+    }
+    // Overpass reports a query that timed out or ran out of memory as a 200 with a remark and empty or partial elements.
+    const remark = (json as { remark?: unknown } | null)?.remark;
+    if (typeof remark === "string" && /runtime error/i.test(remark)) throw new OverpassError(`Overpass: ${remark}`);
+    return json;
   }
-  throw new OverpassError(lastError);
+
+  function race(list: string[]): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      const abort = new AbortController();
+      let launched = 0;
+      let failed = 0;
+      let finished = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let lastError = "Overpass request failed";
+      const finish = (fn: () => void) => {
+        finished = true;
+        clearTimeout(timer);
+        abort.abort(); // abandon the slower mirrors
+        fn();
+      };
+      const launch = () => {
+        if (finished || launched >= list.length) return;
+        const url = list[launched++];
+        clearTimeout(timer);
+        if (launched < list.length && Number.isFinite(hedgeMs)) timer = setTimeout(launch, hedgeMs);
+        ask(url, abort.signal).then(
+          (json) => finished || finish(() => resolve(json)),
+          (e: unknown) => {
+            if (finished) return;
+            lastError = e instanceof Error ? e.message : String(e);
+            if (e instanceof FatalOverpassError) return finish(() => reject(e));
+            if (++failed === list.length) return finish(() => reject(new OverpassError(lastError)));
+            launch(); // a failure doesn't wait for the hedge timer
+          },
+        );
+      };
+      launch();
+    });
+  }
+
+  try {
+    return await race(urls);
+  } catch (e) {
+    if (e instanceof FatalOverpassError) throw e;
+  }
+  await sleep(OVERPASS_RETRY_DELAY_MS);
+  return race([urls[0]]);
 }

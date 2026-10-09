@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
+import { TtlCache } from "./suggestions/cache";
 
 const BCRYPT_COST = 10;
 
@@ -46,15 +47,26 @@ export async function verifyCredentials(
   return user && ok ? { id: user.id, email: user.email } : null;
 }
 
+// Every signed-in request checks the session version, which is a database round trip. Remember the answer briefly per
+// server instance; revoking clears it on the instance that handled the revoke, and other instances see it within the TTL.
+export const SESSION_VERSION_TTL_MS = 15_000;
+const versions = new TtlCache<number | null>(SESSION_VERSION_TTL_MS, 2000);
+export const clearSessionVersionCache = () => versions.clear();
+
 /** The user's current session version, or null when the account no longer exists. */
 export async function getSessionVersion(userId: string): Promise<number | null> {
+  const cached = versions.get(userId);
+  if (cached !== undefined) return cached;
   const row = await prisma.user.findUnique({ where: { id: userId }, select: { sessionVersion: true } });
-  return row?.sessionVersion ?? null;
+  const version = row?.sessionVersion ?? null;
+  versions.set(userId, version);
+  return version;
 }
 
 /** Invalidates every sign-in token issued so far for this user ("sign out everywhere"). */
 export async function revokeAllSessions(userId: string): Promise<void> {
   await prisma.user.updateMany({ where: { id: userId }, data: { sessionVersion: { increment: 1 } } });
+  versions.delete(userId);
 }
 
 /** Sets a new password after checking the current one, and signs every other device out. */
@@ -65,5 +77,6 @@ export async function changePassword(userId: string, currentPassword: string, ne
     where: { id: userId },
     data: { passwordHash: await bcrypt.hash(newPassword, BCRYPT_COST), sessionVersion: { increment: 1 } },
   });
+  versions.delete(userId);
   return true;
 }

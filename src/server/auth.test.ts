@@ -1,9 +1,9 @@
 import type { Session } from "next-auth";
 import type { JWT } from "next-auth/jwt";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { authOptions, authorizeCredentials } from "./auth";
 import { clearAllLimits } from "./rate-limit";
-import { createUser, revokeAllSessions } from "./users";
+import { clearSessionVersionCache, createUser, revokeAllSessions } from "./users";
 import { prisma } from "./db";
 import { resetDb } from "../../tests/helpers/db";
 
@@ -47,7 +47,21 @@ describe("auth", () => {
     const user = await createUser("ann@example.com", "correct-horse");
     const token = await tokenFor(user.id);
     await prisma.user.delete({ where: { id: user.id } });
+    clearSessionVersionCache(); // what the 15 s expiry does on its own
     expect((await sessionOf(token)).user).toBeUndefined();
+  });
+
+  it("looks the session version up once per 15 s, not on every request, and a revoke on this instance shows at once", async () => {
+    const user = await createUser("ann@example.com", "correct-horse");
+    const token = await tokenFor(user.id);
+    const find = vi.spyOn(prisma.user, "findUnique");
+    await sessionOf(token);
+    await sessionOf(token);
+    await sessionOf(token);
+    expect(find).not.toHaveBeenCalled(); // already remembered from the sign-in above
+    await revokeAllSessions(user.id);
+    expect((await sessionOf(token)).user).toBeUndefined();
+    find.mockRestore();
   });
 
   describe("per-email login throttle", () => {

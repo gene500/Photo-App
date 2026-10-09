@@ -186,11 +186,10 @@ describe("TripEditor", () => {
     render(<TripEditor initialTrip={withStops([seed[0]])} />);
     await userEvent.click(screen.getByRole("tab", { name: /Suggestions/ }));
     await waitFor(() => expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(5));
-    await waitFor(() => expect(releases).toHaveLength(1));
+    await waitFor(() => expect(releases).toHaveLength(2)); // two batches are asked for at once
+    await act(async () => releases[1]()); // the later one answering first reveals nothing yet
+    expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(5);
     await act(async () => releases[0]());
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(10));
-    await waitFor(() => expect(releases).toHaveLength(2));
-    await act(async () => releases[1]());
     await waitFor(() => expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(12));
   });
 

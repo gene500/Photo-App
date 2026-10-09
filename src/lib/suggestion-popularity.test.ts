@@ -46,10 +46,26 @@ describe("loadPopularityInBatches", () => {
     const items = Array.from({ length: 20 }, (_, i) => s(i));
     const onBatch = vi.fn();
     const cancel = loadPopularityInBatches(items, onBatch);
-    await vi.waitFor(() => expect(suggestionPopularity).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(suggestionPopularity).toHaveBeenCalledTimes(3)); // two start together; the failed one frees a slot for the third
     cancel();
     await new Promise((r) => setTimeout(r, 20));
     expect(onBatch).toHaveBeenCalledTimes(1); // the failed batch still reports (empty) so the list keeps revealing
-    expect(suggestionPopularity).toHaveBeenCalledTimes(2);
+    expect(suggestionPopularity).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps two requests in flight but reports batches in order, even when the later one answers first", async () => {
+    const resolvers: Array<(v: { counts: number[] }) => void> = [];
+    suggestionPopularity.mockImplementation(() => new Promise((resolve) => resolvers.push(resolve)));
+    const items = Array.from({ length: 15 }, (_, i) => s(i));
+    const reported: string[][] = [];
+    loadPopularityInBatches(items, (found) => reported.push([...found.keys()]));
+    await vi.waitFor(() => expect(resolvers).toHaveLength(2));
+    resolvers[1]({ counts: [1, 1, 1, 1, 1] });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(reported).toHaveLength(0); // batch 2 is held back until batch 1 is shown
+    resolvers[0]({ counts: [1, 1, 1, 1, 1] });
+    await vi.waitFor(() => expect(reported).toHaveLength(2));
+    expect(reported[0][0]).toBe("node/0");
+    expect(reported[1][0]).toBe("node/5");
   });
 });

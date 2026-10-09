@@ -1,10 +1,12 @@
+import { enforceLimit } from "@/server/rate-limit";
 import { suggestionsRequestSchema } from "@/lib/validation";
 import { handle, HttpError, readJson, requireUserId } from "@/server/http";
 import { OverpassError } from "@/server/suggestions/overpass";
 import { findSuggestions, findSuggestionsAround } from "@/server/suggestions/service";
 
 export const POST = handle(async (req: Request) => {
-  await requireUserId();
+  const userId = await requireUserId();
+  enforceLimit("suggestions", userId);
   const { coordinates, around, radiusKm, enrich } = suggestionsRequestSchema.parse(await readJson(req));
   try {
     if (coordinates) return Response.json({ suggestions: await findSuggestions(coordinates, { enrich }) });

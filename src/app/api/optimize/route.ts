@@ -1,3 +1,4 @@
+import { enforceLimit } from "@/server/rate-limit";
 import { departureTime } from "@/lib/best-time";
 import { optimizeSchedule } from "@/lib/optimize-schedule";
 import { optimizeRequestSchema } from "@/lib/validation";
@@ -10,7 +11,8 @@ import { handle, HttpError, readJson, requireUserId } from "@/server/http";
  * lists the stops whose light cannot be met (`misses`, by submitted index).
  */
 export const POST = handle(async (req: Request) => {
-  await requireUserId();
+  const userId = await requireUserId();
+  enforceLimit("optimize", userId);
   const { coordinates, stops: prefs, plannedDate } = optimizeRequestSchema.parse(await readJson(req));
   try {
     const durations = await getDurationMatrix(coordinates);

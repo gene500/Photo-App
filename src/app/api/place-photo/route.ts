@@ -1,3 +1,4 @@
+import { enforceLimit } from "@/server/rate-limit";
 import { z } from "zod";
 import { pointQuerySchema } from "@/lib/validation";
 import { handle, requireUserId } from "@/server/http";
@@ -6,7 +7,8 @@ import { getPlacePhoto } from "@/server/external/place-photo";
 const querySchema = pointQuerySchema.extend({ name: z.string().trim().min(1).max(200) });
 
 export const GET = handle(async (req: Request) => {
-  await requireUserId();
+  const userId = await requireUserId();
+  enforceLimit("place-photo", userId);
   const params = new URL(req.url).searchParams;
   const place = querySchema.parse({
     lat: params.get("lat") ?? undefined,

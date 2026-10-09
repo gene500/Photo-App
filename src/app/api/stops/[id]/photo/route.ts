@@ -1,18 +1,26 @@
-import { handle, HttpError, requireUserId } from "@/server/http";
+import { MAX_PHOTO_BYTES } from "@/lib/photo-rules";
+import { enforceLimit } from "@/server/rate-limit";
+import { handle, HttpError, readBodyBytes, requireUserId } from "@/server/http";
 import { deletePhotoFile, savePhoto, validatePhoto } from "@/server/photos";
 import { getOwnedStop, swapStopPhoto } from "@/server/stops";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+/** Multipart framing around the file; anything bigger than file cap + this is refused before it is buffered. */
+const FORM_OVERHEAD_BYTES = 64 * 1024;
+
 export const POST = handle(async (req: Request, { params }: Ctx) => {
   const userId = await requireUserId();
+  enforceLimit("photo-upload", userId);
   const { id } = await params;
   const stop = await getOwnedStop(userId, id);
   if (!stop) throw new HttpError(404, "Stop not found");
 
   let form: FormData;
+  // The size cap is checked on the raw bytes (Content-Length first, then while streaming), before any parsing.
+  const raw = await readBodyBytes(req, MAX_PHOTO_BYTES + FORM_OVERHEAD_BYTES);
   try {
-    form = await req.formData();
+    form = await new Response(raw as BodyInit, { headers: { "content-type": req.headers.get("content-type") ?? "" } }).formData();
   } catch {
     throw new HttpError(400, "Expected a multipart form upload");
   }

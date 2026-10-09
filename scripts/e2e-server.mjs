@@ -14,6 +14,9 @@ const env = {
   NEXTAUTH_URL: `http://localhost:${PORT}`,
   NEXTAUTH_SECRET: "e2e-only-secret",
   UPLOAD_DIR: ".e2e-uploads",
+  // Every test signs up from the same address, instantly; the limiter and the signup timer have unit tests.
+  RATE_LIMIT_DISABLED: "1",
+  SIGNUP_MIN_SECONDS: "0",
   // Never let e2e use a real Blob store from .env.local; photos go to UPLOAD_DIR.
   BLOB_READ_WRITE_TOKEN: "",
   // Likewise never reach a real Turso database (e.g. from a pulled .env.local).

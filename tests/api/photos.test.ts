@@ -43,6 +43,18 @@ describe("photo routes", () => {
   });
   afterEach(() => rmSync(process.env.UPLOAD_DIR!, { recursive: true, force: true }));
 
+  it("refuses an oversize upload with 413 from Content-Length, before reading the body", async () => {
+    const res = await photoPOST(
+      new Request(`http://localhost/api/stops/${stopId}/photo`, {
+        method: "POST",
+        headers: { "content-type": "multipart/form-data; boundary=x", "content-length": String(MAX_PHOTO_BYTES + 1_000_000) },
+        body: "tiny",
+      }),
+      idParams(stopId),
+    );
+    expect(res.status).toBe(413);
+  });
+
   it("uploads a PNG and serves it back to the owner only", async () => {
     const res = await upload(stopId, new File([PNG], "ref.png", { type: "image/png" }));
     expect(res.status).toBe(200);

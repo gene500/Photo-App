@@ -58,6 +58,9 @@ export function useWeatherLine(lat: number, lng: number, arrival: Date | null, p
   return loaded?.key === key ? weatherLine(loaded.forecast, pref, new Date(atMs), unit) : null;
 }
 
+/** Suggestion weather is requested for this many places at a time, from the top of the list down. */
+export const SUGGESTION_WEATHER_GROUP = 5;
+
 type Spot = { osmId: string; lat: number; lng: number };
 
 /**
@@ -84,22 +87,35 @@ export function useSuggestionWeather(spots: readonly Spot[], plannedDate: string
   const requested = useRef(new Set<string>());
   useEffect(() => {
     if (!enabled) return;
-    const byDate = new Map<string, { id: string; fkey: string; spot: Spot }[]>();
-    for (const [id, t] of targets) {
+    // In list order (best first), five at a time, one batch after another so the top cards fill in first.
+    const pending: { fkey: string; date: string; spot: Spot }[] = [];
+    for (const t of targets.values()) {
       const fkey = `${t.spot.lat.toFixed(2)},${t.spot.lng.toFixed(2)}|${t.date}`;
-      if (requested.current.has(fkey)) continue;
-      requested.current.add(fkey);
-      byDate.set(t.date, [...(byDate.get(t.date) ?? []), { id, fkey, spot: t.spot }]);
+      if (!requested.current.has(fkey) && !pending.some((p) => p.fkey === fkey)) pending.push({ fkey, date: t.date, spot: t.spot });
     }
-    for (const [date, group] of byDate) {
-      void loadForecastBatch(group.map((g) => g.spot), date).then((list) => {
-        setForecasts((prev) => {
-          const next = new Map(prev);
-          group.forEach((g, i) => next.set(g.fkey, list[i] ?? null));
-          return next;
-        });
-      });
-    }
+    let cancelled = false;
+    void (async () => {
+      for (let i = 0; i < pending.length && !cancelled; i += SUGGESTION_WEATHER_GROUP) {
+        const group = pending.slice(i, i + SUGGESTION_WEATHER_GROUP);
+        for (const date of new Set(group.map((g) => g.date))) {
+          const part = group.filter((g) => g.date === date);
+          for (const g of part) requested.current.add(g.fkey);
+          const list = await loadForecastBatch(part.map((g) => g.spot), date);
+          if (cancelled) {
+            for (const g of part) requested.current.delete(g.fkey); // not shown: ask again next time
+            return;
+          }
+          setForecasts((prev) => {
+            const next = new Map(prev);
+            part.forEach((g, j) => next.set(g.fkey, list[j] ?? null));
+            return next;
+          });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [targets, enabled]);
   return useMemo(() => {
     const lines = new Map<string, WeatherLine>();

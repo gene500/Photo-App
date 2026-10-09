@@ -232,8 +232,8 @@ nothing; a failed lookup shows nothing.
 
 **Weather is the last thing fetched.** The client holds every weather request
 (`holdWeather` in `src/lib/weather-cache.ts`) while suggestions are being found
-or ranked by popularity, and suggestion weather is requested only after that
-finishes. A hold that is never released lets go by itself after 45 s. Open-Meteo
+or ranked by popularity, and suggestion weather is requested only once all the suggestions are loaded and ranked
+finishes, then goes down the list from the top five places at a time (one batch after another, so the best cards fill in first). A hold that is never released lets go by itself after 45 s. Open-Meteo
 labels hours in the location's local time, so `src/lib/weather.ts` converts
 with `utc_offset_seconds` before matching them to arrival instants. The
 public share page does not show weather. Offline mode returns canned data.

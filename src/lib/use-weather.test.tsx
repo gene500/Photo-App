@@ -97,3 +97,26 @@ describe("useWeatherLine", () => {
     expect(loadForecast).not.toHaveBeenCalled();
   });
 });
+
+describe("useSuggestionWeather", () => {
+  it("waits for enabled, then asks five at a time from the top of the list", async () => {
+    const { loadForecastBatch } = await import("./weather-cache");
+    const batch = vi.mocked(loadForecastBatch);
+    const calls: number[][] = [];
+    batch.mockImplementation(async (pts) => {
+      calls.push(pts.map((p) => p.lat));
+      return pts.map(() => null);
+    });
+    const { useSuggestionWeather } = await import("./use-weather");
+    const date = dateOf(day(2));
+    const spots = Array.from({ length: 12 }, (_, i) => ({ osmId: `n/${i}`, lat: 30 + i * 0.5, lng: -100 }));
+    const { rerender } = renderHook(({ on }) => useSuggestionWeather(spots, date, on), { initialProps: { on: false } });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls).toHaveLength(0);
+    rerender({ on: true });
+    await waitFor(() => expect(calls.length).toBe(3));
+    expect(calls.map((c) => c.length)).toEqual([5, 5, 2]);
+    expect(calls[0][0]).toBe(30);
+    expect(calls[1][0]).toBe(32.5);
+  });
+});

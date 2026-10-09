@@ -52,7 +52,16 @@ export async function fetchOverpass(query: string, deps: Deps = {}): Promise<unk
         body: new URLSearchParams({ data: query }).toString(),
         signal: AbortSignal.timeout(timeoutMs),
       });
-      if (res.ok) return await res.json();
+      if (res.ok) {
+        const json = await res.json();
+        // Overpass reports a query that timed out or ran out of memory as a 200 with a remark and empty or partial elements.
+        const remark = (json as { remark?: unknown } | null)?.remark;
+        if (typeof remark === "string" && /runtime error/i.test(remark)) {
+          lastError = `Overpass: ${remark}`;
+          continue;
+        }
+        return json;
+      }
       lastError = `Overpass responded ${res.status}`;
       if (res.status !== 429 && res.status < 500) break;
     } catch (e) {

@@ -37,4 +37,18 @@ describe("fetchOverpass", () => {
     await expect(fetchOverpass("q", { fetchImpl, sleep: noSleep })).rejects.toThrow("Overpass responded 400");
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
+
+  it("treats a 200 carrying a runtime-error remark (query timed out, partial or empty elements) as a failed mirror", async () => {
+    noSleep.mockClear();
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(ok({ elements: [], remark: "runtime error: Query timed out in \"query\" at line 3 after 26 seconds." }))
+      .mockResolvedValueOnce(ok({ elements: [1] }));
+    await expect(fetchOverpass("q", { fetchImpl, sleep: noSleep })).resolves.toEqual({ elements: [1] });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws OverpassError when every mirror answers with a runtime-error remark", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(ok({ elements: [], remark: "runtime error: Query ran out of memory" }));
+    await expect(fetchOverpass("q", { fetchImpl, sleep: noSleep })).rejects.toBeInstanceOf(OverpassError);
+  });
 });

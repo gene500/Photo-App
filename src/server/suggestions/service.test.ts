@@ -153,4 +153,28 @@ describe("local copy of the map data", () => {
     expect(result).toHaveLength(6);
     expect(fetchOverpass).not.toHaveBeenCalled();
   });
+
+  it("does not turn an empty local answer plus an Overpass failure into an (empty, cached) success", async () => {
+    const failing = vi.fn(async () => {
+      throw new OverpassError("down");
+    });
+    await expect(findSuggestions(ROUTE, { local: async () => [], fetchOverpass: failing, fetchImpl })).rejects.toBeInstanceOf(OverpassError);
+    const fetchOverpass = vi.fn(async () => overpassJson);
+    const result = await findSuggestions(ROUTE, { local: async () => [], fetchOverpass, fetchImpl });
+    expect(result).toHaveLength(1);
+    expect(fetchOverpass).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not cache a thin local answer that was only used because Overpass failed", async () => {
+    const thin = [{ type: "node", id: 9, lat: 37.1, lon: -119.5, tags: { tourism: "viewpoint", name: "Thin" } }];
+    const failing = vi.fn(async () => {
+      throw new OverpassError("down");
+    });
+    const first = await findSuggestions(ROUTE, { local: async () => thin, fetchOverpass: failing, fetchImpl });
+    expect(first.map((s) => s.name)).toEqual(["Thin"]);
+    const fetchOverpass = vi.fn(async () => overpassJson);
+    const second = await findSuggestions(ROUTE, { local: async () => thin, fetchOverpass, fetchImpl });
+    expect(fetchOverpass).toHaveBeenCalledTimes(1);
+    expect(second.map((s) => s.name)).toEqual(["Spot"]);
+  });
 });

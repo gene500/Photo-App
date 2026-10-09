@@ -40,6 +40,8 @@ async function runSearch(key: string, buildQuery: () => string, local: () => Pro
   const done = enrich ? cache.get(key) : (cache.get(key) ?? rawCache.get(key));
   if (done) return done;
   let parsed = rawCache.get(key);
+  // A fallback to a thin local answer (Overpass failed) must not be remembered as if it were the real result.
+  let degraded = false;
   if (!parsed) {
     // The local copy answers in milliseconds; Overpass (free, often busy) is only asked when the copy doesn't cover the
     // area or comes back nearly empty, and a thin local answer still beats an Overpass failure.
@@ -50,17 +52,18 @@ async function runSearch(key: string, buildQuery: () => string, local: () => Pro
       try {
         parsed = parseOverpassResponse(await (deps.fetchOverpass ?? fetchOverpass)(buildQuery()));
       } catch (e) {
-        if (!nearby) throw e;
+        if (!nearby?.length) throw e;
         parsed = parseOverpassResponse({ elements: nearby });
+        degraded = true;
       }
     }
-    rawCache.set(key, parsed);
+    if (!degraded) rawCache.set(key, parsed);
   }
   if (!enrich) return parsed;
   // Popularity is a bonus: enrichPopularity never throws, but guard anyway so it can never fail the request.
   const base = parsed;
   const suggestions = await enrichPopularity(base, { fetchImpl: deps.fetchImpl }).catch(() => base);
-  cache.set(key, suggestions);
+  if (!degraded) cache.set(key, suggestions);
   return suggestions;
 }
 

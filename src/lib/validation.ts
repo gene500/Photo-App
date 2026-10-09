@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { isDateOnly } from "./dates";
 
+// Zod otherwise probes `new Function("")` to JIT its parsers, which a CSP without unsafe-eval reports as a violation
+// in the browser console. In the browser the interpreter path is plenty fast for these small forms.
+if (typeof window !== "undefined") z.config({ jitless: true });
+
 export const MAX_ROUTE_WAYPOINTS = 25; // Mapbox Directions driving profile limit
 export const MAX_DWELL_MINUTES = 480;
 

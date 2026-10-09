@@ -28,6 +28,9 @@ rmSync("e2e.db", { force: true });
 rmSync(".e2e-uploads", { recursive: true, force: true });
 execSync("npx prisma migrate deploy", { stdio: "inherit", env });
 
-const child = spawn("npx", ["next", "dev", "--port", PORT], { stdio: "inherit", env });
+// E2E_PROD=1 runs the production build instead of the dev server, so the strict (no unsafe-eval) CSP is exercised.
+const prod = process.env.E2E_PROD === "1";
+if (prod) execSync("npx next build", { stdio: "inherit", env });
+const child = spawn("npx", ["next", prod ? "start" : "dev", "--port", PORT], { stdio: "inherit", env });
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => child.kill(signal));
 child.on("exit", (code) => process.exit(code ?? 0));

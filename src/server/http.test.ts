@@ -105,8 +105,8 @@ describe("cross-site guard", () => {
 
   it("handle() answers 403 for every unsafe method from another origin and does not run the handler", async () => {
     for (const method of ["POST", "PATCH", "PUT", "DELETE"]) {
-      const fn = vi.fn(async (_req: Request) => Response.json({}));
-      const res = await handle(fn)(new Request("http://localhost/x", { method, headers: { origin: "https://evil.example" } }));
+      const fn = vi.fn(async () => Response.json({}));
+      const res = await (handle(fn) as (r: Request) => Promise<Response>)(new Request("http://localhost/x", { method, headers: { origin: "https://evil.example" } }));
       expect(res.status).toBe(403);
       expect(fn).not.toHaveBeenCalled();
     }

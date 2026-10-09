@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
 import { getCurrentUserId } from "@/server/session";
-import { DELETE } from "@/app/api/account/sessions/route";
+import { DELETE as route } from "@/app/api/account/sessions/route";
+
+const DELETE = route as (r: Request) => Promise<Response>;
 import { getSessionVersion } from "@/server/users";
 import { createTestUser, resetDb } from "../helpers/db";
 

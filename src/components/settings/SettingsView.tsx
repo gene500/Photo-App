@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useId, useState, type ReactNode } from "react";
+import { LegalLinks } from "@/components/legal/LegalPage";
 import { SignOutButton, SignOutEverywhereButton } from "@/components/SignOutButton";
 import { btnSecondary, card, inputClass } from "@/components/ui/styles";
 import { clearAllCopies } from "@/lib/offline-store";
@@ -170,6 +171,7 @@ export function SettingsView({ email }: { email: string | null }) {
           Reset to defaults
         </button>
       </div>
+      <LegalLinks />
     </main>
   );
 }

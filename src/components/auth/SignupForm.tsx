@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LegalLinks } from "@/components/legal/LegalPage";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
@@ -59,6 +60,9 @@ export function SignupForm({ formToken }: { formToken?: string }) {
       </button>
       <p className="text-sm text-muted">
         Have an account? <Link href="/login" className="font-medium text-foreground underline underline-offset-2">Log in</Link>
+      </p>
+      <p className="text-xs text-muted">
+        By creating an account you agree to the <Link href="/terms" className="underline underline-offset-2">Terms</Link> and <Link href="/privacy" className="underline underline-offset-2">Privacy Policy</Link>.
       </p>
     </form>
   );

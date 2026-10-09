@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LegalLinks } from "@/components/legal/LegalPage";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useEffect, useState } from "react";
@@ -49,6 +50,7 @@ export function LoginForm() {
       <p className="text-sm text-muted">
         No account? <Link href="/signup" className="font-medium text-foreground underline underline-offset-2">Sign up</Link>
       </p>
+      <LegalLinks />
     </form>
   );
 }

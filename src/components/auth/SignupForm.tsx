@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { LegalLinks } from "@/components/legal/LegalPage";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";

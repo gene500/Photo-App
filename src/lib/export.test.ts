@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { appleMapsUrl, buildGpx, googleMapsUrl, gpxFileName } from "./export";
+import { APPLE_MAX_STOPS_PER_LINK, appleMapsUrl, appleMapsUrls, buildGpx, googleMapsUrl, gpxFileName } from "./export";
 
 const mk = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `S${i}`, lat: 40 + i / 10, lng: -120 - i / 10, notes: null as string | null }));
 
@@ -149,5 +149,29 @@ describe("appleMapsUrl", () => {
   });
   it("12 stops all fit in one link", () => {
     expect(new URL(appleMapsUrl(mk(12))!).searchParams.get("daddr")!.split(" to:")).toHaveLength(11);
+  });
+});
+
+describe("appleMapsUrls", () => {
+  it("returns null under 2 stops, and one unlabelled link up to the cap", () => {
+    expect(appleMapsUrls(mk(1))).toBeNull();
+    const one = appleMapsUrls(mk(APPLE_MAX_STOPS_PER_LINK))!;
+    expect(one).toHaveLength(1);
+    expect(one[0]!.label).toBe("");
+  });
+  it("splits longer trips into linked parts that share an end point, each within the cap", () => {
+    const stops = mk(45);
+    const links = appleMapsUrls(stops)!;
+    expect(links.map((l) => l.label)).toEqual(["Part 1/3", "Part 2/3", "Part 3/3"]);
+    let previousEnd: string | null = null;
+    for (const l of links) {
+      const u = new URL(l.url);
+      const points = [u.searchParams.get("saddr")!, ...u.searchParams.get("daddr")!.split(" to:")];
+      expect(points.length).toBeLessThanOrEqual(APPLE_MAX_STOPS_PER_LINK);
+      if (previousEnd) expect(points[0]).toBe(previousEnd);
+      previousEnd = points[points.length - 1]!;
+      expect(l.url.length).toBeLessThan(1000);
+    }
+    expect(previousEnd).toBe("44.4,-124.4");
   });
 });

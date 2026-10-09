@@ -157,4 +157,37 @@ describe("StopDrawer", () => {
     expect(api.uploadPhoto).toHaveBeenCalledWith("s1", file);
     expect(onPhotoChange).toHaveBeenCalledWith(updated);
   });
+
+  describe("modal behaviour", () => {
+    it("closes on Escape", async () => {
+      const onClose = vi.fn();
+      render(<StopDrawer stop={stop} onClose={onClose} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+      await userEvent.keyboard("{Escape}");
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("moves focus into the dialog on open and back to the opener on close", () => {
+      const opener = document.createElement("button");
+      document.body.append(opener);
+      opener.focus();
+      const { unmount } = render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+      expect(screen.getByRole("dialog").contains(document.activeElement)).toBe(true);
+      unmount();
+      expect(document.activeElement).toBe(opener);
+      opener.remove();
+    });
+
+    it("keeps Tab and Shift+Tab inside the drawer", async () => {
+      render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+      const dialog = screen.getByRole("dialog");
+      const close = screen.getByRole("button", { name: "Close" });
+      const save = screen.getByRole("button", { name: "Save" });
+      save.focus();
+      await userEvent.tab();
+      expect(document.activeElement).toBe(close);
+      await userEvent.tab({ shift: true });
+      expect(document.activeElement).toBe(save);
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    });
+  });
 });

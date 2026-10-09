@@ -83,7 +83,21 @@ export function googleMapsUrl(stops: ExportStop[]): MapsLink[] | null {
   });
 }
 
-/** Apple Maps directions link: first stop to the last, via the rest ("+to:" chained). Null under 2 stops. */
+// Each "to:" stop adds ~25 characters; 20 stops per link keeps the URL well under any practical length limit.
+export const APPLE_MAX_STOPS_PER_LINK = 20;
+
+/** Apple Maps links; more than 20 stops are split into consecutive parts that share an end point, like the Google links. Null under 2 stops. */
+export function appleMapsUrls(stops: ExportStop[]): MapsLink[] | null {
+  if (stops.length < 2) return null;
+  const chunks: ExportStop[][] = [];
+  for (let i = 0; i < stops.length - 1; i += APPLE_MAX_STOPS_PER_LINK - 1) chunks.push(stops.slice(i, i + APPLE_MAX_STOPS_PER_LINK));
+  return chunks.map((chunk, i) => ({
+    label: chunks.length > 1 ? `Part ${i + 1}/${chunks.length}` : "",
+    url: appleMapsUrl(chunk)!,
+  }));
+}
+
+/** Apple Maps directions link: first stop to the last, via the rest ("+to:" chained), however many stops are passed. Null under 2 stops. */
 export function appleMapsUrl(stops: ExportStop[]): string | null {
   if (stops.length < 2) return null;
   const params = new URLSearchParams({ saddr: point(stops[0]), daddr: stops.slice(1).map(point).join(" to:") });

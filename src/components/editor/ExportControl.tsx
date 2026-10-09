@@ -1,7 +1,7 @@
 "use client";
 
 import { btnGhost, card } from "@/components/ui/styles";
-import { appleMapsUrl, buildGpx, googleMapsUrl, gpxFileName, type ExportStop } from "@/lib/export";
+import { appleMapsUrls, buildGpx, googleMapsUrl, gpxFileName, type ExportStop } from "@/lib/export";
 import type { LngLat } from "@/lib/types";
 import { usePopover } from "./use-popover";
 
@@ -22,7 +22,7 @@ export function ExportControl({ tripName, plannedDate, stops, route }: Props) {
   const enough = stops.length >= 2;
   if (open && !enough) setOpen(false); // stops were removed while the menu was open
   const google = googleMapsUrl(stops);
-  const apple = appleMapsUrl(stops);
+  const apple = appleMapsUrls(stops);
 
   function downloadGpx() {
     const blob = new Blob([buildGpx({ name: tripName, stops, route })], { type: "application/gpx+xml" });
@@ -60,7 +60,11 @@ export function ExportControl({ tripName, plannedDate, stops, route }: Props) {
               Open in Google Maps{g.label && ` (${g.label})`}
             </a>
           ))}
-          {apple && <a href={apple} onClick={() => close()} target="_blank" rel="noopener noreferrer" className={item}>Open in Apple Maps</a>}
+          {apple?.map((a) => (
+            <a key={a.url} href={a.url} onClick={() => close()} target="_blank" rel="noopener noreferrer" className={item}>
+              Open in Apple Maps{a.label && ` (${a.label})`}
+            </a>
+          ))}
         </div>
       )}
     </div>

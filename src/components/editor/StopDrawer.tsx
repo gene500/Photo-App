@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost, btnPrimary, inputClass, btnIcon } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
@@ -25,6 +25,8 @@ const LIGHT_OPTIONS: [LightPref, string][] = [["any", "Any"], ["sunrise", "Sunri
 type ShotRow = ShotItem & { id: number };
 const plain = (rows: ShotRow[]): ShotItem[] => rows.map(({ text, done }) => ({ text, done }));
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives }: Props) {
@@ -40,6 +42,38 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives 
   const [newShot, setNewShot] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Modal behaviour: focus moves into the drawer when it opens and goes back to whatever opened it when it closes.
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialogRef.current?.focus();
+    return () => {
+      if (opener && opener.isConnected) opener.focus();
+    };
+  }, []);
+
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    // Keep Tab inside the drawer (aria-modal): wrap at either end.
+    const items = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (!first || !last) return;
+    const active = document.activeElement;
+    if (e.shiftKey && (active === first || active === dialogRef.current)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
 
   // Swapping replaces the stop and closes the drawer, which would silently throw typed edits away; so it waits for Save.
   const dirty =
@@ -117,7 +151,7 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives 
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-label={`Edit ${stop.name}`} className="anim-slide-in fixed inset-y-0 right-0 z-20 w-full max-w-md space-y-4 overflow-y-auto rounded-l-2xl bg-surface p-5 text-foreground shadow-2xl ring-1 ring-border">
+    <div ref={dialogRef} tabIndex={-1} onKeyDown={onKeyDown} role="dialog" aria-modal="true" aria-label={`Edit ${stop.name}`} className="anim-slide-in outline-none fixed inset-y-0 right-0 z-20 w-full max-w-md space-y-4 overflow-y-auto rounded-l-2xl bg-surface p-5 text-foreground shadow-2xl ring-1 ring-border">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Edit stop</h2>
         <button type="button" onClick={onClose} className={btnGhost}>Close</button>

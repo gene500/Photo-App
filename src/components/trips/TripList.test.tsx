@@ -32,6 +32,21 @@ describe("TripList", () => {
     expect(listTripCopies()).toEqual([]);
   });
 
+  it("sends one delete (and asks once) when Delete is clicked twice while it is in flight", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    confirm.mockClear();
+    let finish!: () => void;
+    vi.mocked(api.deleteTrip).mockReset().mockReturnValue(new Promise<void>((r) => { finish = r; }));
+    render(<TripList trips={[trip]} />);
+    const button = screen.getByRole("button", { name: "Delete Sierra loop" });
+    await userEvent.dblClick(button);
+    expect(api.deleteTrip).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    finish();
+    await vi.waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+  });
+
   it("prunes offline copies of trips the server no longer lists, even when the list is empty", () => {
     saveTripCopy(copy("t1"));
     saveTripCopy(copy("gone"));

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { api } from "@/lib/api-client";
 import { pruneTripCopies, removeTripCopy } from "@/lib/offline-store";
@@ -11,19 +11,29 @@ import type { TripSummary } from "@/lib/types";
 export function TripList({ trips }: { trips: TripSummary[] }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  // A second click while a delete is in flight must not send another request (or show another confirm).
+  const inFlight = useRef(new Set<string>());
+  const [deleting, setDeleting] = useState<ReadonlySet<string>>(new Set());
+  const markDeleting = () => setDeleting(new Set(inFlight.current));
 
   // Offline copies of trips that no longer exist (deleted here or elsewhere) must not stay readable.
   const idsKey = trips.map((t) => t.id).join(",");
   useEffect(() => pruneTripCopies(idsKey ? idsKey.split(",") : []), [idsKey]);
 
   async function remove(trip: TripSummary) {
+    if (inFlight.current.has(trip.id)) return;
     if (!window.confirm(`Delete "${trip.name}"? This cannot be undone.`)) return;
+    inFlight.current.add(trip.id);
+    markDeleting();
     try {
       await api.deleteTrip(trip.id);
       removeTripCopy(trip.id);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't delete the trip");
+    } finally {
+      inFlight.current.delete(trip.id);
+      markDeleting();
     }
   }
 
@@ -43,7 +53,7 @@ export function TripList({ trips }: { trips: TripSummary[] }) {
                 <span className="text-sm text-muted">{t.stopCount} stops</span>
               </span>
             </Link>
-            <button type="button" onClick={() => void remove(t)} aria-label={`Delete ${t.name}`} className="mr-3 min-h-9 shrink-0 rounded-lg px-3 text-sm text-muted transition hover:bg-danger-soft hover:text-danger [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100">
+            <button type="button" disabled={deleting.has(t.id)} onClick={() => void remove(t)} aria-label={`Delete ${t.name}`} className="mr-3 min-h-9 shrink-0 rounded-lg px-3 text-sm text-muted transition hover:bg-danger-soft hover:text-danger disabled:opacity-50 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100">
               Delete
             </button>
           </li>

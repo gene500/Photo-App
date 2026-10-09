@@ -32,12 +32,38 @@ export async function createUser(
   }
 }
 
+// A hash to compare against when the email is unknown, so "no such user" costs the same bcrypt time as "wrong
+// password" and response timing doesn't reveal which emails have accounts. Computed once per instance.
+let dummyHash: Promise<string> | undefined;
+const getDummyHash = () => (dummyHash ??= bcrypt.hash("not-a-real-password", BCRYPT_COST));
+
 export async function verifyCredentials(
   email: string,
   password: string,
 ): Promise<{ id: string; email: string } | null> {
   const user = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
-  if (!user) return null;
-  const ok = await bcrypt.compare(password, user.passwordHash);
-  return ok ? { id: user.id, email: user.email } : null;
+  const ok = await bcrypt.compare(password, user?.passwordHash ?? (await getDummyHash()));
+  return user && ok ? { id: user.id, email: user.email } : null;
+}
+
+/** The user's current session version, or null when the account no longer exists. */
+export async function getSessionVersion(userId: string): Promise<number | null> {
+  const row = await prisma.user.findUnique({ where: { id: userId }, select: { sessionVersion: true } });
+  return row?.sessionVersion ?? null;
+}
+
+/** Invalidates every sign-in token issued so far for this user ("sign out everywhere"). */
+export async function revokeAllSessions(userId: string): Promise<void> {
+  await prisma.user.updateMany({ where: { id: userId }, data: { sessionVersion: { increment: 1 } } });
+}
+
+/** Sets a new password after checking the current one, and signs every other device out. */
+export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) return false;
+  await prisma.user.update({
+    where: { id: userId },
+    data: { passwordHash: await bcrypt.hash(newPassword, BCRYPT_COST), sessionVersion: { increment: 1 } },
+  });
+  return true;
 }

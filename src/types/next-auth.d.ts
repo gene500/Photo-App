@@ -5,3 +5,10 @@ declare module "next-auth" {
     user: { id: string } & DefaultSession["user"];
   }
 }
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    /** User.sessionVersion at sign-in; a mismatch means the token was revoked. */
+    sv?: number;
+  }
+}

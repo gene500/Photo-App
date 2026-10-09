@@ -23,7 +23,7 @@ export function LoginForm() {
     const res = await signIn("credentials", { email, password, redirect: false });
     setPending(false);
     if (!res || res.error) {
-      setError("Invalid email or password");
+      setError(res?.error === "RateLimited" ? "Too many login attempts. Try again in a few minutes." : "Invalid email or password");
       return;
     }
     enableOfflineSaving();

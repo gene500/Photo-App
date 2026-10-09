@@ -1,12 +1,21 @@
-import type { NextAuthOptions } from "next-auth";
+import type { NextAuthOptions, Session } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { verifyCredentials } from "./users";
+import { hit, isBlocked, resetLimit } from "./rate-limit";
+import { getSessionVersion, verifyCredentials } from "./users";
+
+export const RATE_LIMITED = "RateLimited";
 
 export async function authorizeCredentials(
   credentials: Record<string, string> | undefined,
 ): Promise<{ id: string; email: string } | null> {
   if (!credentials?.email || !credentials.password) return null;
-  return verifyCredentials(credentials.email, credentials.password);
+  const key = credentials.email.trim().toLowerCase();
+  // Per-email throttle on failures (the per-IP limit is applied in the route before NextAuth runs).
+  if (!isBlocked("login-email-failures", key).ok) throw new Error(RATE_LIMITED);
+  const user = await verifyCredentials(credentials.email, credentials.password);
+  if (user) resetLimit("login-email-failures", key);
+  else hit("login-email-failures", key);
+  return user;
 }
 
 // The Credentials provider only supports the JWT strategy: an encrypted
@@ -27,11 +36,20 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user }) {
-      if (user) token.sub = user.id;
+      if (user) {
+        token.sub = user.id;
+        // Stamp the token with the user's current session version; bumping it later revokes this token.
+        token.sv = (await getSessionVersion(user.id)) ?? 0;
+      }
       return token;
     },
     async session({ session, token }) {
-      if (token.sub) session.user = { ...session.user, id: token.sub };
+      if (!token.sub) return session;
+      // Tokens from before versioning have no `sv` (= 0, the column default). A deleted user or a bumped
+      // version yields a session without a user, which every caller treats as signed out (401).
+      const current = await getSessionVersion(token.sub);
+      if (current === null || current !== (token.sv ?? 0)) return { expires: session.expires } as Session;
+      session.user = { ...session.user, id: token.sub };
       return session;
     },
   },

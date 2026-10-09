@@ -28,8 +28,9 @@ const send = (method: string, body?: unknown): RequestInit => ({
 });
 
 export const api = {
-  signup: (email: string, password: string) =>
-    request<{ user: { id: string; email: string } }>("/api/signup", send("POST", { email, password })),
+  signup: (email: string, password: string, guard: { formToken?: string; website?: string } = {}) =>
+    request<{ user: { id: string; email: string } }>("/api/signup", send("POST", { email, password, ...guard })),
+  signOutEverywhere: () => request<void>("/api/account/sessions", send("DELETE")),
   listTrips: () => request<{ trips: TripSummary[] }>("/api/trips"),
   createTrip: (input: TripInput) => request<{ trip: Trip }>("/api/trips", send("POST", input)),
   updateTrip: (id: string, patch: TripPatch) => request<{ trip: Trip }>(`/api/trips/${id}`, send("PATCH", patch)),

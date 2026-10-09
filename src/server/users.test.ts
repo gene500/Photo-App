@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import bcrypt from "bcryptjs";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "./db";
-import { createUser, DuplicateEmailError, verifyCredentials } from "./users";
+import { changePassword, createUser, DuplicateEmailError, getSessionVersion, revokeAllSessions, verifyCredentials } from "./users";
 import { resetDb } from "../../tests/helpers/db";
 
 describe("users", () => {
@@ -30,5 +31,27 @@ describe("users", () => {
     await createUser("ann@example.com", "correct-horse");
     expect(await verifyCredentials("ann@example.com", "wrong-horse")).toBeNull();
     expect(await verifyCredentials("nobody@example.com", "correct-horse")).toBeNull();
+  });
+
+  it("still runs a bcrypt comparison when the email is unknown (no timing tell)", async () => {
+    await createUser("ann@example.com", "correct-horse");
+    const compare = vi.spyOn(bcrypt, "compare");
+    await verifyCredentials("nobody@example.com", "whatever-pass");
+    expect(compare).toHaveBeenCalledTimes(1);
+    compare.mockRestore();
+  });
+
+  it("revokeAllSessions and changePassword bump the session version", async () => {
+    const user = await createUser("ann@example.com", "correct-horse");
+    expect(await getSessionVersion(user.id)).toBe(0);
+    await revokeAllSessions(user.id);
+    expect(await getSessionVersion(user.id)).toBe(1);
+    expect(await changePassword(user.id, "wrong-password", "new-password-1")).toBe(false);
+    expect(await getSessionVersion(user.id)).toBe(1);
+    expect(await changePassword(user.id, "correct-horse", "new-password-1")).toBe(true);
+    expect(await getSessionVersion(user.id)).toBe(2);
+    expect(await verifyCredentials("ann@example.com", "new-password-1")).toEqual(user);
+    expect(await verifyCredentials("ann@example.com", "correct-horse")).toBeNull();
+    expect(await getSessionVersion("missing")).toBeNull();
   });
 });

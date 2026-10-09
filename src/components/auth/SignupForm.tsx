@@ -9,18 +9,20 @@ import { btnPrimary, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 
 
-export function SignupForm() {
+/** `formToken` is signed by the server when the page renders (see signup-guard.ts); `website` is a honeypot. */
+export function SignupForm({ formToken }: { formToken?: string }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [website, setWebsite] = useState("");
   const [pending, setPending] = useState(false);
 
   async function submit() {
     setPending(true);
     setError(null);
     try {
-      await api.signup(email, password);
+      await api.signup(email, password, { formToken, website });
       const res = await signIn("credentials", { email, password, redirect: false });
       if (!res || res.error) throw new Error("Account created, but signing in failed. Try logging in.");
       enableOfflineSaving();
@@ -44,6 +46,13 @@ export function SignupForm() {
         <input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
       </label>
       <p className="text-xs text-muted">At least 8 characters.</p>
+      {/* Honeypot: invisible to people and assistive tech, tempting to bots. */}
+      <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
+        <label>
+          Website
+          <input type="text" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
+        </label>
+      </div>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       <button type="submit" disabled={pending} className={`${btnPrimary} w-full`}>
         Create account

@@ -28,7 +28,7 @@ type OverpassElement = {
   tags?: Record<string, string>;
 };
 
-type Candidate = Suggestion & { named: boolean };
+type Candidate = Suggestion & { named: boolean; dist: number };
 
 function toCandidate(el: OverpassElement): Candidate | null {
   const kind = classifyKind(el.tags ?? {});
@@ -45,6 +45,7 @@ function toCandidate(el: OverpassElement): Candidate | null {
     lng,
     kind,
     named: Boolean(name),
+    dist: 0,
   };
 }
 
@@ -52,18 +53,26 @@ function compare(a: Candidate, b: Candidate): number {
   return (
     KIND_RANK[a.kind] - KIND_RANK[b.kind] ||
     Number(b.named) - Number(a.named) ||
+    a.dist - b.dist ||
     a.osmId.localeCompare(b.osmId)
   );
 }
 
-export function parseOverpassResponse(json: unknown, cap: number = SUGGESTION_CAP): Suggestion[] {
+/**
+ * Ranks by kind (viewpoints, then peaks, then attractions), named before unnamed, and, when the search has a centre
+ * (`origin`), nearest first, so the nearest spots win the cap; then by id, which keeps the order deterministic.
+ */
+export function parseOverpassResponse(json: unknown, cap: number = SUGGESTION_CAP, origin?: { lat: number; lng: number }): Suggestion[] {
   const elements = (json as { elements?: unknown } | null)?.elements;
   if (!Array.isArray(elements)) return [];
 
   const byId = new Map<string, Candidate>();
   for (const el of elements) {
     const c = toCandidate(el as OverpassElement);
-    if (c && !byId.has(c.osmId)) byId.set(c.osmId, c);
+    if (c && !byId.has(c.osmId)) {
+      if (origin) c.dist = haversineMeters(origin, c);
+      byId.set(c.osmId, c);
+    }
   }
 
   const kept: Candidate[] = [];

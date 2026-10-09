@@ -77,3 +77,38 @@ describe("parseOverpassResponse", () => {
     expect(SUGGESTION_CAP).toBe(40);
   });
 });
+
+describe("parseOverpassResponse distance ordering", () => {
+  const origin = { lat: 37, lng: -119 };
+  const vp = (id: number, dLng: number, name = "V") => node(id, 37, -119 + dLng, { tourism: "viewpoint", name });
+
+  it("keeps the nearest spots when the cap bites, and lists them nearest first within a tier", () => {
+    const elements = Array.from({ length: 10 }, (_, i) => vp(100 - i, (i + 1) * 0.01)); // ids descend while distance ascends
+    const near = parseOverpassResponse({ elements }, 3, origin);
+    expect(near.map((s) => s.osmId)).toEqual(["node/100", "node/99", "node/98"]);
+    // without an origin the id decides, as before
+    expect(parseOverpassResponse({ elements }, 3).map((s) => s.osmId)).toEqual(["node/100", "node/91", "node/92"]);
+  });
+
+  it("still ranks by kind tier, then named, before distance", () => {
+    const result = parseOverpassResponse(
+      {
+        elements: [
+          node(1, 37.2, -119, { tourism: "attraction", name: "Close attraction" }),
+          node(2, 37, -119.5, { natural: "peak", name: "Far peak" }),
+          vp(3, 0.9, "Far viewpoint"),
+          node(4, 37, -119.002, { tourism: "viewpoint" }), // unnamed, very close
+          vp(5, 0.3, "Nearer viewpoint"),
+        ],
+      },
+      40,
+      origin,
+    );
+    expect(result.map((s) => s.osmId)).toEqual(["node/5", "node/3", "node/4", "node/2", "node/1"]);
+  });
+
+  it("is deterministic for equal distances (by id)", () => {
+    const result = parseOverpassResponse({ elements: [vp(9, 0.02), vp(2, -0.02)] }, 40, origin);
+    expect(result.map((s) => s.osmId)).toEqual(["node/2", "node/9"]);
+  });
+});

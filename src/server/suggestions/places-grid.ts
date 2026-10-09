@@ -1,3 +1,4 @@
+import { haversineMeters } from "@/lib/geo";
 import type { LngLat } from "@/lib/types";
 
 /** Places are bucketed into 0.1 degree squares (about 11 km), so a search reads a handful of index ranges instead of scanning. */
@@ -10,7 +11,7 @@ export function cellOf(lat: number, lng: number): number {
 
 const KM_PER_DEG = 111.32;
 
-/** Every cell the circle's bounding box touches. */
+/** Every cell the circle touches: the bounding box's cells, minus the corner cells that lie wholly outside the circle (about a fifth fewer). */
 export function cellsForCircle(lat: number, lng: number, radiusKm: number): number[] {
   const dLat = radiusKm / KM_PER_DEG;
   const dLng = radiusKm / (KM_PER_DEG * Math.max(Math.cos((lat * Math.PI) / 180), 0.05));
@@ -19,8 +20,28 @@ export function cellsForCircle(lat: number, lng: number, radiusKm: number): numb
   const row1 = Math.floor((lat + dLat + 90) / CELL_DEG);
   const col0 = Math.floor((lng - dLng + 180) / CELL_DEG);
   const col1 = Math.floor((lng + dLng + 180) / CELL_DEG);
-  for (let r = row0; r <= row1; r++) for (let c = col0; c <= col1; c++) out.push(r * LNG_STRIDE + c);
+  // A little slack (1 % + 300 m) keeps this conservative: the box maths and haversine differ slightly, and a cell must never be missed.
+  const reach = radiusKm * 1010 + 300;
+  for (let r = row0; r <= row1; r++) {
+    const nearLat = Math.min(Math.max(lat, r * CELL_DEG - 90), (r + 1) * CELL_DEG - 90);
+    for (let c = col0; c <= col1; c++) {
+      const nearLng = Math.min(Math.max(lng, c * CELL_DEG - 180), (c + 1) * CELL_DEG - 180);
+      if (haversineMeters({ lat, lng }, { lat: nearLat, lng: nearLng }) <= reach) out.push(r * LNG_STRIDE + c);
+    }
+  }
   return out;
+}
+
+/** Sorted, de-duplicated cells merged into inclusive [first, last] runs of consecutive numbers (a run is part of one grid row, or runs on into the next row's start only if the numbers are consecutive, which is still exact). */
+export function cellRuns(cells: readonly number[]): [number, number][] {
+  const sorted = [...new Set(cells)].sort((a, b) => a - b);
+  const runs: [number, number][] = [];
+  for (const cell of sorted) {
+    const last = runs[runs.length - 1];
+    if (last && cell === last[1] + 1) last[1] = cell;
+    else runs.push([cell, cell]);
+  }
+  return runs;
 }
 
 /** Every cell a corridor polygon touches: its outline is walked in small steps, which is enough because a corridor is narrower than a cell. */

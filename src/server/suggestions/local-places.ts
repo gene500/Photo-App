@@ -1,7 +1,8 @@
 import { haversineMeters } from "@/lib/geo";
 import type { LngLat } from "@/lib/types";
 import { prisma } from "../db";
-import { cellsForCircle, cellsForRing, pointInRing } from "./places-grid";
+import { TtlCache } from "./cache";
+import { cellRuns, cellsForCircle, cellsForRing, pointInRing } from "./places-grid";
 
 /** Rows of the local `Place` table. */
 export type PlaceRow = { id: string; name: string; kind: string; lat: number; lng: number };
@@ -20,18 +21,65 @@ export function inLocalCoverage(lat: number, lng: number): boolean {
   return US_BOXES.some((b) => lat >= b.minLat && lat <= b.maxLat && lng >= b.minLng && lng <= b.maxLng);
 }
 
-/** SQLite caps bound parameters per statement, so cells are read in chunks. */
-const CELLS_PER_QUERY = 400;
+/** Rows of consecutive cells are read with one `cell BETWEEN a AND b` term each; a statement carries at most this many terms. */
+export const RUNS_PER_QUERY = 100;
+export const CELL_CACHE_TTL_MS = 30 * 60_000;
+export const CELL_CACHE_MAX = 3000;
 
 export type CellReader = (cells: number[]) => Promise<PlaceRow[]>;
 
-const readCells: CellReader = async (cells) => {
-  const rows: PlaceRow[] = [];
-  for (let i = 0; i < cells.length; i += CELLS_PER_QUERY) {
-    rows.push(...(await prisma.place.findMany({ where: { cell: { in: cells.slice(i, i + CELLS_PER_QUERY) } }, select: { id: true, name: true, kind: true, lat: true, lng: true } })));
-  }
-  return rows;
+/** Reads the rows of the given runs of cells; one round trip per call. */
+type RunReader = (runs: [number, number][]) => Promise<(PlaceRow & { cell: number })[]>;
+
+/**
+ * Plain SQL rather than `findMany({ where: { OR: [...] } })`: the same query plan (one index range search per run), but
+ * without Prisma building and compiling a big OR tree, which is about twice as fast. Every value is a bound parameter.
+ */
+const readRuns: RunReader = async (runs) => {
+  const where = runs.map(() => "cell BETWEEN ? AND ?").join(" OR ");
+  const rows = await prisma.$queryRawUnsafe<(PlaceRow & { cell: number | bigint })[]>(`SELECT id, name, kind, lat, lng, cell FROM Place WHERE ${where}`, ...runs.flat());
+  return rows.map((r) => ({ ...r, cell: Number(r.cell) }));
 };
+
+/**
+ * A cell reader that turns the wanted cells into runs, asks the database for them in parallel statements of at most
+ * `RUNS_PER_QUERY` runs (so a search is a single round trip however long the route), and remembers every cell it has read
+ * (empty ones too) for a while, so a nearby second search needs no round trip at all. Nothing is remembered if a read fails.
+ */
+export function createCellReader(readRunRows: RunReader, now: () => number = Date.now): CellReader & { clear: () => void } {
+  const cache = new TtlCache<PlaceRow[]>(CELL_CACHE_TTL_MS, CELL_CACHE_MAX, now);
+  const reader = async (cells: number[]): Promise<PlaceRow[]> => {
+    const wanted = [...new Set(cells)];
+    const have = new Map<number, PlaceRow[]>();
+    const missing: number[] = [];
+    for (const cell of wanted) {
+      const hit = cache.get(String(cell));
+      if (hit) have.set(cell, hit);
+      else missing.push(cell);
+    }
+    if (missing.length > 0) {
+      const runs = cellRuns(missing);
+      const groups: [number, number][][] = [];
+      for (let i = 0; i < runs.length; i += RUNS_PER_QUERY) groups.push(runs.slice(i, i + RUNS_PER_QUERY));
+      const fetched = (await Promise.all(groups.map(readRunRows))).flat();
+      const byCell = new Map<number, PlaceRow[]>(missing.map((c) => [c, []]));
+      for (const { cell, ...row } of fetched) byCell.get(cell)?.push(row);
+      for (const [cell, rows] of byCell) {
+        cache.set(String(cell), rows);
+        have.set(cell, rows);
+      }
+    }
+    return wanted.flatMap((cell) => have.get(cell) ?? []);
+  };
+  reader.clear = () => cache.clear();
+  return reader;
+}
+
+const defaultReader = createCellReader(readRuns);
+const readCells: CellReader = defaultReader;
+
+/** Forgets the remembered cells (tests, and after a data re-import in a long-lived process). */
+export const clearCellCache = (): void => defaultReader.clear();
 
 const KIND_TAGS: Record<string, Record<string, string>> = {
   viewpoint: { tourism: "viewpoint" },

@@ -3,10 +3,12 @@ import type { LngLat, Suggestion } from "@/lib/types";
 import { fakeSuggestions, isFakeExternal } from "../external/fake";
 import { TtlCache } from "./cache";
 import { AROUND_RADIUS_KM, buildCorridor, buildOverpassAroundQuery, buildOverpassQuery, toOverpassPoly } from "./corridor";
-import { localPlacesAround, localPlacesInRing } from "./local-places";
+import { clearCellCache, localPlacesAround, localPlacesInRing } from "./local-places";
 import { fetchOverpass, OverpassError } from "./overpass";
-import { parseOverpassResponse } from "./parse";
+import { parseOverpassResponse, SUGGESTION_CAP } from "./parse";
 import { enrichPopularity, resetSharedCounter } from "./popularity";
+
+type LngLatLiteral = { lat: number; lng: number };
 
 export const SUGGESTION_CACHE_TTL_MS = 30 * 60_000;
 
@@ -26,6 +28,7 @@ export function clearSuggestionCache(): void {
   cache.clear();
   rawCache.clear();
   resetSharedCounter();
+  clearCellCache();
 }
 
 type Deps = {
@@ -36,7 +39,7 @@ type Deps = {
   enrich?: boolean;
 };
 
-async function runSearch(key: string, buildQuery: () => string, local: () => Promise<unknown[] | null>, deps: Deps): Promise<Suggestion[]> {
+async function runSearch(key: string, buildQuery: () => string, local: () => Promise<unknown[] | null>, deps: Deps, origin?: LngLatLiteral): Promise<Suggestion[]> {
   const enrich = deps.enrich !== false;
   const done = enrich ? cache.get(key) : (cache.get(key) ?? rawCache.get(key));
   if (done) return done;
@@ -48,13 +51,13 @@ async function runSearch(key: string, buildQuery: () => string, local: () => Pro
     // area or comes back nearly empty, and a thin local answer still beats an Overpass failure.
     const nearby = await (deps.local ?? local)().catch(() => null);
     if (nearby && nearby.length >= MIN_LOCAL_PLACES) {
-      parsed = parseOverpassResponse({ elements: nearby });
+      parsed = parseOverpassResponse({ elements: nearby }, SUGGESTION_CAP, origin);
     } else {
       try {
-        parsed = parseOverpassResponse(await (deps.fetchOverpass ?? fetchOverpass)(buildQuery()));
+        parsed = parseOverpassResponse(await (deps.fetchOverpass ?? fetchOverpass)(buildQuery()), SUGGESTION_CAP, origin);
       } catch (e) {
         if (!nearby?.length) throw e;
-        parsed = parseOverpassResponse({ elements: nearby });
+        parsed = parseOverpassResponse({ elements: nearby }, SUGGESTION_CAP, origin);
         degraded = true;
       }
     }
@@ -88,5 +91,5 @@ export async function findSuggestions(route: LngLat[], deps: Deps = {}): Promise
 /** Suggestions in a circle around one point (a trip's first stop, before there is a route). */
 export async function findSuggestionsAround(point: LngLat, deps: Deps = {}, radiusKm: number = AROUND_RADIUS_KM): Promise<Suggestion[]> {
   if (isFakeExternal()) return fakeSuggestions([point]);
-  return runSearch(`around:${radiusKm}:${routeCacheKey([point])}`, () => buildOverpassAroundQuery(point[0], point[1], radiusKm), () => localPlacesAround(point[1], point[0], radiusKm), deps);
+  return runSearch(`around:${radiusKm}:${routeCacheKey([point])}`, () => buildOverpassAroundQuery(point[0], point[1], radiusKm), () => localPlacesAround(point[1], point[0], radiusKm), deps, { lat: point[1], lng: point[0] });
 }

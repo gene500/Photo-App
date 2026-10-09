@@ -70,6 +70,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   // Alternatives found for one stop, tagged with the stop and the waypoints they were found for (stale ones are not shown).
   const [alternativesState, setAlternativesState] = useState<{ stopId: string; key: string; items: Suggestion[]; status: SuggestionsStatus; error: string | null } | null>(null);
   const alternativesSeq = useRef(0);
+  const suggestionsSeq = useRef(0);
   // The last swap, kept client-side so it can be undone once. Honoured only while the stop is still where the swap put it.
   const [swapNote, setSwapNote] = useState<{
     stopId: string;
@@ -432,16 +433,20 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   // --- Suggestions -----------------------------------------------------------
 
   async function findSuggestions() {
+    // Only a newer search supersedes this one. A change of stops doesn't discard the result (it is
+    // tagged with its key, so it is just not shown) - otherwise reverting the stops left "Searching…" stuck.
+    if (stops.length !== 1 && !activeRoute) return;
+    const seq = ++suggestionsSeq.current;
     if (stops.length === 1) {
       const key = waypointKey;
       const { lng, lat } = stops[0];
       setSuggestionsState({ key, items: [], status: "loading", error: null });
       try {
         const { suggestions: found } = await api.suggestions({ around: [lng, lat] }, { enrich: false });
-        if (waypointKeyRef.current !== key) return;
+        if (seq !== suggestionsSeq.current) return;
         setSuggestionsState({ key, items: found.filter((x) => haversineMeters({ lat, lng }, x) >= ALREADY_A_STOP_M), status: "done", error: null, shown: POPULARITY_BATCH });
       } catch (e) {
-        if (waypointKeyRef.current !== key) return;
+        if (seq !== suggestionsSeq.current) return;
         setSuggestionsState({ key, items: [], status: "error", error: errorMessage(e, "Couldn't load suggestions. Please retry.") });
       }
       return;
@@ -452,11 +457,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     setSuggestionsState({ key, items: [], status: "loading", error: null });
     try {
       const { suggestions: found } = await api.suggestions(downsampleRoute(activeRoute.geometry), { enrich: false });
-      if (waypointKeyRef.current !== key) return;
+      if (seq !== suggestionsSeq.current) return;
       const items = found.filter((s) => !placed.some((st) => haversineMeters(st, s) < ALREADY_A_STOP_M));
       setSuggestionsState({ key, items, status: "done", error: null, shown: POPULARITY_BATCH });
     } catch (e) {
-      if (waypointKeyRef.current !== key) return;
+      if (seq !== suggestionsSeq.current) return;
       setSuggestionsState({ key, items: [], status: "error", error: errorMessage(e, "Couldn't load suggestions. Please retry.") });
     }
   }

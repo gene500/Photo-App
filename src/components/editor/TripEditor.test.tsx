@@ -530,6 +530,23 @@ describe("TripEditor", () => {
     expect(screen.queryAllByTestId("suggestion-card")).toHaveLength(0);
   });
 
+  it("does not stay on Searching when the stops change and revert while a search is in flight", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    let resolveSearch!: (v: { suggestions: import("@/lib/types").Suggestion[] }) => void;
+    let rejectMove!: (e: Error) => void;
+    vi.mocked(api.suggestions).mockImplementationOnce(() => new Promise((r) => { resolveSearch = r; }));
+    vi.mocked(api.updateStop).mockImplementation(() => new Promise((_r, reject) => { rejectMove = reject; }));
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("km"));
+    await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+    await userEvent.click(screen.getByRole("button", { name: "drag first marker" }));
+    await act(async () => { resolveSearch({ suggestions: [] }); });
+    await act(async () => { rejectMove(new Error("nope")); });
+    await waitFor(() => expect(screen.getByTestId("first-stop").textContent).toBe("36.74,-119.79"));
+    await waitFor(() => expect(screen.queryByText("Searching…")).toBeNull());
+  });
+
   it("keeps a newer drawer open when an earlier delete finishes", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     vi.spyOn(window, "confirm").mockReturnValue(true);

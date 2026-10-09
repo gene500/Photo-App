@@ -2,6 +2,7 @@
 // Private trip data lives here, so: no tokens or emails are ever stored (the share token is stripped),
 // copies are wiped on sign-out and when a different user signs in, and everything is best-effort
 // (storage can be missing, full or blocked; nothing here ever throws).
+import { isDateOnly } from "@/lib/dates";
 import type { ShotItem, Stop, TripWithStops } from "@/lib/types";
 
 const PREFIX = "rtpp.offline.";
@@ -153,7 +154,7 @@ export function loadTripCopy(id: string): TripCopy | null {
     const parsed: unknown = JSON.parse(raw);
     if (isObj(parsed) && typeof parsed.savedAt === "string" && isObj(parsed.trip)) {
       const t = parsed.trip;
-      if (typeof t.id === "string" && typeof t.name === "string" && typeof t.plannedDate === "string" && Array.isArray(t.stops)) {
+      if (typeof t.id === "string" && typeof t.name === "string" && typeof t.plannedDate === "string" && Array.isArray(t.stops) && isDateOnly(t.plannedDate) && (t.departAt == null || (typeof t.departAt === "string" && !Number.isNaN(Date.parse(t.departAt))))) {
         const stops = t.stops.map((st, i) => normalizeStop(st, t.id as string, i));
         if (stops.every((st): st is Stop => st !== null)) {
           const trip: TripWithStops = { id: t.id, name: t.name, plannedDate: t.plannedDate, departAt: typeof t.departAt === "string" ? t.departAt : null, shareToken: null, stops };

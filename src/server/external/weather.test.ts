@@ -97,11 +97,11 @@ describe("forecast cache", () => {
 });
 
 describe("getForecast", () => {
-  it("short-circuits dates outside yesterday..today+14 without any request", async () => {
+  it("short-circuits past days and dates beyond the typical range without any request", async () => {
     const spy = vi.spyOn(globalThis, "fetch");
     try {
-      expect(await getForecast(1, 2, "2026-10-22", "2026-10-07")).toEqual({ available: false, reason: "out_of_range" });
       expect(await getForecast(1, 2, "2026-10-05", "2026-10-07")).toEqual({ available: false, reason: "out_of_range" });
+      expect(await getForecast(1, 2, "2030-01-01", "2026-10-07")).toEqual({ available: false, reason: "out_of_range" });
       expect(spy).not.toHaveBeenCalled();
     } finally {
       spy.mockRestore();

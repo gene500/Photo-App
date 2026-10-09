@@ -72,6 +72,9 @@ export const api = {
     request<{ photo: PlacePhoto | null }>(
       `/api/place-photo?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}&name=${encodeURIComponent(p.name)}`,
     ),
+  /** Weather for up to 10 places on one date, in the same order; unavailable ones come back as unavailable. */
+  weatherBatch: (date: string, points: { lat: number; lng: number }[]) =>
+    request<{ forecasts: WeatherForecast[] }>("/api/weather/batch", send("POST", { date, points })),
   weather: (p: { lat: number; lng: number; date: string }) =>
     request<{ forecast: WeatherForecast }>(`/api/weather?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}&date=${p.date}`),
 };

@@ -209,18 +209,45 @@ never touched.
 
 ## Weather and light-window forecast
 
-A stop with a preferred light (sunrise, golden hour, sunset) and an estimated
-arrival shows the forecast at the middle of its light window (the window the
-visit is in, else the nearest) under its row and on the selected-stop card, e.g. "mostly clear, 15% rain"; the add-place card shows the evening
-golden-hour forecast for the trip date. Data comes from Open-Meteo (free, no
-key, fixed host `api.open-meteo.com`) through the signed-in-only
-`GET /api/weather?lat&lng&date`, cached 30 minutes per ~1 km and day (failures 60 s); each request covers the day before to the day after.
-Forecasts reach about 16 days ahead (yesterday is also accepted, since the server date is UTC): later dates show "Forecast not available
-yet" without calling upstream; a failed lookup shows nothing. Open-Meteo
+Every stop with an estimated arrival shows a small emoji for the sky and the
+temperature (e.g. "⛅ 18°C"; °F when distances are in miles) under its row and on the
+selected-stop card. A stop with a preferred light (sunrise, golden hour, sunset)
+is read at the middle of its light window (the window the visit is in, else the
+nearest); other stops at their arrival. Hovering shows the words ("mostly
+cloudy, 15% rain"), and the colour turns red when the weather is poor for the
+chosen light. The add-place card and every suggestion card show the evening
+golden-hour weather for the trip date.
+
+Data comes from Open-Meteo (free, no key). Forecasts (`api.open-meteo.com`) reach
+about 16 days ahead through the signed-in-only `GET /api/weather?lat&lng&date`,
+cached 30 minutes per ~1 km and day (failures 60 s); each request covers the day
+before to the day after. Later dates (up to about two years ahead) show
+**typical** weather, labelled "Typical ⛅ 18°C": averages of the same calendar
+date (plus or minus 3 days) over the previous 3 years from the Open-Meteo archive
+(`archive-api.open-meteo.com`), with "rain on ~N% of days" as the rain figure.
+Typical answers are cached 24 hours. Suggestion cards use
+`POST /api/weather/batch` (up to 10 places per request, one upstream request per
+batch, 30 requests a minute per user). Dates further out, or already past, show
+nothing; a failed lookup shows nothing.
+
+**Weather is the last thing fetched.** The client holds every weather request
+(`holdWeather` in `src/lib/weather-cache.ts`) while suggestions are being found
+or ranked by popularity, and suggestion weather is requested only after that
+finishes. A hold that is never released lets go by itself after 45 s. Open-Meteo
 labels hours in the location's local time, so `src/lib/weather.ts` converts
 with `utc_offset_seconds` before matching them to arrival instants. The
 public share page does not show weather. Offline mode returns canned data.
 No new environment variables.
+
+## Privacy policy and terms
+
+`/privacy` and `/terms` are public pages (`src/app/privacy`, `src/app/terms`),
+linked from sign-up, log-in and Settings. They describe what is actually stored
+and which providers receive data; update them (and their date in
+`src/components/legal/LegalPage.tsx`) when that changes. They have not had
+legal review, and contact goes through the GitHub issues link in `CONTACT_URL`;
+replace it with a proper contact address and add self-serve account deletion
+before relying on them.
 
 ## 6. How best time is computed
 

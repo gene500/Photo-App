@@ -28,7 +28,7 @@ describe("reorderIds", () => {
 describe("StopList", () => {
   beforeEach(() => useWeatherLine.mockReturnValue(null));
 
-  it("shows the forecast under a stop with a preferred light and an arrival, and asks only for those", () => {
+  it("shows the forecast under every stop that has an arrival", () => {
     useWeatherLine.mockImplementation((_lat, _lng, at) => (at ? { text: "mostly clear, 15% rain", quality: "poor" } : null));
     render(
       <StopList
@@ -39,11 +39,11 @@ describe("StopList", () => {
       />,
     );
     const weather = screen.getAllByTestId("stop-weather");
-    expect(weather).toHaveLength(1);
+    expect(weather).toHaveLength(2);
     expect(weather[0].textContent).toBe("mostly clear, 15% rain");
     expect(weather[0].className).toContain("text-danger");
     expect(useWeatherLine).toHaveBeenCalledWith(37, -119, new Date("2026-07-01T20:00:00Z"), "sunset");
-    expect(useWeatherLine).toHaveBeenCalledWith(37, -119, null, "any");
+    expect(useWeatherLine).toHaveBeenCalledWith(37, -119, new Date("2026-07-01T21:00:00Z"), "any");
   });
 
   it("disables browser touch panning on the drag handle so touch drags reach dnd-kit", () => {

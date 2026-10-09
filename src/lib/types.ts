@@ -101,5 +101,6 @@ export type PlacePhoto = {
 /** One forecast hour. `time` is the location's LOCAL wall-clock time ("2026-07-01T19:00"), as Open-Meteo reports it. */
 export type WeatherHour = { time: string; cloudPct: number | null; rainPct: number | null; tempC: number | null };
 export type WeatherForecast =
-  | { available: true; utcOffsetSeconds: number; hours: WeatherHour[] }
+  /** `typical`: averages of past years for this calendar date, not a forecast (used beyond the forecast horizon). */
+  | { available: true; utcOffsetSeconds: number; hours: WeatherHour[]; typical?: true }
   | { available: false; reason: "out_of_range" | "unavailable" };

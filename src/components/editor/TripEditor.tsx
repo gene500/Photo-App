@@ -7,6 +7,8 @@ import { btnGhost } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { downsampleRoute } from "@/lib/downsample";
 import { prefetchPlacePhotos } from "@/lib/place-photo-cache";
+import { useSuggestionWeather } from "@/lib/use-weather";
+import { holdWeather } from "@/lib/weather-cache";
 import { loadPopularityInBatches, POPULARITY_BATCH, rankSuggestions } from "@/lib/suggestion-popularity";
 import { computeArrivals, computeBestTimes, formatClock } from "@/lib/best-time";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
@@ -138,6 +140,13 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       () => setSuggestionsState((prev) => (prev && prev.key === popularityKey ? { ...prev, shown: undefined } : prev)),
     );
   }, [popularityKey]);
+  // Weather is fetched last: it waits while places are being found or ranked (status "loading", or "done" with popularity still revealing).
+  const suggestionsBusy = suggestionsStatus === "loading" || (freshSuggestions?.status === "done" && freshSuggestions.shown !== undefined);
+  useEffect(() => {
+    if (!suggestionsBusy) return;
+    return holdWeather();
+  }, [suggestionsBusy]);
+  const suggestionWeather = useSuggestionWeather(suggestions, trip.plannedDate, !suggestionsBusy);
   // As soon as places are found, fetch their photos in the background so popups and cards open with the picture ready.
   useEffect(() => {
     if (suggestions.length === 0) return;
@@ -690,6 +699,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
             onAccept={acceptSuggestion}
             onDismiss={dismissSuggestion}
             onHover={setHighlightedId}
+            weather={suggestionWeather}
             onDismissError={() => setSuggestionsState({ key: waypointKey, items: [], status: "idle", error: null })}
           />
         }

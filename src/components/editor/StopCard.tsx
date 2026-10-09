@@ -18,7 +18,7 @@ type Props = {
 
 export function StopCard({ stop, bestTime, arrival, onToggleVisited, onOpenDetails, onClose }: Props) {
   const { settings } = useSettings();
-  const weather = useWeatherLine(stop.lat, stop.lng, stop.lightPref !== "any" ? arrival : null, stop.lightPref);
+  const weather = useWeatherLine(stop.lat, stop.lng, arrival, stop.lightPref);
   return (
     <section aria-label="Selected stop" className={`space-y-2 rounded-xl p-3 ${card}`}>
       <div className="flex items-start justify-between gap-2">
@@ -35,7 +35,7 @@ export function StopCard({ stop, bestTime, arrival, onToggleVisited, onOpenDetai
       )}
       {arrival && <p className="text-xs text-muted">Arrive ~{formatClock(arrival, undefined, settings.timeFormat)}</p>}
       {weather && (
-        <p data-testid="card-weather" data-light-quality={weather.quality ?? undefined} className={`text-xs ${weather.quality === "poor" ? "text-danger" : "text-muted"}`}>
+        <p data-testid="card-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-danger" : "text-muted"}`}>
           {weather.text}
         </p>
       )}

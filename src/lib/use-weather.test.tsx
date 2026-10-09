@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WeatherForecast } from "./types";
 
 const loadForecast = vi.fn();
-vi.mock("./weather-cache", () => ({ loadForecast: (...a: unknown[]) => loadForecast(...a) }));
+vi.mock("./weather-cache", () => ({ loadForecast: (...a: unknown[]) => loadForecast(...a), loadForecastBatch: vi.fn() }));
 import { forecastInstant } from "./light-windows";
 import { useWeatherLine, weatherLine } from "./use-weather";
 
@@ -19,7 +19,16 @@ const forecastFor = (date: string): WeatherForecast => ({
 describe("weatherLine", () => {
   it("describes the hour and rates the light", () => {
     const at = new Date("2026-07-01T12:10:00Z");
-    expect(weatherLine(forecastFor("2026-07-01"), "sunset", at)).toEqual({ text: "clear, 15% rain", quality: "good" });
+    expect(weatherLine(forecastFor("2026-07-01"), "sunset", at)).toEqual({ text: "☀️ 20°C", label: "clear, 15% rain", quality: "good" });
+  });
+  it("shows Fahrenheit for miles", () => {
+    expect(weatherLine(forecastFor("2026-07-01"), "any", new Date("2026-07-01T12:10:00Z"), "mi")?.text).toBe("☀️ 68°F");
+  });
+  it("marks typical weather as typical, not a forecast", () => {
+    const typical = { ...forecastFor("2027-07-01"), typical: true as const };
+    const line = weatherLine(typical, "any", new Date("2027-07-01T12:10:00Z"));
+    expect(line?.text).toBe("Typical ☀️ 20°C");
+    expect(line?.label).toMatch(/^Typically clear, rain on ~15% of days$/);
   });
   it("says nothing when the lookup failed, is unavailable or has no hour near the instant", () => {
     const at = new Date("2026-07-01T12:10:00Z");
@@ -47,7 +56,7 @@ describe("useWeatherLine", () => {
     const date = dateOf(at);
     loadForecast.mockResolvedValue(forecastFor(date));
     const { result } = renderHook(() => useWeatherLine(0, 0, at, "any"));
-    await waitFor(() => expect(result.current).toEqual({ text: "clear, 15% rain", quality: null }));
+    await waitFor(() => expect(result.current).toEqual({ text: "☀️ 20°C", label: "clear, 15% rain", quality: null }));
     expect(loadForecast).toHaveBeenCalledWith(0, 0, date);
   });
 
@@ -60,7 +69,7 @@ describe("useWeatherLine", () => {
     const midHour = new Date(Math.round(mid.getTime() / 3600_000) * 3600_000);
     loadForecast.mockResolvedValue({ available: true, utcOffsetSeconds: 0, hours: [hour(arrival, 3), hour(midHour, 95)] });
     const { result } = renderHook(() => useWeatherLine(0, 0, arrival, "sunset"));
-    await waitFor(() => expect(result.current).toEqual({ text: "overcast, 5% rain", quality: "poor" }));
+    await waitFor(() => expect(result.current).toEqual({ text: "☁️ 20°C", label: "overcast, 5% rain", quality: "poor" }));
     expect(loadForecast).toHaveBeenCalledWith(0, 0, dateOf(mid));
   });
 
@@ -72,8 +81,16 @@ describe("useWeatherLine", () => {
     expect(result.current).toBeNull();
   });
 
-  it("answers 'not available yet' beyond the horizon without a request, and nothing for the past", () => {
-    const far = renderHook(() => useWeatherLine(0, 0, day(40), "any"));
+  it("asks for typical weather past the forecast horizon", async () => {
+    const at = day(60);
+    at.setUTCHours(12, 0, 0, 0);
+    loadForecast.mockResolvedValue({ ...forecastFor(dateOf(at)), typical: true });
+    const { result } = renderHook(() => useWeatherLine(0, 0, at, "any"));
+    await waitFor(() => expect(result.current?.text).toBe("Typical ☀️ 20°C"));
+  });
+
+  it("answers 'not available yet' beyond the typical range without a request, and nothing for the past", () => {
+    const far = renderHook(() => useWeatherLine(0, 0, day(900), "any"));
     expect(far.result.current?.text).toBe("Forecast not available yet");
     const past = renderHook(() => useWeatherLine(0, 0, day(-40), "any"));
     expect(past.result.current).toBeNull();

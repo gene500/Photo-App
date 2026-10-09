@@ -5,6 +5,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnAccent, btnGhost, btnSecondary } from "@/components/ui/styles";
 import { formatPhotoCount } from "@/lib/format";
 import { isHoverPointer } from "./hover-pointer";
+import type { WeatherLine } from "@/lib/use-weather";
 import type { Suggestion } from "@/lib/types";
 
 export type SuggestionsStatus = "idle" | "loading" | "done" | "error";
@@ -19,9 +20,11 @@ type Props = {
   onDismiss: (osmId: string) => void;
   onDismissError: () => void;
   onHover?: (osmId: string | null) => void;
+  /** Golden-hour weather per suggestion, filled in last (after the places and their ranking). */
+  weather?: ReadonlyMap<string, WeatherLine>;
 };
 
-export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind, onAccept, onDismiss, onDismissError, onHover }: Props) {
+export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind, onAccept, onDismiss, onDismissError, onHover, weather }: Props) {
   // Accepts in flight, per suggestion. The ref guards synchronously (two clicks can land
   // before a re-render); the state disables the button.
   const inFlight = useRef(new Set<string>());
@@ -87,6 +90,11 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
                 <span className="capitalize">{s.kind}</span>
                 {formatPhotoCount(s.popularity) && <span data-testid="suggestion-popularity"> · {formatPhotoCount(s.popularity)}</span>}
               </p>
+              {weather?.get(s.osmId) && (
+                <p data-testid="suggestion-weather" data-light-quality={weather.get(s.osmId)?.quality ?? undefined} title={weather.get(s.osmId)?.label} className={`text-xs ${weather.get(s.osmId)?.quality === "poor" ? "text-danger" : "text-muted"}`}>
+                  {weather.get(s.osmId)?.text}
+                </p>
+              )}
             </div>
             <div className="flex shrink-0 gap-1">
               <button type="button" disabled={accepting.has(s.osmId)} onClick={() => void accept(s)} className={btnAccent}>Accept</button>

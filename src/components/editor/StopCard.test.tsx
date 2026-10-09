@@ -24,7 +24,7 @@ describe("StopCard", () => {
   it("has no forecast line when there is nothing to show", () => {
     render(<StopCard {...base} arrival={new Date("2026-07-01T16:30:00Z")} />);
     expect(screen.queryByTestId("card-weather")).toBeNull();
-    expect(useWeatherLine).toHaveBeenLastCalledWith(37.7, -119.7, null, "any");
+    expect(useWeatherLine).toHaveBeenLastCalledWith(37.7, -119.7, new Date("2026-07-01T16:30:00Z"), "any");
   });
 
   it("shows the name, best time and estimated arrival", () => {

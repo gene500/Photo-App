@@ -1,22 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { solarDateAt } from "./best-time";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { getSunWindows, solarDateAt } from "./best-time";
 import { forecastInstant } from "./light-windows";
 import type { LightPref, WeatherForecast } from "./types";
-import { describeWeather, FORECAST_UNAVAILABLE_TEXT, inForecastRange, lightQuality, summarizeAt, type LightQuality } from "./weather";
-import { loadForecast } from "./weather-cache";
+import { describeTypical, describeWeather, weatherGlyph, FORECAST_UNAVAILABLE_TEXT, inForecastRange, inTypicalRange, lightQuality, summarizeAt, type LightQuality } from "./weather";
+import { useSettings } from "@/components/settings/SettingsProvider";
+import { loadForecast, loadForecastBatch } from "./weather-cache";
 
-export type WeatherLine = { text: string; quality: LightQuality | null };
+/** `text` is the short emoji + temperature; `label` is the same in words (tooltip and screen readers). */
+export type WeatherLine = { text: string; label?: string; quality: LightQuality | null };
+type Unit = "km" | "mi";
 
 /** The pure part: the hint text for an instant given the day's forecast (null = say nothing). */
-export function weatherLine(forecast: WeatherForecast | null, pref: LightPref, at: Date): WeatherLine | null {
+export function weatherLine(forecast: WeatherForecast | null, pref: LightPref, at: Date, unit: Unit = "km"): WeatherLine | null {
   if (!forecast) return null;
   if (!forecast.available) {
     return forecast.reason === "out_of_range" ? { text: FORECAST_UNAVAILABLE_TEXT, quality: null } : null;
   }
   const w = summarizeAt(forecast, at.toISOString());
-  return w ? { text: describeWeather(w), quality: lightQuality(pref, w) } : null;
+  if (!w) return null;
+  const glyph = weatherGlyph(w, unit);
+  return forecast.typical
+    ? { text: `Typical ${glyph}`, label: describeTypical(w).replace(/^./, (c) => c.toUpperCase()), quality: lightQuality(pref, w) }
+    : { text: glyph, label: describeWeather(w), quality: lightQuality(pref, w) };
 }
 
 /**
@@ -26,10 +33,11 @@ export function weatherLine(forecast: WeatherForecast | null, pref: LightPref, a
  * horizon answer "Forecast not available yet" without a request.
  */
 export function useWeatherLine(lat: number, lng: number, arrival: Date | null, pref: LightPref = "any"): WeatherLine | null {
+  const unit = useSettings().settings.distanceUnit;
   const atMs = arrival ? forecastInstant(pref, lat, lng, arrival).getTime() : null;
   const date = atMs === null ? null : solarDateAt(new Date(atMs), lng);
   const today = new Date().toISOString().slice(0, 10);
-  const inRange = date !== null && inForecastRange(date, today);
+  const inRange = date !== null && (inForecastRange(date, today) || inTypicalRange(date, today));
   const key = date === null ? null : `${lat.toFixed(2)},${lng.toFixed(2)}|${date}`;
   const [loaded, setLoaded] = useState<{ key: string; forecast: WeatherForecast | null } | null>(null);
   useEffect(() => {
@@ -47,5 +55,59 @@ export function useWeatherLine(lat: number, lng: number, arrival: Date | null, p
     // Too far ahead is "not yet"; a day already gone has no forecast to wait for, so say nothing.
     return date > today ? { text: FORECAST_UNAVAILABLE_TEXT, quality: null } : null;
   }
-  return loaded?.key === key ? weatherLine(loaded.forecast, pref, new Date(atMs)) : null;
+  return loaded?.key === key ? weatherLine(loaded.forecast, pref, new Date(atMs), unit) : null;
+}
+
+type Spot = { osmId: string; lat: number; lng: number };
+
+/**
+ * Weather lines for suggestion cards, read at the middle of each place's golden hour on the trip date. Everything is
+ * fetched in batches and only while `enabled`, which the editor turns on once the suggestions themselves (and their
+ * popularity ranking) have finished loading: weather is the last thing fetched.
+ */
+export function useSuggestionWeather(spots: readonly Spot[], plannedDate: string | null, enabled: boolean): ReadonlyMap<string, WeatherLine> {
+  const unit = useSettings().settings.distanceUnit;
+  const today = new Date().toISOString().slice(0, 10);
+  const targets = useMemo(() => {
+    const out = new Map<string, { at: Date; date: string; spot: Spot }>();
+    if (plannedDate === null) return out;
+    for (const spot of spots) {
+      const golden = getSunWindows(spot.lat, spot.lng, plannedDate).goldenHour;
+      if (!(golden instanceof Date) || Number.isNaN(golden.getTime())) continue;
+      const at = forecastInstant("golden", spot.lat, spot.lng, golden);
+      const date = solarDateAt(at, spot.lng);
+      if (inForecastRange(date, today) || inTypicalRange(date, today)) out.set(spot.osmId, { at, date, spot });
+    }
+    return out;
+  }, [spots, plannedDate, today]);
+  const [forecasts, setForecasts] = useState<ReadonlyMap<string, WeatherForecast | null>>(new Map());
+  const requested = useRef(new Set<string>());
+  useEffect(() => {
+    if (!enabled) return;
+    const byDate = new Map<string, { id: string; fkey: string; spot: Spot }[]>();
+    for (const [id, t] of targets) {
+      const fkey = `${t.spot.lat.toFixed(2)},${t.spot.lng.toFixed(2)}|${t.date}`;
+      if (requested.current.has(fkey)) continue;
+      requested.current.add(fkey);
+      byDate.set(t.date, [...(byDate.get(t.date) ?? []), { id, fkey, spot: t.spot }]);
+    }
+    for (const [date, group] of byDate) {
+      void loadForecastBatch(group.map((g) => g.spot), date).then((list) => {
+        setForecasts((prev) => {
+          const next = new Map(prev);
+          group.forEach((g, i) => next.set(g.fkey, list[i] ?? null));
+          return next;
+        });
+      });
+    }
+  }, [targets, enabled]);
+  return useMemo(() => {
+    const lines = new Map<string, WeatherLine>();
+    for (const [id, t] of targets) {
+      const forecast = forecasts.get(`${t.spot.lat.toFixed(2)},${t.spot.lng.toFixed(2)}|${t.date}`);
+      const line = forecast ? weatherLine(forecast, "golden", t.at, unit) : null;
+      if (line && forecast?.available) lines.set(id, line);
+    }
+    return lines;
+  }, [targets, forecasts, unit]);
 }

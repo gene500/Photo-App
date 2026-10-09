@@ -26,6 +26,7 @@ export const POLICIES = {
   "login-email-failures": { limit: 8, windowMs: 15 * MINUTE, message: "Too many login attempts. Try again later." },
   suggestions: { limit: 30, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   popularity: { limit: 120, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
+  "weather-batch": { limit: 30, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   directions: { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   optimize: { limit: 20, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   "photo-upload": { limit: 20, windowMs: 10 * MINUTE, message: "Too many uploads. Try again in a few minutes." },

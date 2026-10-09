@@ -29,14 +29,18 @@ async function tripWithSunsetStop(page: Page, plannedDate: string) {
   return rows;
 }
 
-test("a sunset stop on a near date shows its weather forecast", async ({ page }) => {
+const SKY = "(☀️|⛅|🌥️|☁️|🌧️)";
+
+test("every stop on a near date shows an emoji and temperature", async ({ page }) => {
   const rows = await tripWithSunsetStop(page, inDays(2));
-  await expect(rows.nth(2).getByTestId("stop-weather")).toHaveText(/^((clear|partly cloudy|mostly cloudy|overcast), \d+% rain|rain likely \(\d+%\))$/);
-  // Stops that do not care about light show no forecast.
-  await expect(rows.nth(0).getByTestId("stop-weather")).toHaveCount(0);
+  const glyph = new RegExp(`^${SKY} -?\\d+°[CF]$`);
+  await expect(rows.nth(2).getByTestId("stop-weather")).toHaveText(glyph);
+  // Stops that do not care about light get weather too.
+  await expect(rows.nth(0).getByTestId("stop-weather")).toHaveText(glyph);
 });
 
-test("a date beyond the forecast horizon says the forecast is not available yet", async ({ page }) => {
+test("a date beyond the forecast horizon shows typical weather, labelled as such", async ({ page }) => {
   const rows = await tripWithSunsetStop(page, inDays(40));
-  await expect(rows.nth(2).getByTestId("stop-weather")).toHaveText("Forecast not available yet");
+  await expect(rows.nth(2).getByTestId("stop-weather")).toHaveText(new RegExp(`^Typical ${SKY} -?\\d+°[CF]$`));
+  await expect(rows.nth(2).getByTestId("stop-weather")).toHaveAttribute("title", /^Typically .*rain on ~\d+% of days$/);
 });

@@ -70,7 +70,7 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
   const { settings } = useSettings();
   const hint = describeLightHint(stop, arrival, undefined, settings.timeFormat);
   // Forecast at the arrival, only for stops that care about light; silent while loading or when it fails.
-  const weather = useWeatherLine(stop.lat, stop.lng, stop.lightPref !== "any" ? arrival : null, stop.lightPref);
+  const weather = useWeatherLine(stop.lat, stop.lng, arrival, stop.lightPref);
   // The timeline line runs through the dot centre (22px down) and stops at the first/last dot.
   const line = first && last ? "hidden" : first ? "top-[22px] bottom-0" : last ? "top-0 h-[22px]" : "inset-y-0";
   return (
@@ -122,7 +122,7 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
           )}
         </p>
         {weather && (
-          <p data-testid="stop-weather" data-light-quality={weather.quality ?? undefined} className={`text-xs ${weather.quality === "poor" ? "text-danger" : "text-muted"}`}>
+          <p data-testid="stop-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-danger" : "text-muted"}`}>
             {weather.text}
           </p>
         )}

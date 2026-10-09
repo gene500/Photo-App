@@ -24,6 +24,15 @@ export function inForecastRange(date: string, today: string): boolean {
   return diff >= -1 && diff <= FORECAST_DAYS;
 }
 
+/** Typical weather (past years' averages) is offered for future dates past the forecast horizon, up to this far ahead. */
+export const TYPICAL_MAX_DAYS = 800;
+
+/** True when `date` is beyond the forecast horizon but within TYPICAL_MAX_DAYS, so typical weather applies. */
+export function inTypicalRange(date: string, today: string): boolean {
+  const diff = dayNumber(date) - dayNumber(today);
+  return diff > FORECAST_DAYS && diff <= TYPICAL_MAX_DAYS;
+}
+
 /**
  * The days to request for `date`: the day before through the day after, so a window near midnight (or in a zone far
  * from its longitude's solar time) still finds its hour. Clamped to the range Open-Meteo serves.
@@ -111,10 +120,28 @@ export function lightQuality(pref: LightPref, w: Pick<WeatherSummary, "cloudPct"
   return w.cloudPct < 50 ? "good" : "fair";
 }
 
-/** "mostly cloudy, 15% rain" (lower case, to follow the light window in a hint). */
+const EMOJI: Record<WeatherLabel, string> = { Clear: "☀️", "Partly cloudy": "⛅", "Mostly cloudy": "🌥️", Overcast: "☁️", "Rain likely": "🌧️" };
+
+/** "18°C" / "64°F" (null when the temperature is unknown). */
+export function formatTemp(tempC: number | null, unit: "km" | "mi"): string | null {
+  if (tempC === null) return null;
+  return unit === "mi" ? `${Math.round((tempC * 9) / 5 + 32)}°F` : `${Math.round(tempC)}°C`;
+}
+
+/** "⛅ 18°C": a small emoji for the sky and the temperature. Words for screen readers come from describeWeather. */
+export function weatherGlyph(w: WeatherSummary, unit: "km" | "mi" = "km"): string {
+  return [EMOJI[w.label], formatTemp(w.tempC, unit)].filter(Boolean).join(" ");
+}
+
+/** "mostly cloudy, 15% rain" (lower case): the plain-words version, used as the accessible label. */
 export function describeWeather(w: WeatherSummary): string {
   if (w.label === "Rain likely") return `rain likely (${Math.round(w.rainPct)}%)`;
   return `${w.label.toLowerCase()}, ${Math.round(w.rainPct)}% rain`;
+}
+
+/** "typically mostly cloudy, rain on ~20% of days": typical weather is a climate average, so it is worded as one. */
+export function describeTypical(w: WeatherSummary): string {
+  return `typically ${w.label === "Rain likely" ? "wet" : w.label.toLowerCase()}, rain on ~${Math.round(w.rainPct)}% of days`;
 }
 
 export const FORECAST_UNAVAILABLE_TEXT = "Forecast not available yet";

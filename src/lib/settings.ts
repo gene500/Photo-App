@@ -36,7 +36,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "system",
   textSize: "default",
   reduceMotion: false,
-  distanceUnit: "km",
+  distanceUnit: "mi",
   timeFormat: "auto",
   mapStyle: "beige",
   defaultDwellMinutes: 30,

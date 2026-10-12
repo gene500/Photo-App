@@ -79,7 +79,7 @@ describe("TripEditor", () => {
   it("loads the route through the stops in order and shows its summary", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     render(<TripEditor initialTrip={withStops(seed)} />);
-    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toBe("100 km · 1 h 0 min"));
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toBe("62 mi · 1 h 0 min"));
     expect(api.directions).toHaveBeenCalledWith([[-119.79, 36.74], [-119.12, 37.96]]);
   });
 
@@ -209,7 +209,7 @@ describe("TripEditor", () => {
     vi.mocked(api.addStop).mockResolvedValue({ stop: newStop({ id: "c", order: 2, name: "Tunnel View", source: "suggested", lat: 37.7, lng: -119.7 }) });
     vi.mocked(api.placePhoto).mockResolvedValue({ photo: { url: "https://upload.wikimedia.org/tv.jpg", title: "Tunnel View", pageUrl: "https://en.wikipedia.org/wiki/Tunnel_View", credit: "Wikipedia" } });
     render(<TripEditor initialTrip={withStops(seed)} />);
-    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("km"));
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("mi"));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
     await userEvent.click(await screen.findByRole("button", { name: /^Accept/ }));
@@ -223,7 +223,7 @@ describe("TripEditor", () => {
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });
     vi.mocked(api.addStop).mockResolvedValue({ stop: newStop({ id: "c", order: 2, name: "Tunnel View", source: "suggested", lat: 37.7, lng: -119.7 }) });
     render(<TripEditor initialTrip={withStops(seed)} />);
-    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("km"));
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("mi"));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
     await screen.findByTestId("suggestion-card");
@@ -496,7 +496,7 @@ describe("TripEditor", () => {
     vi.mocked(api.directions).mockResolvedValue({ route: { ...route, geometry } });
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [] });
     render(<TripEditor initialTrip={withStops(seed)} />);
-    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("km"));
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("mi"));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
     await waitFor(() => expect(api.suggestions).toHaveBeenCalled());
@@ -512,7 +512,7 @@ describe("TripEditor", () => {
     vi.mocked(api.suggestions).mockResolvedValueOnce({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });
     vi.mocked(api.updateStop).mockResolvedValue({ stop: { ...seed[0], lat: 38, lng: -118 } });
     render(<TripEditor initialTrip={withStops(seed)} />);
-    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("km"));
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("mi"));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
     await screen.findByTestId("suggestion-card");
@@ -536,7 +536,7 @@ describe("TripEditor", () => {
     vi.mocked(api.suggestions).mockImplementationOnce(() => new Promise((r) => { resolveSearch = r; }));
     vi.mocked(api.updateStop).mockImplementation(() => new Promise((_r, reject) => { rejectMove = reject; }));
     render(<TripEditor initialTrip={withStops(seed)} />);
-    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("km"));
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("mi"));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
     await userEvent.click(screen.getByRole("button", { name: "drag first marker" }));
@@ -570,7 +570,7 @@ describe("TripEditor", () => {
     ] });
     vi.mocked(api.addStop).mockResolvedValue({ stop: newStop({ id: "c", order: 2, name: "Tunnel View", source: "suggested", lat: 37.7, lng: -119.7 }) });
     render(<TripEditor initialTrip={withStops(seed)} />);
-    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("km"));
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("mi"));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
     await userEvent.click((await screen.findAllByRole("button", { name: /^Accept/ }))[0]!);

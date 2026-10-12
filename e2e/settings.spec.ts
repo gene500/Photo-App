@@ -47,8 +47,8 @@ test("settings: theme, text size, units and reset persist per device", async ({ 
   expect(first.__firstTheme).toBe("dark");
   expect(first.__firstSize).toBe("large");
 
-  // Miles on a real trip.
-  await page.getByRole("radio", { name: "Miles", exact: true }).check();
+  // Metric on a real trip.
+  await page.getByRole("radio", { name: "Metric", exact: true }).check();
   await page.goto("/trips");
   await page.getByLabel("Trip name").fill("Settings coast");
   await page.getByLabel("Planned date").fill("2026-07-01");
@@ -59,8 +59,8 @@ test("settings: theme, text size, units and reset persist per device", async ({ 
     await expect(page.getByText(/^Spot .* \(fake\)$/)).toBeVisible();
     await page.getByRole("button", { name: "Add stop" }).click();
   }
-  await expect(page.getByTestId("route-status")).toContainText(/\d+ mi/);
-  await expect(page.getByTestId("route-status")).not.toContainText("km");
+  await expect(page.getByTestId("route-status")).toContainText(/\d+ km/);
+  await expect(page.getByTestId("route-status")).not.toContainText(/\d mi\b/);
 
   // Reset restores everything.
   await page.getByRole("link", { name: "Settings" }).click();
@@ -68,7 +68,7 @@ test("settings: theme, text size, units and reset persist per device", async ({ 
   await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.*/);
   await expect(page.locator("html")).not.toHaveAttribute("data-text-size", /.*/);
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe("16px");
-  await expect(page.getByRole("radio", { name: "Kilometres" })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "Imperial" })).toBeChecked();
 });
 
 test("explicit theme beats the OS colour scheme in both directions", async ({ page }) => {

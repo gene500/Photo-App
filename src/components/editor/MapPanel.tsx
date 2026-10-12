@@ -268,8 +268,6 @@ export default function MapPanel({
       el.addEventListener("blur", hidePopup);
       return new mapboxgl.Marker({ element: el }).setLngLat([s.lng, s.lat]).addTo(map);
     });
-    const highlighted = suggestions.find((s) => s.osmId === highlightedSuggestionId);
-    if (highlighted) showPopup(highlighted);
   }, [suggestions, highlightedSuggestionId]);
 
   // The temporary pin.

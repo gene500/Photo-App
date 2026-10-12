@@ -39,9 +39,9 @@ describe("SettingsView", () => {
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
     await userEvent.click(screen.getByRole("radio", { name: "Large" }));
     expect(document.documentElement.getAttribute("data-text-size")).toBe("large");
-    await userEvent.click(screen.getByRole("radio", { name: "Miles" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Metric" }));
     await userEvent.click(screen.getByRole("radio", { name: "24-hour" }));
-    expect(saved()).toMatchObject({ distanceUnit: "mi", timeFormat: "24h" });
+    expect(saved()).toMatchObject({ distanceUnit: "km", timeFormat: "24h" });
     expect(screen.getByRole("group", { name: "Theme" })).toBeTruthy();
   });
 

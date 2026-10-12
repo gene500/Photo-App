@@ -5,6 +5,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnAccent, btnGhost, btnSecondary } from "@/components/ui/styles";
 import { formatPhotoCount } from "@/lib/format";
 import { isHoverPointer } from "./hover-pointer";
+import { SuggestionHoverPhoto } from "./SuggestionHoverPhoto";
 import type { WeatherLine } from "@/lib/use-weather";
 import type { Suggestion } from "@/lib/types";
 
@@ -45,6 +46,7 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
     }
     tops.current = next;
   }, [suggestions]);
+  const [hover, setHover] = useState<{ s: Suggestion; rect: DOMRect } | null>(null);
   const [accepting, setAccepting] = useState<ReadonlySet<string>>(new Set());
   async function accept(sug: Suggestion) {
     if (inFlight.current.has(sug.osmId)) return;
@@ -83,7 +85,7 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
       )}
       <ul ref={listRef} className="space-y-1">
         {suggestions.map((s, i) => (
-          <li key={s.osmId} data-testid="suggestion-card" data-id={s.osmId} style={{ animationDelay: `${(i % 5) * 50}ms` }} onPointerEnter={(e) => isHoverPointer(e) && onHover?.(s.osmId)} onPointerLeave={() => onHover?.(null)} onFocus={() => onHover?.(s.osmId)} onBlur={() => onHover?.(null)} className="anim-rise flex items-center justify-between gap-2 rounded-xl px-2 py-2 hover:bg-hover">
+          <li key={s.osmId} data-testid="suggestion-card" data-id={s.osmId} style={{ animationDelay: `${(i % 5) * 50}ms` }} onPointerEnter={(e) => { if (isHoverPointer(e)) { onHover?.(s.osmId); setHover({ s, rect: e.currentTarget.getBoundingClientRect() }); } }} onPointerLeave={() => { onHover?.(null); setHover(null); }} onFocus={(e) => { onHover?.(s.osmId); setHover({ s, rect: e.currentTarget.getBoundingClientRect() }); }} onBlur={() => { onHover?.(null); setHover(null); }} className="anim-rise flex items-center justify-between gap-2 rounded-xl px-2 py-2 hover:bg-hover">
             <div className="min-w-0">
               <p data-testid="suggestion-name" className="truncate text-sm font-medium">{s.name}</p>
               <p className="text-xs text-muted">
@@ -103,6 +105,7 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
           </li>
         ))}
       </ul>
+      {hover && suggestions.some((x) => x.osmId === hover.s.osmId) && <SuggestionHoverPhoto suggestion={hover.s} anchor={hover.rect} />}
     </section>
   );
 }

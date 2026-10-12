@@ -96,11 +96,12 @@ export function SettingsView({ email }: { email: string | null }) {
 
       <Section title="Units and time">
         <Segmented
-          legend="Distance"
+          legend="Units"
           name="distanceUnit"
           value={settings.distanceUnit}
           onChange={(distanceUnit) => update({ distanceUnit })}
-          options={[{ value: "km", label: "Kilometres" }, { value: "mi", label: "Miles" }]}
+          options={[{ value: "mi", label: "Imperial" }, { value: "km", label: "Metric" }]}
+          hint="Imperial shows miles and °F. Metric shows kilometres and °C."
         />
         <Segmented
           legend="Time format"

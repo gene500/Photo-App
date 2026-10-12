@@ -1,5 +1,6 @@
 "use client";
 
+import { StartTimeControl } from "./StartTimeControl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useSettings } from "@/components/settings/SettingsProvider";
@@ -374,6 +375,14 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     }
   }
 
+  async function saveStartTime(departAt: string | null) {
+    try {
+      await saveTrip({ departAt });
+    } catch (e) {
+      setStopsError(errorMessage(e, "Couldn't save the start time"));
+    }
+  }
+
   async function resetDeparture() {
     try {
       await saveTrip({ departAt: null });
@@ -639,6 +648,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                     : "Add 2 stops to see the route"}
             </p>
             </div>
+            <StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} onChange={(iso) => saveStartTime(iso)} />
             {trip.departAt && (
               <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
                 <p data-testid="depart-note">Starts {formatClock(new Date(trip.departAt), undefined, settings.timeFormat)}</p>

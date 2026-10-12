@@ -34,7 +34,7 @@ describe("AlternativesPanel", () => {
 
   it("shows an empty result and an error", () => {
     const { rerender } = render(<AlternativesPanel {...base} status="done" />);
-    expect(screen.getByText("No other photo spots within 10 km.")).toBeTruthy();
+    expect(screen.getByText("No other photo spots within 6 mi.")).toBeTruthy();
     rerender(<AlternativesPanel {...base} status="error" error="Couldn't load suggestions. Please retry." />);
     expect(screen.getByText("Couldn't load suggestions. Please retry.")).toBeTruthy();
   });

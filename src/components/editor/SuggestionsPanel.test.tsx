@@ -79,3 +79,16 @@ describe("SuggestionsPanel", () => {
     expect((screen.getByRole("button", { name: /^Accept/ }) as HTMLButtonElement).disabled).toBe(false);
   });
 });
+
+describe("hover photo beside the suggestion", () => {
+  it("shows a photo card next to a hovered suggestion and removes it on leave, without touching the map popup", async () => {
+    const { container } = render(
+      <SuggestionsPanel status="done" suggestions={[{ osmId: "node/1", name: "Hover Point", lat: 1, lng: 2, kind: "viewpoint" }]} error={null} canSearch onFind={() => {}} onAccept={() => {}} onDismiss={() => {}} onDismissError={() => {}} />,
+    );
+    const card = container.querySelector('[data-testid="suggestion-card"]')!;
+    await userEvent.hover(card);
+    expect(screen.getByTestId("suggestion-hover-photo")).toBeTruthy();
+    await userEvent.unhover(card);
+    expect(screen.queryByTestId("suggestion-hover-photo")).toBeNull();
+  });
+});

@@ -17,7 +17,7 @@ async function setup() {
       <div>
         <p data-testid="out">{`${settings.theme}|${settings.textSize}|${settings.distanceUnit}`}</p>
         <button onClick={() => update({ theme: "dark" })}>dark</button>
-        <button onClick={() => update({ textSize: "xlarge", distanceUnit: "mi" })}>big</button>
+        <button onClick={() => update({ textSize: "xlarge", distanceUnit: "km" })}>big</button>
         <button onClick={reset}>reset</button>
       </div>
     );
@@ -36,7 +36,7 @@ describe("SettingsProvider", () => {
   it("starts from the stored settings and applies them to <html>", async () => {
     storage.setItem(SETTINGS_KEY, JSON.stringify({ theme: "light", textSize: "large" }));
     await setup();
-    expect(screen.getByTestId("out").textContent).toBe("light|large|km");
+    expect(screen.getByTestId("out").textContent).toBe("light|large|mi");
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
     expect(document.documentElement.getAttribute("data-text-size")).toBe("large");
   });
@@ -48,9 +48,9 @@ describe("SettingsProvider", () => {
     expect(JSON.parse(storage.getItem(SETTINGS_KEY)!).theme).toBe("dark");
     await userEvent.click(screen.getByText("big"));
     expect(document.documentElement.getAttribute("data-text-size")).toBe("xlarge");
-    expect(screen.getByTestId("out").textContent).toBe("dark|xlarge|mi");
+    expect(screen.getByTestId("out").textContent).toBe("dark|xlarge|km");
     await userEvent.click(screen.getByText("reset"));
-    expect(screen.getByTestId("out").textContent).toBe("system|default|km");
+    expect(screen.getByTestId("out").textContent).toBe("system|default|mi");
     expect(document.documentElement.hasAttribute("data-theme")).toBe(false);
     expect(document.documentElement.hasAttribute("data-text-size")).toBe(false);
   });
@@ -58,16 +58,16 @@ describe("SettingsProvider", () => {
   it("recovers from corrupt stored data", async () => {
     storage.setItem(SETTINGS_KEY, "{oops");
     await setup();
-    expect(screen.getByTestId("out").textContent).toBe("system|default|km");
+    expect(screen.getByTestId("out").textContent).toBe("system|default|mi");
   });
 
   it("follows another tab through the storage event", async () => {
     await setup();
     act(() => {
-      storage.setItem(SETTINGS_KEY, JSON.stringify({ theme: "dark", distanceUnit: "mi" }));
+      storage.setItem(SETTINGS_KEY, JSON.stringify({ theme: "dark", distanceUnit: "km" }));
       window.dispatchEvent(new StorageEvent("storage", { key: SETTINGS_KEY }));
     });
-    expect(screen.getByTestId("out").textContent).toBe("dark|default|mi");
+    expect(screen.getByTestId("out").textContent).toBe("dark|default|km");
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
   });
 
@@ -77,9 +77,9 @@ describe("SettingsProvider", () => {
       get() { throw new DOMException("denied", "SecurityError"); },
     });
     await setup();
-    expect(screen.getByTestId("out").textContent).toBe("system|default|km");
+    expect(screen.getByTestId("out").textContent).toBe("system|default|mi");
     await userEvent.click(screen.getByText("dark"));
-    expect(screen.getByTestId("out").textContent).toBe("dark|default|km");
+    expect(screen.getByTestId("out").textContent).toBe("dark|default|mi");
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
   });
 
@@ -87,14 +87,14 @@ describe("SettingsProvider", () => {
     storage.failWrites = () => true;
     await setup();
     await userEvent.click(screen.getByText("dark"));
-    expect(screen.getByTestId("out").textContent).toBe("dark|default|km");
+    expect(screen.getByTestId("out").textContent).toBe("dark|default|mi");
   });
 
   it("does not stay in memory-only mode after a quota failure: a later write persists", async () => {
     await setup();
     storage.failWrites = () => true;
     await userEvent.click(screen.getByText("dark"));
-    expect(screen.getByTestId("out").textContent).toBe("dark|default|km");
+    expect(screen.getByTestId("out").textContent).toBe("dark|default|mi");
     expect(storage.getItem(SETTINGS_KEY)).toBeNull();
     storage.failWrites = null;
     await userEvent.click(screen.getByText("big"));
@@ -107,10 +107,10 @@ describe("SettingsProvider", () => {
     await userEvent.click(screen.getByText("dark"));
     storage.failWrites = null;
     act(() => {
-      storage.setItem(SETTINGS_KEY, JSON.stringify({ theme: "light", distanceUnit: "mi" }));
+      storage.setItem(SETTINGS_KEY, JSON.stringify({ theme: "light", distanceUnit: "km" }));
       window.dispatchEvent(new StorageEvent("storage", { key: SETTINGS_KEY }));
     });
-    expect(screen.getByTestId("out").textContent).toBe("light|default|mi");
+    expect(screen.getByTestId("out").textContent).toBe("light|default|km");
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
   });
 });

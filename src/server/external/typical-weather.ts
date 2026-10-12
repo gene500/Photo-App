@@ -9,6 +9,8 @@ export const TYPICAL_YEARS = 3;
 /** Days either side of the calendar date that are averaged in, to smooth out single odd days. */
 export const TYPICAL_SPREAD_DAYS = 3;
 export const TYPICAL_TTL_MS = 24 * 60 * 60_000;
+/** A failed lookup is remembered briefly so a client looping over places cannot hammer the archive. */
+export const TYPICAL_FAILURE_TTL_MS = 60_000;
 export const TYPICAL_CACHE_MAX = 1000;
 /** A day with at least this much precipitation counts as a wet day. */
 const WET_DAY_MM = 1;
@@ -116,7 +118,7 @@ export async function fetchProfiles(points: Point[], date: string, today: string
 /** Profile lookup with a bounded 24 h cache (keyed by ~1 km and calendar day) and in-flight de-duplication. */
 export function createTypicalLookup(opts: { fetchImpl?: typeof fetch; now?: () => number } = {}) {
   const now = opts.now ?? Date.now;
-  const store = new Map<string, { profile: TypicalProfile; expiresAt: number }>();
+  const store = new Map<string, { profile: TypicalProfile | null; expiresAt: number }>();
   const inFlight = new Map<string, Promise<TypicalProfile | null>>();
 
   function many(points: Point[], date: string, today = new Date().toISOString().slice(0, 10)): Promise<WeatherForecast[]> {
@@ -147,10 +149,8 @@ export function createTypicalLookup(opts: { fetchImpl?: typeof fetch; now?: () =
         const p = batch
           .then((profiles) => {
             const profile = profiles[j] ?? null;
-            if (profile) {
-              store.set(key, { profile, expiresAt: now() + TYPICAL_TTL_MS });
-              while (store.size > TYPICAL_CACHE_MAX) store.delete(store.keys().next().value as string);
-            }
+            store.set(key, { profile, expiresAt: now() + (profile ? TYPICAL_TTL_MS : TYPICAL_FAILURE_TTL_MS) });
+            while (store.size > TYPICAL_CACHE_MAX) store.delete(store.keys().next().value as string);
             return profile;
           })
           .finally(() => inFlight.delete(key));

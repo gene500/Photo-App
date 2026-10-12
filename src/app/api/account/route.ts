@@ -11,6 +11,8 @@ export const DELETE = handle(async (req: Request) => {
   const { password } = deleteAccountSchema.parse(await readJson(req));
   const result = await deleteAccount(userId, password);
   if (!result) throw new HttpError(403, "That password is not correct");
-  await Promise.allSettled(result.photoUrls.map((url) => deletePhotoFile(url)));
+  const settled = await Promise.allSettled(result.photoUrls.map((url) => deletePhotoFile(url)));
+  const failed = settled.filter((r) => r.status === "rejected").length;
+  if (failed > 0) console.error(`account deletion: ${failed} of ${settled.length} photo files could not be removed`);
   return new Response(null, { status: 204 });
 });

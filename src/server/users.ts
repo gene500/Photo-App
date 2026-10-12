@@ -88,8 +88,12 @@ export async function changePassword(userId: string, currentPassword: string, ne
 export async function deleteAccount(userId: string, password: string): Promise<{ photoUrls: string[] } | null> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) return null;
-  const stops = await prisma.stop.findMany({ where: { trip: { userId } }, select: { photoUrl: true } });
-  await prisma.user.delete({ where: { id: userId } });
+  // One transaction, so a photo attached between the read and the delete cannot be left behind.
+  const stops = await prisma.$transaction(async (tx) => {
+    const rows = await tx.stop.findMany({ where: { trip: { userId } }, select: { photoUrl: true } });
+    await tx.user.delete({ where: { id: userId } });
+    return rows;
+  });
   versions.delete(userId);
   return { photoUrls: stops.map((s) => s.photoUrl).filter((u): u is string => u !== null) };
 }

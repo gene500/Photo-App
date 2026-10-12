@@ -105,6 +105,11 @@ export function useSuggestionWeather(spots: readonly Spot[], plannedDate: string
             for (const g of part) requested.current.delete(g.fkey); // not shown: ask again next time
             return;
           }
+          // A failed answer is not final: forget it so the next change to the list asks again.
+          part.forEach((g, j) => {
+            const f = list[j];
+            if (!f || (!f.available && f.reason === "unavailable")) requested.current.delete(g.fkey);
+          });
           setForecasts((prev) => {
             const next = new Map(prev);
             part.forEach((g, j) => next.set(g.fkey, list[j] ?? null));

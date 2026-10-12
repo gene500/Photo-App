@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildProfile, createTypicalLookup, profileToForecast, sameDayInYear, TYPICAL_TTL_MS, TYPICAL_YEARS } from "./typical-weather";
+import { buildProfile, createTypicalLookup, TYPICAL_FAILURE_TTL_MS, profileToForecast, sameDayInYear, TYPICAL_TTL_MS, TYPICAL_YEARS } from "./typical-weather";
 
 const week = (dayRain: number) => {
   const time: string[] = [];
@@ -64,13 +64,14 @@ describe("typical lookup", () => {
     await lookup(pts, "2027-07-01", "2026-10-09");
     expect(f).toHaveBeenCalledTimes(TYPICAL_YEARS);
   });
-  it("expires after a day and reports unavailable on failures without caching them", async () => {
+  it("expires after a day; failures are remembered for only a minute", async () => {
     let t = 0;
     const f = vi.fn(async () => new Response("no", { status: 500 }));
     const lookup = createTypicalLookup({ fetchImpl: f as unknown as typeof fetch, now: () => t });
     expect((await lookup([{ lat: 1, lng: 2 }], "2027-07-01", "2026-10-09"))[0]).toEqual({ available: false, reason: "unavailable" });
     await lookup([{ lat: 1, lng: 2 }], "2027-07-01", "2026-10-09");
-    expect(f).toHaveBeenCalledTimes(TYPICAL_YEARS * 2);
+    expect(f).toHaveBeenCalledTimes(TYPICAL_YEARS); // the failure is cached, not retried at once
+    t += TYPICAL_FAILURE_TTL_MS + 1;
     f.mockImplementation(async () => ok1());
     function ok1() { return new Response(JSON.stringify(week(0))); }
     await lookup([{ lat: 1, lng: 2 }], "2027-07-01", "2026-10-09");

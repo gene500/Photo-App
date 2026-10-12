@@ -1,9 +1,10 @@
 import { weatherQuerySchema } from "@/lib/validation";
 import { handle, requireUserId } from "@/server/http";
+import { enforceLimit } from "@/server/rate-limit";
 import { getForecast } from "@/server/external/weather";
 
 export const GET = handle(async (req: Request) => {
-  await requireUserId();
+  enforceLimit("weather", await requireUserId());
   const params = new URL(req.url).searchParams;
   const q = weatherQuerySchema.parse({
     lat: params.get("lat") ?? undefined,

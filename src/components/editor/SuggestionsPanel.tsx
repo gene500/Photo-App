@@ -92,7 +92,7 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
               </p>
               {weather?.get(s.osmId) && (
                 <p data-testid="suggestion-weather" data-light-quality={weather.get(s.osmId)?.quality ?? undefined} title={weather.get(s.osmId)?.label} className={`text-xs ${weather.get(s.osmId)?.quality === "poor" ? "text-danger" : "text-muted"}`}>
-                  {weather.get(s.osmId)?.text}
+                  <span role="img" aria-label={weather.get(s.osmId)?.label}>{weather.get(s.osmId)?.text}</span>
                 </p>
               )}
             </div>

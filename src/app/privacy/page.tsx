@@ -28,7 +28,7 @@ export default function PrivacyPage() {
       <ul>
         <li><strong>Hosting and database</strong> (Vercel, Turso) store the account and trip data above. <strong>Vercel Blob</strong> stores uploaded photos.</li>
         <li><strong>Mapbox</strong> draws the map and provides routes and place search. It receives the map areas you view, coordinates for directions and search text, and your browser&apos;s IP address.</li>
-        <li><strong>Open-Meteo</strong> provides weather. It receives the coordinates and dates of stops you view.</li>
+        <li><strong>Open-Meteo</strong> provides weather. It receives the coordinates (to about 1 km) of stops and suggested places you view, and the dates involved; for dates far ahead it is asked about the same date in past years.</li>
         <li><strong>OpenStreetMap / Overpass</strong> and <strong>Wikimedia Commons</strong> (and Flickr, if enabled) supply nearby places and photo counts. They receive the area being searched, not your identity.</li>
         <li>Images for places may load directly from Mapbox, Wikimedia or Flickr servers, which see your IP address like any website.</li>
       </ul>

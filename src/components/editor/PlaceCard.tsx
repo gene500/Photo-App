@@ -48,7 +48,7 @@ export function PlaceCard({ name, resolving, busy, suggestion, visit, onAdd, onC
         <p className={`text-sm font-medium ${resolving ? "text-muted" : ""}`}>{name}</p>
         {golden && weather && (
           <p data-testid="place-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-danger" : "text-muted"}`}>
-            Golden hour {formatClock(golden, undefined, settings.timeFormat)} · {weather.text}
+            Golden hour {formatClock(golden, undefined, settings.timeFormat)} · <span role="img" aria-label={weather.label}>{weather.text}</span>
           </p>
         )}
         {photo && <p data-testid="photo-credit" className="text-xs text-muted">{photo.credit}</p>}

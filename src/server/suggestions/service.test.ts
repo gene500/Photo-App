@@ -141,6 +141,38 @@ describe("local copy of the map data", () => {
     await expect(findSuggestionsAround([-119.6, 37.2], { local: async () => null, fetchOverpass: down, enrich: false })).rejects.toBeInstanceOf(OverpassError);
   });
 
+  it("shows a thin local answer without waiting out a slow Overpass, and keeps the late Overpass answer for next time", async () => {
+    let release!: (v: unknown) => void;
+    const slow = vi.fn(() => new Promise<unknown>((r) => (release = r)));
+    const started = Date.now();
+    const first = await findSuggestionsAround([-119.6, 37.2], { local: local(2), fetchOverpass: slow, enrich: false, thinGraceMs: 20 });
+    expect(first).toHaveLength(2);
+    expect(Date.now() - started).toBeLessThan(1000);
+    release(overpassJson);
+    await new Promise((r) => setTimeout(r, 10));
+    const again = await findSuggestionsAround([-119.6, 37.2], { local: local(2), fetchOverpass: slow, enrich: false });
+    expect(again).toHaveLength(1);
+    expect(slow).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not remember a thin answer shown only because Overpass was slow", async () => {
+    const never = vi.fn(() => new Promise<unknown>(() => undefined));
+    await findSuggestionsAround([-119.6, 37.2], { local: local(2), fetchOverpass: never, enrich: false, thinGraceMs: 5 });
+    const fetchOverpass = vi.fn(async () => overpassJson);
+    expect(await findSuggestionsAround([-119.6, 37.2], { local: local(2), fetchOverpass, enrich: false })).toHaveLength(1);
+    expect(fetchOverpass).toHaveBeenCalledTimes(1);
+  });
+
+  it("identical searches in flight share one lookup", async () => {
+    const fetchOverpass = vi.fn(async () => overpassJson);
+    const [a, b] = await Promise.all([
+      findSuggestionsAround([-0.1, 51.5], { local: async () => null, fetchOverpass, enrich: false }),
+      findSuggestionsAround([-0.1, 51.5], { local: async () => null, fetchOverpass, enrich: false }),
+    ]);
+    expect(a).toEqual(b);
+    expect(fetchOverpass).toHaveBeenCalledTimes(1);
+  });
+
   it("a database error in the local lookup quietly falls back to Overpass", async () => {
     const fetchOverpass = vi.fn(async () => overpassJson);
     const result = await findSuggestionsAround([-119.6, 37.2], { local: async () => { throw new Error("no such table: Place"); }, fetchOverpass, enrich: false });

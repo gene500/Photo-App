@@ -19,6 +19,9 @@ export const MIN_LOCAL_PLACES = 5;
 const cache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS);
 const rawCache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS);
 
+/** Searches already underway, so a repeat of the same one (a double-fired effect, a retry click) joins it instead of starting another. */
+const inflight = new Map<string, Promise<{ parsed: Suggestion[]; degraded: boolean }>>();
+
 export function routeCacheKey(route: LngLat[]): string {
   const canonical = route.map(([lng, lat]) => `${lng.toFixed(4)},${lat.toFixed(4)}`).join(";");
   return createHash("sha1").update(canonical).digest("hex");
@@ -29,6 +32,7 @@ export function clearSuggestionCache(): void {
   rawCache.clear();
   resetSharedCounter();
   clearCellCache();
+  inflight.clear();
 }
 
 type Deps = {
@@ -37,31 +41,71 @@ type Deps = {
   fetchOverpass?: (query: string) => Promise<unknown>;   fetchImpl?: typeof fetch;
   /** false: skip popularity (the caller ranks it later). */
   enrich?: boolean;
+  /** Test hook: overrides THIN_LOCAL_GRACE_MS. */
+  thinGraceMs?: number;
 };
+
+/** How long a thin local answer waits for Overpass before being shown instead (Overpass keeps going and fills the cache). */
+export const THIN_LOCAL_GRACE_MS = 2_500;
+
+type Raw = { parsed: Suggestion[]; degraded: boolean };
+
+async function loadRaw(key: string, buildQuery: () => string, local: () => Promise<unknown[] | null>, deps: Deps, origin?: LngLatLiteral): Promise<Raw> {
+  // The local copy answers in milliseconds; Overpass (free, often busy) is only asked when the copy doesn't cover the
+  // area or comes back nearly empty, and a thin local answer still beats an Overpass failure.
+  const nearby = await (deps.local ?? local)().catch(() => null);
+  if (nearby && nearby.length >= MIN_LOCAL_PLACES) {
+    const parsed = parseOverpassResponse({ elements: nearby }, SUGGESTION_CAP, origin);
+    rawCache.set(key, parsed);
+    return { parsed, degraded: false };
+  }
+  const asked = (async () => parseOverpassResponse(await (deps.fetchOverpass ?? fetchOverpass)(buildQuery()), SUGGESTION_CAP, origin))();
+  if (!nearby?.length) {
+    const parsed = await asked;
+    rawCache.set(key, parsed);
+    return { parsed, degraded: false };
+  }
+  // Something local to show: don't make the first page wait out a slow or failing Overpass.
+  const thin = parseOverpassResponse({ elements: nearby }, SUGGESTION_CAP, origin);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<"late">((resolve) => {
+    timer = setTimeout(() => resolve("late"), deps.thinGraceMs ?? THIN_LOCAL_GRACE_MS);
+  });
+  try {
+    const won = await Promise.race([asked, late]);
+    if (won === "late") {
+      // Overpass is still working: remember its answer if it comes, so the next search is complete.
+      asked.then((p) => rawCache.set(key, p), () => undefined);
+      // A thin answer shown only because Overpass was slow must not be remembered as the real result.
+      return { parsed: thin, degraded: true };
+    }
+    rawCache.set(key, won);
+    return { parsed: won, degraded: false };
+  } catch {
+    return { parsed: thin, degraded: true };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function runSearch(key: string, buildQuery: () => string, local: () => Promise<unknown[] | null>, deps: Deps, origin?: LngLatLiteral): Promise<Suggestion[]> {
   const enrich = deps.enrich !== false;
   const done = enrich ? cache.get(key) : (cache.get(key) ?? rawCache.get(key));
   if (done) return done;
   let parsed = rawCache.get(key);
-  // A fallback to a thin local answer (Overpass failed) must not be remembered as if it were the real result.
   let degraded = false;
   if (!parsed) {
-    // The local copy answers in milliseconds; Overpass (free, often busy) is only asked when the copy doesn't cover the
-    // area or comes back nearly empty, and a thin local answer still beats an Overpass failure.
-    const nearby = await (deps.local ?? local)().catch(() => null);
-    if (nearby && nearby.length >= MIN_LOCAL_PLACES) {
-      parsed = parseOverpassResponse({ elements: nearby }, SUGGESTION_CAP, origin);
-    } else {
-      try {
-        parsed = parseOverpassResponse(await (deps.fetchOverpass ?? fetchOverpass)(buildQuery()), SUGGESTION_CAP, origin);
-      } catch (e) {
-        if (!nearby?.length) throw e;
-        parsed = parseOverpassResponse({ elements: nearby }, SUGGESTION_CAP, origin);
-        degraded = true;
-      }
+    let pending = inflight.get(key);
+    if (!pending) {
+      const started: Promise<Raw> = loadRaw(key, buildQuery, local, deps, origin);
+      pending = started;
+      inflight.set(key, started);
+      const clear = () => {
+        if (inflight.get(key) === started) inflight.delete(key);
+      };
+      started.then(clear, clear);
     }
-    if (!degraded) rawCache.set(key, parsed);
+    ({ parsed, degraded } = await pending);
   }
   if (!enrich) return parsed;
   // Popularity is a bonus: enrichPopularity never throws, but guard anyway so it can never fail the request.

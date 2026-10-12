@@ -172,7 +172,7 @@ describe("TripEditor", () => {
     await waitFor(() => expect(api.suggestions).toHaveBeenCalledWith({ around: [-119.79, 36.74] }, { enrich: false }));
     expect(api.suggestions).toHaveBeenCalledTimes(1);
     await userEvent.click(screen.getByRole("tab", { name: /Suggestions/ }));
-    expect(await screen.findByRole("button", { name: "Accept" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /^Accept/ })).toBeTruthy();
     expect(api.directions).not.toHaveBeenCalled();
   });
 
@@ -185,12 +185,12 @@ describe("TripEditor", () => {
     );
     render(<TripEditor initialTrip={withStops([seed[0]])} />);
     await userEvent.click(screen.getByRole("tab", { name: /Suggestions/ }));
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(5));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Accept/ })).toHaveLength(5));
     await waitFor(() => expect(releases).toHaveLength(2)); // two batches are asked for at once
     await act(async () => releases[1]()); // the later one answering first reveals nothing yet
-    expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(5);
+    expect(screen.getAllByRole("button", { name: /^Accept/ })).toHaveLength(5);
     await act(async () => releases[0]());
-    await waitFor(() => expect(screen.getAllByRole("button", { name: "Accept" })).toHaveLength(12));
+    await waitFor(() => expect(screen.getAllByRole("button", { name: /^Accept/ })).toHaveLength(12));
   });
 
   it("retries the around search by hand after an error", async () => {
@@ -199,7 +199,7 @@ describe("TripEditor", () => {
     render(<TripEditor initialTrip={withStops([seed[0]])} />);
     await userEvent.click(screen.getByRole("tab", { name: /Suggestions/ }));
     await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
-    expect(await screen.findByRole("button", { name: "Accept" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /^Accept/ })).toBeTruthy();
     expect(api.suggestions).toHaveBeenLastCalledWith({ around: [-119.79, 36.74] }, { enrich: false });
   });
 
@@ -212,7 +212,7 @@ describe("TripEditor", () => {
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("km"));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
-    await userEvent.click(await screen.findByRole("button", { name: "Accept" }));
+    await userEvent.click(await screen.findByRole("button", { name: /^Accept/ }));
     expect(api.addStop).toHaveBeenCalledWith("t1", { name: "Tunnel View", lat: 37.7, lng: -119.7, source: "suggested", lightPref: "golden" });
     await userEvent.click(screen.getByRole("tab", { name: "Stops" }));
     expect(screen.getAllByTestId("stop-row")[2].textContent).toContain("Tunnel View");
@@ -573,7 +573,7 @@ describe("TripEditor", () => {
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toContain("km"));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
-    await userEvent.click((await screen.findAllByRole("button", { name: "Accept" }))[0]!);
+    await userEvent.click((await screen.findAllByRole("button", { name: /^Accept/ }))[0]!);
     await waitFor(() => expect(api.directions).toHaveBeenCalledTimes(2));
     expect(screen.getAllByTestId("suggestion-name").map((e) => e.textContent)).toEqual(["Glacier Point"]);
   });

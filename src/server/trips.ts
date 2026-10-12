@@ -14,7 +14,17 @@ function patchData(patch: TripPatch) {
   };
 }
 
+export const MAX_TRIPS_PER_USER = 100;
+
+export class TooManyTripsError extends Error {
+  constructor() {
+    super(`You can have at most ${MAX_TRIPS_PER_USER} trips. Delete one to add another.`);
+    this.name = "TooManyTripsError";
+  }
+}
+
 export async function createTrip(userId: string, input: TripInput): Promise<Trip> {
+  if ((await prisma.trip.count({ where: { userId } })) >= MAX_TRIPS_PER_USER) throw new TooManyTripsError();
   const row = await prisma.trip.create({
     data: {
       userId,
@@ -64,12 +74,16 @@ export async function deleteTrip(
   userId: string,
   tripId: string,
 ): Promise<{ photoUrls: string[] } | null> {
-  const row = await prisma.trip.findFirst({
-    where: { id: tripId, userId },
-    include: { stops: { select: { photoUrl: true } } },
+  // One transaction, so a photo attached between the read and the delete cannot be left behind.
+  const row = await prisma.$transaction(async (tx) => {
+    const found = await tx.trip.findFirst({
+      where: { id: tripId, userId },
+      include: { stops: { select: { photoUrl: true } } },
+    });
+    if (found) await tx.trip.delete({ where: { id: tripId } });
+    return found;
   });
   if (!row) return null;
-  await prisma.trip.delete({ where: { id: tripId } });
   return {
     photoUrls: row.stops.map((s) => s.photoUrl).filter((u): u is string => u !== null),
   };

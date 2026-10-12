@@ -58,7 +58,7 @@ export function ShareControl({ tripId, shareToken, onChange }: Props) {
       </button>
       {open && (
         <div ref={panelRef} id={panelId} role="group" aria-label="Share trip" className={`absolute right-0 top-full z-20 mt-1 w-72 max-w-full space-y-2 p-3 ${card}`}>
-          <p className="text-sm text-muted">Anyone with the link can view this trip (without photos).</p>
+          <p className="text-sm text-muted">Anyone with the link can view this trip, including stop locations, notes and shot lists (without photos).</p>
           {shareToken ? (
             <>
               <input readOnly aria-label="Share link" value={url} onFocus={(e) => e.currentTarget.select()} className={`${inputClass} !mt-0 text-xs`} />

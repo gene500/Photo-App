@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <ul>
         <li><strong>Account:</strong> your email address and a salted hash of your password (never the password itself).</li>
         <li><strong>Your trips:</strong> trip names, dates, stops and their coordinates, notes, shot lists, and the photos you upload to a stop.</li>
-        <li><strong>Share links:</strong> if you create a share link, anyone who has it can see that trip&apos;s stops and notes until you turn the link off.</li>
+        <li><strong>Share links:</strong> if you create a share link, anyone who has it can see that trip&apos;s stops with their exact locations, notes, shot lists and progress, times and light preferences (but not photos) until you turn the link off.</li>
         <li><strong>Settings:</strong> display preferences such as theme, text size and time format.</li>
       </ul>
 

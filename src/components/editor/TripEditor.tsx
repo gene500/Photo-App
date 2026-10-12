@@ -285,16 +285,21 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     );
   }
 
+  const reorderSeq = useRef(0);
+
   /** Resolves true when the new order was saved (false: reverted, error shown). */
   async function reorder(ids: string[]): Promise<boolean> {
+    const seq = ++reorderSeq.current;
     const previousOrderById = new Map(stops.map((s) => [s.id, s.order]));
     // Applied onto the latest state so an edit that landed since this render is never reverted.
     applyOrder(new Map(ids.map((id, order) => [id, order])));
     try {
       const { stops: reordered } = await api.reorderStops(trip.id, ids);
-      applyOrder(new Map(reordered.map((s) => [s.id, s.order])));
+      // A newer drag has been sent since: its answer decides the order, not this one.
+      if (seq === reorderSeq.current) applyOrder(new Map(reordered.map((s) => [s.id, s.order])));
       return true;
     } catch (e) {
+      if (seq !== reorderSeq.current) return false; // superseded: do not revert over the newer order
       applyOrder(previousOrderById);
       setStopsError(errorMessage(e, "Couldn't save the new order"));
       return false;

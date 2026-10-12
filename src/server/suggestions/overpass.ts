@@ -75,6 +75,8 @@ export async function fetchOverpass(query: string, deps: Deps = {}): Promise<unk
     // Overpass reports a query that timed out or ran out of memory as a 200 with a remark and empty or partial elements.
     const remark = (json as { remark?: unknown } | null)?.remark;
     if (typeof remark === "string" && /runtime error/i.test(remark)) throw new OverpassError(`Overpass: ${remark}`);
+    // A 200 that is not an element list is a broken answer, not "no places here": do not let it be cached as empty.
+    if (!Array.isArray((json as { elements?: unknown } | null)?.elements)) throw new OverpassError("Overpass returned an unexpected response");
     return json;
   }
 

@@ -5,6 +5,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const url = process.env.TURSO_DATABASE_URL;
+if (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production") {
+  console.log(`VERCEL_ENV=${process.env.VERCEL_ENV}; skipping Turso migrations (production builds only).`);
+  process.exit(0);
+}
 if (!url) {
   console.log("TURSO_DATABASE_URL not set; skipping Turso migrations.");
   process.exit(0);

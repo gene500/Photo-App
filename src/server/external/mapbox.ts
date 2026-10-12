@@ -45,9 +45,20 @@ async function getJson<T>(url: string, fetchImpl: typeof fetch, unreachable: str
 const DIRECTIONS_TTL_MS = 10 * 60_000;
 const directionsCache = new TtlCache<RouteResult>(DIRECTIONS_TTL_MS, 200);
 
-export function clearDirectionsCache(): void {
+/** Search and click-to-name lookups repeat a lot (typing, re-clicking); each uncached one is a billed Mapbox call. */
+const LOOKUP_TTL_MS = 10 * 60_000;
+const geocodeCache = new TtlCache<Place[]>(LOOKUP_TTL_MS, 300);
+const reverseCache = new TtlCache<Place>(LOOKUP_TTL_MS, 300);
+const matrixCache = new TtlCache<number[][]>(LOOKUP_TTL_MS, 100);
+
+export function clearMapboxCaches(): void {
   directionsCache.clear();
+  geocodeCache.clear();
+  reverseCache.clear();
+  matrixCache.clear();
 }
+
+const isLngLat = (c: unknown): c is LngLat => Array.isArray(c) && c.length >= 2 && Number.isFinite(c[0]) && Number.isFinite(c[1]);
 
 export async function getDirections(coords: LngLat[], fetchImpl: typeof fetch = fetch): Promise<RouteResult> {
   if (isFakeExternal()) return fakeDirections(coords);
@@ -64,6 +75,7 @@ export async function getDirections(coords: LngLat[], fetchImpl: typeof fetch = 
       body?.code === "NoRoute" ? "No driving route found between these points" : "Routing failed. Please try again.",
     );
   }
+  if (!Array.isArray(route.geometry?.coordinates) || !Array.isArray(route.legs)) throw new ExternalServiceError("Routing failed. Please try again.");
   const result: RouteResult = {
     geometry: route.geometry.coordinates,
     legs: route.legs.map((l) => ({ distance: l.distance, duration: l.duration })),
@@ -85,6 +97,8 @@ export async function getDurationMatrix(coords: LngLat[], fetchImpl: typeof fetc
   }
   if (isFakeExternal()) return fakeDurationMatrix(coords);
   const path = coords.map(([lng, lat]) => `${lng.toFixed(6)},${lat.toFixed(6)}`).join(";");
+  const cachedMatrix = matrixCache.get(path);
+  if (cachedMatrix) return cachedMatrix;
   const url =
     `${MAPBOX_BASE}/directions-matrix/v1/mapbox/driving/${path}` +
     `?annotations=duration&access_token=${encodeURIComponent(token())}`;
@@ -94,7 +108,9 @@ export async function getDurationMatrix(coords: LngLat[], fetchImpl: typeof fetc
   if (!ok || body?.code !== "Ok" || !square) {
     throw new ExternalServiceError("Couldn't calculate drive times. Please try again.");
   }
-  return rows.map((row) => row.map((v) => (typeof v === "number" ? v : Infinity)));
+  const matrix = rows.map((row) => row.map((v) => (typeof v === "number" ? v : Infinity)));
+  matrixCache.set(path, matrix);
+  return matrix;
 }
 
 type GeocodeResponse = {
@@ -114,26 +130,38 @@ export async function geocode(query: string, options: GeocodeOptions = {}, fetch
   const proximity = options.proximity
     ? `&proximity=${options.proximity.lng.toFixed(6)},${options.proximity.lat.toFixed(6)}`
     : "";
+  const cacheKey = `${query.toLowerCase()}|${proximity}`;
+  const cached = geocodeCache.get(cacheKey);
+  if (cached) return cached;
   const url =
     `${MAPBOX_BASE}/search/geocode/v6/forward?q=${encodeURIComponent(query)}` +
     `&autocomplete=true&limit=5${proximity}&access_token=${encodeURIComponent(token())}`;
   const { ok, body } = await getJson<GeocodeResponse>(url, fetchImpl, "Couldn't reach the place search service");
   if (!ok || !body?.features) throw new ExternalServiceError("Place search failed. Please try again.");
-  return body.features.map((f) => ({
-    name: clampName(f.properties.full_address || f.properties.name || query),
-    lng: f.geometry.coordinates[0],
-    lat: f.geometry.coordinates[1],
-  }));
+  const places = body.features
+    .filter((f) => f && isLngLat(f.geometry?.coordinates))
+    .map((f) => ({
+      name: clampName(f.properties?.full_address || f.properties?.name || query),
+      lng: f.geometry.coordinates[0],
+      lat: f.geometry.coordinates[1],
+    }));
+  geocodeCache.set(cacheKey, places);
+  return places;
 }
 
 /** Names a clicked spot; the returned coordinates are the clicked ones, not the feature's. */
 export async function reverseGeocode(p: { lat: number; lng: number }, fetchImpl: typeof fetch = fetch): Promise<Place> {
   if (isFakeExternal()) return fakeReverseGeocode(p);
+  const rKey = `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+  const rCached = reverseCache.get(rKey);
+  if (rCached) return rCached;
   const url =
     `${MAPBOX_BASE}/search/geocode/v6/reverse?longitude=${p.lng.toFixed(6)}&latitude=${p.lat.toFixed(6)}` +
     `&limit=1&access_token=${encodeURIComponent(token())}`;
   const { ok, body } = await getJson<GeocodeResponse>(url, fetchImpl, "Couldn't reach the place lookup service");
   if (!ok || !body) throw new ExternalServiceError("Place lookup failed. Please try again.");
   const f = body.features?.[0];
-  return { name: clampName(f?.properties.full_address || f?.properties.name || coordsLabel(p)), lat: p.lat, lng: p.lng };
+  const place = { name: clampName(f?.properties?.full_address || f?.properties?.name || coordsLabel(p)), lat: p.lat, lng: p.lng };
+  reverseCache.set(rKey, place);
+  return place;
 }

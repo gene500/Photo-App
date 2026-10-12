@@ -37,11 +37,11 @@ export function LoginForm() {
       <h1 className="text-2xl font-semibold">Log in</h1>
       <label className="block">
         <span className="text-sm text-muted">Email</span>
-        <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
+        <input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
       </label>
       <label className="block">
         <span className="text-sm text-muted">Password</span>
-        <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
+        <input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
       </label>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       <button type="submit" disabled={pending} className={`${btnPrimary} w-full`}>

@@ -39,11 +39,11 @@ export function SignupForm({ formToken }: { formToken?: string }) {
       <h1 className="text-2xl font-semibold">Create an account</h1>
       <label className="block">
         <span className="text-sm text-muted">Email</span>
-        <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
+        <input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
       </label>
       <label className="block">
         <span className="text-sm text-muted">Password</span>
-        <input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
+        <input type="password" autoComplete="new-password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
       </label>
       <p className="text-xs text-muted">At least 8 characters.</p>
       {/* Honeypot: invisible to people and assistive tech, tempting to bots. */}

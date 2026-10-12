@@ -39,7 +39,7 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
       const top = (el as HTMLElement).offsetTop;
       next.set(id, top);
       const before = tops.current.get(id);
-      if (before !== undefined && before !== top && typeof el.animate === "function" && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      if (before !== undefined && before !== top && typeof el.animate === "function" && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches && document.documentElement.dataset.reduceMotion !== "true") {
         el.animate([{ transform: `translateY(${before - top}px)` }, { transform: "none" }], { duration: 260, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
       }
     }
@@ -92,13 +92,13 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
               </p>
               {weather?.get(s.osmId) && (
                 <p data-testid="suggestion-weather" data-light-quality={weather.get(s.osmId)?.quality ?? undefined} title={weather.get(s.osmId)?.label} className={`text-xs ${weather.get(s.osmId)?.quality === "poor" ? "text-danger" : "text-muted"}`}>
-                  <span role="img" aria-label={weather.get(s.osmId)?.label}>{weather.get(s.osmId)?.text}</span>
+                  <span role="img" aria-label={weather.get(s.osmId)?.label ?? weather.get(s.osmId)?.text}>{weather.get(s.osmId)?.text}</span>
                 </p>
               )}
             </div>
             <div className="flex shrink-0 gap-1">
-              <button type="button" disabled={accepting.has(s.osmId)} onClick={() => void accept(s)} className={btnAccent}>Accept</button>
-              <button type="button" onClick={() => onDismiss(s.osmId)} className={btnGhost}>Dismiss</button>
+              <button type="button" disabled={accepting.has(s.osmId)} onClick={() => void accept(s)} className={btnAccent} aria-label={`Accept ${s.name}`}>Accept</button>
+              <button type="button" onClick={() => onDismiss(s.osmId)} className={btnGhost} aria-label={`Dismiss ${s.name}`}>Dismiss</button>
             </div>
           </li>
         ))}

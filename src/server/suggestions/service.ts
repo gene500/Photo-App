@@ -6,7 +6,7 @@ import { AROUND_RADIUS_KM, buildCorridor, buildOverpassAroundQuery, buildOverpas
 import { clearCellCache, localPlacesAround, localPlacesInRing } from "./local-places";
 import { fetchOverpass, OverpassError } from "./overpass";
 import { parseOverpassResponse, SUGGESTION_CAP } from "./parse";
-import { enrichPopularity, resetSharedCounter } from "./popularity";
+import { enrichPopularity, POPULARITY_MAX_CANDIDATES, resetSharedCounter } from "./popularity";
 
 type LngLatLiteral = { lat: number; lng: number };
 
@@ -67,7 +67,10 @@ async function runSearch(key: string, buildQuery: () => string, local: () => Pro
   // Popularity is a bonus: enrichPopularity never throws, but guard anyway so it can never fail the request.
   const base = parsed;
   const suggestions = await enrichPopularity(base, { fetchImpl: deps.fetchImpl }).catch(() => base);
-  if (!degraded) cache.set(key, suggestions);
+  // Cache only a reasonably complete enrichment: a half-finished one would be served for the whole TTL.
+  const head = Math.min(suggestions.length, POPULARITY_MAX_CANDIDATES);
+  const counted = suggestions.filter((s) => s.popularity !== undefined).length;
+  if (!degraded && (head === 0 || counted * 2 >= head)) cache.set(key, suggestions);
   return suggestions;
 }
 

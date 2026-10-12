@@ -1,4 +1,5 @@
 import { handle, HttpError, requireUserId } from "@/server/http";
+import { enforceLimit } from "@/server/rate-limit";
 import { isValidPhotoName, PHOTO_URL_PREFIX, readPhoto } from "@/server/photos";
 import { findStopByPhotoUrl } from "@/server/stops";
 
@@ -6,6 +7,7 @@ type Ctx = { params: Promise<{ name: string }> };
 
 export const GET = handle(async (_req: Request, { params }: Ctx) => {
   const userId = await requireUserId();
+  enforceLimit("photo-read", userId);
   const { name } = await params;
   if (!isValidPhotoName(name)) throw new HttpError(404, "Not found");
   if (!(await findStopByPhotoUrl(userId, `${PHOTO_URL_PREFIX}${name}`))) {

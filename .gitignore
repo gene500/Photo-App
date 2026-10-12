@@ -68,3 +68,7 @@ next-env.d.ts
 
 # generated local map data (rebuild with scripts/build-places.sh)
 /data/
+
+# third-party skill caches
+__pycache__/
+*.pyc

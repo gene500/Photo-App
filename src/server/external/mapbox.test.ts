@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearDirectionsCache, ExternalServiceError, geocode, getDirections, getDurationMatrix, reverseGeocode } from "./mapbox";
+import { clearMapboxCaches, ExternalServiceError, geocode, getDirections, getDurationMatrix, reverseGeocode } from "./mapbox";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const okRoute = {
@@ -16,7 +16,7 @@ describe("mapbox", () => {
   beforeEach(() => {
     process.env.MAPBOX_TOKEN = "test-token";
     delete process.env.EXTERNAL_APIS_FAKE;
-    clearDirectionsCache();
+    clearMapboxCaches();
   });
   afterEach(() => {
     delete process.env.MAPBOX_TOKEN;
@@ -70,6 +70,7 @@ describe("mapbox", () => {
   it("falls back to the name, then coordinates, when full_address is empty", async () => {
     const named = vi.fn(async () => json({ features: [{ geometry: { coordinates: [0, 0] }, properties: { name: "Tunnel View", full_address: "" } }] }));
     expect((await reverseGeocode({ lat: 37.5, lng: -119.5 }, named)).name).toBe("Tunnel View");
+    clearMapboxCaches();
     const bare = vi.fn(async () => json({ features: [{ geometry: { coordinates: [0, 0] }, properties: { full_address: "" } }] }));
     expect((await reverseGeocode({ lat: 37.5, lng: -119.5 }, bare)).name).toBe("37.5000, -119.5000");
   });
@@ -170,5 +171,38 @@ describe("mapbox", () => {
       expect(await getDurationMatrix([[0, 0], [0, 1]], fetchImpl)).toHaveLength(2);
       expect(fetchImpl).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("mapbox caches and shape guards", () => {
+  beforeEach(() => {
+    process.env.MAPBOX_TOKEN = "t";
+    delete process.env.EXTERNAL_APIS_FAKE;
+    clearMapboxCaches();
+  });
+  const json = (body: unknown) => vi.fn(async () => new Response(JSON.stringify(body)));
+
+  it("serves a repeated search from memory", async () => {
+    const f = json({ features: [{ geometry: { coordinates: [1, 2] }, properties: { name: "A" } }] });
+    await geocode("Yosemite", {}, f as unknown as typeof fetch);
+    await geocode("yosemite", {}, f as unknown as typeof fetch);
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+  it("serves a repeated reverse lookup and matrix from memory", async () => {
+    const r = json({ features: [{ geometry: { coordinates: [1, 2] }, properties: { name: "A" } }] });
+    await reverseGeocode({ lat: 1, lng: 2 }, r as unknown as typeof fetch);
+    await reverseGeocode({ lat: 1, lng: 2 }, r as unknown as typeof fetch);
+    expect(r).toHaveBeenCalledTimes(1);
+    const m = json({ code: "Ok", durations: [[0, 5], [5, 0]] });
+    const pts: [number, number][] = [[1, 2], [3, 4]];
+    await getDurationMatrix(pts, m as unknown as typeof fetch);
+    await getDurationMatrix(pts, m as unknown as typeof fetch);
+    expect(m).toHaveBeenCalledTimes(1);
+  });
+  it("skips malformed features and turns a malformed route into a service error", async () => {
+    const f = json({ features: [null, { geometry: {}, properties: {} }, { geometry: { coordinates: [1, 2] }, properties: { name: "ok" } }] });
+    expect(await geocode("x y", {}, f as unknown as typeof fetch)).toHaveLength(1);
+    const d = json({ code: "Ok", routes: [{ geometry: null, legs: null, distance: 1, duration: 1 }] });
+    await expect(getDirections([[1, 2], [3, 4]], d as unknown as typeof fetch)).rejects.toBeInstanceOf(ExternalServiceError);
   });
 });

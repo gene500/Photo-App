@@ -16,7 +16,7 @@ export const TYPICAL_CACHE_MAX = 1000;
 const WET_DAY_MM = 1;
 
 type Point = { lat: number; lng: number };
-export type TypicalProfile = { utcOffsetSeconds: number; cloud: (number | null)[]; temp: (number | null)[]; wetDayPct: number };
+export type TypicalProfile = { utcOffsetSeconds: number; cloud: (number | null)[]; temp: (number | null)[]; wetDayPct: number; thin?: boolean };
 
 const round2 = (n: number) => n.toFixed(2);
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -48,7 +48,7 @@ export function buildProfile(responses: unknown[]): TypicalProfile | null {
     const [c, p, t] = [col("cloud_cover"), col("precipitation"), col("temperature_2m")];
     const perDay = new Map<string, number>();
     h.time.forEach((time, i) => {
-      if (typeof time !== "string") return;
+      if (typeof time !== "string" || time[10] !== "T") return;
       const hour = Number(time.slice(11, 13));
       if (!Number.isInteger(hour) || hour < 0 || hour > 23) return;
       const cv = num(c[i]);
@@ -112,7 +112,12 @@ export async function fetchProfiles(points: Point[], date: string, today: string
       }
     }),
   );
-  return points.map((_, j) => buildProfile(perYear.flatMap((list) => (list ? [list[j]] : []))));
+  return points.map((_, j) => {
+    const profile = buildProfile(perYear.flatMap((list) => (list ? [list[j]] : [])));
+    // One surviving year is a thin average: flag it so it is only cached briefly.
+    if (profile && perYear.filter((list) => list).length < 2) profile.thin = true;
+    return profile;
+  });
 }
 
 /** Profile lookup with a bounded 24 h cache (keyed by ~1 km and calendar day) and in-flight de-duplication. */
@@ -149,7 +154,7 @@ export function createTypicalLookup(opts: { fetchImpl?: typeof fetch; now?: () =
         const p = batch
           .then((profiles) => {
             const profile = profiles[j] ?? null;
-            store.set(key, { profile, expiresAt: now() + (profile ? TYPICAL_TTL_MS : TYPICAL_FAILURE_TTL_MS) });
+            store.set(key, { profile, expiresAt: now() + (profile && !profile.thin ? TYPICAL_TTL_MS : TYPICAL_FAILURE_TTL_MS) });
             while (store.size > TYPICAL_CACHE_MAX) store.delete(store.keys().next().value as string);
             return profile;
           })

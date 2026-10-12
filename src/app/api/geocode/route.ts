@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ExternalServiceError, geocode } from "@/server/external/mapbox";
 import { handle, HttpError, requireUserId } from "@/server/http";
+import { enforceLimit } from "@/server/rate-limit";
 
 const querySchema = z.string().trim().min(2, "Type at least 2 characters").max(200);
 const proximitySchema = z
@@ -13,7 +14,7 @@ const proximitySchema = z
   .pipe(z.object({ lng: z.number().min(-180).max(180), lat: z.number().min(-90).max(90) }));
 
 export const GET = handle(async (req: Request) => {
-  await requireUserId();
+  enforceLimit("geocode", await requireUserId());
   const params = new URL(req.url).searchParams;
   const q = querySchema.parse(params.get("q") ?? "");
   const rawProximity = params.get("proximity");

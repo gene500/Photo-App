@@ -101,20 +101,18 @@ export function useSuggestionWeather(spots: readonly Spot[], plannedDate: string
           const part = group.filter((g) => g.date === date);
           for (const g of part) requested.current.add(g.fkey);
           const list = await loadForecastBatch(part.map((g) => g.spot), date);
-          if (cancelled) {
-            for (const g of part) requested.current.delete(g.fkey); // not shown: ask again next time
-            return;
-          }
           // A failed answer is not final: forget it so the next change to the list asks again.
           part.forEach((g, j) => {
             const f = list[j];
             if (!f || (!f.available && f.reason === "unavailable")) requested.current.delete(g.fkey);
           });
+          // Results are keyed by place and date, so they stay right even if the list changed meanwhile: keep them.
           setForecasts((prev) => {
             const next = new Map(prev);
             part.forEach((g, j) => next.set(g.fkey, list[j] ?? null));
             return next;
           });
+          if (cancelled) return;
         }
       }
     })();

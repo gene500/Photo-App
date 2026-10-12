@@ -77,13 +77,18 @@ export async function readPhoto(
   }
 }
 
-export async function deletePhotoFile(photoUrl: string | null | undefined): Promise<void> {
-  if (!photoUrl?.startsWith(PHOTO_URL_PREFIX)) return;
+/** Removes a stored photo. Resolves false (and logs the file name, never its owner) when the file could not be removed. */
+export async function deletePhotoFile(photoUrl: string | null | undefined): Promise<boolean> {
+  if (!photoUrl?.startsWith(PHOTO_URL_PREFIX)) return true;
   const name = photoUrl.slice(PHOTO_URL_PREFIX.length);
-  if (!isValidPhotoName(name)) return;
-  if (blobEnabled()) {
-    await del(blobPath(name)).catch(() => undefined);
-    return;
+  if (!isValidPhotoName(name)) return true;
+  try {
+    if (blobEnabled()) await del(blobPath(name));
+    else await unlink(path.join(uploadDir(), name));
+    return true;
+  } catch (e) {
+    if ((e as { code?: unknown }).code === "ENOENT") return true; // already gone
+    console.error(`photo ${name} could not be removed`);
+    return false;
   }
-  await unlink(path.join(uploadDir(), name)).catch(() => undefined);
 }

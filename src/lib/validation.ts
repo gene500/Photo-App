@@ -11,9 +11,15 @@ export const MAX_DWELL_MINUTES = 480;
 const lat = z.number().min(-90).max(90);
 const lng = z.number().min(-180).max(180);
 
+const inYearRange = (ms: number) => {
+  const y = new Date(ms).getUTCFullYear();
+  return y >= 1970 && y <= 2200;
+};
+
 export const dateOnlySchema = z
   .string()
-  .refine(isDateOnly, "Planned date must be a valid YYYY-MM-DD date");
+  .refine(isDateOnly, "Planned date must be a valid YYYY-MM-DD date")
+  .refine((v) => inYearRange(Date.parse(`${v}T00:00:00Z`)), "Date must be between 1970 and 2200");
 
 export const tripInputSchema = z.object({
   name: z.string().trim().min(1, "Trip name is required").max(120),
@@ -33,7 +39,7 @@ export const lightPrefSchema = z.enum(["any", "sunrise", "golden", "sunset"]);
 export const dwellMinutesSchema = z.number().int().min(0).max(MAX_DWELL_MINUTES);
 
 export const tripPatchSchema = tripInputSchema
-  .extend({ departAt: z.iso.datetime({ offset: true }).nullable() })
+  .extend({ departAt: z.iso.datetime({ offset: true }).refine((v) => inYearRange(Date.parse(v)), "Date must be between 1970 and 2200").nullable() })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "Nothing to update");
 export type TripPatch = z.infer<typeof tripPatchSchema>;

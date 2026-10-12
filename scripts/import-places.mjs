@@ -1,6 +1,6 @@
 // Loads the local copy of OpenStreetMap photo spots into the `Place` table.
 //
-//   node scripts/import-places.mjs <dir-of-.jsonl-files> [--replace]
+//   node scripts/import-places.mjs <dir-of-.jsonl-files> [--replace [--yes-remote]]
 //
 // Each line of a .jsonl file is ["node"|"way", osmId, name, "viewpoint"|"peak"|"attraction", lat, lng].
 // Writes to Turso when TURSO_DATABASE_URL (and TURSO_AUTH_TOKEN) are set, otherwise to DATABASE_URL (default file:./dev.db).
@@ -20,7 +20,13 @@ const url = process.env.TURSO_DATABASE_URL ?? process.env.DATABASE_URL ?? "file:
 const db = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
 console.log(`Importing into ${url.startsWith("libsql:") ? "Turso" : url}`);
 
-if (process.argv.includes("--replace")) await db.execute("DELETE FROM Place");
+if (process.argv.includes("--replace")) {
+  if (url.startsWith("libsql:") && !process.argv.includes("--yes-remote")) {
+    console.error("--replace on a remote (Turso) database wipes its Place table; add --yes-remote to confirm.");
+    process.exit(1);
+  }
+  await db.execute("DELETE FROM Place");
+}
 
 const KINDS = new Set(["viewpoint", "peak", "attraction"]);
 const BATCH = 400;

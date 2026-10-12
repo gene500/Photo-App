@@ -42,6 +42,13 @@ describe("photos", () => {
   it("refuses path traversal and unknown names", async () => {
     expect(isValidPhotoName("../../etc/passwd")).toBe(false);
     expect(await readPhoto("../package.json")).toBeNull();
-    await expect(deletePhotoFile("/api/uploads/../package.json")).resolves.toBeUndefined();
+    await expect(deletePhotoFile("/api/uploads/../package.json")).resolves.toBe(true);
+  });
+});
+
+describe("deletePhotoFile result", () => {
+  it("reports true for a missing file and for non-photo urls", async () => {
+    await expect(deletePhotoFile(null)).resolves.toBe(true);
+    await expect(deletePhotoFile("/api/uploads/00000000-0000-0000-0000-000000000000.jpg")).resolves.toBe(true);
   });
 });

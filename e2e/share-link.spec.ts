@@ -23,7 +23,7 @@ test("share a trip read-only, open it logged out, revoke it", async ({ page, bro
   expect(names).toHaveLength(2);
 
   await page.getByRole("button", { name: "Share", exact: true }).click();
-  await expect(page.getByText("Anyone with the link can view this trip (without photos).")).toBeVisible();
+  await expect(page.getByText("Anyone with the link can view this trip, including stop locations, notes and shot lists (without photos).")).toBeVisible();
   await page.getByRole("button", { name: "Create link" }).click();
   const url = await page.getByLabel("Share link").inputValue();
   expect(url).toMatch(/\/s\/[A-Za-z0-9_-]{43}$/);

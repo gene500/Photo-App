@@ -31,18 +31,22 @@ type OverpassElement = {
 type Candidate = Suggestion & { named: boolean; dist: number };
 
 function toCandidate(el: OverpassElement): Candidate | null {
-  const kind = classifyKind(el.tags ?? {});
+  if (!el || typeof el !== "object") return null;
+  const rawTags = el.tags && typeof el.tags === "object" ? el.tags : {};
+  const tags: Record<string, string> = {};
+  for (const [k, v] of Object.entries(rawTags)) if (typeof v === "string") tags[k] = v;
+  const kind = classifyKind(tags);
   const lat = el.lat ?? el.center?.lat;
   const lng = el.lon ?? el.center?.lon;
-  if (!kind || !el.type || typeof el.id !== "number" || lat === undefined || lng === undefined) {
+  if (!kind || typeof el.type !== "string" || typeof el.id !== "number" || !Number.isFinite(lat) || !Number.isFinite(lng)) {
     return null;
   }
-  const name = el.tags?.name?.trim();
+  const name = tags.name?.trim();
   return {
     osmId: `${el.type}/${el.id}`,
     name: name || DEFAULT_NAME[kind],
-    lat,
-    lng,
+    lat: lat as number,
+    lng: lng as number,
     kind,
     named: Boolean(name),
     dist: 0,

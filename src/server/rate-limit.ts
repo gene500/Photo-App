@@ -24,15 +24,19 @@ export const POLICIES = {
   "login-ip": { limit: 30, windowMs: 15 * MINUTE, message: "Too many login attempts. Try again later." },
   /** Counts failed logins only, so an attacker cannot lock a victim out by merely submitting requests that succeed. */
   "login-email-failures": { limit: 8, windowMs: 15 * MINUTE, message: "Too many login attempts. Try again later." },
+  geocode: { limit: 60, windowMs: MINUTE, message: "Too many searches. Slow down a little." },
+  "reverse-geocode": { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
+  "trip-write": { limit: 60, windowMs: MINUTE, message: "Too many changes. Slow down a little." },
+  "photo-read": { limit: 300, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   suggestions: { limit: 30, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
-  popularity: { limit: 120, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
-  weather: { limit: 120, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
-  "weather-batch": { limit: 20, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
+  popularity: { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
+  weather: { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
+  "weather-batch": { limit: 10, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   "account-delete": { limit: 5, windowMs: 15 * MINUTE, message: "Too many attempts. Try again later." },
   directions: { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
-  optimize: { limit: 20, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
+  optimize: { limit: 10, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   "photo-upload": { limit: 20, windowMs: 10 * MINUTE, message: "Too many uploads. Try again in a few minutes." },
-  "place-photo": { limit: 120, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
+  "place-photo": { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
 } as const;
 export type PolicyName = keyof typeof POLICIES;
 
@@ -78,7 +82,9 @@ export function hit(name: PolicyName, key: string, now = Date.now()): LimitResul
 /** Whether the next hit would be allowed, without counting it. */
 export function isBlocked(name: PolicyName, key: string, now = Date.now()): LimitResult {
   if (disabled()) return { ok: true };
-  const b = slot(name, key, now);
+  // Read-only: looking up a key must not create a bucket (an attacker submitting endless emails would fill the map).
+  const b = buckets.get(`${name}:${key}`);
+  if (!b || b.resetAt <= now) return { ok: true };
   return b.count >= POLICIES[name].limit ? { ok: false, retryAfter: Math.max(1, Math.ceil((b.resetAt - now) / 1000)) } : { ok: true };
 }
 

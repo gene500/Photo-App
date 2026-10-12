@@ -21,8 +21,8 @@ describe("SuggestionsPanel", () => {
     const onDismiss = vi.fn();
     render(<SuggestionsPanel {...base} status="done" suggestions={[s]} onAccept={onAccept} onDismiss={onDismiss} />);
     expect(screen.getByTestId("suggestion-name").textContent).toBe("Tunnel View");
-    await userEvent.click(screen.getByRole("button", { name: "Accept" }));
-    await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Accept/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^Dismiss/ }));
     expect(onAccept).toHaveBeenCalledWith(s);
     expect(onDismiss).toHaveBeenCalledWith("node/1");
   });
@@ -71,11 +71,11 @@ describe("SuggestionsPanel", () => {
     let finish!: () => void;
     const onAccept = vi.fn(() => new Promise<void>((r) => { finish = r; }));
     render(<SuggestionsPanel {...base} status="done" suggestions={[s]} onAccept={onAccept} />);
-    const accept = screen.getByRole("button", { name: "Accept" });
+    const accept = screen.getByRole("button", { name: /^Accept/ });
     await userEvent.dblClick(accept);
     expect(onAccept).toHaveBeenCalledTimes(1);
     expect((accept as HTMLButtonElement).disabled).toBe(true);
     await act(async () => { finish(); });
-    expect((screen.getByRole("button", { name: "Accept" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^Accept/ }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

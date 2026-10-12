@@ -18,7 +18,7 @@ describe("ShareControl", () => {
     render(<ShareControl tripId="t1" shareToken={null} onChange={onChange} />);
     expect(screen.queryByText(/Anyone with the link/)).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Share" }));
-    expect(screen.getByText("Anyone with the link can view this trip (without photos).")).toBeTruthy();
+    expect(screen.getByText("Anyone with the link can view this trip, including stop locations, notes and shot lists (without photos).")).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Create link" }));
     expect(api.createShare).toHaveBeenCalledWith("t1");
     expect(onChange).toHaveBeenCalledWith(TOKEN);

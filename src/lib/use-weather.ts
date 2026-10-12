@@ -60,6 +60,8 @@ export function useWeatherLine(lat: number, lng: number, arrival: Date | null, p
 
 /** Suggestion weather is requested for this many places at a time, from the top of the list down. */
 export const SUGGESTION_WEATHER_GROUP = 5;
+/** Groups requested at once (well inside the 10 requests/minute the batch endpoint allows for a full 40-place list). */
+export const SUGGESTION_WEATHER_PARALLEL = 2;
 
 type Spot = { osmId: string; lat: number; lng: number };
 
@@ -94,28 +96,33 @@ export function useSuggestionWeather(spots: readonly Spot[], plannedDate: string
       if (!requested.current.has(fkey) && !pending.some((p) => p.fkey === fkey)) pending.push({ fkey, date: t.date, spot: t.spot });
     }
     let cancelled = false;
-    void (async () => {
-      for (let i = 0; i < pending.length && !cancelled; i += SUGGESTION_WEATHER_GROUP) {
-        const group = pending.slice(i, i + SUGGESTION_WEATHER_GROUP);
-        for (const date of new Set(group.map((g) => g.date))) {
-          const part = group.filter((g) => g.date === date);
-          for (const g of part) requested.current.add(g.fkey);
-          const list = await loadForecastBatch(part.map((g) => g.spot), date);
-          // A failed answer is not final: forget it so the next change to the list asks again.
-          part.forEach((g, j) => {
-            const f = list[j];
-            if (!f || (!f.available && f.reason === "unavailable")) requested.current.delete(g.fkey);
-          });
-          // Results are keyed by place and date, so they stay right even if the list changed meanwhile: keep them.
-          setForecasts((prev) => {
-            const next = new Map(prev);
-            part.forEach((g, j) => next.set(g.fkey, list[j] ?? null));
-            return next;
-          });
-          if (cancelled) return;
-        }
+    const groups: typeof pending[] = [];
+    for (let i = 0; i < pending.length; i += SUGGESTION_WEATHER_GROUP) groups.push(pending.slice(i, i + SUGGESTION_WEATHER_GROUP));
+    const loadGroup = async (group: typeof pending) => {
+      for (const date of new Set(group.map((g) => g.date))) {
+        if (cancelled) return;
+        const part = group.filter((g) => g.date === date);
+        for (const g of part) requested.current.add(g.fkey);
+        const list = await loadForecastBatch(part.map((g) => g.spot), date);
+        // A failed answer is not final: forget it so the next change to the list asks again.
+        part.forEach((g, j) => {
+          const f = list[j];
+          if (!f || (!f.available && f.reason === "unavailable")) requested.current.delete(g.fkey);
+        });
+        // Results are keyed by place and date, so they stay right even if the list changed meanwhile: keep them.
+        setForecasts((prev) => {
+          const next = new Map(prev);
+          part.forEach((g, j) => next.set(g.fkey, list[j] ?? null));
+          return next;
+        });
       }
-    })();
+    };
+    // Groups start strictly top-down, but SUGGESTION_WEATHER_PARALLEL of them are in flight, so one slow answer does not stall the rest.
+    let nextGroup = 0;
+    const worker = async () => {
+      while (!cancelled && nextGroup < groups.length) await loadGroup(groups[nextGroup++]);
+    };
+    for (let w = 0; w < SUGGESTION_WEATHER_PARALLEL; w++) void worker();
     return () => {
       cancelled = true;
     };

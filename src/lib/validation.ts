@@ -164,3 +164,5 @@ export const weatherBatchSchema = z.object({
   date: dateOnlySchema,
   points: z.array(z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) })).min(1).max(WEATHER_BATCH_MAX),
 });
+
+export const deleteAccountSchema = z.object({ password: z.string().min(1).max(200) });

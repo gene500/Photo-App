@@ -80,3 +80,16 @@ export async function changePassword(userId: string, currentPassword: string, ne
   versions.delete(userId);
   return true;
 }
+
+/**
+ * Permanently deletes the account after checking the password. Trips and stops go with it (cascade); the stops'
+ * photo URLs are returned so the caller can remove the files. null = wrong password or no such account.
+ */
+export async function deleteAccount(userId: string, password: string): Promise<{ photoUrls: string[] } | null> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || !(await bcrypt.compare(password, user.passwordHash))) return null;
+  const stops = await prisma.stop.findMany({ where: { trip: { userId } }, select: { photoUrl: true } });
+  await prisma.user.delete({ where: { id: userId } });
+  versions.delete(userId);
+  return { photoUrls: stops.map((s) => s.photoUrl).filter((u): u is string => u !== null) };
+}

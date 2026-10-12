@@ -246,8 +246,9 @@ linked from sign-up, log-in and Settings. They describe what is actually stored
 and which providers receive data; update them (and their date in
 `src/components/legal/LegalPage.tsx`) when that changes. They have not had
 legal review, and contact goes through the GitHub issues link in `CONTACT_URL`;
-replace it with a proper contact address and add self-serve account deletion
-before relying on them.
+replace it with a proper contact address before relying on them.
+Account deletion is `DELETE /api/account` (password-confirmed, 5 tries per 15
+minutes), reachable from Settings.
 
 ## 6. How best time is computed
 

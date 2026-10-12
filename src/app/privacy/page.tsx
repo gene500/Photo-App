@@ -37,7 +37,7 @@ export default function PrivacyPage() {
       <p>Passwords are hashed, traffic uses HTTPS, and access to a trip requires being its owner or having its share link. No system is perfectly secure, so use a unique password. &quot;Sign out on all devices&quot; in Settings ends every session.</p>
 
       <h2>Retention and deletion</h2>
-      <p>We keep your data while your account exists. To have your account and its trips and photos deleted, or to get a copy of your data, contact us using the link below. Deleting an individual trip or photo in the app removes it from our database.</p>
+      <p>We keep your data while your account exists. You can delete your account yourself in Settings (&ldquo;Delete account&rdquo;, confirmed with your password); this permanently removes your account, trips, stops and uploaded photos. To get a copy of your data, contact us using the link below. Deleting an individual trip or photo in the app removes it too. Backups kept by our hosting providers may take a short time to expire.</p>
 
       <h2>Children</h2>
       <p>The service is not directed to children under 13 and we do not knowingly collect their data.</p>

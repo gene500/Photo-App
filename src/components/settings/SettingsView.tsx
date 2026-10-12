@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useId, useState, type ReactNode } from "react";
 import { LegalLinks } from "@/components/legal/LegalPage";
-import { SignOutButton, SignOutEverywhereButton } from "@/components/SignOutButton";
+import { DeleteAccountButton, SignOutButton, SignOutEverywhereButton } from "@/components/SignOutButton";
 import { btnSecondary, card, inputClass } from "@/components/ui/styles";
 import { clearAllCopies } from "@/lib/offline-store";
 import { MAX_DWELL_MINUTES } from "@/lib/validation";
@@ -164,6 +164,7 @@ export function SettingsView({ email }: { email: string | null }) {
           <SignOutEverywhereButton className={btnSecondary} />
           <p className="mt-2 text-xs text-muted">Ends every session on every device, including this one. Use it if you lost a phone or signed in on a shared computer.</p>
         </div>
+        <div><DeleteAccountButton className={btnSecondary} /></div>
       </Section>
 
       <div>

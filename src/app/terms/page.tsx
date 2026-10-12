@@ -39,7 +39,7 @@ export default function TermsPage() {
       <p>To the fullest extent the law allows, the service is provided without warranties of any kind, and we are not liable for indirect or consequential losses, lost data, missed shots, travel costs, or any injury or loss arising from use of the service. Keep your own copy of anything important. Nothing here limits liability that cannot be limited by law.</p>
 
       <h2>Ending</h2>
-      <p>You can stop using the service at any time and ask for your account to be deleted (see the Privacy Policy). We may end or change the service with or without notice.</p>
+      <p>You can stop using the service at any time and delete your account in Settings. We may end or change the service with or without notice.</p>
 
       <h2>Changes</h2>
       <p>We may update these terms; continuing to use the service after a change means you accept it. The date above shows the latest version.</p>

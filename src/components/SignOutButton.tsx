@@ -46,3 +46,50 @@ export function SignOutButton() {
     </button>
   );
 }
+
+/** Permanent account deletion: asks for the password, then wipes this device's offline copies and signs out. */
+export function DeleteAccountButton({ className }: { className?: string }) {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function run() {
+    setPending(true);
+    setError(null);
+    try {
+      await api.deleteAccount(password);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't delete the account");
+      setPending(false);
+      return;
+    }
+    disableOfflineSaving();
+    clearAllCopies();
+    void signOut({ callbackUrl: "/login" });
+  }
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className={className}>
+        Delete account…
+      </button>
+    );
+  }
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); void run(); }} className="space-y-2">
+      <p className="text-xs text-muted">This permanently deletes your account, all your trips, stops and photos. It cannot be undone. Enter your password to confirm.</p>
+      <label className="block text-sm">
+        <span className="text-muted">Password</span>
+        <input type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 block w-full max-w-xs rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+      </label>
+      <div className="flex gap-2">
+        <button type="submit" disabled={pending || password === ""} className="inline-flex min-h-9 items-center rounded-lg bg-danger px-3 text-sm text-white disabled:opacity-50">
+          {pending ? "Deleting…" : "Delete my account"}
+        </button>
+        <button type="button" disabled={pending} onClick={() => { setOpen(false); setPassword(""); setError(null); }} className={className}>
+          Cancel
+        </button>
+      </div>
+      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+    </form>
+  );
+}

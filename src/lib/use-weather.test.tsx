@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WeatherForecast } from "./types";
 
@@ -118,5 +118,29 @@ describe("useSuggestionWeather", () => {
     expect(calls.map((c) => c.length)).toEqual([5, 5, 2]);
     expect(calls[0][0]).toBe(30);
     expect(calls[1][0]).toBe(32.5);
+  });
+
+  it("has at most two groups in flight and starts them strictly top-down", async () => {
+    const { loadForecastBatch } = await import("./weather-cache");
+    const batch = vi.mocked(loadForecastBatch);
+    const started: number[] = [];
+    const releases: Array<() => void> = [];
+    batch.mockImplementation(
+      (pts) =>
+        new Promise((resolve) => {
+          started.push(pts[0].lat);
+          releases.push(() => resolve(pts.map(() => null)));
+        }),
+    );
+    const { useSuggestionWeather } = await import("./use-weather");
+    const date = dateOf(day(2));
+    const spots = Array.from({ length: 15 }, (_, i) => ({ osmId: `p/${i}`, lat: 30 + i * 0.5, lng: -100 }));
+    renderHook(() => useSuggestionWeather(spots, date, true));
+    await waitFor(() => expect(started).toHaveLength(2));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(started).toEqual([30, 32.5]); // third group waits for a free slot
+    await act(async () => releases[1]());
+    await waitFor(() => expect(started).toHaveLength(3));
+    expect(started[2]).toBe(35);
   });
 });

@@ -17,10 +17,10 @@ export function rankSuggestions(items: Suggestion[]): Suggestion[] {
 }
 
 /** Batches in flight at once; their results are still delivered in order so the list reveals chunk by chunk. */
-export const POPULARITY_PARALLEL = 2;
+export const POPULARITY_PARALLEL = 4;
 
 /**
- * Looks up popularity for suggestions that lack it, 5 at a time (one request per batch, two requests in flight at once), calling
+ * Looks up popularity for suggestions that lack it, 5 at a time (one request per batch, four requests in flight at once), calling
  * `onBatch` after each in order (with the counts found, possibly none) so the list can be re-ranked and the next chunk
  * revealed. `onDone` follows the last batch. Returns a cancel function. A failed batch is skipped: popularity is only a ranking bonus.
  */
@@ -51,7 +51,7 @@ export function loadPopularityInBatches(items: readonly Suggestion[], onBatch: (
     for (let i = 0; i < batches.length && !cancelled; i++) {
       const found = await started[i];
       if (cancelled) return;
-      start(i + POPULARITY_PARALLEL); // keep two requests going while this batch is shown
+      start(i + POPULARITY_PARALLEL); // keep the window of requests full while this batch is shown
       onBatch(found ?? new Map());
     }
     if (!cancelled) onDone?.();

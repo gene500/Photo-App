@@ -12,12 +12,15 @@ export const POST = handle(async (req: Request) => {
   if (isFakeExternal()) return Response.json({ counts: places.map((_, i) => (i * 7) % 50) });
   const count = sharedCounter();
   const counts = await Promise.all(
-    places.map((p) =>
-      Promise.race([
+    places.map((p) => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      return Promise.race([
         count({ osmId: "", name: "", kind: "viewpoint", lat: p.lat, lng: p.lng }, fetch).catch(() => undefined),
-        new Promise<undefined>((r) => setTimeout(() => r(undefined), POPULARITY_TIMEOUT_MS)),
-      ]).then((n) => (typeof n === "number" && Number.isFinite(n) && n >= 0 ? n : null)),
-    ),
+        new Promise<undefined>((r) => { timer = setTimeout(() => r(undefined), POPULARITY_TIMEOUT_MS); }),
+      ])
+        .finally(() => clearTimeout(timer))
+        .then((n) => (typeof n === "number" && Number.isFinite(n) && n >= 0 ? n : null));
+    }),
   );
   return Response.json({ counts });
 });

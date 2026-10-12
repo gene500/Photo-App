@@ -63,10 +63,11 @@ export function prefetchPlacePhotos(places: readonly Place[], opts: { concurrenc
     while (!cancelled && next < queue.length) {
       const place = queue[next++];
       const photo = await loadPlacePhoto(place);
-      if (photo && !cancelled) await preloadImage(photo.url);
+      // Not awaited: the next lookup must not wait for this image to download.
+      if (photo && !cancelled) void preloadImage(photo.url);
     }
   }
-  for (let i = 0; i < (opts.concurrency ?? 4); i++) void worker();
+  for (let i = 0; i < (opts.concurrency ?? 6); i++) void worker();
   return () => {
     cancelled = true;
   };

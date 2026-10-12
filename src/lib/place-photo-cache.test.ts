@@ -91,4 +91,18 @@ describe("prefetchPlacePhotos", () => {
     await new Promise((r) => setTimeout(r, 60));
     expect(placePhoto.mock.calls.length).toBeLessThanOrEqual(2);
   });
+
+  it("does not wait for an image download before looking up the next place", async () => {
+    const OriginalImage = globalThis.Image;
+    // An image that never finishes loading.
+    globalThis.Image = class { onload = null; onerror = null; referrerPolicy = ""; set src(_: string) {} } as unknown as typeof Image;
+    try {
+      placePhoto.mockImplementation(() => Promise.resolve({ photo }));
+      const places = Array.from({ length: 4 }, (_, i) => ({ key: `i/${i}`, name: `P${i}`, lat: i, lng: i }));
+      prefetchPlacePhotos(places, { concurrency: 1 });
+      await vi.waitFor(() => expect(placePhoto).toHaveBeenCalledTimes(4));
+    } finally {
+      globalThis.Image = OriginalImage;
+    }
+  });
 });

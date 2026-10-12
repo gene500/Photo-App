@@ -1,3 +1,4 @@
+import { enforceLimit } from "@/server/rate-limit";
 import { tripPatchSchema } from "@/lib/validation";
 import { handle, HttpError, readJson, requireUserId } from "@/server/http";
 import { deletePhotoFile } from "@/server/photos";
@@ -15,6 +16,7 @@ export const GET = handle(async (_req: Request, { params }: Ctx) => {
 
 export const PATCH = handle(async (req: Request, { params }: Ctx) => {
   const userId = await requireUserId();
+  enforceLimit("trip-write", userId);
   const { id } = await params;
   const patch = tripPatchSchema.parse(await readJson(req));
   const trip = await updateTrip(userId, id, patch);
@@ -24,6 +26,7 @@ export const PATCH = handle(async (req: Request, { params }: Ctx) => {
 
 export const DELETE = handle(async (_req: Request, { params }: Ctx) => {
   const userId = await requireUserId();
+  enforceLimit("trip-write", userId);
   const { id } = await params;
   const result = await deleteTrip(userId, id);
   if (!result) throw new HttpError(404, "Trip not found");

@@ -24,13 +24,16 @@ export class TooManyTripsError extends Error {
 }
 
 export async function createTrip(userId: string, input: TripInput): Promise<Trip> {
-  if ((await prisma.trip.count({ where: { userId } })) >= MAX_TRIPS_PER_USER) throw new TooManyTripsError();
-  const row = await prisma.trip.create({
-    data: {
-      userId,
-      name: input.name,
-      plannedDate: dateOnlyToUtc(input.plannedDate),
-    },
+  // Count and create together, so parallel requests cannot slip past the cap.
+  const row = await prisma.$transaction(async (tx) => {
+    if ((await tx.trip.count({ where: { userId } })) >= MAX_TRIPS_PER_USER) throw new TooManyTripsError();
+    return tx.trip.create({
+      data: {
+        userId,
+        name: input.name,
+        plannedDate: dateOnlyToUtc(input.plannedDate),
+      },
+    });
   });
   return toTripDto(row);
 }

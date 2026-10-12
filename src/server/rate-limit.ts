@@ -31,7 +31,7 @@ export const POLICIES = {
   suggestions: { limit: 30, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   popularity: { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   weather: { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
-  "weather-batch": { limit: 10, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
+  "weather-batch": { limit: 20, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   "account-delete": { limit: 5, windowMs: 15 * MINUTE, message: "Too many attempts. Try again later." },
   directions: { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   optimize: { limit: 10, windowMs: MINUTE, message: "Too many requests. Slow down a little." },

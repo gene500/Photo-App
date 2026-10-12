@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
 vi.mock("@/server/users", () => ({ deleteAccount: vi.fn() }));
-vi.mock("@/server/photos", () => ({ deletePhotoFile: vi.fn(async () => {}) }));
+vi.mock("@/server/photos", () => ({ deletePhotoFile: vi.fn(async () => true) }));
 import { getCurrentUserId } from "@/server/session";
 import { deleteAccount } from "@/server/users";
 import { deletePhotoFile } from "@/server/photos";

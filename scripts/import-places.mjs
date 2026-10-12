@@ -18,10 +18,10 @@ if (!dir) {
 }
 const url = process.env.TURSO_DATABASE_URL ?? process.env.DATABASE_URL ?? "file:./dev.db";
 const db = createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
-console.log(`Importing into ${url.startsWith("libsql:") ? "Turso" : url}`);
+console.log(`Importing into ${url.startsWith("file:") ? url : "a remote database"}`);
 
 if (process.argv.includes("--replace")) {
-  if (url.startsWith("libsql:") && !process.argv.includes("--yes-remote")) {
+  if (!url.startsWith("file:") && !process.argv.includes("--yes-remote")) {
     console.error("--replace on a remote (Turso) database wipes its Place table; add --yes-remote to confirm.");
     process.exit(1);
   }

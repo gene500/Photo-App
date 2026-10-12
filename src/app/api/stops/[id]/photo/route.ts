@@ -50,6 +50,7 @@ export const POST = handle(async (req: Request, { params }: Ctx) => {
 
 export const DELETE = handle(async (_req: Request, { params }: Ctx) => {
   const userId = await requireUserId();
+  enforceLimit("trip-write", userId);
   const { id } = await params;
   const stop = await getOwnedStop(userId, id);
   if (!stop) throw new HttpError(404, "Stop not found");

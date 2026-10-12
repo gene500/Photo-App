@@ -20,6 +20,8 @@ const cache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS);
 const rawCache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS);
 
 /** Searches already underway, so a repeat of the same one (a double-fired effect, a retry click) joins it instead of starting another. */
+/** Overpass calls still running after a thin local answer was shown, so a repeat search joins them instead of racing the mirrors again. */
+const lateAsks = new Map<string, Promise<Suggestion[]>>();
 const inflight = new Map<string, Promise<{ parsed: Suggestion[]; degraded: boolean }>>();
 
 export function routeCacheKey(route: LngLat[]): string {
@@ -33,6 +35,7 @@ export function clearSuggestionCache(): void {
   resetSharedCounter();
   clearCellCache();
   inflight.clear();
+  lateAsks.clear();
 }
 
 type Deps = {
@@ -43,6 +46,8 @@ type Deps = {
   enrich?: boolean;
   /** Test hook: overrides THIN_LOCAL_GRACE_MS. */
   thinGraceMs?: number;
+  /** Keeps work alive after the response is sent (the route passes next's `after`); without it the late answer is best effort. */
+  defer?: (work: Promise<unknown>) => void;
 };
 
 /** How long a thin local answer waits for Overpass before being shown instead (Overpass keeps going and fills the cache). */
@@ -59,7 +64,7 @@ async function loadRaw(key: string, buildQuery: () => string, local: () => Promi
     rawCache.set(key, parsed);
     return { parsed, degraded: false };
   }
-  const asked = (async () => parseOverpassResponse(await (deps.fetchOverpass ?? fetchOverpass)(buildQuery()), SUGGESTION_CAP, origin))();
+  const asked = lateAsks.get(key) ?? (async () => parseOverpassResponse(await (deps.fetchOverpass ?? fetchOverpass)(buildQuery()), SUGGESTION_CAP, origin))();
   if (!nearby?.length) {
     const parsed = await asked;
     rawCache.set(key, parsed);
@@ -75,7 +80,13 @@ async function loadRaw(key: string, buildQuery: () => string, local: () => Promi
     const won = await Promise.race([asked, late]);
     if (won === "late") {
       // Overpass is still working: remember its answer if it comes, so the next search is complete.
-      asked.then((p) => rawCache.set(key, p), () => undefined);
+      if (!lateAsks.has(key)) {
+        lateAsks.set(key, asked);
+        const settle = asked.then((p) => { rawCache.set(key, p); }, () => undefined).finally(() => {
+          if (lateAsks.get(key) === asked) lateAsks.delete(key);
+        });
+        deps.defer?.(settle);
+      }
       // A thin answer shown only because Overpass was slow must not be remembered as the real result.
       return { parsed: thin, degraded: true };
     }

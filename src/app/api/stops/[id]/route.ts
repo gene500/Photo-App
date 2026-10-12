@@ -1,3 +1,4 @@
+import { enforceLimit } from "@/server/rate-limit";
 import { stopPatchSchema } from "@/lib/validation";
 import { handle, HttpError, readJson, requireUserId } from "@/server/http";
 import { deletePhotoFile } from "@/server/photos";
@@ -7,6 +8,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export const PATCH = handle(async (req: Request, { params }: Ctx) => {
   const userId = await requireUserId();
+  enforceLimit("trip-write", userId);
   const { id } = await params;
   const { photoUrl, ...patch } = stopPatchSchema.parse(await readJson(req));
   const before = photoUrl === null ? await getOwnedStop(userId, id) : null;
@@ -23,6 +25,7 @@ export const PATCH = handle(async (req: Request, { params }: Ctx) => {
 
 export const DELETE = handle(async (_req: Request, { params }: Ctx) => {
   const userId = await requireUserId();
+  enforceLimit("trip-write", userId);
   const { id } = await params;
   const result = await deleteStop(userId, id);
   if (!result) throw new HttpError(404, "Stop not found");

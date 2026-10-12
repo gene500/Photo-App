@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isDateOnly } from "./dates";
+import { haversineMeters } from "./geo";
 
 // Zod otherwise probes `new Function("")` to JIT its parsers, which a CSP without unsafe-eval reports as a violation
 // in the browser console. In the browser the interpreter path is plenty fast for these small forms.
@@ -121,6 +122,15 @@ export const optimizeRequestSchema = z
 // waypoints, and Mapbox Directions is called with overview=full).
 export const MAX_SUGGESTIONS_COORDINATES = 2_000;
 
+/** Coast to coast with detours is ~6,000 km; anything longer is not a real driving route (and would read most of the map data). */
+export const MAX_SUGGESTIONS_ROUTE_KM = 6_000;
+
+function routeLengthKm(coords: readonly (readonly [number, number])[]): number {
+  let m = 0;
+  for (let i = 1; i < coords.length; i++) m += haversineMeters({ lng: coords[i - 1][0], lat: coords[i - 1][1] }, { lng: coords[i][0], lat: coords[i][1] });
+  return m / 1000;
+}
+
 export const MAX_AROUND_RADIUS_KM = 30;
 
 export const suggestionsRequestSchema = z
@@ -138,6 +148,7 @@ export const suggestionsRequestSchema = z
     enrich: z.boolean().optional(),
   })
   .refine((v) => (v.coordinates === undefined) !== (v.around === undefined), "Send either a route or a single point")
+  .refine((v) => !v.coordinates || routeLengthKm(v.coordinates) <= MAX_SUGGESTIONS_ROUTE_KM, `Route is too long (max ${MAX_SUGGESTIONS_ROUTE_KM} km)`)
   .refine((v) => v.radiusKm === undefined || v.around !== undefined, { path: ["radiusKm"], message: "radiusKm only applies to a single point" });
 
 /** Popularity is looked up for at most this many places per request; the client asks in batches. */

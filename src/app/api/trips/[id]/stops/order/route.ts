@@ -1,3 +1,4 @@
+import { enforceLimit } from "@/server/rate-limit";
 import { reorderSchema } from "@/lib/validation";
 import { handle, HttpError, readJson, requireUserId } from "@/server/http";
 import { InvalidReorderError, reorderStops } from "@/server/stops";
@@ -6,6 +7,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export const PUT = handle(async (req: Request, { params }: Ctx) => {
   const userId = await requireUserId();
+  enforceLimit("trip-write", userId);
   const { id } = await params;
   const { stopIds } = reorderSchema.parse(await readJson(req));
   try {

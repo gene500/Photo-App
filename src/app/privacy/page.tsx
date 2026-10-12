@@ -19,7 +19,7 @@ export default function PrivacyPage() {
       <h2>On your device</h2>
       <ul>
         <li>A sign-in cookie that keeps you logged in (up to 30 days). It is required for the app to work; we use no advertising or analytics cookies.</li>
-        <li>Browser storage (localStorage) for your settings and for offline copies of your trips. Signing out clears the offline copies.</li>
+        <li>Browser storage (localStorage) for your settings and for offline copies of your trips. Signing out on a device clears its offline copies; copies on another device are cleared when you next sign out or visit the sign-in page there, so remove them in Settings if you lose a device.</li>
         <li>A small service-worker cache so the offline page and app assets load without a connection.</li>
       </ul>
 

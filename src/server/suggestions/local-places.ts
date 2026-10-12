@@ -12,17 +12,33 @@ export type PlaceRow = { id: string; name: string; kind: string; lat: number; ln
  * nothing lies across it, the public Overpass servers are asked instead.
  */
 const US_BOXES = [
-  { minLat: 24.4, maxLat: 49.5, minLng: -125.1, maxLng: -66.9 }, // lower 48
-  { minLat: 51, maxLat: 71.6, minLng: -179.9, maxLng: -129.9 }, // Alaska
+  { minLat: 51, maxLat: 71.6, minLng: -179.9, maxLng: -141.2 }, // Alaska mainland (the panhandle borders Canada closely)
   { minLat: 18.8, maxLat: 22.4, minLng: -160.7, maxLng: -154.7 }, // Hawaii
 ];
 
+/**
+ * The lower 48, drawn a little inside the Canadian and Mexican borders (about 25 km, more near the Great Lakes), so a
+ * point near a border is sent to Overpass rather than answered from US-only data. Coasts run out into the sea.
+ * Points are [lng, lat].
+ */
+const LOWER_48: LngLat[] = [
+  [-124.9, 48.3], [-123.0, 48.6], [-95.3, 48.6], [-94.5, 48.4], [-92.0, 48.0], [-89.9, 47.8], [-88.0, 47.6],
+  [-85.2, 46.6], [-84.8, 46.1], [-84.0, 45.5], [-83.9, 43.5], [-83.9, 41.7], [-82.5, 41.9], [-81.0, 42.0],
+  [-79.8, 42.1], [-77.5, 43.4], [-76.0, 43.6], [-74.8, 44.5], [-71.5, 44.6], [-70.9, 45.3], [-69.0, 46.0],
+  [-67.9, 45.1], [-66.5, 44.5], [-66.5, 43.0], [-69.0, 40.0], [-73.5, 38.5], [-75.0, 35.0], [-79.0, 31.0],
+  [-79.5, 25.5], [-80.0, 24.4], [-83.0, 24.3], [-87.0, 27.0], [-93.0, 28.0], [-96.9, 26.1], [-97.9, 26.4],
+  [-99.3, 28.0], [-101.0, 29.9], [-103.2, 29.6], [-104.5, 30.2], [-106.2, 32.2], [-108.2, 31.9],
+  [-111.1, 31.9], [-114.7, 32.9], [-117.3, 32.6], [-121.0, 32.6], [-124.9, 34.0],
+];
+
 export function inLocalCoverage(lat: number, lng: number): boolean {
-  return US_BOXES.some((b) => lat >= b.minLat && lat <= b.maxLat && lng >= b.minLng && lng <= b.maxLng);
+  return US_BOXES.some((b) => lat >= b.minLat && lat <= b.maxLat && lng >= b.minLng && lng <= b.maxLng) || pointInRing(lng, lat, LOWER_48);
 }
 
 /** Rows of consecutive cells are read with one `cell BETWEEN a AND b` term each; a statement carries at most this many terms. */
 export const RUNS_PER_QUERY = 100;
+/** A corridor covering more cells than this is refused by the local copy. */
+export const MAX_RING_CELLS = 20_000;
 export const CELL_CACHE_TTL_MS = 30 * 60_000;
 export const CELL_CACHE_MAX = 3000;
 
@@ -108,6 +124,8 @@ export async function localPlacesAround(lat: number, lng: number, radiusKm: numb
 /** Places inside a corridor polygon; null when any part of it lies outside the covered area. */
 export async function localPlacesInRing(ring: LngLat[], read: CellReader = readCells): Promise<unknown[] | null> {
   if (ring.length < 3 || !ring.every(([lng, lat]) => inLocalCoverage(lat, lng))) return null;
-  const rows = await read(cellsForRing(ring));
+  const cells = cellsForRing(ring);
+  if (cells.length > MAX_RING_CELLS) return null; // not a real corridor: do not read the map for it
+  const rows = await read(cells);
   return toElements(rows.filter((r) => pointInRing(r.lng, r.lat, ring)));
 }

@@ -14,6 +14,16 @@ describe("inLocalCoverage", () => {
     expect(inLocalCoverage(51.5, -0.1)).toBe(false); // London
     expect(inLocalCoverage(51.0, -114.1)).toBe(false); // Calgary
   });
+  it("covers the interior and coasts of the lower 48", () => {
+    for (const [lat, lng] of [[47.6, -122.3], [37.8, -122.4], [34.05, -118.2], [32.72, -117.16], [41.9, -87.6], [40.7, -74], [42.36, -71.06], [25.8, -80.2], [24.55, -81.8], [29.76, -95.4], [44.98, -93.27], [39.7, -105], [33.4, -112], [35.1, -106.6]]) {
+      expect(inLocalCoverage(lat, lng), `${lat},${lng}`).toBe(true);
+    }
+  });
+  it("does not cover places across the Canadian or Mexican border", () => {
+    for (const [lat, lng] of [[43.65, -79.38], [45.5, -73.57], [45.42, -75.7], [42.3, -83.0], [49.28, -123.12], [32.5, -117.03], [31.7, -106.45], [25.7, -100.3], [60.7, -135.0], [49.9, -97.1]]) {
+      expect(inLocalCoverage(lat, lng), `${lat},${lng}`).toBe(false);
+    }
+  });
 });
 
 describe("toElements", () => {

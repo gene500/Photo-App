@@ -16,6 +16,6 @@ export const GET = handle(async (_req: Request, { params }: Ctx) => {
   const photo = await readPhoto(name);
   if (!photo) throw new HttpError(404, "Not found");
   return new Response(new Uint8Array(photo.bytes), {
-    headers: { "Content-Type": photo.contentType, "Cache-Control": "private, max-age=3600" },
+    headers: { "Content-Type": photo.contentType, "Cache-Control": "private, no-store" },
   });
 });

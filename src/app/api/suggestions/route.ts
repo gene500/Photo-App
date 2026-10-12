@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { enforceLimit } from "@/server/rate-limit";
 import { suggestionsRequestSchema } from "@/lib/validation";
 import { handle, HttpError, readJson, requireUserId } from "@/server/http";
@@ -8,10 +9,11 @@ export const POST = handle(async (req: Request) => {
   const userId = await requireUserId();
   enforceLimit("suggestions", userId);
   const { coordinates, around, radiusKm, enrich } = suggestionsRequestSchema.parse(await readJson(req));
+  const defer = (work: Promise<unknown>) => after(() => work);
   try {
-    if (coordinates) return Response.json({ suggestions: await findSuggestions(coordinates, { enrich }) });
+    if (coordinates) return Response.json({ suggestions: await findSuggestions(coordinates, { enrich, defer }) });
     // Without a radius the service default applies (and keeps the call shape of a plain "around" search).
-    const found = radiusKm === undefined ? await findSuggestionsAround(around!, { enrich }) : await findSuggestionsAround(around!, { enrich }, radiusKm);
+    const found = radiusKm === undefined ? await findSuggestionsAround(around!, { enrich, defer }) : await findSuggestionsAround(around!, { enrich, defer }, radiusKm);
     return Response.json({ suggestions: found });
   } catch (e) {
     if (e instanceof OverpassError) throw new HttpError(502, "Couldn't load suggestions. Please retry.");

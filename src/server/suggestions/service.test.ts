@@ -156,11 +156,21 @@ describe("local copy of the map data", () => {
   });
 
   it("does not remember a thin answer shown only because Overpass was slow", async () => {
-    const never = vi.fn(() => new Promise<unknown>(() => undefined));
-    await findSuggestionsAround([-119.6, 37.2], { local: local(2), fetchOverpass: never, enrich: false, thinGraceMs: 5 });
-    const fetchOverpass = vi.fn(async () => overpassJson);
-    expect(await findSuggestionsAround([-119.6, 37.2], { local: local(2), fetchOverpass, enrich: false })).toHaveLength(1);
-    expect(fetchOverpass).toHaveBeenCalledTimes(1);
+    let release!: (v: unknown) => void;
+    const slow = vi.fn(() => new Promise<unknown>((resolve) => { release = resolve; }));
+    const deferred: Promise<unknown>[] = [];
+    const first = await findSuggestionsAround([-119.6, 37.2], { local: local(2), fetchOverpass: slow, enrich: false, thinGraceMs: 5, defer: (w) => void deferred.push(w) });
+    expect(first).toHaveLength(2); // the thin local answer
+    // A repeat while Overpass is still running joins that call instead of starting another one.
+    const again = await findSuggestionsAround([-119.6, 37.2], { local: local(2), fetchOverpass: slow, enrich: false, thinGraceMs: 5 });
+    expect(again).toHaveLength(2);
+    expect(slow).toHaveBeenCalledTimes(1);
+    expect(deferred).toHaveLength(1); // handed to the platform so it is not cut off
+    release(overpassJson);
+    await Promise.all(deferred);
+    // Once it answers, the next search is the complete one.
+    expect(await findSuggestionsAround([-119.6, 37.2], { local: local(2), fetchOverpass: slow, enrich: false })).toHaveLength(1);
+    expect(slow).toHaveBeenCalledTimes(1);
   });
 
   it("identical searches in flight share one lookup", async () => {

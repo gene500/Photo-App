@@ -60,7 +60,7 @@ export function useWeatherLine(lat: number, lng: number, arrival: Date | null, p
 
 /** Suggestion weather is requested for this many places at a time, from the top of the list down. */
 export const SUGGESTION_WEATHER_GROUP = 5;
-/** Groups requested at once (well inside the 10 requests/minute the batch endpoint allows for a full 40-place list). */
+/** Groups requested at once (a full 40-place list is 8 requests; the batch endpoint allows 20 a minute). */
 export const SUGGESTION_WEATHER_PARALLEL = 2;
 
 type Spot = { osmId: string; lat: number; lng: number };

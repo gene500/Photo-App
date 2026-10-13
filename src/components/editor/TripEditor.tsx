@@ -648,7 +648,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                     : "Add 2 stops to see the route"}
             </p>
             </div>
-            <StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} onChange={(iso) => saveStartTime(iso)} />
+            <StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} lng={stops[0]?.lng} disabled={optimizing} onChange={(iso) => saveStartTime(iso)} />
             {trip.departAt && (
               <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
                 <p data-testid="depart-note">Starts {formatClock(new Date(trip.departAt), undefined, settings.timeFormat)}</p>

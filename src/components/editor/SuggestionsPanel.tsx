@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnAccent, btnGhost, btnSecondary } from "@/components/ui/styles";
 import { formatPhotoCount } from "@/lib/format";
@@ -25,6 +25,15 @@ type Props = {
   weather?: ReadonlyMap<string, WeatherLine>;
 };
 
+/** True for keyboard focus; a tap on a button also focuses it (on Android), and that must not pop the photo up. */
+function keyboardFocus(el: HTMLElement): boolean {
+  try {
+    return el.matches(":focus-visible");
+  } catch {
+    return true;
+  }
+}
+
 export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind, onAccept, onDismiss, onDismissError, onHover, weather }: Props) {
   // Accepts in flight, per suggestion. The ref guards synchronously (two clicks can land
   // before a re-render); the state disables the button.
@@ -47,6 +56,13 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
     tops.current = next;
   }, [suggestions]);
   const [hover, setHover] = useState<{ s: Suggestion; rect: DOMRect } | null>(null);
+  // The card is positioned from where the row was when hovered, so any scroll or a removed row drops it.
+  useEffect(() => {
+    if (!hover) return;
+    const clear = () => setHover(null);
+    window.addEventListener("scroll", clear, true);
+    return () => window.removeEventListener("scroll", clear, true);
+  }, [hover]);
   const [accepting, setAccepting] = useState<ReadonlySet<string>>(new Set());
   async function accept(sug: Suggestion) {
     if (inFlight.current.has(sug.osmId)) return;
@@ -85,7 +101,7 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
       )}
       <ul ref={listRef} className="space-y-1">
         {suggestions.map((s, i) => (
-          <li key={s.osmId} data-testid="suggestion-card" data-id={s.osmId} style={{ animationDelay: `${(i % 5) * 50}ms` }} onPointerEnter={(e) => { if (isHoverPointer(e)) { onHover?.(s.osmId); setHover({ s, rect: e.currentTarget.getBoundingClientRect() }); } }} onPointerLeave={() => { onHover?.(null); setHover(null); }} onFocus={(e) => { onHover?.(s.osmId); setHover({ s, rect: e.currentTarget.getBoundingClientRect() }); }} onBlur={() => { onHover?.(null); setHover(null); }} className="anim-rise flex items-center justify-between gap-2 rounded-xl px-2 py-2 hover:bg-hover">
+          <li key={s.osmId} data-testid="suggestion-card" data-id={s.osmId} style={{ animationDelay: `${(i % 5) * 50}ms` }} onPointerEnter={(e) => { if (isHoverPointer(e)) { onHover?.(s.osmId); setHover({ s, rect: e.currentTarget.getBoundingClientRect() }); } }} onPointerLeave={() => { onHover?.(null); setHover(null); }} onFocus={(e) => { onHover?.(s.osmId); if (keyboardFocus(e.target as HTMLElement)) setHover({ s, rect: e.currentTarget.getBoundingClientRect() }); }} onBlur={() => { onHover?.(null); setHover(null); }} className="anim-rise flex items-center justify-between gap-2 rounded-xl px-2 py-2 hover:bg-hover">
             <div className="min-w-0">
               <p data-testid="suggestion-name" className="truncate text-sm font-medium">{s.name}</p>
               <p className="text-xs text-muted">
@@ -99,8 +115,8 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
               )}
             </div>
             <div className="flex shrink-0 gap-1">
-              <button type="button" disabled={accepting.has(s.osmId)} onClick={() => void accept(s)} className={btnAccent} aria-label={`Accept ${s.name}`}>Accept</button>
-              <button type="button" onClick={() => onDismiss(s.osmId)} className={btnGhost} aria-label={`Dismiss ${s.name}`}>Dismiss</button>
+              <button type="button" disabled={accepting.has(s.osmId)} onClick={() => { setHover(null); void accept(s); }} className={btnAccent} aria-label={`Accept ${s.name}`}>Accept</button>
+              <button type="button" onClick={() => { setHover(null); onDismiss(s.osmId); }} className={btnGhost} aria-label={`Dismiss ${s.name}`}>Dismiss</button>
             </div>
           </li>
         ))}

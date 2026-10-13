@@ -224,8 +224,8 @@ export default function MapPanel({
     };
   }, []);
 
-  // Faint suggestion markers (bigger when highlighted from the panel). Hovering/focusing one, or hovering its
-  // card in the panel, shows a photo popup; only one popup exists at a time.
+  // Faint suggestion markers (bigger when highlighted from the panel). Hovering/focusing one shows a photo popup
+  // (the panel card has its own, beside the list); only one popup exists at a time.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;

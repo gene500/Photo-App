@@ -2,6 +2,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { solarDateAt } from "@/lib/best-time";
 import { fromTimeValue, StartTimeControl, toTimeValue } from "./StartTimeControl";
 
 describe("start time helpers", () => {
@@ -18,6 +19,16 @@ describe("start time helpers", () => {
   });
 });
 
+describe("start time lands on the trip's solar day wherever the viewer is", () => {
+  it("picks the viewer-local instant whose solar day at the stop is the planned day", () => {
+    // New York stop (lng -74): every candidate must map to the planned day at that longitude, whatever the machine's zone.
+    for (const time of ["00:30", "07:00", "12:00", "23:30"]) {
+      const iso = fromTimeValue("2026-07-01", time, -74)!;
+      expect(solarDateAt(new Date(iso), -74)).toBe("2026-07-01");
+    }
+  });
+});
+
 describe("StartTimeControl", () => {
   it("saves the chosen time on blur", async () => {
     const onChange = vi.fn();
@@ -29,11 +40,17 @@ describe("StartTimeControl", () => {
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(toTimeValue(onChange.mock.calls[0][0])).toBe("09:15");
   });
-  it("clears the start time when the field is emptied", async () => {
+  it("does not clear the start time when the field is emptied; it falls back to the saved time", async () => {
     const onChange = vi.fn();
-    render(<StartTimeControl plannedDate="2026-07-01" departAt={fromTimeValue("2026-07-01", "07:00")} onChange={onChange} />);
+    const departAt = fromTimeValue("2026-07-01", "07:00");
+    render(<StartTimeControl plannedDate="2026-07-01" departAt={departAt} onChange={onChange} />);
     await userEvent.clear(screen.getByLabelText("Start time"));
     await userEvent.tab();
-    expect(onChange).toHaveBeenCalledWith(null);
+    expect(onChange).not.toHaveBeenCalled();
+    expect((screen.getByLabelText("Start time") as HTMLInputElement).value).toBe("07:00");
+  });
+  it("is disabled while an optimize is running", () => {
+    render(<StartTimeControl plannedDate="2026-07-01" departAt={null} disabled onChange={() => {}} />);
+    expect((screen.getByLabelText("Start time") as HTMLInputElement).disabled).toBe(true);
   });
 });

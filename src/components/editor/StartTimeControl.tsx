@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { inputClass } from "@/components/ui/styles";
+import { solarDateAt } from "@/lib/best-time";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -12,19 +13,29 @@ export function toTimeValue(iso: string | null): string {
   return Number.isNaN(d.getTime()) ? "" : `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-/** The instant for `time` ("HH:MM") on the trip's calendar day ("YYYY-MM-DD") in the viewer's time zone; null when either is invalid. */
-export function fromTimeValue(plannedDate: string, time: string): string | null {
+/**
+ * The instant for `time` ("HH:MM", read in the viewer's time zone) that falls on the trip's day ("YYYY-MM-DD") where the
+ * trip is: with `lng` the day is the solar day at that longitude (as for best times), so a viewer in another time zone
+ * cannot move the trip to the neighbouring day. Without `lng` it is the viewer's own calendar day. Null when invalid.
+ */
+export function fromTimeValue(plannedDate: string, time: string, lng?: number): string | null {
   const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(plannedDate);
   const clock = /^(\d{2}):(\d{2})$/.exec(time);
   if (!day || !clock) return null;
-  const d = new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]), Number(clock[1]), Number(clock[2]));
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  const at = (offset: number) => new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]) + offset, Number(clock[1]), Number(clock[2]));
+  const candidates = [0, -1, 1].map(at).filter((d) => !Number.isNaN(d.getTime()));
+  if (candidates.length === 0) return null;
+  const pick = lng === undefined ? candidates[0] : (candidates.find((d) => solarDateAt(d, lng) === plannedDate) ?? candidates[0]);
+  return pick.toISOString();
 }
 
 /** Lets the traveller pick when the trip starts; leaving it empty means "sunrise at the first stop". */
-export function StartTimeControl({ plannedDate, departAt, onChange }: {
+export function StartTimeControl({ plannedDate, departAt, lng, disabled, onChange }: {
   plannedDate: string;
   departAt: string | null;
+  /** Longitude of the first stop, which decides which calendar day a picked time belongs to. */
+  lng?: number;
+  disabled?: boolean;
   /** Resolves when saved. `null` clears the start time. */
   onChange: (iso: string | null) => void | Promise<void>;
 }) {
@@ -33,15 +44,16 @@ export function StartTimeControl({ plannedDate, departAt, onChange }: {
   // null while the person is not editing, so the field always follows the saved value.
   const [draft, setDraft] = useState<string | null>(null);
 
-  function commit() {
+  async function commit() {
     if (draft === null) return;
     const next = draft;
-    setDraft(null);
-    if (next === saved) return;
-    if (next === "") void onChange(null);
-    else {
-      const iso = fromTimeValue(plannedDate, next);
-      if (iso) void onChange(iso);
+    // An emptied or half-typed field is not a choice (use "Reset to sunrise" to clear it): fall back to the saved time.
+    const iso = next === "" || next === saved ? null : fromTimeValue(plannedDate, next, lng);
+    if (!iso) return setDraft(null);
+    try {
+      await onChange(iso); // the field keeps showing the new time while it saves
+    } finally {
+      setDraft(null);
     }
   }
 
@@ -52,12 +64,14 @@ export function StartTimeControl({ plannedDate, departAt, onChange }: {
         id={id}
         type="time"
         value={draft ?? saved}
+        disabled={disabled}
+        aria-describedby={departAt ? undefined : `${id}-hint`}
         onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => { if (e.key === "Enter") commit(); }}
+        onBlur={() => void commit()}
+        onKeyDown={(e) => { if (e.key === "Enter") void commit(); }}
         className={`${inputClass} !mt-0 w-auto min-w-0`}
       />
-      {!departAt && <span className="text-xs">Sunrise at the first stop</span>}
+      {!departAt && <span id={`${id}-hint`} className="text-xs">Sunrise at the first stop</span>}
     </div>
   );
 }

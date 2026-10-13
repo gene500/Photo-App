@@ -29,7 +29,7 @@ test("sign up → new trip → search + click to add stops → suggestion → re
   await expect(page.getByText(/^Spot .* \(fake\)$/)).toBeVisible();
   await page.getByRole("button", { name: "Add stop" }).click();
   await expect(rows).toHaveCount(2);
-  await expect(page.getByTestId("route-status")).toHaveText(/mi/);
+  await expect(page.getByTestId("route-status")).toHaveText(/\d mi\b/);
   await expect(page.getByTestId("stop-role")).toHaveText(["Start", "End"]);
 
   // Accept a suggestion from the Suggestions tab

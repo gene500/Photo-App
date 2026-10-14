@@ -498,9 +498,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     const warm = prewarmRef.current?.key === key ? prewarmRef.current.prewarm : null;
     prewarmRef.current = null; // adopted once; a retry searches afresh
     try {
-      let found: Suggestion[];
       const adopted = warm ? await adoptPrewarm(warm) : null;
-      found = adopted ?? (await api.suggestions(downsampleRoute(activeRoute.geometry), { enrich: false })).suggestions;
+      const found: Suggestion[] = adopted ?? (await api.suggestions(downsampleRoute(activeRoute.geometry), { enrich: false })).suggestions;
       if (seq !== suggestionsSeq.current) return;
       const items = found.filter((s) => !placed.some((st) => haversineMeters(st, s) < ALREADY_A_STOP_M));
       setSuggestionsState({ key, items, status: "done", error: null, shown: POPULARITY_BATCH });

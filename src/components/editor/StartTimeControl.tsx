@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { inputClass } from "@/components/ui/styles";
 import { solarDateAt } from "@/lib/best-time";
+import { useMounted } from "@/lib/use-mounted";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -40,7 +41,9 @@ export function StartTimeControl({ plannedDate, departAt, lng, disabled, onChang
   onChange: (iso: string | null) => void | Promise<void>;
 }) {
   const id = useId();
-  const saved = toTimeValue(departAt);
+  // The time is read in the viewer's zone, so the server (and the first client render) show an empty field.
+  const mounted = useMounted();
+  const saved = mounted ? toTimeValue(departAt) : "";
   // null while the person is not editing, so the field always follows the saved value.
   const [draft, setDraft] = useState<string | null>(null);
 
@@ -57,7 +60,8 @@ export function StartTimeControl({ plannedDate, departAt, lng, disabled, onChang
       await onChange(iso); // the field keeps showing the new time while it saves
     } finally {
       saving.current = false;
-      setDraft(null);
+      // Keep an edit made while this save was in flight; only clear the draft if it is still what was saved.
+      setDraft((d) => (d === next ? null : d));
     }
   }
 

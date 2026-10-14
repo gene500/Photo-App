@@ -3,6 +3,7 @@
 import { describeBestTime, formatClock } from "@/lib/best-time";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { btnSecondary, card, btnIcon } from "@/components/ui/styles";
+import { useMounted } from "@/lib/use-mounted";
 import { useWeatherLine } from "@/lib/use-weather";
 import type { BestTime } from "@/lib/best-time";
 import type { Stop } from "@/lib/types";
@@ -18,6 +19,7 @@ type Props = {
 
 export function StopCard({ stop, bestTime, arrival, onToggleVisited, onOpenDetails, onClose }: Props) {
   const { settings } = useSettings();
+  const mounted = useMounted(); // clock text is in the viewer's time zone
   const weather = useWeatherLine(stop.lat, stop.lng, arrival, stop.lightPref);
   return (
     <section aria-label="Selected stop" className={`space-y-2 rounded-xl p-3 ${card}`}>
@@ -27,13 +29,13 @@ export function StopCard({ stop, bestTime, arrival, onToggleVisited, onOpenDetai
           ×
         </button>
       </div>
-      <p className="text-xs text-muted">{describeBestTime(bestTime, undefined, settings.timeFormat)}</p>
+      <p className="text-xs text-muted">{mounted ? describeBestTime(bestTime, undefined, settings.timeFormat) : "\u00A0"}</p>
       {stop.shotChecklist.length > 0 && (
         <p data-testid="shot-summary" className="text-xs text-muted">
           {stop.shotChecklist.filter((s) => s.done).length}/{stop.shotChecklist.length} shots
         </p>
       )}
-      {arrival && <p className="text-xs text-muted">Arrive ~{formatClock(arrival, undefined, settings.timeFormat)}</p>}
+      {mounted && arrival && <p className="text-xs text-muted">Arrive ~{formatClock(arrival, undefined, settings.timeFormat)}</p>}
       {weather && (
         <p data-testid="card-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-danger" : "text-muted"}`}>
           <span role="img" aria-label={weather.label ?? weather.text}>{weather.text}</span>

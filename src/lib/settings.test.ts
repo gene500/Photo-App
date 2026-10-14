@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyAppearance, DEFAULT_SETTINGS, parseSettings, parseStoredSettings, SETTINGS_INIT_SCRIPT, SETTINGS_KEY } from "./settings";
+import { applyAppearance, DEFAULT_SETTINGS, parseSettings, parseStoredSettings, SETTINGS_INIT_SCRIPT, SETTINGS_KEY, SETTINGS_VERSION, serializeSettings } from "./settings";
 
 describe("parseSettings", () => {
   it("returns defaults for missing and non-object input", () => {
@@ -68,5 +68,15 @@ describe("SETTINGS_INIT_SCRIPT", () => {
   it("is a constant string with no interpolation hazards", () => {
     expect(typeof SETTINGS_INIT_SCRIPT).toBe("string");
     expect(SETTINGS_INIT_SCRIPT).not.toContain("${");
+  });
+});
+
+describe("settings versioning", () => {
+  it("resets distanceUnit for settings stored without a version", () => {
+    expect(parseStoredSettings(JSON.stringify({ theme: "dark", distanceUnit: "km" }))).toMatchObject({ theme: "dark", distanceUnit: "mi" });
+  });
+  it("keeps distanceUnit once the settings carry the current version", () => {
+    expect(parseStoredSettings(serializeSettings({ ...DEFAULT_SETTINGS, distanceUnit: "km" })).distanceUnit).toBe("km");
+    expect(JSON.parse(serializeSettings(DEFAULT_SETTINGS)).version).toBe(SETTINGS_VERSION);
   });
 });

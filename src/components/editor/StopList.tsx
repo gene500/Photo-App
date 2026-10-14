@@ -9,6 +9,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { describeBestTime, type BestTime } from "@/lib/best-time";
 import { describeLightHint } from "@/lib/light-windows";
+import { useMounted } from "@/lib/use-mounted";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { stopColor } from "@/lib/stop-style";
 import { useWeatherLine } from "@/lib/use-weather";
@@ -68,7 +69,8 @@ const REVEAL = "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hove
 function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVisited, onDelete, onSelect }: Handlers & { stop: Stop; index: number; bestTime: BestTime; arrival: Date | null; role: "Start" | "End" | null; first: boolean; last: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id });
   const { settings } = useSettings();
-  const hint = describeLightHint(stop, arrival, undefined, settings.timeFormat);
+  const mounted = useMounted(); // clock text is in the viewer's time zone: only a placeholder until mounted
+  const hint = !mounted ? null : describeLightHint(stop, arrival, undefined, settings.timeFormat);
   // Weather at the arrival (or the stop's light window); silent while loading or when it fails.
   const weather = useWeatherLine(stop.lat, stop.lng, arrival, stop.lightPref);
   // The timeline line runs through the dot centre (22px down) and stops at the first/last dot.
@@ -118,7 +120,7 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
               <span>{hint.text}</span>
             </span>
           ) : (
-            <span data-testid="best-time">{describeBestTime(bestTime, undefined, settings.timeFormat)}</span>
+            <span data-testid="best-time">{mounted ? describeBestTime(bestTime, undefined, settings.timeFormat) : "\u00A0"}</span>
           )}
         </p>
         {weather && (

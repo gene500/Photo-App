@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { LngLat } from "@/lib/types";
 import { buildCorridor } from "./corridor";
-import { createCellReader, inLocalCoverage, localPlacesAround, localPlacesInRing, RUNS_PER_QUERY, toElements, type PlaceRow } from "./local-places";
+import { createCellReader, inLocalCoverage, localPlacesAround, localPlacesInRing, localPlacesInRingPartial, RUNS_PER_QUERY, toElements, type PlaceRow } from "./local-places";
 import { cellOf } from "./places-grid";
 
 const row = (id: string, lat: number, lng: number, kind = "viewpoint", name = "Spot"): PlaceRow => ({ id, name, kind, lat, lng });
@@ -123,5 +123,22 @@ describe("createCellReader", () => {
     const read2 = createCellReader(failing);
     await expect(read2([10])).rejects.toThrow("db down");
     expect(await read2([10])).toHaveLength(1);
+  });
+});
+
+describe("localPlacesInRingPartial", () => {
+  const inside = (lng: number, lat: number) => [[lng, lat], [lng + 0.05, lat], [lng + 0.05, lat + 0.05], [lng, lat + 0.05]] as [number, number][];
+  it("answers for a corridor that only touches the covered area, where the full lookup refuses", async () => {
+    // Half in Montana (covered), half across the line in Canada (not covered).
+    const ring: [number, number][] = [[-113.9, 48.2], [-113.7, 48.2], [-113.7, 49.4], [-113.9, 49.4]];
+    const read = async () => [];
+    expect(await localPlacesInRing(ring, read)).toBeNull();
+    expect(await localPlacesInRingPartial(ring, read)).toEqual([]);
+  });
+  it("reads whatever the local copy holds for a corridor outside the covered box, and is null for a degenerate ring", async () => {
+    const ring = inside(-134.5, 58.2); // the Alaska panhandle
+    const got = await localPlacesInRingPartial(ring, async () => [row("node/1", 58.22, -134.48)]);
+    expect(got).toHaveLength(1);
+    expect(await localPlacesInRingPartial([[0, 0], [1, 1]], async () => [])).toBeNull();
   });
 });

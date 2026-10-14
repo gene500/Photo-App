@@ -124,6 +124,20 @@ export async function localPlacesAround(lat: number, lng: number, radiusKm: numb
 /** Places inside a corridor polygon; null when any part of it lies outside the covered area. */
 export async function localPlacesInRing(ring: LngLat[], read: CellReader = readCells): Promise<unknown[] | null> {
   if (ring.length < 3 || !ring.every(([lng, lat]) => inLocalCoverage(lat, lng))) return null;
+  return ringRows(ring, read);
+}
+
+/**
+ * For a corridor the covered-area check refused (a park on the border, the Alaska panhandle): whatever US places the local
+ * copy holds there. Never complete (the rest may lie across the border), so the caller shows it only as a fallback while
+ * Overpass is asked; a corridor wholly abroad simply finds nothing.
+ */
+export async function localPlacesInRingPartial(ring: LngLat[], read: CellReader = readCells): Promise<unknown[] | null> {
+  if (ring.length < 3) return null;
+  return ringRows(ring, read);
+}
+
+async function ringRows(ring: LngLat[], read: CellReader): Promise<unknown[] | null> {
   const cells = cellsForRing(ring);
   if (cells.length > MAX_RING_CELLS) return null; // not a real corridor: do not read the map for it
   const rows = await read(cells);

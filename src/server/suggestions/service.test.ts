@@ -155,6 +155,20 @@ describe("local copy of the map data", () => {
     expect(slow).toHaveBeenCalledTimes(1);
   });
 
+  it("an area only partly covered (a border park) shows the local places once the grace passes, even when there are plenty, while Overpass is still asked", async () => {
+    const slow = vi.fn(() => new Promise<unknown>(() => {}));
+    const many = Array.from({ length: 8 }, (_, i) => ({ type: "node", id: i + 1, lat: 37.2 + i / 100, lon: -119.6, tags: { tourism: "viewpoint", name: `P${i}` } }));
+    const out = await findSuggestionsAround([-119.6, 37.2], { local: async () => null, localPartial: async () => many, fetchOverpass: slow, enrich: false, thinGraceMs: 10 });
+    expect(out).toHaveLength(8);
+    expect(slow).toHaveBeenCalledTimes(1);
+  });
+
+  it("an area with no covered part still waits for Overpass", async () => {
+    const fetchOverpass = vi.fn(async () => overpassJson);
+    const out = await findSuggestionsAround([-119.6, 37.2], { local: async () => null, localPartial: async () => null, fetchOverpass, enrich: false, thinGraceMs: 10 });
+    expect(out).toHaveLength(1);
+  });
+
   it("does not remember a thin answer shown only because Overpass was slow", async () => {
     let release!: (v: unknown) => void;
     const slow = vi.fn(() => new Promise<unknown>((resolve) => { release = resolve; }));

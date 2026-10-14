@@ -3,7 +3,7 @@ import type { LngLat, Suggestion } from "@/lib/types";
 import { fakeSuggestions, isFakeExternal } from "../external/fake";
 import { TtlCache } from "./cache";
 import { AROUND_RADIUS_KM, buildCorridor, buildOverpassAroundQuery, buildOverpassQuery, toOverpassPoly } from "./corridor";
-import { clearCellCache, localPlacesAround, localPlacesInRing } from "./local-places";
+import { clearCellCache, localPlacesAround, localPlacesInRing, localPlacesInRingPartial } from "./local-places";
 import { fetchOverpass, OverpassError } from "./overpass";
 import { parseOverpassResponse, SUGGESTION_CAP } from "./parse";
 import { enrichPopularity, POPULARITY_MAX_CANDIDATES, resetSharedCounter } from "./popularity";
@@ -43,6 +43,8 @@ export function clearSuggestionCache(): void {
 type Deps = {
   /** The local copy of the map data: elements, or null when the area isn't covered. Defaults to the database. */
   local?: () => Promise<unknown[] | null>;
+  /** Places the local copy has for an area it only partly covers (a border park): shown as a fallback while Overpass is asked. */
+  localPartial?: () => Promise<unknown[] | null>;
   fetchOverpass?: (query: string) => Promise<unknown>;   fetchImpl?: typeof fetch;
   /** false: skip popularity (the caller ranks it later). */
   enrich?: boolean;
@@ -53,15 +55,18 @@ type Deps = {
 };
 
 /** How long a thin local answer waits for Overpass before being shown instead (Overpass keeps going and fills the cache). */
-export const THIN_LOCAL_GRACE_MS = 2_500;
+export const THIN_LOCAL_GRACE_MS = 1_500;
 
 type Raw = { parsed: Suggestion[]; degraded: boolean };
 
-async function loadRaw(key: string, buildQuery: () => string, local: () => Promise<unknown[] | null>, deps: Deps, origin?: LngLatLiteral): Promise<Raw> {
+async function loadRaw(key: string, buildQuery: () => string, local: () => Promise<unknown[] | null>, deps: Deps, origin?: LngLatLiteral, localPartial?: () => Promise<unknown[] | null>): Promise<Raw> {
   // The local copy answers in milliseconds; Overpass (free, often busy) is only asked when the copy doesn't cover the
   // area or comes back nearly empty, and a thin local answer still beats an Overpass failure.
-  const nearby = await (deps.local ?? local)().catch(() => null);
-  if (nearby && nearby.length >= MIN_LOCAL_PLACES) {
+  let nearby = await (deps.local ?? local)().catch(() => null);
+  // Not covered (null): a corridor that touches the covered area still has US places to show while Overpass answers.
+  const partial = nearby === null;
+  if (partial) nearby = await (deps.localPartial ?? localPartial)?.().catch(() => null) ?? null;
+  if (nearby && nearby.length >= MIN_LOCAL_PLACES && !partial) {
     const parsed = parseOverpassResponse({ elements: nearby }, SUGGESTION_CAP, origin);
     rawCache.set(key, parsed);
     return { parsed, degraded: false };
@@ -105,7 +110,7 @@ async function loadRaw(key: string, buildQuery: () => string, local: () => Promi
   }
 }
 
-async function runSearch(key: string, buildQuery: () => string, local: () => Promise<unknown[] | null>, deps: Deps, origin?: LngLatLiteral): Promise<Suggestion[]> {
+async function runSearch(key: string, buildQuery: () => string, local: () => Promise<unknown[] | null>, deps: Deps, origin?: LngLatLiteral, localPartial?: () => Promise<unknown[] | null>): Promise<Suggestion[]> {
   const enrich = deps.enrich !== false;
   const done = enrich ? cache.get(key) : (cache.get(key) ?? rawCache.get(key));
   if (done) return done;
@@ -114,7 +119,7 @@ async function runSearch(key: string, buildQuery: () => string, local: () => Pro
   if (!parsed) {
     let pending = inflight.get(key);
     if (!pending) {
-      const started: Promise<Raw> = loadRaw(key, buildQuery, local, deps, origin);
+      const started: Promise<Raw> = loadRaw(key, buildQuery, local, deps, origin, localPartial);
       pending = started;
       inflight.set(key, started);
       const clear = () => {
@@ -149,7 +154,7 @@ export async function findSuggestions(route: LngLat[], deps: Deps = {}): Promise
       throw new OverpassError(e instanceof Error ? e.message : "Could not build a route corridor");
     }
   };
-  return runSearch(routeCacheKey(route), () => buildOverpassQuery(toOverpassPoly(corridor())), async () => localPlacesInRing(corridor()), deps);
+  return runSearch(routeCacheKey(route), () => buildOverpassQuery(toOverpassPoly(corridor())), async () => localPlacesInRing(corridor()), deps, undefined, async () => localPlacesInRingPartial(corridor()));
 }
 
 /** Suggestions in a circle around one point (a trip's first stop, before there is a route). */

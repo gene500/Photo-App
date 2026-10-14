@@ -50,6 +50,8 @@ type Deps = {
   enrich?: boolean;
   /** Test hook: overrides THIN_LOCAL_GRACE_MS. */
   thinGraceMs?: number;
+  /** Told whether the answer is complete (false) or a stand-in shown while a slow source was still loading (true). */
+  onResult?: (info: { degraded: boolean }) => void;
   /** Keeps work alive after the response is sent (the route passes next's `after`); without it the late answer is best effort. */
   defer?: (work: Promise<unknown>) => void;
 };
@@ -113,7 +115,10 @@ async function loadRaw(key: string, buildQuery: () => string, local: () => Promi
 async function runSearch(key: string, buildQuery: () => string, local: () => Promise<unknown[] | null>, deps: Deps, origin?: LngLatLiteral, localPartial?: () => Promise<unknown[] | null>): Promise<Suggestion[]> {
   const enrich = deps.enrich !== false;
   const done = enrich ? cache.get(key) : (cache.get(key) ?? rawCache.get(key));
-  if (done) return done;
+  if (done) {
+    deps.onResult?.({ degraded: false });
+    return done;
+  }
   let parsed = rawCache.get(key);
   let degraded = false;
   if (!parsed) {
@@ -129,6 +134,7 @@ async function runSearch(key: string, buildQuery: () => string, local: () => Pro
     }
     ({ parsed, degraded } = await pending);
   }
+  deps.onResult?.({ degraded });
   if (!enrich) return parsed;
   // Popularity is a bonus: enrichPopularity never throws, but guard anyway so it can never fail the request.
   const base = parsed;

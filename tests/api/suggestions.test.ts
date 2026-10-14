@@ -23,7 +23,7 @@ describe("POST /api/suggestions", () => {
     vi.mocked(findSuggestionsAround).mockResolvedValue([{ osmId: "node/2", name: "Near", lat: 37, lng: -119, kind: "peak" }]);
     const ok = await POST(jsonRequest("POST", "/api/suggestions", { around: [-119.79, 36.74] }));
     expect((await ok.json()).suggestions).toHaveLength(1);
-    expect(findSuggestionsAround).toHaveBeenCalledWith([-119.79, 36.74], { enrich: undefined, defer: expect.any(Function) });
+    expect(findSuggestionsAround).toHaveBeenCalledWith([-119.79, 36.74], { enrich: undefined, defer: expect.any(Function), onResult: expect.any(Function) });
     expect((await POST(jsonRequest("POST", "/api/suggestions", { ...body, around: [-119, 36] }))).status).toBe(400);
     expect((await POST(jsonRequest("POST", "/api/suggestions", {}))).status).toBe(400);
     expect((await POST(jsonRequest("POST", "/api/suggestions", { around: [500, 36] }))).status).toBe(400);
@@ -33,7 +33,7 @@ describe("POST /api/suggestions", () => {
     vi.mocked(findSuggestionsAround).mockResolvedValue([]);
     const ok = await POST(jsonRequest("POST", "/api/suggestions", { around: [-119.79, 36.74], radiusKm: 10 }));
     expect(ok.status).toBe(200);
-    expect(findSuggestionsAround).toHaveBeenLastCalledWith([-119.79, 36.74], { defer: expect.any(Function) }, 10);
+    expect(findSuggestionsAround).toHaveBeenLastCalledWith([-119.79, 36.74], { defer: expect.any(Function), onResult: expect.any(Function) }, 10);
     for (const radiusKm of [0, 0.5, 10.5, 31, "10", null]) {
       expect((await POST(jsonRequest("POST", "/api/suggestions", { around: [-119.79, 36.74], radiusKm }))).status).toBe(400);
     }

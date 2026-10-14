@@ -233,6 +233,19 @@ describe("TripEditor", () => {
     expect(api.suggestions).toHaveBeenCalledTimes(1);
   });
 
+  it("searches again when the quiet search was only a stand-in (degraded), even with enough places", async () => {
+    const six = Array.from({ length: 6 }, (_, i) => ({ osmId: `node/${i}`, name: `Spot ${i}`, lat: 37.7 + i / 100, lng: -119.7, kind: "viewpoint" as const }));
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.mocked(api.suggestions).mockResolvedValueOnce({ suggestions: six, degraded: true }).mockResolvedValue({ suggestions: six, degraded: false });
+    vi.mocked(api.suggestionPopularity).mockResolvedValue({ counts: six.map(() => 7) });
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await waitFor(() => expect(api.suggestions).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+    expect((await screen.findAllByTestId("suggestion-card")).length).toBeGreaterThan(0);
+    expect(api.suggestions).toHaveBeenCalledTimes(2);
+  });
+
   it("searches again when the quiet search found only a thin list", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });

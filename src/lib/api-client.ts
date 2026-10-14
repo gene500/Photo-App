@@ -60,7 +60,7 @@ export const api = {
     ),
   /** `enrich: false` answers as soon as places are found; popularity then arrives via `suggestionPopularity`. */
   suggestions: (route: LngLat[] | { around: LngLat; radiusKm?: number }, opts: { enrich?: boolean } = {}) =>
-    request<{ suggestions: Suggestion[] }>("/api/suggestions", send("POST", { ...(Array.isArray(route) ? { coordinates: route } : route), ...opts })),
+    request<{ suggestions: Suggestion[]; degraded?: boolean }>("/api/suggestions", send("POST", { ...(Array.isArray(route) ? { coordinates: route } : route), ...opts })),
   /** Photo-count popularity for up to 10 places; a null count means unknown. */
   suggestionPopularity: (places: { lat: number; lng: number }[]) =>
     request<{ counts: (number | null)[] }>("/api/suggestions/popularity", send("POST", { places })),

@@ -210,7 +210,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     let entry: { key: string; prewarm: Prewarm } | null = null;
     const timer = setTimeout(() => {
       if (askedKeyRef.current === waypointKey) return;
-      entry = { key: waypointKey, prewarm: startPrewarm(async () => (await api.suggestions(downsampleRoute(geometry), { enrich: false })).suggestions) };
+      entry = { key: waypointKey, prewarm: startPrewarm(async () => {
+          const r = await api.suggestions(downsampleRoute(geometry), { enrich: false });
+          if (r.degraded) throw new Error("incomplete"); // a stand-in, not the full answer: Find searches again
+          return r.suggestions;
+        }) };
       prewarmRef.current = entry;
     }, PREWARM_DELAY_MS);
     return () => {

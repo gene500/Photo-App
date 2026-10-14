@@ -163,6 +163,29 @@ describe("local copy of the map data", () => {
     expect(slow).toHaveBeenCalledTimes(1);
   });
 
+  it("reports a partial-area stand-in as degraded and does not remember it", async () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({ type: "node", id: i + 1, lat: 37.2 + i / 100, lon: -119.6, tags: { tourism: "viewpoint", name: `P${i}` } }));
+    const slow = vi.fn(() => new Promise<unknown>(() => {}));
+    const seen: boolean[] = [];
+    const deps = { local: async () => null, localPartial: async () => many, fetchOverpass: slow, enrich: false, thinGraceMs: 5, onResult: (i: { degraded: boolean }) => void seen.push(i.degraded) };
+    expect(await findSuggestionsAround([-119.6, 37.2], deps)).toHaveLength(8);
+    expect(await findSuggestionsAround([-119.6, 37.2], deps)).toHaveLength(8);
+    expect(seen).toEqual([true, true]); // the second call was not served from a cache
+  });
+
+  it("when Overpass answers within the grace, its full answer replaces the stand-in and is final", async () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({ type: "node", id: i + 1, lat: 37.2 + i / 100, lon: -119.6, tags: { tourism: "viewpoint", name: `P${i}` } }));
+    const seen: boolean[] = [];
+    const out = await findSuggestionsAround([-119.6, 37.2], { local: async () => null, localPartial: async () => many, fetchOverpass: async () => overpassJson, enrich: false, thinGraceMs: 200, onResult: (i) => void seen.push(i.degraded) });
+    expect(out).toHaveLength(1);
+    expect(seen).toEqual([false]);
+  });
+
+  it("a failing partial lookup falls back to waiting for Overpass", async () => {
+    const out = await findSuggestionsAround([-119.6, 37.2], { local: async () => null, localPartial: async () => { throw new Error("db"); }, fetchOverpass: async () => overpassJson, enrich: false });
+    expect(out).toHaveLength(1);
+  });
+
   it("an area with no covered part still waits for Overpass", async () => {
     const fetchOverpass = vi.fn(async () => overpassJson);
     const out = await findSuggestionsAround([-119.6, 37.2], { local: async () => null, localPartial: async () => null, fetchOverpass, enrich: false, thinGraceMs: 10 });

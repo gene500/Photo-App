@@ -140,5 +140,9 @@ describe("localPlacesInRingPartial", () => {
     const got = await localPlacesInRingPartial(ring, async () => [row("node/1", 58.22, -134.48)]);
     expect(got).toHaveLength(1);
     expect(await localPlacesInRingPartial([[0, 0], [1, 1]], async () => [])).toBeNull();
+    // A corridor in Europe is not read at all.
+    const read = vi.fn(async () => []);
+    expect(await localPlacesInRingPartial(inside(2.3, 48.8), read)).toBeNull();
+    expect(read).not.toHaveBeenCalled();
   });
 });

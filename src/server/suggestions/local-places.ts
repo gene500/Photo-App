@@ -134,6 +134,8 @@ export async function localPlacesInRing(ring: LngLat[], read: CellReader = readC
  */
 export async function localPlacesInRingPartial(ring: LngLat[], read: CellReader = readCells): Promise<unknown[] | null> {
   if (ring.length < 3) return null;
+  // Cheap geographic filter: a corridor nowhere near North America has no US places to find (and must not flush the cell cache).
+  if (!ring.some(([lng, lat]) => lat >= 17 && lat <= 72 && lng >= -180 && lng <= -64)) return null;
   return ringRows(ring, read);
 }
 

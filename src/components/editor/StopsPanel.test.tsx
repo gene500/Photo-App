@@ -57,3 +57,38 @@ describe("StopsPanel", () => {
     expect(root.getAttribute("data-snap")).toBe("half");
   });
 });
+
+describe("StopsPanel tabs follow the ARIA tab pattern", () => {
+  it("links tabs and panel, and uses a roving tabindex", () => {
+    panel();
+    const stops = screen.getByRole("tab", { name: "Stops" });
+    const sugg = screen.getByRole("tab", { name: "Suggestions (3)" });
+    const tabpanel = screen.getByRole("tabpanel");
+    expect(stops.getAttribute("aria-controls")).toBe(tabpanel.id);
+    expect(tabpanel.getAttribute("aria-labelledby")).toBe(stops.id);
+    expect(stops.tabIndex).toBe(0);
+    expect(sugg.tabIndex).toBe(-1);
+  });
+
+  it("moves between tabs with the arrow, Home and End keys", async () => {
+    panel();
+    const user = userEvent.setup();
+    const stops = screen.getByRole("tab", { name: "Stops" });
+    stops.focus();
+    await user.keyboard("{ArrowRight}");
+    const sugg = screen.getByRole("tab", { name: "Suggestions (3)" });
+    expect(sugg.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(sugg);
+    expect(screen.getByRole("tabpanel").getAttribute("aria-labelledby")).toBe(sugg.id);
+    await user.keyboard("{ArrowRight}"); // wraps
+    expect(document.activeElement).toBe(stops);
+    await user.keyboard("{ArrowLeft}"); // wraps back
+    expect(document.activeElement).toBe(sugg);
+    await user.keyboard("{Home}");
+    expect(document.activeElement).toBe(stops);
+    await user.keyboard("{End}");
+    expect(document.activeElement).toBe(sugg);
+    expect(sugg.tabIndex).toBe(0);
+    expect(stops.tabIndex).toBe(-1);
+  });
+});

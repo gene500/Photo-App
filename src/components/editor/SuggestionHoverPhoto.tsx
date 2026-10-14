@@ -8,6 +8,12 @@ import { createSuggestionPopupContent, POPUP_PHOTO_WIDTH } from "./suggestion-po
 const GAP = 12;
 const EST_HEIGHT = 230;
 
+/** True when the card fits beside the row on at least one side; otherwise it would cover the row and its buttons. */
+export function hasRoomBeside(anchor: DOMRect): boolean {
+  const need = POPUP_PHOTO_WIDTH + GAP;
+  return window.innerWidth - anchor.right >= need + GAP || anchor.left >= need + 8;
+}
+
 /** The photo card shown beside a suggestion in the list while it is hovered (the map dot has its own popup). */
 export function SuggestionHoverPhoto({ suggestion, anchor }: { suggestion: Suggestion; anchor: DOMRect }) {
   const host = useRef<HTMLDivElement>(null);

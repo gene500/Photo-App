@@ -12,7 +12,7 @@ import { prefetchPlacePhotos } from "@/lib/place-photo-cache";
 import { useSuggestionWeather } from "@/lib/use-weather";
 import { holdWeather } from "@/lib/weather-cache";
 import { loadPopularityInBatches, POPULARITY_BATCH, rankSuggestions } from "@/lib/suggestion-popularity";
-import { computeArrivals, computeBestTimes, formatClock } from "@/lib/best-time";
+import { computeArrivals, computeBestTimes } from "@/lib/best-time";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useOfflineCopy } from "@/lib/use-offline-copy";
 import { defaultLightPref } from "@/lib/light-windows";
@@ -675,15 +675,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                     : "Add 2 stops to see the route"}
             </p>
             </div>
-            <StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} lng={stops[0]?.lng} disabled={optimizing} onChange={(iso) => saveStartTime(iso)} />
-            {trip.departAt && (
-              <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
-                <p data-testid="depart-note">Starts {formatClock(new Date(trip.departAt), undefined, settings.timeFormat)}</p>
-                <button type="button" disabled={optimizing} onClick={() => void resetDeparture()} className={btnGhost}>
-                  Reset to sunrise
-                </button>
-              </div>
-            )}
+            <StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} lng={stops[0]?.lng} disabled={optimizing} onChange={(iso) => saveStartTime(iso)} onReset={() => void resetDeparture()} />
             <ErrorBanner
               message={current?.dismissed ? null : activeRouteError}
               onDismiss={() => setRouteResult((r) => (r ? { ...r, dismissed: true } : r))}

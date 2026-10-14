@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 type Snap = "collapsed" | "half" | "full";
 type Tab = "stops" | "suggestions";
+
+const TABS: Tab[] = ["stops", "suggestions"];
 
 const BIGGER: Partial<Record<Snap, Snap>> = { collapsed: "half", half: "full" };
 const SMALLER: Partial<Record<Snap, Snap>> = { full: "half", half: "collapsed" };
@@ -27,6 +29,19 @@ type Props = {
 export function StopsPanel({ header, collapsedSummary, summary, stops, suggestions, suggestionCount }: Props) {
   const [snap, setSnap] = useState<Snap>("half");
   const [tab, setTab] = useState<Tab>("stops");
+  const uid = useId();
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
+  const tabId = (t: Tab) => `${uid}-tab-${t}`;
+  const panelId = `${uid}-panel`;
+  // ARIA tab pattern: arrows (and Home/End) move between the tabs, selecting and focusing the new one.
+  function onTabKey(e: KeyboardEvent<HTMLElement>) {
+    const at = TABS.indexOf(tab);
+    const next = e.key === "ArrowRight" ? (at + 1) % TABS.length : e.key === "ArrowLeft" ? (at + TABS.length - 1) % TABS.length : e.key === "Home" ? 0 : e.key === "End" ? TABS.length - 1 : null;
+    if (next === null) return;
+    e.preventDefault();
+    setTab(TABS[next]!);
+    tabRefs.current[TABS[next]!]?.focus();
+  }
   const open = snap !== "collapsed";
   const tabClass = (t: Tab) =>
     `min-h-9 rounded-lg px-3 py-1.5 text-sm transition ${tab === t ? "bg-surface font-medium text-foreground shadow-sm" : "text-muted hover:text-foreground"}`;
@@ -60,15 +75,15 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, suggestio
       {open && (
         <>
           <div className="space-y-2 px-4">{summary}</div>
-          <div role="tablist" className="mx-4 mt-3 flex gap-1 rounded-xl bg-hover p-1">
-            <button role="tab" type="button" aria-selected={tab === "stops"} className={tabClass("stops")} onClick={() => setTab("stops")}>
+          <div role="tablist" onKeyDown={onTabKey} className="mx-4 mt-3 flex gap-1 rounded-xl bg-hover p-1">
+            <button role="tab" type="button" id={tabId("stops")} ref={(el) => { tabRefs.current.stops = el; }} aria-selected={tab === "stops"} aria-controls={panelId} tabIndex={tab === "stops" ? 0 : -1} className={tabClass("stops")} onClick={() => setTab("stops")}>
               Stops
             </button>
-            <button role="tab" type="button" aria-selected={tab === "suggestions"} className={tabClass("suggestions")} onClick={() => setTab("suggestions")}>
+            <button role="tab" type="button" id={tabId("suggestions")} ref={(el) => { tabRefs.current.suggestions = el; }} aria-selected={tab === "suggestions"} aria-controls={panelId} tabIndex={tab === "suggestions" ? 0 : -1} className={tabClass("suggestions")} onClick={() => setTab("suggestions")}>
               {suggestionCount > 0 ? `Suggestions (${suggestionCount})` : "Suggestions"}
             </button>
           </div>
-          <div role="tabpanel" className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-4 pt-3">
+          <div role="tabpanel" id={panelId} aria-labelledby={tabId(tab)} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-4 pt-3">
             {tab === "stops" ? stops : suggestions}
           </div>
         </>

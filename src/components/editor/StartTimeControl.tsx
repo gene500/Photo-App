@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import { inputClass } from "@/components/ui/styles";
+import { btnGhost, inputClass } from "@/components/ui/styles";
 import { solarDateAt } from "@/lib/best-time";
 import { useMounted } from "@/lib/use-mounted";
 
@@ -31,7 +31,7 @@ export function fromTimeValue(plannedDate: string, time: string, lng?: number): 
 }
 
 /** Lets the traveller pick when the trip starts; leaving it empty means "sunrise at the first stop". */
-export function StartTimeControl({ plannedDate, departAt, lng, disabled, onChange }: {
+export function StartTimeControl({ plannedDate, departAt, lng, disabled, onChange, onReset }: {
   plannedDate: string;
   departAt: string | null;
   /** Longitude of the first stop, which decides which calendar day a picked time belongs to. */
@@ -39,6 +39,8 @@ export function StartTimeControl({ plannedDate, departAt, lng, disabled, onChang
   disabled?: boolean;
   /** Resolves when saved. `null` clears the start time. */
   onChange: (iso: string | null) => void | Promise<void>;
+  /** Clears the start time back to sunrise; the button shows only while a start time is set. */
+  onReset?: () => void;
 }) {
   const id = useId();
   // The time is read in the viewer's zone, so the server (and the first client render) show an empty field.
@@ -79,6 +81,11 @@ export function StartTimeControl({ plannedDate, departAt, lng, disabled, onChang
         onKeyDown={(e) => { if (e.key === "Enter") void commit(); }}
         className={`${inputClass} !mt-0 w-auto min-w-0`}
       />
+      {departAt && onReset && (
+        <button type="button" disabled={disabled} onClick={onReset} className={btnGhost}>
+          Reset to sunrise
+        </button>
+      )}
       {!departAt && <span id={`${id}-hint`} className="text-xs">Sunrise at the first stop</span>}
     </div>
   );

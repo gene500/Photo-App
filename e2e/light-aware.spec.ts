@@ -27,12 +27,13 @@ test("a sunset stop moves the departure so it is reached in its light, and Undo 
   await drawer.getByRole("button", { name: "Save" }).click();
   await expect(drawer).toHaveCount(0);
   await expect(rows.nth(2).getByTestId("best-time")).toHaveText(/^(Misses sunset by|Sunset window)/);
-  await expect(page.getByTestId("depart-note")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reset to sunrise" })).toHaveCount(0);
 
   const departSaved = page.waitForResponse((r) => r.request().method() === "PATCH" && /\/api\/trips\/[^/]+$/.test(r.url()));
   await page.getByRole("button", { name: "Optimize route" }).click();
   await departSaved;
-  await expect(page.getByTestId("depart-note")).toHaveText(/^Starts \d{1,2}:\d{2} (AM|PM)$/);
+  await expect(page.getByLabel("Start time")).toHaveValue(/^\d{2}:\d{2}$/);
+  await expect(page.getByRole("button", { name: "Reset to sunrise" })).toBeVisible();
   // The sunset stop is now reached inside its window.
   const sunsetRow = rows.filter({ hasText: "Sunset window" });
   await expect(sunsetRow).toHaveCount(1);
@@ -41,16 +42,16 @@ test("a sunset stop moves the departure so it is reached in its light, and Undo 
   const undone = page.waitForResponse((r) => r.request().method() === "PATCH" && /\/api\/trips\/[^/]+$/.test(r.url()));
   await page.getByRole("button", { name: "Undo" }).click();
   await undone;
-  await expect(page.getByTestId("depart-note")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reset to sunrise" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Undo" })).toHaveCount(0);
 
   // The departure survives a reload, and can be reset by hand.
   await page.getByRole("button", { name: "Optimize route" }).click();
-  await expect(page.getByTestId("depart-note")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reset to sunrise" })).toBeVisible();
   await page.reload();
-  await expect(page.getByTestId("depart-note")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Reset to sunrise" })).toBeVisible();
   const reset = page.waitForResponse((r) => r.request().method() === "PATCH" && /\/api\/trips\/[^/]+$/.test(r.url()));
   await page.getByRole("button", { name: "Reset to sunrise" }).click();
   await reset;
-  await expect(page.getByTestId("depart-note")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Reset to sunrise" })).toHaveCount(0);
 });

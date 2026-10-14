@@ -19,10 +19,10 @@
 - [ ] Get legal review of the privacy and terms pages.
 
 ## Known gaps
-- [ ] Priority is not shown on the public share page.
 - [ ] Must-have priority is a heavy weight, not a hard block.
 - [ ] Optimize with light preferences can pick its own start time.
-- [ ] Password-change UI missing; no email verification; signup email enumeration (409).
+- [ ] Sign in with Google (later): needs a Google OAuth client in Vercel env, a nullable password hash migration, account linking by email, and a non-password confirmation for delete-account and change-password.
+- [ ] No email verification; signup email enumeration (409).
 - [ ] CSP still allows `'unsafe-inline'`.
 - [ ] Share page `no-referrer` vs a URL-restricted Mapbox token.
 - [ ] Offline copies persist until sign-out; orphaned Blob files if deletion fails.

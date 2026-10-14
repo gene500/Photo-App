@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { solarDateAt } from "@/lib/best-time";
 import { fromTimeValue, StartTimeControl, toTimeValue } from "./StartTimeControl";
+
+// The helpers read the viewer's zone; pin one so the suite gives the same answer on any machine (CI is UTC).
+process.env.TZ = "America/New_York";
 
 describe("start time helpers", () => {
   it("round-trips a time on the trip's day in the viewer's time zone", () => {
@@ -52,5 +55,30 @@ describe("StartTimeControl", () => {
   it("is disabled while an optimize is running", () => {
     render(<StartTimeControl plannedDate="2026-07-01" departAt={null} disabled onChange={() => {}} />);
     expect((screen.getByLabelText("Start time") as HTMLInputElement).disabled).toBe(true);
+  });
+  it("saves once when Enter is followed by the blur", async () => {
+    const onChange = vi.fn();
+    render(<StartTimeControl plannedDate="2026-07-01" departAt={null} onChange={onChange} />);
+    await userEvent.type(screen.getByLabelText("Start time"), "0915{Enter}");
+    await userEvent.tab();
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+  it("keeps an edit made while a save is in flight", async () => {
+    let finish: () => void = () => {};
+    const onChange = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+    render(<StartTimeControl plannedDate="2026-07-01" departAt={null} onChange={onChange} />);
+    const input = screen.getByLabelText("Start time") as HTMLInputElement;
+    await userEvent.type(input, "0915{Enter}"); // save starts and is still pending
+    await userEvent.clear(input);
+    await userEvent.type(input, "1030");
+    await userEvent.tab(); // blurs while saving: not a second save
+    expect(onChange).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+    expect(input.value).toBe("10:30"); // the newer edit was not thrown away
+  });
+  it("shows an empty field until mounted (server render)", async () => {
+    const { renderToString } = await import("react-dom/server");
+    const departAt = fromTimeValue("2026-07-01", "07:00");
+    expect(renderToString(<StartTimeControl plannedDate="2026-07-01" departAt={departAt} onChange={() => {}} />)).not.toContain('value="07:00"');
   });
 });

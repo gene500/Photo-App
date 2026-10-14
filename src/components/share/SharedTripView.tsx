@@ -1,22 +1,22 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useMemo, useState } from "react";
 import { MapView } from "@/components/editor/MapView";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { card } from "@/components/ui/styles";
 import { computeArrivals, computeBestTimes, describeBestTime, formatClock } from "@/lib/best-time";
 import { describeLightHint, lightLabel } from "@/lib/light-windows";
 import { estimateLegDurations } from "@/lib/straight-line";
+import { useMounted } from "@/lib/use-mounted";
 import { stopColor } from "@/lib/stop-style";
 import type { LngLat, PublicTrip, Stop } from "@/lib/types";
 
 const noop = () => {};
-const subscribe = () => noop;
 
 /** Read-only trip for the public share page: map with numbered pins, then the stops with times. */
 export function SharedTripView({ trip }: { trip: PublicTrip }) {
   // Clock times use the viewer's time zone, so they are only rendered once mounted (no server/client mismatch).
-  const mounted = useSyncExternalStore(subscribe, () => true, () => false);
+  const mounted = useMounted();
   const { settings } = useSettings();
   const tf = settings.timeFormat;
   const [selected, setSelected] = useState<string | null>(null);

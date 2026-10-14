@@ -3,6 +3,13 @@
 import { MAX_DWELL_MINUTES } from "./validation";
 
 export const SETTINGS_KEY = "rtpp.settings.v1";
+/**
+ * Bumped when a stored value has to be reset once. Version 2: the default distance unit became miles, but anyone who had
+ * saved any setting before then has the full object stored with distanceUnit "km" (the old default), not a choice they
+ * made. Settings stored without a version (all of those) get distanceUnit reset to the default once; every write from
+ * now on carries the version, so a deliberate later pick of km is kept.
+ */
+export const SETTINGS_VERSION = 2;
 
 export const THEMES = ["system", "light", "dark"] as const;
 export const TEXT_SIZES = ["default", "large", "xlarge"] as const;
@@ -66,11 +73,19 @@ export function parseSettings(raw: unknown): Settings {
   };
 }
 
+/** The JSON to store: the settings plus the current version (see SETTINGS_VERSION). */
+export function serializeSettings(s: Settings): string {
+  return JSON.stringify({ ...s, version: SETTINGS_VERSION });
+}
+
 /** Parse the stored JSON string; null/corrupt falls back to defaults. */
 export function parseStoredSettings(json: string | null): Settings {
   if (!json) return DEFAULT_SETTINGS;
   try {
-    return parseSettings(JSON.parse(json));
+    const raw: unknown = JSON.parse(json);
+    const o = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
+    const outdated = o !== null && !(typeof o.version === "number" && o.version >= SETTINGS_VERSION);
+    return parseSettings(outdated ? { ...o, distanceUnit: DEFAULT_SETTINGS.distanceUnit } : raw);
   } catch {
     return DEFAULT_SETTINGS;
   }

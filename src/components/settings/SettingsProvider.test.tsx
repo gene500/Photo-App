@@ -3,7 +3,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { installMemoryStorage, type MemoryStorage } from "../../../tests/helpers/memory-storage";
-import { SETTINGS_KEY } from "@/lib/settings";
+import { SETTINGS_KEY, SETTINGS_VERSION } from "@/lib/settings";
 
 let storage: MemoryStorage;
 
@@ -64,7 +64,7 @@ describe("SettingsProvider", () => {
   it("follows another tab through the storage event", async () => {
     await setup();
     act(() => {
-      storage.setItem(SETTINGS_KEY, JSON.stringify({ theme: "dark", distanceUnit: "km" }));
+      storage.setItem(SETTINGS_KEY, JSON.stringify({ theme: "dark", distanceUnit: "km", version: SETTINGS_VERSION }));
       window.dispatchEvent(new StorageEvent("storage", { key: SETTINGS_KEY }));
     });
     expect(screen.getByTestId("out").textContent).toBe("dark|default|km");
@@ -107,10 +107,19 @@ describe("SettingsProvider", () => {
     await userEvent.click(screen.getByText("dark"));
     storage.failWrites = null;
     act(() => {
-      storage.setItem(SETTINGS_KEY, JSON.stringify({ theme: "light", distanceUnit: "km" }));
+      storage.setItem(SETTINGS_KEY, JSON.stringify({ theme: "light", distanceUnit: "km", version: SETTINGS_VERSION }));
       window.dispatchEvent(new StorageEvent("storage", { key: SETTINGS_KEY }));
     });
     expect(screen.getByTestId("out").textContent).toBe("light|default|km");
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+  });
+
+  it("resets a km saved before the miles default once, but keeps a later deliberate km", async () => {
+    storage.setItem(SETTINGS_KEY, JSON.stringify({ theme: "dark", distanceUnit: "km" })); // no version: the old default
+    await setup();
+    expect(screen.getByTestId("out").textContent).toBe("dark|default|mi");
+    await userEvent.click(screen.getByText("big")); // picks km on purpose
+    expect(screen.getByTestId("out").textContent).toBe("dark|xlarge|km");
+    expect(JSON.parse(storage.getItem(SETTINGS_KEY)!)).toMatchObject({ distanceUnit: "km", version: SETTINGS_VERSION });
   });
 });

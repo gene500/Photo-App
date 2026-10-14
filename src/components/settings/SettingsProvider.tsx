@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
-import { applyAppearance, DEFAULT_SETTINGS, parseSettings, parseStoredSettings, SETTINGS_KEY, type Settings } from "@/lib/settings";
+import { applyAppearance, DEFAULT_SETTINGS, parseSettings, parseStoredSettings, serializeSettings, SETTINGS_KEY, type Settings } from "@/lib/settings";
 
 type Ctx = { settings: Settings; update: (patch: Partial<Settings>) => void; reset: () => void };
 
@@ -54,7 +54,7 @@ function subscribe(cb: () => void): () => void {
 function write(next: Settings): void {
   memory = next;
   try {
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+    window.localStorage.setItem(SETTINGS_KEY, serializeSettings(next));
     unsaved = null;
   } catch {
     unsaved = next;

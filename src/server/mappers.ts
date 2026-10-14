@@ -1,6 +1,6 @@
 import type { Stop as StopRow, Trip as TripRow } from "@/generated/prisma/client";
 import { utcToDateOnly } from "@/lib/dates";
-import type { LightPref, PublicStop, PublicTrip, ShotItem, Stop, StopSource, Trip } from "@/lib/types";
+import type { LightPref, PublicStop, PublicTrip, ShotItem, Stop, StopPriority, StopSource, Trip } from "@/lib/types";
 
 export function toTripDto(row: TripRow): Trip {
   return {
@@ -32,6 +32,10 @@ export function parseShotChecklist(raw: string): ShotItem[] {
   }
 }
 
+function toPriority(value: string): StopPriority {
+  return value === "high" || value === "must" ? value : "normal";
+}
+
 export function toStopDto(row: StopRow): Stop {
   return {
     id: row.id,
@@ -45,6 +49,7 @@ export function toStopDto(row: StopRow): Stop {
     photoUrl: row.photoUrl,
     visited: row.visited,
     lightPref: row.lightPref as LightPref,
+    priority: toPriority(row.priority),
     dwellMinutes: row.dwellMinutes,
     shotNotes: row.shotNotes,
     shotChecklist: parseShotChecklist(row.shotChecklist),

@@ -1,4 +1,4 @@
-import { tripInputSchema } from "@/lib/validation";
+import { tripCreateSchema } from "@/lib/validation";
 import { handle, HttpError, readJson, requireUserId } from "@/server/http";
 import { enforceLimit } from "@/server/rate-limit";
 import { createTrip, listTrips, TooManyTripsError } from "@/server/trips";
@@ -11,7 +11,7 @@ export const GET = handle(async () => {
 export const POST = handle(async (req: Request) => {
   const userId = await requireUserId();
   enforceLimit("trip-write", userId);
-  const input = tripInputSchema.parse(await readJson(req));
+  const input = tripCreateSchema.parse(await readJson(req));
   try {
     return Response.json({ trip: await createTrip(userId, input) }, { status: 201 });
   } catch (e) {

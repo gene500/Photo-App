@@ -97,9 +97,11 @@ export function appleMapsUrls(stops: ExportStop[]): MapsLink[] | null {
   }));
 }
 
-/** Apple Maps directions link: first stop to the last, via the rest ("+to:" chained), however many stops are passed. Null under 2 stops. */
+/** Apple Maps driving directions: first stop to the last via the rest, one repeated `daddr` per later stop in order. Null under 2 stops. */
 export function appleMapsUrl(stops: ExportStop[]): string | null {
   if (stops.length < 2) return null;
-  const params = new URLSearchParams({ saddr: point(stops[0]), daddr: stops.slice(1).map(point).join(" to:") });
+  const params = new URLSearchParams({ saddr: point(stops[0]) });
+  for (const s of stops.slice(1)) params.append("daddr", point(s));
+  params.set("dirflg", "d");
   return `https://maps.apple.com/?${params.toString()}`;
 }

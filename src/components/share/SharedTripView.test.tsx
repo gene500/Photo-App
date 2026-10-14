@@ -36,6 +36,14 @@ describe("SharedTripView", () => {
     expect(screen.getByText("Best at sunset")).toBeTruthy();
   });
 
+  it("drops the straight-line caveat when a real driving route is supplied", () => {
+    const route = { geometry: [[-120, 36.3], [-120, 36.6]] as [number, number][], legs: [{ distance: 40000, duration: 2400 }], distance: 40000, duration: 2400 };
+    const { rerender } = render(<SharedTripView trip={trip} />);
+    expect(screen.getByText(/straight-line distances/i)).toBeTruthy();
+    rerender(<SharedTripView trip={trip} route={route} />);
+    expect(screen.queryByText(/straight-line distances/i)).toBeNull();
+  });
+
   it("offers no editing controls and renders no images", () => {
     const { container } = render(<SharedTripView trip={trip} />);
     expect(container.querySelector("input, textarea, img")).toBeNull();

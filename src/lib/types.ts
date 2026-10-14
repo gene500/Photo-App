@@ -7,6 +7,8 @@ export type Place = { name: string; lat: number; lng: number };
 export type StopSource = "manual" | "suggested";
 
 export type LightPref = "any" | "sunrise" | "golden" | "sunset";
+/** How hard Optimize route works to land a stop in its preferred light: "must" is protected above everything else. */
+export type StopPriority = "normal" | "high" | "must";
 
 export type ShotItem = { text: string; done: boolean };
 
@@ -23,6 +25,8 @@ export type Stop = {
   visited: boolean;
   /** Light the stop is best shot in. */
   lightPref: LightPref;
+  /** Weight of the stop's light in Optimize route; only matters with a light preference. */
+  priority: StopPriority;
   /** Minutes spent at the stop (0..480). */
   dwellMinutes: number;
   /** Free-text notes on the shots wanted here (max 2000 chars). */

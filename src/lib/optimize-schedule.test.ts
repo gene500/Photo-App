@@ -3,13 +3,38 @@ import { departureTime, getSunWindows } from "./best-time";
 import { lightWindows } from "./light-windows";
 import { optimizeOrder } from "./optimize-order";
 import { optimizeSchedule } from "./optimize-schedule";
-import type { LightPref } from "./types";
+import type { LightPref, StopPriority } from "./types";
 
 const DATE = "2026-07-01";
 const base = { lat: 37.7, lng: -119.6 };
 const stop = (lightPref: LightPref, dwellMinutes = 30, over: Partial<typeof base> = {}) => ({ ...base, ...over, lightPref, dwellMinutes });
 const flat = (n: number, secs: number) => Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 0 : secs)));
 const defaultDeparture = departureTime(base, DATE);
+
+describe("priority", () => {
+  const withPriority = (lightPref: LightPref, priority: StopPriority) => ({ ...base, lightPref, dwellMinutes: 30, priority });
+
+  it("lets the must-have stop keep its light when two stops cannot both have theirs", () => {
+    const d = flat(2, 2700);
+    const sunriseWins = optimizeSchedule({ durations: d, stops: [withPriority("sunrise", "must"), withPriority("sunset", "normal")], plannedDate: DATE, defaultDeparture });
+    expect(sunriseWins.misses.map((m) => m.stopIndex)).toEqual([1]);
+    const sunsetWins = optimizeSchedule({ durations: d, stops: [withPriority("sunrise", "normal"), withPriority("sunset", "must")], plannedDate: DATE, defaultDeparture });
+    expect(sunsetWins.misses.map((m) => m.stopIndex)).toEqual([0]);
+    expect(sunsetWins.misses[0]!.priority).toBe("normal");
+  });
+
+  it("treats high priority as a heavier weight than normal", () => {
+    const d = flat(2, 2700);
+    const r = optimizeSchedule({ durations: d, stops: [withPriority("sunrise", "normal"), withPriority("sunset", "high")], plannedDate: DATE, defaultDeparture });
+    expect(r.misses.map((m) => m.stopIndex)).toEqual([0]);
+  });
+
+  it("defaults a stop without a priority to normal", () => {
+    const d = flat(2, 2700);
+    const r = optimizeSchedule({ durations: d, stops: [stop("sunrise"), stop("sunset")], plannedDate: DATE, defaultDeparture });
+    expect(r.misses.every((m) => m.priority === "normal")).toBe(true);
+  });
+});
 
 describe("optimizeSchedule", () => {
   it("matches optimizeOrder and keeps the default departure when every stop is any", () => {

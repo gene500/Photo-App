@@ -1,21 +1,24 @@
 import { getSunWindows } from "./best-time";
 import { lightWindows } from "./light-windows";
 import { optimizeOrder } from "./optimize-order";
-import type { LightPref } from "./types";
+import type { LightPref, StopPriority } from "./types";
 
-export type ScheduleStop = { lat: number; lng: number; lightPref: LightPref; dwellMinutes: number };
+export type ScheduleStop = { lat: number; lng: number; lightPref: LightPref; dwellMinutes: number; priority?: StopPriority };
 
 export type ScheduleMiss = {
   /** Index in the submitted stop list. */
   stopIndex: number;
   minutes: number;
   pref: LightPref;
+  priority: StopPriority;
 };
 
 export type Schedule = { order: number[]; departAt: Date; misses: ScheduleMiss[] };
 
 /** One minute of missed light costs as much as this many seconds of driving. */
 const MISS_WEIGHT_SECONDS_PER_MIN = 3 * 60;
+/** Multiplier on a stop's missed minutes. "must" is large enough that no amount of driving outweighs missing it. */
+const PRIORITY_WEIGHT: Record<StopPriority, number> = { normal: 1, high: 8, must: 1000 };
 const EXACT_MAX_STOPS = 8;
 const STEP_MS = 15 * 60_000;
 const DAY_MS = 86_400_000;
@@ -55,6 +58,7 @@ class Evaluator {
   readonly candidates: number[];
   private readonly windowCache: Map<number, Interval[]>[];
   private readonly constrained: boolean[];
+  private readonly weight: number[];
   private readonly arrivalOffsets: Float64Array;
 
   constructor(
@@ -68,6 +72,7 @@ class Evaluator {
     }
     this.windowCache = stops.map(() => new Map());
     this.constrained = stops.map((s) => s.lightPref !== "any");
+    this.weight = stops.map((s) => PRIORITY_WEIGHT[s.priority ?? "normal"]);
     this.arrivalOffsets = new Float64Array(stops.length);
   }
 
@@ -115,12 +120,12 @@ class Evaluator {
     return best / 60_000;
   }
 
-  /** Total missed minutes for `order` when leaving at `departMs`. */
+  /** Total missed minutes for `order` when leaving at `departMs`, each stop counted by its priority weight. */
   missTotal(order: number[], departMs: number, off = this.offsets(order)): number {
     let total = 0;
     for (let k = 0; k < order.length; k++) {
       const i = order[k]!;
-      if (this.constrained[i]) total += this.missAt(i, departMs + off[k]!);
+      if (this.constrained[i]) total += this.weight[i]! * this.missAt(i, departMs + off[k]!);
     }
     return total;
   }
@@ -151,7 +156,7 @@ class Evaluator {
     order.forEach((i, k) => {
       if (!this.constrained[i]) return;
       const minutes = this.missAt(i, departMs + off[k]!);
-      if (minutes > 0) out.push({ stopIndex: i, minutes, pref: this.stops[i]!.lightPref });
+      if (minutes > 0) out.push({ stopIndex: i, minutes, pref: this.stops[i]!.lightPref, priority: this.stops[i]!.priority ?? "normal" });
     });
     return out;
   }

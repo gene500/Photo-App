@@ -1,5 +1,5 @@
-import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, Stop, Suggestion, Trip, TripSummary, WeatherForecast } from "./types";
-import type { NewStopInput, StopPatch, TripInput, TripPatch } from "./validation";
+import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, Stop, StopPriority, Suggestion, Trip, TripSummary, WeatherForecast } from "./types";
+import type { NewStopInput, StopPatch, TripCreateInput, TripPatch } from "./validation";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -34,7 +34,7 @@ export const api = {
   /** Permanently deletes the signed-in account and everything in it; the password confirms it. */
   deleteAccount: (password: string) => request<void>("/api/account", send("DELETE", { password })),
   listTrips: () => request<{ trips: TripSummary[] }>("/api/trips"),
-  createTrip: (input: TripInput) => request<{ trip: Trip }>("/api/trips", send("POST", input)),
+  createTrip: (input: TripCreateInput) => request<{ trip: Trip }>("/api/trips", send("POST", input)),
   updateTrip: (id: string, patch: TripPatch) => request<{ trip: Trip }>(`/api/trips/${id}`, send("PATCH", patch)),
   deleteTrip: (id: string) => request<void>(`/api/trips/${id}`, send("DELETE")),
   createShare: (tripId: string) => request<{ shareToken: string }>(`/api/trips/${tripId}/share`, send("POST")),
@@ -53,8 +53,8 @@ export const api = {
   removePhoto: (stopId: string) => request<{ stop: Stop }>(`/api/stops/${stopId}/photo`, send("DELETE")),
   directions: (coordinates: LngLat[]) =>
     request<{ route: RouteResult }>("/api/directions", send("POST", { coordinates })),
-  optimizeOrder: (coordinates: LngLat[], light?: { stops: { lightPref: LightPref; dwellMinutes: number }[]; plannedDate: string }) =>
-    request<{ order: number[]; departAt?: string | null; misses?: { stopIndex: number; minutes: number }[] }>(
+  optimizeOrder: (coordinates: LngLat[], light?: { stops: { lightPref: LightPref; priority?: StopPriority; dwellMinutes: number }[]; plannedDate: string }) =>
+    request<{ order: number[]; departAt?: string | null; misses?: { stopIndex: number; minutes: number; priority?: StopPriority }[] }>(
       "/api/optimize",
       send("POST", { coordinates, ...light }),
     ),

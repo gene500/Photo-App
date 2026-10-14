@@ -22,6 +22,7 @@ export const POST = handle(async (req: Request) => {
       lng,
       lightPref: prefs?.[i]?.lightPref ?? ("any" as const),
       dwellMinutes: prefs?.[i]?.dwellMinutes ?? 30,
+      priority: prefs?.[i]?.priority ?? ("normal" as const),
     }));
     const usesLight = stops.some((s) => s.lightPref !== "any");
     const result = optimizeSchedule({
@@ -34,7 +35,7 @@ export const POST = handle(async (req: Request) => {
       order: result.order,
       departAt: usesLight ? result.departAt.toISOString() : null,
       misses: result.misses
-        .map((m) => ({ stopIndex: m.stopIndex, minutes: Math.round(m.minutes) }))
+        .map((m) => ({ stopIndex: m.stopIndex, minutes: Math.round(m.minutes), priority: m.priority }))
         .filter((m) => m.minutes > 0),
     });
   } catch (e) {

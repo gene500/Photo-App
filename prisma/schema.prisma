@@ -51,6 +51,8 @@ model Stop {
   visited       Boolean  @default(false)
   /// "any" | "sunrise" | "golden" | "sunset", validated in application code.
   lightPref     String   @default("any")
+  /// "normal" | "high" | "must": how hard Optimize route works to land the stop in its light, validated in application code.
+  priority      String   @default("normal")
   /// Minutes spent at the stop (0..480), validated in application code.
   dwellMinutes  Int      @default(30)
   /// Free-text shot notes (max 2000 chars, validated in application code).

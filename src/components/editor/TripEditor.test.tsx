@@ -53,7 +53,7 @@ import { TripEditor } from "./TripEditor";
 const trip: TripWithStops = { id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] };
 const route = { geometry: [[-119.79, 36.74], [-119.12, 37.96]] as [number, number][], legs: [{ distance: 100_000, duration: 3_600 }], distance: 100_000, duration: 3_600 };
 const newStop = (over: Partial<Stop>): Stop => ({
-  id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37.5, lng: -119.5, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 30, shotNotes: null, shotChecklist: [], ...over,
+  id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37.5, lng: -119.5, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], ...over,
 });
 const seed = [
   newStop({ id: "a", order: 0, name: "A", lat: 36.74, lng: -119.79 }),
@@ -658,7 +658,7 @@ describe("TripEditor", () => {
       render(<TripEditor initialTrip={withStops(three)} />);
       await user.click(screen.getByRole("button", { name: "Optimize route" }));
       expect(api.optimizeOrder).toHaveBeenCalledWith([[-119, 36], [-119, 38], [-119, 37]], {
-        stops: [30, 30, 30].map((dwellMinutes) => ({ lightPref: "any", dwellMinutes })),
+        stops: [30, 30, 30].map((dwellMinutes) => ({ lightPref: "any", priority: "normal", dwellMinutes })),
         plannedDate: "2026-07-01",
       });
       await waitFor(() => expect(api.reorderStops).toHaveBeenCalledWith("t1", ["a", "c", "b"]));
@@ -683,16 +683,16 @@ describe("TripEditor", () => {
         const user = userEvent.setup();
         render(<TripEditor initialTrip={trip2(null)} />);
         await user.click(screen.getByRole("button", { name: "Optimize route" }));
-        expect(vi.mocked(api.optimizeOrder).mock.calls[0]![1]!.stops[2]).toEqual({ lightPref: "sunset", dwellMinutes: 30 });
+        expect(vi.mocked(api.optimizeOrder).mock.calls[0]![1]!.stops[2]).toEqual({ lightPref: "sunset", priority: "normal", dwellMinutes: 30 });
         await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", { departAt: "2026-07-01T23:15:00.000Z" }));
         expect(((await screen.findByLabelText("Start time")) as HTMLInputElement).value).toMatch(/^\d{2}:\d{2}$/);
-        expect(screen.getByRole("button", { name: "Reset to sunrise" })).toBeTruthy();
+        expect(screen.getByRole("button", { name: "Reset to now" })).toBeTruthy();
 
         await user.click(await screen.findByRole("button", { name: "Undo" }));
         await waitFor(() => expect(api.updateTrip).toHaveBeenLastCalledWith("t1", { departAt: null }));
         await waitFor(() => expect(api.reorderStops).toHaveBeenLastCalledWith("t1", ["a", "b", "c"]));
-        await waitFor(() => expect(screen.queryByRole("button", { name: "Reset to sunrise" })).toBeNull());
-        expect((screen.getByLabelText("Start time") as HTMLInputElement).value).toBe("");
+        await waitFor(() => expect(screen.queryByRole("button", { name: "Reset to now" })).toBeNull());
+        expect((screen.getByLabelText("Start time") as HTMLInputElement).value).toMatch(/^\d{2}:\d{2}$/); // back to now
       });
 
       it("keeps an unchanged order but still applies a new departure", async () => {
@@ -723,9 +723,9 @@ describe("TripEditor", () => {
         render(<TripEditor initialTrip={trip2("2026-07-01T23:15:00.000Z")} />);
         expect((screen.getByLabelText("Start time") as HTMLInputElement).value).toMatch(/^\d{2}:\d{2}$/);
         expect(screen.queryByTestId("depart-note")).toBeNull();
-        await user.click(screen.getByRole("button", { name: "Reset to sunrise" }));
+        await user.click(screen.getByRole("button", { name: "Reset to now" }));
         await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", { departAt: null }));
-        await waitFor(() => expect(screen.queryByRole("button", { name: "Reset to sunrise" })).toBeNull());
+        await waitFor(() => expect(screen.queryByRole("button", { name: "Reset to now" })).toBeNull());
       });
     });
 

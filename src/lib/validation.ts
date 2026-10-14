@@ -28,6 +28,12 @@ export const tripInputSchema = z.object({
 });
 export type TripInput = z.infer<typeof tripInputSchema>;
 
+const departAtSchema = z.iso.datetime({ offset: true }).refine((v) => inYearRange(Date.parse(v)), "Date must be between 1970 and 2200");
+
+/** A new trip may carry its start time; the app sends the current time on the trip's day. */
+export const tripCreateSchema = tripInputSchema.extend({ departAt: departAtSchema.optional() });
+export type TripCreateInput = z.infer<typeof tripCreateSchema>;
+
 export const MAX_SHOT_ITEMS = 20;
 export const MAX_SHOT_TEXT = 120;
 export const MAX_SHOT_NOTES = 2000;
@@ -37,10 +43,11 @@ export const shotChecklistSchema = z
 export const shotNotesSchema = z.string().max(MAX_SHOT_NOTES);
 
 export const lightPrefSchema = z.enum(["any", "sunrise", "golden", "sunset"]);
+export const stopPrioritySchema = z.enum(["normal", "high", "must"]);
 export const dwellMinutesSchema = z.number().int().min(0).max(MAX_DWELL_MINUTES);
 
 export const tripPatchSchema = tripInputSchema
-  .extend({ departAt: z.iso.datetime({ offset: true }).refine((v) => inYearRange(Date.parse(v)), "Date must be between 1970 and 2200").nullable() })
+  .extend({ departAt: departAtSchema.nullable() })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "Nothing to update");
 export type TripPatch = z.infer<typeof tripPatchSchema>;
@@ -52,6 +59,7 @@ export const newStopSchema = z.object({
   source: z.enum(["manual", "suggested"]),
   notes: z.string().max(5000).nullable().optional(),
   lightPref: lightPrefSchema.default("any"),
+  priority: stopPrioritySchema.default("normal"),
   dwellMinutes: dwellMinutesSchema.default(30),
   shotNotes: shotNotesSchema.nullable().optional(),
   shotChecklist: shotChecklistSchema.optional(),
@@ -64,6 +72,7 @@ export const stopPatchSchema = z
     notes: z.string().max(5000).nullable(),
     visited: z.boolean(),
     lightPref: lightPrefSchema,
+    priority: stopPrioritySchema,
     dwellMinutes: dwellMinutesSchema,
     shotNotes: shotNotesSchema.nullable(),
     shotChecklist: shotChecklistSchema,
@@ -107,7 +116,7 @@ export const optimizeRequestSchema = z
     .min(3, "Add at least 3 stops to optimize the route")
     .max(MAX_ROUTE_WAYPOINTS, `Optimizing supports at most ${MAX_ROUTE_WAYPOINTS} stops per trip`),
     /** Per-coordinate light preference and time spent; same length as `coordinates`. */
-    stops: z.array(z.object({ lightPref: lightPrefSchema, dwellMinutes: dwellMinutesSchema })).optional(),
+    stops: z.array(z.object({ lightPref: lightPrefSchema, priority: stopPrioritySchema.optional(), dwellMinutes: dwellMinutesSchema })).optional(),
     plannedDate: dateOnlySchema.optional(),
   })
   .refine((o) => !o.stops || o.stops.length === o.coordinates.length, {

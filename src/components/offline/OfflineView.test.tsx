@@ -11,7 +11,7 @@ import { OfflineView } from "./OfflineView";
 
 const stop = (i: number, over: Partial<Stop> = {}): Stop => ({
   id: `s${i}`, tripId: "t1", order: i, name: `Place ${i}`, lat: 37.7, lng: -119.6, notes: null, source: "manual",
-  photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 0, shotNotes: null, shotChecklist: [], ...over,
+  photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 0, shotNotes: null, shotChecklist: [], ...over,
 });
 const trip: TripWithStops = {
   id: "t1", name: "Yosemite loop", plannedDate: "2026-07-01", departAt: null, shareToken: null,

@@ -30,10 +30,11 @@ test("trip page hydrates cleanly when the browser's time zone differs from the s
 
   // Save a start time so the time field and the arrival times have something to show after a full server render.
   const startTime = page.getByLabel("Start time");
+  const saved = page.waitForResponse((r) => r.request().method() === "PATCH" && /\/api\/trips\/[^/]+$/.test(r.url()));
   await startTime.fill("08:30");
   await startTime.blur();
+  await saved; // reloading before the save lands would show the old time
   await expect(startTime).toHaveValue("08:30");
-  await expect(page.getByRole("button", { name: "Reset to sunrise" })).toBeVisible(); // only shown once the time is saved
   await expect(rows.first().getByTestId("best-time")).toHaveText(/\d{1,2}:\d{2} (AM|PM)/);
 
   // A fresh server render of the saved trip, hydrated in the New York browser.

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,7 +11,7 @@ import { StopDrawer } from "./StopDrawer";
 
 const stop: Stop = {
   id: "s1", tripId: "t1", order: 0, name: "Tunnel View", lat: 37.7156, lng: -119.6773,
-  notes: null, source: "suggested", photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 30, shotNotes: null, shotChecklist: [],
+  notes: null, source: "suggested", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [],
 };
 
 describe("StopDrawer", () => {
@@ -27,6 +27,20 @@ describe("StopDrawer", () => {
     // notes stayed blank (null), so only the visited change is sent
     expect(onSave).toHaveBeenCalledWith({ visited: true });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("has a priority slider that is off until a light is chosen, and saves the level", async () => {
+    const onSave = vi.fn(async () => {});
+    render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    const slider = screen.getByLabelText("Priority") as HTMLInputElement;
+    expect(slider.disabled).toBe(true);
+    expect(slider.getAttribute("aria-valuetext")).toBe("Normal");
+    await userEvent.selectOptions(screen.getByLabelText("Best light"), "golden");
+    expect(slider.disabled).toBe(false);
+    fireEvent.change(slider, { target: { value: "2" } });
+    expect(slider.getAttribute("aria-valuetext")).toBe("Must-have");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({ lightPref: "golden", priority: "must" });
   });
 
   it("sends only the fields changed in the drawer, so a Visited tick made elsewhere is not undone", async () => {

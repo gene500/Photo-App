@@ -125,6 +125,7 @@ function normalizeStop(raw: unknown, tripId: string, order: number): Stop | null
     photoUrl: null,
     visited: raw.visited === true,
     lightPref: (LIGHT_PREFS as readonly unknown[]).includes(raw.lightPref) ? (raw.lightPref as Stop["lightPref"]) : "any",
+    priority: raw.priority === "high" || raw.priority === "must" ? raw.priority : "normal",
     dwellMinutes: finite(raw.dwellMinutes) ? raw.dwellMinutes : 0,
     shotNotes: typeof raw.shotNotes === "string" ? raw.shotNotes : null,
     shotChecklist: checklist,

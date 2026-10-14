@@ -78,7 +78,7 @@ describe("POST /api/optimize", () => {
     });
     const body = await res.json();
     expect(body.misses.length).toBeGreaterThan(0);
-    expect(body.misses[0]).toEqual({ stopIndex: expect.any(Number), minutes: expect.any(Number) });
+    expect(body.misses[0]).toEqual({ stopIndex: expect.any(Number), minutes: expect.any(Number), priority: "normal" });
   });
 
   it("returns 502 with the user-safe message when Mapbox fails", async () => {

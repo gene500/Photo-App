@@ -6,7 +6,7 @@ import type { Stop, TripWithStops } from "./types";
 
 const stop = (i: number): Stop => ({
   id: `s${i}`, tripId: "t", order: i, name: `Stop ${i}`, lat: 37, lng: -119, notes: "n", source: "manual",
-  photoUrl: "/uploads/private.jpg", visited: false, lightPref: "golden", dwellMinutes: 30, shotNotes: "wide", shotChecklist: [{ text: "a", done: true }],
+  photoUrl: "/uploads/private.jpg", visited: false, lightPref: "golden", priority: "normal", dwellMinutes: 30, shotNotes: "wide", shotChecklist: [{ text: "a", done: true }],
 });
 const trip = (id: string, over: Partial<TripWithStops> = {}): TripWithStops => ({
   id, name: `Trip ${id}`, plannedDate: "2026-07-01", departAt: null, shareToken: "SECRET-TOKEN", stops: [stop(0), stop(1)], ...over,

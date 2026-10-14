@@ -138,17 +138,17 @@ describe("appleMapsUrl", () => {
   it("returns null under 2 stops", () => {
     expect(appleMapsUrl(mk(1))).toBeNull();
   });
-  it("builds saddr and daddr with +to: chaining", () => {
+  it("builds saddr and one daddr per later stop", () => {
     const u = new URL(appleMapsUrl(mk(2))!);
     expect(u.origin).toBe("https://maps.apple.com");
     expect(u.searchParams.get("saddr")).toBe("40,-120");
-    expect(u.searchParams.get("daddr")).toBe("40.1,-120.1");
+    expect(u.searchParams.getAll("daddr")).toEqual(["40.1,-120.1"]);
     const five = new URL(appleMapsUrl(mk(5))!);
-    expect(five.searchParams.get("daddr")).toBe("40.1,-120.1 to:40.2,-120.2 to:40.3,-120.3 to:40.4,-120.4");
-    expect(appleMapsUrl(mk(5))).toContain("+to%3A");
+    expect(five.searchParams.getAll("daddr")).toEqual(["40.1,-120.1", "40.2,-120.2", "40.3,-120.3", "40.4,-120.4"]);
+    expect(five.searchParams.get("dirflg")).toBe("d");
   });
   it("12 stops all fit in one link", () => {
-    expect(new URL(appleMapsUrl(mk(12))!).searchParams.get("daddr")!.split(" to:")).toHaveLength(11);
+    expect(new URL(appleMapsUrl(mk(12))!).searchParams.getAll("daddr")).toHaveLength(11);
   });
 });
 
@@ -166,7 +166,7 @@ describe("appleMapsUrls", () => {
     let previousEnd: string | null = null;
     for (const l of links) {
       const u = new URL(l.url);
-      const points = [u.searchParams.get("saddr")!, ...u.searchParams.get("daddr")!.split(" to:")];
+      const points = [u.searchParams.get("saddr")!, ...u.searchParams.getAll("daddr")];
       expect(points.length).toBeLessThanOrEqual(APPLE_MAX_STOPS_PER_LINK);
       if (previousEnd) expect(points[0]).toBe(previousEnd);
       previousEnd = points[points.length - 1]!;

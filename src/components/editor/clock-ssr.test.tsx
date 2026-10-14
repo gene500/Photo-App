@@ -10,7 +10,7 @@ vi.mock("@/lib/use-weather", () => ({ useWeatherLine: () => null }));
 
 const stop: Stop = {
   id: "a", tripId: "t1", order: 0, name: "Pier", lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null,
-  visited: false, lightPref: "sunset", dwellMinutes: 30, shotNotes: null, shotChecklist: [],
+  visited: false, lightPref: "sunset", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [],
 };
 const best = { window: "sunset" as const, at: new Date("2026-07-01T03:00:00Z"), status: "ok" as never } as never;
 const arrival = new Date("2026-07-01T03:00:00Z");

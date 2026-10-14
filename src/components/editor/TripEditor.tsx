@@ -13,6 +13,8 @@ import { useSuggestionWeather } from "@/lib/use-weather";
 import { holdWeather } from "@/lib/weather-cache";
 import { loadPopularityInBatches, POPULARITY_BATCH, rankSuggestions } from "@/lib/suggestion-popularity";
 import { computeArrivals, computeBestTimes } from "@/lib/best-time";
+import { useMounted } from "@/lib/use-mounted";
+import { fromTimeValue, toTimeValue } from "./StartTimeControl";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useOfflineCopy } from "@/lib/use-offline-copy";
 import { defaultLightPref } from "@/lib/light-windows";
@@ -106,7 +108,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     idsKeyRef.current = idsKey;
   }, [idsKey]);
   // What the optimizer reads besides positions (including the trip date): a change to it mid-flight makes the result stale.
-  const prefsKey = JSON.stringify([trip.plannedDate, stops.map((s) => [s.lightPref, s.dwellMinutes])]);
+  const prefsKey = JSON.stringify([trip.plannedDate, stops.map((s) => [s.lightPref, s.priority, s.dwellMinutes])]);
   const prefsKeyRef = useRef(prefsKey);
   useEffect(() => {
     prefsKeyRef.current = prefsKey;
@@ -224,15 +226,24 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }, [activeRoute, waypointKey]);
   const legDurations = activeRoute ? activeRoute.legs.map((l) => l.duration) : null;
 
+  // With no saved start time the trip starts now (fixed when the editor opened), on the trip's day.
+  const mounted = useMounted();
+  const [openedAt] = useState(() => new Date().toISOString());
+  const defaultDepartAt = useMemo(
+    () => (mounted ? fromTimeValue(trip.plannedDate, toTimeValue(openedAt), stops[0]?.lng) : null),
+    [mounted, trip.plannedDate, openedAt, stops[0]?.lng], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const departAt = trip.departAt ?? defaultDepartAt;
+
   const bestTimes = useMemo(
-    () => computeBestTimes({ plannedDate: trip.plannedDate, departAt: trip.departAt, stops }, legDurations),
+    () => computeBestTimes({ plannedDate: trip.plannedDate, departAt, stops }, legDurations),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- legDurations is derived from activeRoute
-    [trip.plannedDate, trip.departAt, stops, activeRoute],
+    [trip.plannedDate, departAt, stops, activeRoute],
   );
   const arrivals = useMemo(
-    () => computeArrivals({ plannedDate: trip.plannedDate, departAt: trip.departAt, stops }, legDurations),
+    () => computeArrivals({ plannedDate: trip.plannedDate, departAt, stops }, legDurations),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- legDurations is derived from activeRoute
-    [trip.plannedDate, trip.departAt, stops, activeRoute],
+    [trip.plannedDate, departAt, stops, activeRoute],
   );
 
   async function saveTrip(patch: TripPatch) {
@@ -341,7 +352,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     setOptimizeNote(null);
     try {
       const result = await api.optimizeOrder(before.map((s): LngLat => [s.lng, s.lat]), {
-        stops: before.map((s) => ({ lightPref: s.lightPref, dwellMinutes: s.dwellMinutes })),
+        stops: before.map((s) => ({ lightPref: s.lightPref, priority: s.priority, dwellMinutes: s.dwellMinutes })),
         plannedDate: trip.plannedDate,
       });
       if (
@@ -353,9 +364,12 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         return;
       }
       const ids = result.order.map((i) => before[i].id);
-      const misses = (result.misses ?? []).flatMap((m) => (before[m.stopIndex] ? [before[m.stopIndex].name] : []));
+      const missed = (result.misses ?? []).flatMap((m) => (before[m.stopIndex] ? [{ name: before[m.stopIndex].name, must: m.priority === "must" }] : []));
+      const misses = missed.map((m) => m.name);
+      const mustMisses = missed.filter((m) => m.must).map((m) => m.name);
       const missNote = misses.length
-        ? `Can't fit ${misses.length} ${misses.length === 1 ? "stop in its light" : "stops in their light"}: ${misses.join(", ")}.`
+        ? `Can't fit ${misses.length} ${misses.length === 1 ? "stop in its light" : "stops in their light"}: ${misses.join(", ")}.` +
+          (mustMisses.length ? ` ${mustMisses.join(", ")} ${mustMisses.length === 1 ? "is a must-have" : "are must-haves"}: try fewer stops or a different order.` : "")
         : null;
       // null means no stop has a light preference: leave the departure alone.
       const nextDepartAt = result.departAt ?? previousDepartAt;
@@ -675,7 +689,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                     : "Add 2 stops to see the route"}
             </p>
             </div>
-            <StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} lng={stops[0]?.lng} disabled={optimizing} onChange={(iso) => saveStartTime(iso)} onReset={() => void resetDeparture()} />
+            <StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} defaultDepartAt={defaultDepartAt} lng={stops[0]?.lng} disabled={optimizing} onChange={(iso) => saveStartTime(iso)} onReset={() => void resetDeparture()} />
             <ErrorBanner
               message={current?.dismissed ? null : activeRouteError}
               onDismiss={() => setRouteResult((r) => (r ? { ...r, dismissed: true } : r))}

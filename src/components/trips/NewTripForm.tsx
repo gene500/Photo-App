@@ -6,6 +6,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnPrimary, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { localDateOnly } from "@/lib/dates";
+import { fromTimeValue } from "@/components/editor/StartTimeControl";
 
 
 const noopSubscribe = () => () => {};
@@ -13,6 +14,13 @@ const noopSubscribe = () => () => {};
 /** The viewer's local date; empty during server render so hydration never mismatches. */
 function useLocalToday(): string {
   return useSyncExternalStore(noopSubscribe, () => localDateOnly(new Date()), () => "");
+}
+
+/** The current time of day on the trip's date: where a new trip starts unless the traveller picks another time. */
+function nowOnDay(plannedDate: string): string | undefined {
+  const now = new Date();
+  const clock = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  return fromTimeValue(plannedDate, clock) ?? undefined;
 }
 
 export function NewTripForm() {
@@ -28,7 +36,7 @@ export function NewTripForm() {
     setPending(true);
     setError(null);
     try {
-      const { trip } = await api.createTrip({ name, plannedDate });
+      const { trip } = await api.createTrip({ name, plannedDate, departAt: nowOnDay(plannedDate) });
       router.push(`/trips/${trip.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't create the trip");

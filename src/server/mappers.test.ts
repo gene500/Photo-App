@@ -4,7 +4,7 @@ import { parseShotChecklist, toStopDto } from "./mappers";
 
 const row: StopRow = {
   id: "s1", tripId: "t1", order: 0, name: "A", lat: 1, lng: 2, notes: null, source: "manual", photoUrl: null,
-  visited: false, lightPref: "any", dwellMinutes: 30, shotNotes: "Tripod", shotChecklist: "[]",
+  visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: "Tripod", shotChecklist: "[]",
   createdAt: new Date(), updatedAt: new Date(),
 };
 

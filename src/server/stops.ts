@@ -52,6 +52,7 @@ export async function addStop(
         source: input.source,
         notes: input.notes ?? null,
         lightPref: input.lightPref,
+        priority: input.priority,
         dwellMinutes: input.dwellMinutes,
         shotNotes: cleanShotNotes(input.shotNotes ?? null),
         shotChecklist: JSON.stringify(input.shotChecklist ?? []),

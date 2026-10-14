@@ -11,7 +11,7 @@ const useWeatherLine = vi.fn();
 vi.mock("@/lib/use-weather", () => ({ useWeatherLine: (...a: unknown[]) => useWeatherLine(...a) }));
 
 const stop = (id: string, name: string, extra: Partial<Stop> = {}): Stop => ({
-  id, tripId: "t1", order: 0, name, lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 30, shotNotes: null, shotChecklist: [], ...extra,
+  id, tripId: "t1", order: 0, name, lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], ...extra,
 });
 const handlers = { onReorder: vi.fn(), onToggleVisited: vi.fn(), onDelete: vi.fn(), onSelect: vi.fn() };
 

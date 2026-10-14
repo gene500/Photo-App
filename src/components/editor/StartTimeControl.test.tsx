@@ -36,7 +36,7 @@ describe("StartTimeControl", () => {
   it("saves the chosen time on blur", async () => {
     const onChange = vi.fn();
     render(<StartTimeControl plannedDate="2026-07-01" departAt={null} onChange={onChange} />);
-    expect(screen.getByText("Sunrise at the first stop")).toBeTruthy();
+    expect(screen.getByText("Now")).toBeTruthy();
     const input = screen.getByLabelText("Start time");
     await userEvent.type(input, "0915");
     await userEvent.tab();
@@ -84,15 +84,15 @@ describe("StartTimeControl", () => {
 });
 
 describe("StartTimeControl reset", () => {
-  it("shows Reset to sunrise beside the input only while a start time is set, disabled while busy", async () => {
+  it("shows Reset to now beside the input only while a start time is set, disabled while busy", async () => {
     const onReset = vi.fn();
     const { rerender } = render(<StartTimeControl plannedDate="2026-07-01" departAt={null} onChange={vi.fn()} onReset={onReset} />);
-    expect(screen.queryByRole("button", { name: "Reset to sunrise" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reset to now" })).toBeNull();
     const iso = fromTimeValue("2026-07-01", "08:30")!;
     rerender(<StartTimeControl plannedDate="2026-07-01" departAt={iso} onChange={vi.fn()} onReset={onReset} />);
-    await userEvent.click(screen.getByRole("button", { name: "Reset to sunrise" }));
+    await userEvent.click(screen.getByRole("button", { name: "Reset to now" }));
     expect(onReset).toHaveBeenCalledTimes(1);
     rerender(<StartTimeControl plannedDate="2026-07-01" departAt={iso} disabled onChange={vi.fn()} onReset={onReset} />);
-    expect((screen.getByRole("button", { name: "Reset to sunrise" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Reset to now" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

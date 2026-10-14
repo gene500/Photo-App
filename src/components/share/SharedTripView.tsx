@@ -9,12 +9,12 @@ import { describeLightHint, lightLabel } from "@/lib/light-windows";
 import { estimateLegDurations } from "@/lib/straight-line";
 import { useMounted } from "@/lib/use-mounted";
 import { stopColor } from "@/lib/stop-style";
-import type { LngLat, PublicTrip, Stop } from "@/lib/types";
+import type { LngLat, PublicTrip, RouteResult, Stop } from "@/lib/types";
 
 const noop = () => {};
 
 /** Read-only trip for the public share page: map with numbered pins, then the stops with times. */
-export function SharedTripView({ trip }: { trip: PublicTrip }) {
+export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route?: RouteResult | null }) {
   // Clock times use the viewer's time zone, so they are only rendered once mounted (no server/client mismatch).
   const mounted = useMounted();
   const { settings } = useSettings();
@@ -23,12 +23,12 @@ export function SharedTripView({ trip }: { trip: PublicTrip }) {
 
   // The map takes Stop objects; the keys are made from the order, never from database ids.
   const mapStops: Stop[] = useMemo(
-    () => trip.stops.map((s) => ({ ...s, id: `stop-${s.order}`, tripId: "", photoUrl: null })),
+    () => trip.stops.map((s) => ({ ...s, id: `stop-${s.order}`, tripId: "", photoUrl: null, priority: "normal" as const })),
     [trip.stops],
   );
-  // The routing API needs a login, so the line is straight and the times are estimated from distance.
-  const line: LngLat[] = useMemo(() => trip.stops.map((s) => [s.lng, s.lat]), [trip.stops]);
-  const legs = useMemo(() => estimateLegDurations(trip.stops), [trip.stops]);
+  // The page fetches the real driving route on the server; without one (routing down) the line is straight and the times are estimated from distance.
+  const line: LngLat[] = useMemo(() => route?.geometry ?? trip.stops.map((s) => [s.lng, s.lat]), [route, trip.stops]);
+  const legs = useMemo(() => (route ? route.legs.map((l) => l.duration) : estimateLegDurations(trip.stops)), [route, trip.stops]);
   const timesInput = { plannedDate: trip.plannedDate, departAt: trip.departAt, stops: trip.stops };
   const arrivals = useMemo(
     () => computeArrivals(timesInput, legs),
@@ -106,7 +106,7 @@ export function SharedTripView({ trip }: { trip: PublicTrip }) {
                 );
               })}
             </ol>
-            <p className="px-4 pb-3 text-xs text-muted">Times are estimates from straight-line distances.</p>
+            {!route && <p className="px-4 pb-3 text-xs text-muted">Times are estimates from straight-line distances.</p>}
           </>
         )}
       </aside>

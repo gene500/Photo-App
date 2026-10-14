@@ -25,7 +25,7 @@ vi.mock("@/lib/place-photo-cache", () => ({ loadPlacePhoto: vi.fn(async () => nu
 
 const stop = (i: number, over: Partial<Stop> = {}): Stop => ({
   id: `s${i}`, tripId: "t1", order: i, name: EVIL, lat: 37.7, lng: -119.6, notes: EVIL, source: "manual",
-  photoUrl: null, visited: false, lightPref: "any", dwellMinutes: 0, shotNotes: EVIL, shotChecklist: [{ text: EVIL, done: false }], ...over,
+  photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 0, shotNotes: EVIL, shotChecklist: [{ text: EVIL, done: false }], ...over,
 });
 
 beforeEach(() => {

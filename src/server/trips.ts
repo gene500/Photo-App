@@ -4,12 +4,12 @@ import type { TripInput, TripPatch } from "@/lib/validation";
 import { prisma } from "./db";
 import { toStopDto, toTripDto } from "./mappers";
 
-function patchData(patch: TripPatch) {
+function patchData(patch: TripPatch, dateChanged: boolean) {
   return {
     ...(patch.name !== undefined && { name: patch.name }),
     ...(patch.plannedDate && { plannedDate: dateOnlyToUtc(patch.plannedDate) }),
     // A saved departure belongs to the old day; changing the date resets it to "sunrise at the first stop".
-    ...(patch.plannedDate && patch.departAt === undefined && { departAt: null }),
+    ...(dateChanged && patch.departAt === undefined && { departAt: null }),
     ...(patch.departAt !== undefined && { departAt: patch.departAt === null ? null : new Date(patch.departAt) }),
   };
 }
@@ -65,9 +65,15 @@ export async function updateTrip(
   tripId: string,
   patch: TripPatch,
 ): Promise<Trip | null> {
+  // Only a different day resets the start time: saving the same date again (a rename) must keep it.
+  let dateChanged = false;
+  if (patch.plannedDate) {
+    const current = await prisma.trip.findFirst({ where: { id: tripId, userId }, select: { plannedDate: true } });
+    dateChanged = !current || current.plannedDate.getTime() !== dateOnlyToUtc(patch.plannedDate).getTime();
+  }
   const { count } = await prisma.trip.updateMany({
     where: { id: tripId, userId },
-    data: patchData(patch),
+    data: patchData(patch, dateChanged),
   });
   if (count === 0) return null;
   return toTripDto(await prisma.trip.findUniqueOrThrow({ where: { id: tripId } }));

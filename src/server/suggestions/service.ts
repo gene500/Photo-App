@@ -19,9 +19,11 @@ export const MIN_LOCAL_PLACES = 5;
 const cache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS);
 const rawCache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS);
 
-/** Searches already underway, so a repeat of the same one (a double-fired effect, a retry click) joins it instead of starting another. */
+/** Most Overpass calls kept running in the background per instance after a thin local answer was shown. */
+const MAX_LATE_ASKS = 10;
 /** Overpass calls still running after a thin local answer was shown, so a repeat search joins them instead of racing the mirrors again. */
 const lateAsks = new Map<string, Promise<Suggestion[]>>();
+/** Searches already underway, so a repeat of the same one (a double-fired effect, a retry click) joins it instead of starting another. */
 const inflight = new Map<string, Promise<{ parsed: Suggestion[]; degraded: boolean }>>();
 
 export function routeCacheKey(route: LngLat[]): string {
@@ -63,6 +65,10 @@ async function loadRaw(key: string, buildQuery: () => string, local: () => Promi
     const parsed = parseOverpassResponse({ elements: nearby }, SUGGESTION_CAP, origin);
     rawCache.set(key, parsed);
     return { parsed, degraded: false };
+  }
+  // Bounded background work: with this many slow Overpass calls already running, a thin local answer is shown as is.
+  if (nearby?.length && !lateAsks.has(key) && lateAsks.size >= MAX_LATE_ASKS) {
+    return { parsed: parseOverpassResponse({ elements: nearby }, SUGGESTION_CAP, origin), degraded: true };
   }
   const asked = lateAsks.get(key) ?? (async () => parseOverpassResponse(await (deps.fetchOverpass ?? fetchOverpass)(buildQuery()), SUGGESTION_CAP, origin))();
   if (!nearby?.length) {

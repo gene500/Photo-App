@@ -28,7 +28,7 @@ export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: 
     setBusy(true);
     setError(null);
     try {
-      await onSave({ name, plannedDate });
+      await onSave(plannedDate === trip.plannedDate ? { name } : { name, plannedDate });
       setEditing(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't save the trip");

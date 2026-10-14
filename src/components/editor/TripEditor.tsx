@@ -652,7 +652,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
             {trip.departAt && (
               <div className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
                 <p data-testid="depart-note">Starts {formatClock(new Date(trip.departAt), undefined, settings.timeFormat)}</p>
-                <button type="button" onClick={() => void resetDeparture()} className={btnGhost}>
+                <button type="button" disabled={optimizing} onClick={() => void resetDeparture()} className={btnGhost}>
                   Reset to sunrise
                 </button>
               </div>

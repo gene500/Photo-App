@@ -82,3 +82,12 @@ describe("cellsForRing / pointInRing", () => {
     expect(pointInRing(-119.395, 37.5, ring)).toBe(false);
   });
 });
+
+describe("cellsForRing fills wide corridors", () => {
+  it("includes cells wholly inside a polygon wider than a cell", async () => {
+    const { cellsForRing, cellOf } = await import("./places-grid");
+    const ring: [number, number][] = [[-120, 37], [-119.5, 37], [-119.5, 37.5], [-120, 37.5], [-120, 37]];
+    const cells = new Set(cellsForRing(ring));
+    expect(cells.has(cellOf(37.25, -119.75))).toBe(true);
+  });
+});

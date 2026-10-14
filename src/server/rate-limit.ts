@@ -12,8 +12,14 @@ import { HttpError } from "./http";
  */
 
 type Bucket = { count: number; resetAt: number };
-const buckets = new Map<string, Bucket>();
+/** One map per policy, so flooding one (say signup from many addresses) cannot push another's counters (login failures) out. */
+const maps = new Map<string, Map<string, Bucket>>();
 const MAX_BUCKETS = 10_000;
+const mapFor = (name: string): Map<string, Bucket> => {
+  let m = maps.get(name);
+  if (!m) maps.set(name, (m = new Map()));
+  return m;
+};
 
 const MINUTE = 60_000;
 
@@ -45,23 +51,20 @@ function disabled(): boolean {
   return process.env.NODE_ENV !== "production" && process.env.RATE_LIMIT_DISABLED === "1";
 }
 
-function sweep(now: number): void {
+function sweep(buckets: Map<string, Bucket>, now: number): void {
   if (buckets.size < MAX_BUCKETS) return;
   for (const [k, b] of buckets) if (b.resetAt <= now) buckets.delete(k);
-  // Still full of live buckets (an attack with many distinct keys): drop the oldest rather than grow forever.
-  for (const k of buckets.keys()) {
-    if (buckets.size < MAX_BUCKETS) break;
-    buckets.delete(k);
-  }
 }
 
 function slot(name: PolicyName, key: string, now: number): Bucket {
-  const id = `${name}:${key}`;
-  const existing = buckets.get(id);
+  const buckets = mapFor(name);
+  const existing = buckets.get(key);
   if (existing && existing.resetAt > now) return existing;
-  sweep(now);
+  sweep(buckets, now);
   const fresh = { count: 0, resetAt: now + POLICIES[name].windowMs };
-  buckets.set(id, fresh);
+  // Full of live entries (an attack with many distinct keys): never evict them. The new key is counted for this one
+  // request only, so existing keys keep their counters and the map cannot grow without bound.
+  if (buckets.size < MAX_BUCKETS) buckets.set(key, fresh);
   return fresh;
 }
 
@@ -83,17 +86,17 @@ export function hit(name: PolicyName, key: string, now = Date.now()): LimitResul
 export function isBlocked(name: PolicyName, key: string, now = Date.now()): LimitResult {
   if (disabled()) return { ok: true };
   // Read-only: looking up a key must not create a bucket (an attacker submitting endless emails would fill the map).
-  const b = buckets.get(`${name}:${key}`);
+  const b = mapFor(name).get(key);
   if (!b || b.resetAt <= now) return { ok: true };
   return b.count >= POLICIES[name].limit ? { ok: false, retryAfter: Math.max(1, Math.ceil((b.resetAt - now) / 1000)) } : { ok: true };
 }
 
 export function resetLimit(name: PolicyName, key: string): void {
-  buckets.delete(`${name}:${key}`);
+  mapFor(name).delete(key);
 }
 
 export function clearAllLimits(): void {
-  buckets.clear();
+  maps.clear();
 }
 
 /** Counts a hit and throws a 429 (with Retry-After) when over the limit. */
@@ -105,7 +108,20 @@ export function enforceLimit(name: PolicyName, key: string, now = Date.now()): v
 /** Best-effort client address. Vercel overwrites these headers, so they are trustworthy there. */
 export function clientIp(headers: Headers): string {
   const real = headers.get("x-real-ip")?.trim();
-  if (real) return real;
+  if (real) return ipKey(real);
   const first = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return first || "unknown";
+  return first ? ipKey(first) : "unknown";
+}
+
+/** IPv4 as is. IPv6 collapses to its /64, because one customer controls a whole /64 and could otherwise rotate addresses past every per-IP limit. */
+export function ipKey(ip: string): string {
+  if (!ip.includes(":")) return ip;
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip);
+  if (mapped) return mapped[1];
+  const [head, tail = ""] = ip.split("::");
+  const front = head ? head.split(":") : [];
+  const back = tail ? tail.split(":") : [];
+  const groups = ip.includes("::") ? [...front, ...Array(Math.max(0, 8 - front.length - back.length)).fill("0"), ...back] : front;
+  if (groups.length !== 8) return ip;
+  return `${groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, "")).join(":")}::/64`;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { inputClass } from "@/components/ui/styles";
 import { solarDateAt } from "@/lib/best-time";
 
@@ -44,15 +44,19 @@ export function StartTimeControl({ plannedDate, departAt, lng, disabled, onChang
   // null while the person is not editing, so the field always follows the saved value.
   const [draft, setDraft] = useState<string | null>(null);
 
+  const saving = useRef(false);
+
   async function commit() {
-    if (draft === null) return;
+    if (draft === null || saving.current) return; // Enter then blur must not save twice
     const next = draft;
     // An emptied or half-typed field is not a choice (use "Reset to sunrise" to clear it): fall back to the saved time.
     const iso = next === "" || next === saved ? null : fromTimeValue(plannedDate, next, lng);
     if (!iso) return setDraft(null);
+    saving.current = true;
     try {
       await onChange(iso); // the field keeps showing the new time while it saves
     } finally {
+      saving.current = false;
       setDraft(null);
     }
   }

@@ -55,3 +55,13 @@ describe("rate limiter", () => {
     expect(clientIp(new Headers())).toBe("unknown");
   });
 });
+
+describe("IPv6 clients and map isolation", () => {
+  it("collapses an IPv6 address to its /64 and unwraps IPv4-mapped ones", async () => {
+    const { ipKey } = await import("./rate-limit");
+    expect(ipKey("2001:db8:1:2:aaaa:bbbb:cccc:dddd")).toBe(ipKey("2001:db8:1:2::1"));
+    expect(ipKey("2001:db8:1:2::1")).not.toBe(ipKey("2001:db8:1:3::1"));
+    expect(ipKey("::ffff:203.0.113.9")).toBe("203.0.113.9");
+    expect(ipKey("203.0.113.9")).toBe("203.0.113.9");
+  });
+});

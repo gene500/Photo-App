@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -25,8 +25,18 @@ describe("TripHeader", () => {
     await userEvent.clear(name);
     await userEvent.type(name, "Eastern Sierra");
     await userEvent.click(screen.getByRole("button", { name: "Save trip" }));
-    expect(onSave).toHaveBeenCalledWith({ name: "Eastern Sierra", plannedDate: "2026-07-01" });
+    // The unchanged date is not re-sent, so a rename cannot reset the trip's start time.
+    expect(onSave).toHaveBeenCalledWith({ name: "Eastern Sierra" });
     expect(screen.getByRole("button", { name: "Edit trip" })).toBeTruthy();
+  });
+
+  it("sends the date when it changed", async () => {
+    const onSave = vi.fn(async () => {});
+    render(<TripHeader trip={trip} onSave={onSave} />);
+    await userEvent.click(screen.getByRole("button", { name: "Edit trip" }));
+    fireEvent.change(screen.getByLabelText("Planned date"), { target: { value: "2026-07-05" } });
+    await userEvent.click(screen.getByRole("button", { name: "Save trip" }));
+    expect(onSave).toHaveBeenCalledWith({ name: "Sierra loop", plannedDate: "2026-07-05" });
   });
 
   it("keeps the form open and shows the error when saving fails", async () => {

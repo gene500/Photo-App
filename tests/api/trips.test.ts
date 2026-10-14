@@ -71,6 +71,16 @@ describe("trip routes", () => {
     expect((await both.json()).trip.departAt).toBe(dep);
   });
 
+  it("keeps the start time when a rename re-sends the same date", async () => {
+    const trip = await createViaApi();
+    const dep = "2026-08-01T13:00:00.000Z";
+    await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { departAt: dep }), idParams(trip.id));
+    const res = await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { name: "Renamed", plannedDate: sampleTripInput.plannedDate }), idParams(trip.id));
+    const body = (await res.json()).trip;
+    expect(body.name).toBe("Renamed");
+    expect(body.departAt).toBe(dep);
+  });
+
   it("deletes a trip (204), after which it is gone", async () => {
     const trip = await createViaApi();
     const res = await DELETE(jsonRequest("DELETE", `/api/trips/${trip.id}`), idParams(trip.id));

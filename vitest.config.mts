@@ -1,6 +1,9 @@
 import path from "node:path";
 import { defineConfig } from "vitest/config";
 
+// One database per vitest process, so concurrent runs cannot wipe each other's rows (tests/global-setup.ts creates and removes it).
+const testDb = `test-${process.pid}.db`;
+
 export default defineConfig({
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") } },
   test: {
@@ -9,7 +12,7 @@ export default defineConfig({
     globalSetup: ["tests/global-setup.ts"],
     setupFiles: ["tests/setup.ts"],
     env: {
-      DATABASE_URL: "file:./test.db",
+      DATABASE_URL: `file:./${testDb}`,
       UPLOAD_DIR: ".test-uploads",
       NEXTAUTH_SECRET: "test-secret",
       RATE_LIMIT_DISABLED: "1", // the limiter has its own tests that switch it on

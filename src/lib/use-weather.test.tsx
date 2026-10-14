@@ -99,7 +99,7 @@ describe("useWeatherLine", () => {
 });
 
 describe("useSuggestionWeather", () => {
-  it("waits for enabled, then asks five at a time from the top of the list", async () => {
+  it("waits for enabled, then asks ten at a time from the top of the list", async () => {
     const { loadForecastBatch } = await import("./weather-cache");
     const batch = vi.mocked(loadForecastBatch);
     const calls: number[][] = [];
@@ -109,15 +109,15 @@ describe("useSuggestionWeather", () => {
     });
     const { useSuggestionWeather } = await import("./use-weather");
     const date = dateOf(day(2));
-    const spots = Array.from({ length: 12 }, (_, i) => ({ osmId: `n/${i}`, lat: 30 + i * 0.5, lng: -100 }));
+    const spots = Array.from({ length: 25 }, (_, i) => ({ osmId: `n/${i}`, lat: 30 + i * 0.5, lng: -100 }));
     const { rerender } = renderHook(({ on }) => useSuggestionWeather(spots, date, on), { initialProps: { on: false } });
     await new Promise((r) => setTimeout(r, 20));
     expect(calls).toHaveLength(0);
     rerender({ on: true });
     await waitFor(() => expect(calls.length).toBe(3));
-    expect(calls.map((c) => c.length)).toEqual([5, 5, 2]);
+    expect(calls.map((c) => c.length)).toEqual([10, 10, 5]);
     expect(calls[0][0]).toBe(30);
-    expect(calls[1][0]).toBe(32.5);
+    expect(calls[1][0]).toBe(35);
   });
 
   it("has at most two groups in flight and starts them strictly top-down", async () => {
@@ -134,13 +134,13 @@ describe("useSuggestionWeather", () => {
     );
     const { useSuggestionWeather } = await import("./use-weather");
     const date = dateOf(day(2));
-    const spots = Array.from({ length: 15 }, (_, i) => ({ osmId: `p/${i}`, lat: 30 + i * 0.5, lng: -100 }));
+    const spots = Array.from({ length: 30 }, (_, i) => ({ osmId: `p/${i}`, lat: 30 + i * 0.5, lng: -100 }));
     renderHook(() => useSuggestionWeather(spots, date, true));
     await waitFor(() => expect(started).toHaveLength(2));
     await new Promise((r) => setTimeout(r, 20));
-    expect(started).toEqual([30, 32.5]); // third group waits for a free slot
+    expect(started).toEqual([30, 35]); // third group waits for a free slot
     await act(async () => releases[1]());
     await waitFor(() => expect(started).toHaveLength(3));
-    expect(started[2]).toBe(35);
+    expect(started[2]).toBe(40);
   });
 });

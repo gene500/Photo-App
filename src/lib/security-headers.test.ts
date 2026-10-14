@@ -42,7 +42,7 @@ describe("security headers", () => {
     expect(h["X-Content-Type-Options"]).toBe("nosniff");
     expect(h["Referrer-Policy"]).toBeTruthy();
     expect(h["Permissions-Policy"]).toContain("geolocation=()");
-    expect(h["Strict-Transport-Security"]).toMatch(/max-age=\d+/);
+    expect(h["Strict-Transport-Security"]).toMatch(/^max-age=\d+; includeSubDomains$/); // no preload: the app lives on a shared *.vercel.app domain
   });
 
   it("is applied to every path by next.config, with share pages keeping no-referrer afterwards", async () => {

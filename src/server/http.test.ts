@@ -36,6 +36,31 @@ describe("handle", () => {
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: "Something went wrong" });
   });
+
+  it("logs Prisma errors without query text or params, other errors with a stack", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    class PrismaClientKnownRequestError extends Error {
+      clientVersion = "7";
+      meta = { params: ["secret@example.com"] };
+    }
+    const prismaErr = new PrismaClientKnownRequestError("Invalid `prisma.user.create()` invocation\nINSERT INTO User (email) VALUES ('secret@example.com')");
+    prismaErr.name = "PrismaClientKnownRequestError";
+    await handle(async () => {
+      throw prismaErr;
+    })();
+    const logged = JSON.stringify(spy.mock.calls);
+    expect(logged).toContain("PrismaClientKnownRequestError");
+    expect(logged).toContain("Invalid `prisma.user.create()` invocation");
+    expect(logged).not.toContain("secret@example.com");
+    expect(logged).not.toContain("INSERT INTO");
+
+    spy.mockClear();
+    await handle(async () => {
+      throw new TypeError("boom");
+    })();
+    expect(spy.mock.calls[0]![0]).toBe("TypeError: boom");
+    expect(String(spy.mock.calls[0]![1])).toContain("TypeError");
+  });
 });
 
 describe("requireUserId", () => {

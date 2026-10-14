@@ -45,6 +45,21 @@ export function assertSameOrigin(req: Request): void {
   if (!hosts.has(originHost)) throw new HttpError(403, "Cross-site request refused");
 }
 
+/** Prisma errors can carry query text and parameters (user data), so log only the error name and message for them; the stack for everything else. */
+function logUnexpected(e: unknown): void {
+  if (!(e instanceof Error)) {
+    console.error("Unexpected non-Error thrown:", typeof e);
+    return;
+  }
+  const prismaLike = /^Prisma/.test(e.name) || /^Prisma/.test(e.constructor?.name ?? "") || "clientVersion" in e;
+  if (prismaLike) {
+    // Messages from Prisma can embed the failing query; keep only the first line.
+    console.error(`${e.name}: ${e.message.split("\n").find((l) => l.trim()) ?? ""}`);
+    return;
+  }
+  console.error(`${e.name}: ${e.message}`, e.stack);
+}
+
 /** Wraps a route handler so thrown errors become safe JSON responses. */
 export function handle<A extends unknown[]>(
   fn: (...args: A) => Promise<Response>,
@@ -56,7 +71,7 @@ export function handle<A extends unknown[]>(
     } catch (e) {
       if (e instanceof HttpError) return jsonError(e.status, e.message, e.retryAfter);
       if (e instanceof ZodError) return jsonError(400, formatZodError(e));
-      console.error(e);
+      logUnexpected(e);
       return jsonError(500, "Something went wrong");
     }
   };

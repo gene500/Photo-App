@@ -52,6 +52,6 @@ export function securityHeaders(dev: boolean): { key: string; value: string }[] 
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     // The app never asks for location, camera or microphone.
     { key: "Permissions-Policy", value: "geolocation=(), camera=(), microphone=(), payment=(), usb=()" },
-    { key: "Strict-Transport-Security", value: "max-age=31536000" },
+    { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
   ];
 }

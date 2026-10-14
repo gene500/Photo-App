@@ -46,6 +46,9 @@ next-env.d.ts
 # app data
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
+test-*.db
 /uploads/
 /.test-uploads/
 /.e2e-uploads/

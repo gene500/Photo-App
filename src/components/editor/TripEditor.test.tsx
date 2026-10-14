@@ -203,17 +203,32 @@ describe("TripEditor", () => {
     expect(api.suggestions).toHaveBeenLastCalledWith({ around: [-119.79, 36.74] }, { enrich: false });
   });
 
-  it("starts the route search as soon as the route is known and answers 'Find' from it without asking again", async () => {
+  it("quietly fetches the place list once the route is steady and answers 'Find' from it without asking again", async () => {
+    const six = Array.from({ length: 6 }, (_, i) => ({ osmId: `node/${i}`, name: `Spot ${i}`, lat: 37.7 + i / 100, lng: -119.7, kind: "viewpoint" as const }));
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.mocked(api.suggestions).mockResolvedValue({ suggestions: six });
+    vi.mocked(api.suggestionPopularity).mockResolvedValue({ counts: six.map(() => 7) });
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await waitFor(() => expect(api.suggestions).toHaveBeenCalledTimes(1), { timeout: 4000 });
+    expect(api.suggestionPopularity).not.toHaveBeenCalled(); // popularity waits for the click
+    await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
+    expect(screen.queryAllByTestId("suggestion-card")).toHaveLength(0); // nothing is shown until asked
+    await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+    expect((await screen.findAllByTestId("suggestion-card")).length).toBeGreaterThan(0);
+    expect(api.suggestions).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(api.suggestionPopularity).toHaveBeenCalled());
+  });
+
+  it("searches again when the quiet search found only a thin list", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });
     vi.mocked(api.suggestionPopularity).mockResolvedValue({ counts: [7] });
     render(<TripEditor initialTrip={withStops(seed)} />);
-    await waitFor(() => expect(api.suggestions).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(api.suggestions).toHaveBeenCalledTimes(1), { timeout: 4000 });
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
-    expect(screen.queryAllByTestId("suggestion-card")).toHaveLength(0); // nothing is shown until asked
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
     expect(await screen.findByTestId("suggestion-card")).toBeTruthy();
-    expect(api.suggestions).toHaveBeenCalledTimes(1);
+    expect(api.suggestions).toHaveBeenCalledTimes(2);
   });
 
   it("finds suggestions and accepts one from the Suggestions tab", async () => {

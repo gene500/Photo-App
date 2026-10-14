@@ -16,8 +16,12 @@ export const SUGGESTION_CACHE_TTL_MS = 30 * 60_000;
 export const MIN_LOCAL_PLACES = 5;
 
 /** Enriched (ranked by popularity) results, and the raw Overpass results they are built from. */
-const cache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS);
-const rawCache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS);
+/** A finished (enriched) result is served for up to this long past its TTL while a fresh one is built in the background. */
+export const SUGGESTION_STALE_GRACE_MS = 6 * 3600_000;
+const cache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS, 100, () => Date.now(), SUGGESTION_STALE_GRACE_MS);
+/** Background refreshes underway for stale entries. */
+const refreshing = new Set<string>();
+const rawCache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS, 100, () => Date.now());
 
 /** Searches already underway, so a repeat of the same one (a double-fired effect, a retry click) joins it instead of starting another. */
 /** Overpass calls still running after a thin local answer was shown, so a repeat search joins them instead of racing the mirrors again. */
@@ -36,6 +40,7 @@ export function clearSuggestionCache(): void {
   clearCellCache();
   inflight.clear();
   lateAsks.clear();
+  refreshing.clear();
 }
 
 type Deps = {
@@ -103,6 +108,24 @@ async function runSearch(key: string, buildQuery: () => string, local: () => Pro
   const enrich = deps.enrich !== false;
   const done = enrich ? cache.get(key) : (cache.get(key) ?? rawCache.get(key));
   if (done) return done;
+  if (enrich) {
+    // Stale-while-revalidate: a result past its TTL is still far better than making the user wait, so show it now and
+    // rebuild it in the background (the map data changes rarely; popularity changes slowly).
+    const stale = cache.getStale(key);
+    if (stale) {
+      if (!refreshing.has(key)) {
+        refreshing.add(key);
+        const refresh = compute(key, buildQuery, local, deps, origin).then(() => undefined, () => undefined).finally(() => refreshing.delete(key));
+        deps.defer?.(refresh);
+      }
+      return stale.value;
+    }
+  }
+  return compute(key, buildQuery, local, deps, origin);
+}
+
+async function compute(key: string, buildQuery: () => string, local: () => Promise<unknown[] | null>, deps: Deps, origin?: LngLatLiteral): Promise<Suggestion[]> {
+  const enrich = deps.enrich !== false;
   let parsed = rawCache.get(key);
   let degraded = false;
   if (!parsed) {

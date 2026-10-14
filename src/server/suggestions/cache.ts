@@ -5,16 +5,29 @@ export class TtlCache<V> {
     private readonly ttlMs: number,
     private readonly maxEntries = 100,
     private readonly now: () => number = Date.now,
+    /** How long past its TTL an entry is kept for `getStale` (stale-while-revalidate); `get` never returns it. */
+    private readonly graceMs = 0,
   ) {}
 
   get(key: string): V | undefined {
     const entry = this.entries.get(key);
     if (!entry) return undefined;
     if (entry.expiresAt <= this.now()) {
-      this.entries.delete(key);
+      if (entry.expiresAt + this.graceMs <= this.now()) this.entries.delete(key);
       return undefined;
     }
     return entry.value;
+  }
+
+  /** The value even if it has expired, as long as it is within the grace period; `fresh` says which. */
+  getStale(key: string): { value: V; fresh: boolean } | undefined {
+    const entry = this.entries.get(key);
+    if (!entry) return undefined;
+    const t = this.now();
+    if (entry.expiresAt > t) return { value: entry.value, fresh: true };
+    if (entry.expiresAt + this.graceMs > t) return { value: entry.value, fresh: false };
+    this.entries.delete(key);
+    return undefined;
   }
 
   set(key: string, value: V): void {

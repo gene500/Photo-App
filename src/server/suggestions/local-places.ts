@@ -2,7 +2,7 @@ import { haversineMeters } from "@/lib/geo";
 import type { LngLat } from "@/lib/types";
 import { prisma } from "../db";
 import { TtlCache } from "./cache";
-import { cellRuns, cellsForCircle, cellsForRing, pointInRing } from "./places-grid";
+import { cellRuns, cellsForCircle, cellsForRing, createRingTester, pointInRing } from "./places-grid";
 
 /** Rows of the local `Place` table. */
 export type PlaceRow = { id: string; name: string; kind: string; lat: number; lng: number };
@@ -127,5 +127,6 @@ export async function localPlacesInRing(ring: LngLat[], read: CellReader = readC
   const cells = cellsForRing(ring);
   if (cells.length > MAX_RING_CELLS) return null; // not a real corridor: do not read the map for it
   const rows = await read(cells);
-  return toElements(rows.filter((r) => pointInRing(r.lng, r.lat, ring)));
+  const inside = createRingTester(ring);
+  return toElements(rows.filter((r) => inside(r.lng, r.lat)));
 }

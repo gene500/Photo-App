@@ -17,7 +17,7 @@ describe("GET /api/place-photo", () => {
     vi.mocked(getPlacePhoto).mockResolvedValue(photo);
     const res = await GET(url("lat=37.7459&lng=-119.5332&name=%20Half%20Dome%20"));
     expect(res.status).toBe(200);
-    expect(res.headers.get("Cache-Control")).toBe("private, max-age=86400");
+    expect(res.headers.get("Cache-Control")).toBe("private, max-age=86400, stale-while-revalidate=604800");
     expect(await res.json()).toEqual({ photo });
     expect(getPlacePhoto).toHaveBeenCalledWith({ name: "Half Dome", lat: 37.7459, lng: -119.5332 });
   });

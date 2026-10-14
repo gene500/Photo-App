@@ -64,7 +64,8 @@ describe("auth", () => {
     find.mockRestore();
   });
 
-  describe("per-email login throttle", () => {
+  // Each failed attempt runs a bcrypt compare; eight of them plus a final one can outlast the default 5 s on a busy machine.
+  describe("per-email login throttle", { timeout: 15_000 }, () => {
     beforeEach(() => {
       process.env.RATE_LIMIT_DISABLED = "";
       clearAllLimits();

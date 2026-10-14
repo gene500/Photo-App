@@ -12,7 +12,9 @@ export type PlaceRow = { id: string; name: string; kind: string; lat: number; ln
  * nothing lies across it, the public Overpass servers are asked instead.
  */
 const US_BOXES = [
-  { minLat: 51, maxLat: 71.6, minLng: -179.9, maxLng: -141.2 }, // Alaska mainland (the panhandle borders Canada closely)
+  { minLat: 51, maxLat: 71.6, minLng: -168.2, maxLng: -141.2 }, // Alaska mainland, west to Cape Prince of Wales (Chukotka and Wrangel Island lie beyond, in Russia)
+  { minLat: 51, maxLat: 57.6, minLng: -179.9, maxLng: -168.2 }, // Aleutians and the Pribilofs
+  { minLat: 62.9, maxLat: 63.9, minLng: -172.2, maxLng: -168.2 }, // St Lawrence Island
   { minLat: 18.8, maxLat: 22.4, minLng: -160.7, maxLng: -154.7 }, // Hawaii
 ];
 
@@ -22,8 +24,8 @@ const US_BOXES = [
  * Points are [lng, lat].
  */
 const LOWER_48: LngLat[] = [
-  [-124.9, 48.3], [-123.0, 48.6], [-95.3, 48.6], [-94.5, 48.4], [-92.0, 48.0], [-89.9, 47.8], [-88.0, 47.6],
-  [-85.2, 46.6], [-84.8, 46.1], [-84.0, 45.5], [-83.9, 43.5], [-83.9, 41.7], [-82.5, 41.9], [-81.0, 42.0],
+  [-124.9, 48.45], [-123.9, 48.25], [-123.2, 48.2], [-123.0, 48.6], [-95.3, 48.6], [-94.5, 48.4], [-92.0, 48.0], [-89.9, 47.8], [-88.0, 47.6],
+  [-85.2, 46.6], [-84.8, 46.1], [-84.0, 45.5], [-83.9, 43.5], [-83.9, 41.7], [-83.0, 41.7], [-82.55, 41.72], [-82.5, 41.9], [-81.0, 42.0],
   [-79.8, 42.1], [-77.5, 43.4], [-76.0, 43.6], [-74.8, 44.5], [-71.5, 44.6], [-70.9, 45.3], [-69.0, 46.0],
   [-67.9, 45.1], [-66.5, 44.5], [-66.5, 43.0], [-69.0, 40.0], [-73.5, 38.5], [-75.0, 35.0], [-79.0, 31.0],
   [-79.5, 25.5], [-80.0, 24.4], [-83.0, 24.3], [-87.0, 27.0], [-93.0, 28.0], [-96.9, 26.1], [-97.9, 26.4],

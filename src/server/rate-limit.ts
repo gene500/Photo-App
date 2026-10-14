@@ -56,6 +56,27 @@ function sweep(buckets: Map<string, Bucket>, now: number): void {
   for (const [k, b] of buckets) if (b.resetAt <= now) buckets.delete(k);
 }
 
+/** Auth-sensitive policies fail closed when their map is full of live keys; the rest fail open. */
+const FAIL_CLOSED: ReadonlySet<PolicyName> = new Set<PolicyName>([
+  "login-email-failures",
+  "login-ip",
+  "signup-ip",
+  "signup-email",
+  "account-delete",
+]);
+
+/** True when a new key cannot be tracked because a fail-closed policy's map is full of live keys. */
+function untrackable(name: PolicyName, key: string, now: number): boolean {
+  if (!FAIL_CLOSED.has(name)) return false;
+  const buckets = mapFor(name);
+  const existing = buckets.get(key);
+  if (existing && existing.resetAt > now) return false;
+  sweep(buckets, now);
+  return buckets.size >= MAX_BUCKETS;
+}
+
+const fullMapResult = (name: PolicyName): LimitResult => ({ ok: false, retryAfter: Math.ceil(POLICIES[name].windowMs / 1000) });
+
 function slot(name: PolicyName, key: string, now: number): Bucket {
   const buckets = mapFor(name);
   const existing = buckets.get(key);
@@ -77,6 +98,7 @@ function result(name: PolicyName, b: Bucket, now: number): LimitResult {
 /** Counts one hit and reports whether it is still within the limit. */
 export function hit(name: PolicyName, key: string, now = Date.now()): LimitResult {
   if (disabled()) return { ok: true };
+  if (untrackable(name, key, now)) return fullMapResult(name);
   const b = slot(name, key, now);
   b.count++;
   return result(name, b, now);
@@ -87,7 +109,7 @@ export function isBlocked(name: PolicyName, key: string, now = Date.now()): Limi
   if (disabled()) return { ok: true };
   // Read-only: looking up a key must not create a bucket (an attacker submitting endless emails would fill the map).
   const b = mapFor(name).get(key);
-  if (!b || b.resetAt <= now) return { ok: true };
+  if (!b || b.resetAt <= now) return untrackable(name, key, now) ? fullMapResult(name) : { ok: true };
   return b.count >= POLICIES[name].limit ? { ok: false, retryAfter: Math.max(1, Math.ceil((b.resetAt - now) / 1000)) } : { ok: true };
 }
 
@@ -114,14 +136,27 @@ export function clientIp(headers: Headers): string {
 }
 
 /** IPv4 as is. IPv6 collapses to its /64, because one customer controls a whole /64 and could otherwise rotate addresses past every per-IP limit. */
-export function ipKey(ip: string): string {
+export function ipKey(raw: string): string {
+  const ip = raw.split("%")[0]!; // drop a zone id (fe80::1%eth0)
   if (!ip.includes(":")) return ip;
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ip);
-  if (mapped) return mapped[1];
-  const [head, tail = ""] = ip.split("::");
+  let text = ip;
+  const dotted = /^(.*:)(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(text);
+  if (dotted) {
+    const prefix = dotted[1]!;
+    const o = dotted.slice(2).map(Number);
+    if (o.some((n) => n > 255)) return ip;
+    if (/^(::ffff:|64:ff9b::)$/i.test(prefix)) return o.join(".");
+    text = `${prefix}${((o[0]! << 8) | o[1]!).toString(16)}:${((o[2]! << 8) | o[3]!).toString(16)}`;
+  }
+  const [head, tail = ""] = text.split("::");
   const front = head ? head.split(":") : [];
   const back = tail ? tail.split(":") : [];
-  const groups = ip.includes("::") ? [...front, ...Array(Math.max(0, 8 - front.length - back.length)).fill("0"), ...back] : front;
+  const groups = text.includes("::") ? [...front, ...Array(Math.max(0, 8 - front.length - back.length)).fill("0"), ...back] : front;
   if (groups.length !== 8) return ip;
+  // IPv4-mapped / NAT64 in hex form: key on the embedded IPv4 address.
+  const n = groups.map((g) => parseInt(g, 16));
+  const embedded = `${n[6]! >> 8}.${n[6]! & 255}.${n[7]! >> 8}.${n[7]! & 255}`;
+  if (n.slice(0, 5).every((x) => x === 0) && n[5] === 0xffff) return embedded;
+  if (n[0] === 0x64 && n[1] === 0xff9b && n.slice(2, 6).every((x) => x === 0)) return embedded;
   return `${groups.slice(0, 4).map((g) => g.toLowerCase().replace(/^0+(?=.)/, "")).join(":")}::/64`;
 }

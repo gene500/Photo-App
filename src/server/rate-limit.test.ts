@@ -64,4 +64,46 @@ describe("IPv6 clients and map isolation", () => {
     expect(ipKey("::ffff:203.0.113.9")).toBe("203.0.113.9");
     expect(ipKey("203.0.113.9")).toBe("203.0.113.9");
   });
+
+  it("unwraps NAT64 / embedded-IPv4 forms and strips zone ids", async () => {
+    const { ipKey } = await import("./rate-limit");
+    expect(ipKey("64:ff9b::1.2.3.4")).toBe("1.2.3.4");
+    expect(ipKey("64:ff9b::102:304")).toBe("1.2.3.4");
+    expect(ipKey("::ffff:102:304")).toBe("1.2.3.4");
+    expect(ipKey("::FFFF:1.2.3.4")).toBe("1.2.3.4");
+    expect(ipKey("2001:db8:1:2::1.2.3.4")).toBe(ipKey("2001:db8:1:2::9"));
+    expect(ipKey("fe80::1%eth0")).toBe(ipKey("fe80::1"));
+    expect(ipKey("fe80::1%eth0")).toBe("fe80:0:0:0::/64");
+  });
+});
+
+describe("full policy map", () => {
+  beforeEach(() => {
+    process.env.RATE_LIMIT_DISABLED = "";
+    clearAllLimits();
+  });
+  afterEach(() => {
+    process.env.RATE_LIMIT_DISABLED = "1";
+  });
+  const t = 9_000_000;
+  const fill = (name: "login-ip" | "geocode") => {
+    for (let i = 0; i < 10_000; i++) hit(name, `k${i}`, t);
+  };
+
+  it("fails closed for new keys on auth policies, with the window as retry-after", () => {
+    fill("login-ip");
+    expect(hit("login-ip", "newcomer", t + 1)).toEqual({ ok: false, retryAfter: POLICIES["login-ip"].windowMs / 1000 });
+    expect(isBlocked("login-ip", "newcomer", t + 1).ok).toBe(false);
+    expect(() => enforceLimit("login-ip", "newcomer", t + 1)).toThrow(expect.objectContaining({ status: 429 }));
+    // existing keys keep their own counters
+    expect(hit("login-ip", "k5", t + 1).ok).toBe(true);
+    // once the window has passed the map sweeps and new keys work again
+    expect(hit("login-ip", "newcomer", t + POLICIES["login-ip"].windowMs + 1).ok).toBe(true);
+  });
+
+  it("still fails open for other policies", () => {
+    fill("geocode");
+    expect(hit("geocode", "newcomer", t + 1).ok).toBe(true);
+    expect(isBlocked("geocode", "newcomer", t + 1).ok).toBe(true);
+  });
 });

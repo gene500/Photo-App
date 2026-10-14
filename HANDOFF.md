@@ -25,13 +25,12 @@ site afterwards with a throwaway account.
 
 ## Beige map + photo popups (2026-10-07)
 
-On branch `ui-redesign` (not pushed or merged). Wikipedia photos need no key. The
+Built on branch `ui-redesign` (since merged to `main`). Wikipedia photos need no key. The
 runtime basemap recolour (`src/lib/map-theme.ts`) and the Mapbox popup were never
 run against real Mapbox (no token in this environment): check them in a browser
 with `NEXT_PUBLIC_MAPBOX_TOKEN` set, including dark mode.
 
-<<<<<<< HEAD
-## Photo sources (2026-10-07, branch `photo-sources`, not pushed)
+## Photo sources (2026-10-07, since merged to `main`)
 
 Photos: Flickr (dormant unless `FLICKR_API_KEY`; unverified against the live API)
 -> Commons -> Wikipedia; suggestions are ranked by "photos nearby" (Commons count
@@ -41,17 +40,14 @@ ever exists, a live Flickr check. See README "Photo sources".
 
 ## Light-aware optimization (2026-10-08)
 
-On branch `light-aware` (from `ui-redesign`; not pushed or merged). Adds an
-additive Turso migration (`20261008120000_light_aware_stops`: Stop.lightPref,
-Stop.dwellMinutes, Trip.departAt), so merging to `main` applies it live on the next
-build; it does not drop anything, but verify the build log. Hand-merge note: the
-README/PROGRESS/HANDOFF edits sit next to the photo-popup ones from the other
-branch. Not yet exercised against real Mapbox.
->>>>>>> light-aware
+Built on branch `light-aware` (since merged to `main`). Added an additive Turso
+migration (`20261008120000_light_aware_stops`: Stop.lightPref, Stop.dwellMinutes,
+Trip.departAt); it drops nothing, but check the build log of any deploy that carries
+a new migration. Not yet exercised against real Mapbox.
 
 ## Optimize route (2026-10-07)
 
-Built on branch `optimize-route` (not pushed or merged). Uses the Mapbox Matrix
+Built on branch `optimize-route` (since merged to `main`). Uses the Mapbox Matrix
 API via `MAPBOX_TOKEN`; verified only against fakes and injected fetch so far, so
 smoke-test it with a real token and on a phone-width browser before merging.
 

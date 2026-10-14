@@ -24,6 +24,22 @@ describe("inLocalCoverage", () => {
       expect(inLocalCoverage(lat, lng), `${lat},${lng}`).toBe(false);
     }
   });
+  it("excludes Victoria, Sooke and Pelee Island but keeps the Olympic Peninsula, Seattle and the Lake Erie islands", () => {
+    for (const [lat, lng] of [[48.43, -123.37], [48.37, -123.73], [41.77, -82.68], [48.65, -123.4]]) {
+      expect(inLocalCoverage(lat, lng), `${lat},${lng}`).toBe(false);
+    }
+    for (const [lat, lng] of [[48.12, -123.43], [47.6, -122.3], [48.37, -124.62], [47.95, -124.38], [48.12, -122.76], [41.6, -82.7], [41.65, -83.55]]) {
+      expect(inLocalCoverage(lat, lng), `${lat},${lng}`).toBe(true);
+    }
+  });
+  it("excludes Chukotka and Wrangel Island but keeps western Alaska, St Lawrence Island and the Aleutians", () => {
+    for (const [lat, lng] of [[71.2, -179.4], [64.38, -173.3], [66.3, -179.1], [66.07, -169.7]]) {
+      expect(inLocalCoverage(lat, lng), `${lat},${lng}`).toBe(false);
+    }
+    for (const [lat, lng] of [[64.5, -165.4], [65.6, -168.1], [63.78, -171.7], [51.88, -176.6], [57.12, -170.28], [71.29, -156.8], [66.9, -162.6]]) {
+      expect(inLocalCoverage(lat, lng), `${lat},${lng}`).toBe(true);
+    }
+  });
 });
 
 describe("toElements", () => {

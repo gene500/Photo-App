@@ -91,4 +91,59 @@ describe("hover photo beside the suggestion", () => {
     await userEvent.unhover(card);
     expect(screen.queryByTestId("suggestion-hover-photo")).toBeNull();
   });
+
+  const one = { osmId: "node/1", name: "Hover Point", lat: 1, lng: 2, kind: "viewpoint" as const };
+  const props = { status: "done" as const, error: null, canSearch: true, onFind: () => {}, onAccept: () => {}, onDismiss: () => {}, onDismissError: () => {} };
+
+  it("dismisses the photo with Escape", async () => {
+    render(<SuggestionsPanel {...props} suggestions={[one]} />);
+    await userEvent.hover(screen.getByTestId("suggestion-card"));
+    expect(screen.getByTestId("suggestion-hover-photo")).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByTestId("suggestion-hover-photo")).toBeNull();
+  });
+
+  it("drops the photo when the list is re-ranked", async () => {
+    const two = { ...one, osmId: "node/2", name: "Second" };
+    const { rerender } = render(<SuggestionsPanel {...props} suggestions={[one, two]} />);
+    await userEvent.hover(screen.getAllByTestId("suggestion-card")[0]!);
+    expect(screen.getByTestId("suggestion-hover-photo")).toBeTruthy();
+    rerender(<SuggestionsPanel {...props} suggestions={[two, one]} />);
+    expect(screen.queryByTestId("suggestion-hover-photo")).toBeNull();
+  });
+
+  it("keeps the photo off keyboard focus when there is no room beside the row", () => {
+    const rect = (left: number, right: number) => ({ left, right, top: 0, bottom: 40, width: right - left, height: 40, x: left, y: 0, toJSON() {} }) as DOMRect;
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect");
+    // jsdom has no :focus-visible, so pretend every focus came from the keyboard.
+    const realMatches = Element.prototype.matches;
+    const matches = vi.spyOn(Element.prototype, "matches").mockImplementation(function (this: Element, sel: string) {
+      return sel === ":focus-visible" ? true : realMatches.call(this, sel);
+    });
+    const prevWidth = window.innerWidth;
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 320 });
+    try {
+      render(<SuggestionsPanel {...props} suggestions={[one]} />);
+      const accept = screen.getByRole("button", { name: /^Accept/ });
+      spy.mockReturnValue(rect(0, 320));
+      accept.focus();
+      expect(screen.queryByTestId("suggestion-hover-photo")).toBeNull();
+      accept.blur();
+      spy.mockReturnValue(rect(0, 100)); // a wide window leaves plenty of room on the right
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
+      accept.focus();
+      expect(screen.getByTestId("suggestion-hover-photo")).toBeTruthy();
+    } finally {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: prevWidth });
+      spy.mockRestore();
+      matches.mockRestore();
+    }
+  });
+
+  it("announces the temperature in the weather label", () => {
+    const weather = new Map([["node/1", { text: "⛅ 18°C", label: "partly cloudy, 15% rain", quality: null }]]);
+    render(<SuggestionsPanel {...props} suggestions={[one]} weather={weather} />);
+    expect(screen.getByRole("img", { name: "partly cloudy, 15% rain, 18°C" })).toBeTruthy();
+  });
 });
+

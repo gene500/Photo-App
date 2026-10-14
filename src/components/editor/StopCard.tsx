@@ -4,6 +4,7 @@ import { describeBestTime, formatClock } from "@/lib/best-time";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { btnSecondary, card, btnIcon } from "@/components/ui/styles";
 import { useWeatherLine } from "@/lib/use-weather";
+import { weatherAriaLabel } from "@/lib/weather";
 import type { BestTime } from "@/lib/best-time";
 import type { Stop } from "@/lib/types";
 
@@ -36,7 +37,7 @@ export function StopCard({ stop, bestTime, arrival, onToggleVisited, onOpenDetai
       {arrival && <p className="text-xs text-muted">Arrive ~{formatClock(arrival, undefined, settings.timeFormat)}</p>}
       {weather && (
         <p data-testid="card-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-danger" : "text-muted"}`}>
-          <span role="img" aria-label={weather.label ?? weather.text}>{weather.text}</span>
+          <span role="img" aria-label={weatherAriaLabel(weather)}>{weather.text}</span>
         </p>
       )}
       <div className="flex items-center justify-between">

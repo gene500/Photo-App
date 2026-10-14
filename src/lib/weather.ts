@@ -133,15 +133,31 @@ export function weatherGlyph(w: WeatherSummary, unit: "km" | "mi" = "km"): strin
   return [EMOJI[w.label], formatTemp(w.tempC, unit)].filter(Boolean).join(" ");
 }
 
-/** "mostly cloudy, 15% rain" (lower case): the plain-words version, used as the accessible label. */
-export function describeWeather(w: WeatherSummary): string {
-  if (w.label === "Rain likely") return `rain likely (${Math.round(w.rainPct)}%)`;
-  return `${w.label.toLowerCase()}, ${Math.round(w.rainPct)}% rain`;
+/** ", 18°C" when a unit is given and the temperature is known, so the spoken label carries it too. */
+const tempSuffix = (w: WeatherSummary, unit?: "km" | "mi"): string => {
+  const t = unit ? formatTemp(w.tempC, unit) : null;
+  return t ? `, ${t}` : "";
+};
+
+/** "mostly cloudy, 15% rain, 18°C" (lower case): the plain-words version, used as the accessible label. */
+export function describeWeather(w: WeatherSummary, unit?: "km" | "mi"): string {
+  if (w.label === "Rain likely") return `rain likely (${Math.round(w.rainPct)}%)${tempSuffix(w, unit)}`;
+  return `${w.label.toLowerCase()}, ${Math.round(w.rainPct)}% rain${tempSuffix(w, unit)}`;
 }
 
-/** "typically mostly cloudy, rain on ~20% of days": typical weather is a climate average, so it is worded as one. */
-export function describeTypical(w: WeatherSummary): string {
-  return `typically ${w.label === "Rain likely" ? "wet" : w.label.toLowerCase()}, rain on ~${Math.round(w.rainPct)}% of days`;
+/** "typically mostly cloudy, rain on ~20% of days, 18°C": typical weather is a climate average, so it is worded as one. */
+export function describeTypical(w: WeatherSummary, unit?: "km" | "mi"): string {
+  return `typically ${w.label === "Rain likely" ? "wet" : w.label.toLowerCase()}, rain on ~${Math.round(w.rainPct)}% of days${tempSuffix(w, unit)}`;
+}
+
+/**
+ * The screen-reader label for a weather line: its words plus the temperature shown in `text` ("⛅ 18°C"), which the
+ * words alone omit. Without words the text itself is the label.
+ */
+export function weatherAriaLabel(line: { text: string; label?: string }): string {
+  if (!line.label) return line.text;
+  const temp = /-?\d+°[CF]/.exec(line.text)?.[0];
+  return temp && !line.label.includes(temp) ? `${line.label}, ${temp}` : line.label;
 }
 
 export const FORECAST_UNAVAILABLE_TEXT = "Forecast not available yet";

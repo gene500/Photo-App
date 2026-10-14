@@ -12,6 +12,7 @@ import { describeLightHint } from "@/lib/light-windows";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { stopColor } from "@/lib/stop-style";
 import { useWeatherLine } from "@/lib/use-weather";
+import { weatherAriaLabel } from "@/lib/weather";
 import type { Stop } from "@/lib/types";
 
 type Handlers = {
@@ -123,7 +124,7 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
         </p>
         {weather && (
           <p data-testid="stop-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-danger" : "text-muted"}`}>
-            <span role="img" aria-label={weather.label ?? weather.text}>{weather.text}</span>
+            <span role="img" aria-label={weatherAriaLabel(weather)}>{weather.text}</span>
           </p>
         )}
         {stop.notes && <p className="truncate text-xs text-muted">{stop.notes}</p>}

@@ -5,7 +5,8 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnAccent, btnGhost, btnSecondary } from "@/components/ui/styles";
 import { formatPhotoCount } from "@/lib/format";
 import { isHoverPointer } from "./hover-pointer";
-import { SuggestionHoverPhoto } from "./SuggestionHoverPhoto";
+import { hasRoomBeside, SuggestionHoverPhoto } from "./SuggestionHoverPhoto";
+import { weatherAriaLabel } from "@/lib/weather";
 import type { WeatherLine } from "@/lib/use-weather";
 import type { Suggestion } from "@/lib/types";
 
@@ -55,14 +56,21 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
     }
     tops.current = next;
   }, [suggestions]);
-  const [hover, setHover] = useState<{ s: Suggestion; rect: DOMRect } | null>(null);
+  const [hover, setHover] = useState<{ s: Suggestion; rect: DOMRect; order: string } | null>(null);
   // The card is positioned from where the row was when hovered, so any scroll or a removed row drops it.
   useEffect(() => {
     if (!hover) return;
     const clear = () => setHover(null);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") clear(); };
     window.addEventListener("scroll", clear, true);
-    return () => window.removeEventListener("scroll", clear, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("scroll", clear, true);
+      window.removeEventListener("keydown", onKey);
+    };
   }, [hover]);
+  // A re-rank or a changed list moves the rows, so a card anchored to the old layout is dropped (see `order` below).
+  const order = suggestions.map((x) => x.osmId).join("|");
   const [accepting, setAccepting] = useState<ReadonlySet<string>>(new Set());
   async function accept(sug: Suggestion) {
     if (inFlight.current.has(sug.osmId)) return;
@@ -100,17 +108,19 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
         <p className="text-sm text-muted">No more suggestions along this route.</p>
       )}
       <ul ref={listRef} className="space-y-1">
-        {suggestions.map((s, i) => (
-          <li key={s.osmId} data-testid="suggestion-card" data-id={s.osmId} style={{ animationDelay: `${(i % 5) * 50}ms` }} onPointerEnter={(e) => { if (isHoverPointer(e)) { onHover?.(s.osmId); setHover({ s, rect: e.currentTarget.getBoundingClientRect() }); } }} onPointerLeave={() => { onHover?.(null); setHover(null); }} onFocus={(e) => { onHover?.(s.osmId); if (keyboardFocus(e.target as HTMLElement)) setHover({ s, rect: e.currentTarget.getBoundingClientRect() }); }} onBlur={() => { onHover?.(null); setHover(null); }} className="anim-rise flex items-center justify-between gap-2 rounded-xl px-2 py-2 hover:bg-hover">
+        {suggestions.map((s, i) => {
+          const line = weather?.get(s.osmId);
+          return (
+          <li key={s.osmId} data-testid="suggestion-card" data-id={s.osmId} style={{ animationDelay: `${(i % 5) * 50}ms` }} onPointerEnter={(e) => { if (isHoverPointer(e)) { onHover?.(s.osmId); setHover({ s, rect: e.currentTarget.getBoundingClientRect(), order }); } }} onPointerLeave={() => { onHover?.(null); setHover(null); }} onFocus={(e) => { onHover?.(s.osmId); if (keyboardFocus(e.target as HTMLElement) && hasRoomBeside(e.currentTarget.getBoundingClientRect())) setHover({ s, rect: e.currentTarget.getBoundingClientRect(), order }); }} onBlur={() => { onHover?.(null); setHover(null); }} className="anim-rise flex items-center justify-between gap-2 rounded-xl px-2 py-2 hover:bg-hover">
             <div className="min-w-0">
               <p data-testid="suggestion-name" className="truncate text-sm font-medium">{s.name}</p>
               <p className="text-xs text-muted">
                 <span className="capitalize">{s.kind}</span>
                 {formatPhotoCount(s.popularity) && <span data-testid="suggestion-popularity"> · {formatPhotoCount(s.popularity)}</span>}
               </p>
-              {weather?.get(s.osmId) && (
-                <p data-testid="suggestion-weather" data-light-quality={weather.get(s.osmId)?.quality ?? undefined} title={weather.get(s.osmId)?.label} className={`text-xs ${weather.get(s.osmId)?.quality === "poor" ? "text-danger" : "text-muted"}`}>
-                  <span role="img" aria-label={weather.get(s.osmId)?.label ?? weather.get(s.osmId)?.text}>{weather.get(s.osmId)?.text}</span>
+              {line && (
+                <p data-testid="suggestion-weather" data-light-quality={line.quality ?? undefined} title={line.label} className={`text-xs ${line.quality === "poor" ? "text-danger" : "text-muted"}`}>
+                  <span role="img" aria-label={weatherAriaLabel(line)}>{line.text}</span>
                 </p>
               )}
             </div>
@@ -119,9 +129,10 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
               <button type="button" onClick={() => { setHover(null); onDismiss(s.osmId); }} className={btnGhost} aria-label={`Dismiss ${s.name}`}>Dismiss</button>
             </div>
           </li>
-        ))}
+          );
+        })}
       </ul>
-      {hover && suggestions.some((x) => x.osmId === hover.s.osmId) && <SuggestionHoverPhoto suggestion={hover.s} anchor={hover.rect} />}
+      {hover && hover.order === order && suggestions.some((x) => x.osmId === hover.s.osmId) && <SuggestionHoverPhoto suggestion={hover.s} anchor={hover.rect} />}
     </section>
   );
 }

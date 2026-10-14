@@ -672,12 +672,14 @@ describe("TripEditor", () => {
         await user.click(screen.getByRole("button", { name: "Optimize route" }));
         expect(vi.mocked(api.optimizeOrder).mock.calls[0]![1]!.stops[2]).toEqual({ lightPref: "sunset", dwellMinutes: 30 });
         await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", { departAt: "2026-07-01T23:15:00.000Z" }));
-        expect((await screen.findByTestId("depart-note")).textContent).toMatch(/^Starts \d{1,2}:\d{2} (AM|PM)$/);
+        expect(((await screen.findByLabelText("Start time")) as HTMLInputElement).value).toMatch(/^\d{2}:\d{2}$/);
+        expect(screen.getByRole("button", { name: "Reset to sunrise" })).toBeTruthy();
 
         await user.click(await screen.findByRole("button", { name: "Undo" }));
         await waitFor(() => expect(api.updateTrip).toHaveBeenLastCalledWith("t1", { departAt: null }));
         await waitFor(() => expect(api.reorderStops).toHaveBeenLastCalledWith("t1", ["a", "b", "c"]));
-        await waitFor(() => expect(screen.queryByTestId("depart-note")).toBeNull());
+        await waitFor(() => expect(screen.queryByRole("button", { name: "Reset to sunrise" })).toBeNull());
+        expect((screen.getByLabelText("Start time") as HTMLInputElement).value).toBe("");
       });
 
       it("keeps an unchanged order but still applies a new departure", async () => {
@@ -706,10 +708,11 @@ describe("TripEditor", () => {
         echoTrip();
         const user = userEvent.setup();
         render(<TripEditor initialTrip={trip2("2026-07-01T23:15:00.000Z")} />);
-        expect(screen.getByTestId("depart-note")).toBeTruthy();
+        expect((screen.getByLabelText("Start time") as HTMLInputElement).value).toMatch(/^\d{2}:\d{2}$/);
+        expect(screen.queryByTestId("depart-note")).toBeNull();
         await user.click(screen.getByRole("button", { name: "Reset to sunrise" }));
         await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", { departAt: null }));
-        await waitFor(() => expect(screen.queryByTestId("depart-note")).toBeNull());
+        await waitFor(() => expect(screen.queryByRole("button", { name: "Reset to sunrise" })).toBeNull());
       });
     });
 

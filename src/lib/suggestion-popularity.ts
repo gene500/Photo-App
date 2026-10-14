@@ -17,7 +17,7 @@ export function rankSuggestions(items: Suggestion[]): Suggestion[] {
 }
 
 /** Batches in flight at once; their results are still delivered in order so the list reveals chunk by chunk. */
-export const POPULARITY_PARALLEL = 4;
+export const POPULARITY_PARALLEL = 8; // a full list (40 places) is 8 batches: one round trip, under the 60/min limit
 
 /**
  * Looks up popularity for suggestions that lack it, 5 at a time (one request per batch, four requests in flight at once), calling

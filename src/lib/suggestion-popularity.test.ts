@@ -38,6 +38,7 @@ describe("loadPopularityInBatches", () => {
     await vi.waitFor(() => expect(suggestionPopularity).toHaveBeenCalledTimes(8));
     const asked = suggestionPopularity.mock.calls.reduce((n, c) => n + c[0].length, 0);
     expect(asked).toBe(POPULARITY_MAX - 1);
+    await vi.waitFor(() => expect(batches).toHaveLength(8));
     expect(batches[0].has("node/1")).toBe(false); // first of the batch came back null
   });
 

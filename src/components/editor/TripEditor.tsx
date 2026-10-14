@@ -7,6 +7,7 @@ import { useSettings } from "@/components/settings/SettingsProvider";
 import { btnGhost } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { downsampleRoute } from "@/lib/downsample";
+import { adoptPrewarm, startPrewarm, type Prewarm } from "@/lib/suggestion-prewarm";
 import { prefetchPlacePhotos } from "@/lib/place-photo-cache";
 import { useSuggestionWeather } from "@/lib/use-weather";
 import { holdWeather } from "@/lib/weather-cache";
@@ -199,6 +200,19 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const current = enoughForRoute && routeResult?.key === waypointKey ? routeResult : null;
   const activeRoute = current?.route ?? null;
   const activeRouteError = current?.error ?? null;
+  // The moment the route is known, start the suggestions search quietly (and look up popularity as places arrive), so
+  // "Find photo spots" answers from what has already come in. Dropped when the stops change.
+  const prewarmRef = useRef<{ key: string; prewarm: Prewarm } | null>(null);
+  useEffect(() => {
+    if (!activeRoute) return;
+    const geometry = activeRoute.geometry;
+    const entry = { key: waypointKey, prewarm: startPrewarm(async () => (await api.suggestions(downsampleRoute(geometry), { enrich: false })).suggestions) };
+    prewarmRef.current = entry;
+    return () => {
+      entry.prewarm.cancel();
+      if (prewarmRef.current === entry) prewarmRef.current = null;
+    };
+  }, [activeRoute, waypointKey]);
   const legDurations = activeRoute ? activeRoute.legs.map((l) => l.duration) : null;
 
   const bestTimes = useMemo(
@@ -478,11 +492,24 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     const key = waypointKey;
     const placed = stops;
     setSuggestionsState({ key, items: [], status: "loading", error: null });
+    const warm = prewarmRef.current?.key === key ? prewarmRef.current.prewarm : null;
+    prewarmRef.current = null; // adopted once; a retry searches afresh
     try {
-      const { suggestions: found } = await api.suggestions(downsampleRoute(activeRoute.geometry), { enrich: false });
+      let found: Suggestion[];
+      let settled = false;
+      if (warm) {
+        try {
+          const raw = await warm.items;
+          ({ items: found, settled } = adoptPrewarm(raw, warm));
+        } catch {
+          found = (await api.suggestions(downsampleRoute(activeRoute.geometry), { enrich: false })).suggestions;
+        }
+      } else {
+        found = (await api.suggestions(downsampleRoute(activeRoute.geometry), { enrich: false })).suggestions;
+      }
       if (seq !== suggestionsSeq.current) return;
       const items = found.filter((s) => !placed.some((st) => haversineMeters(st, s) < ALREADY_A_STOP_M));
-      setSuggestionsState({ key, items, status: "done", error: null, shown: POPULARITY_BATCH });
+      setSuggestionsState({ key, items, status: "done", error: null, shown: settled ? undefined : POPULARITY_BATCH });
     } catch (e) {
       if (seq !== suggestionsSeq.current) return;
       setSuggestionsState({ key, items: [], status: "error", error: errorMessage(e, "Couldn't load suggestions. Please retry.") });

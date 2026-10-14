@@ -203,6 +203,19 @@ describe("TripEditor", () => {
     expect(api.suggestions).toHaveBeenLastCalledWith({ around: [-119.79, 36.74] }, { enrich: false });
   });
 
+  it("starts the route search as soon as the route is known and answers 'Find' from it without asking again", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });
+    vi.mocked(api.suggestionPopularity).mockResolvedValue({ counts: [7] });
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await waitFor(() => expect(api.suggestions).toHaveBeenCalledTimes(1));
+    await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
+    expect(screen.queryAllByTestId("suggestion-card")).toHaveLength(0); // nothing is shown until asked
+    await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+    expect(await screen.findByTestId("suggestion-card")).toBeTruthy();
+    expect(api.suggestions).toHaveBeenCalledTimes(1);
+  });
+
   it("finds suggestions and accepts one from the Suggestions tab", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });

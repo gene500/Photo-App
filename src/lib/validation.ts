@@ -90,15 +90,21 @@ export const reorderSchema = z.object({
   stopIds: z.array(z.string().min(1)).min(1, "stopIds must not be empty"),
 });
 
+const newPasswordSchema = z
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .max(200, "Password is too long")
+  // bcrypt only reads the first 72 bytes, so anything longer would silently not count.
+  .refine((p) => new TextEncoder().encode(p).length <= 72, "Password must be at most 72 bytes");
+
 export const signupSchema = z.object({
   email: z.string().trim().toLowerCase().max(254, "Email is too long").pipe(z.email("Enter a valid email address")),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters")
-    .max(200, "Password is too long")
-    // bcrypt only reads the first 72 bytes, so anything longer would silently not count.
-    .refine((p) => new TextEncoder().encode(p).length <= 72, "Password must be at most 72 bytes"),
+  password: newPasswordSchema,
 });
+
+export const changePasswordSchema = z
+  .object({ currentPassword: z.string().min(1).max(200), newPassword: newPasswordSchema })
+  .refine((v) => v.currentPassword !== v.newPassword, { message: "Choose a password you haven't used", path: ["newPassword"] });
 
 const lngLat = z.tuple([lng, lat]);
 

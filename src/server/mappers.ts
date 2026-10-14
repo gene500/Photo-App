@@ -72,6 +72,7 @@ export function toPublicTripDto(row: TripRow & { stops: StopRow[] }): PublicTrip
       source: s.source as StopSource,
       visited: s.visited,
       lightPref: s.lightPref as LightPref,
+      priority: toPriority(s.priority),
       dwellMinutes: s.dwellMinutes,
       shotNotes: s.shotNotes,
       shotChecklist: parseShotChecklist(s.shotChecklist),

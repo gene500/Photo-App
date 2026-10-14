@@ -8,7 +8,7 @@ import { SharedTripView } from "./SharedTripView";
 
 const stop = (order: number, name: string, extra: Partial<PublicTrip["stops"][number]> = {}): PublicTrip["stops"][number] => ({
   order, name, lat: 36 + order * 0.3, lng: -120, notes: null, source: "manual", visited: false, lightPref: "any", dwellMinutes: 30,
-  shotNotes: null, shotChecklist: [], ...extra,
+  shotNotes: null, shotChecklist: [], priority: "normal", ...extra,
 });
 
 const trip: PublicTrip = {
@@ -34,6 +34,15 @@ describe("SharedTripView", () => {
     expect(rows[1]!.textContent).toContain("Wide shot");
     expect(screen.getByRole("button", { name: "Stop 2: Second view" })).toBeTruthy();
     expect(screen.getByText("Best at sunset")).toBeTruthy();
+  });
+
+  it("labels High and Must-have stops but not Normal ones", () => {
+    const t = { ...trip, stops: [stop(0, "A", { lightPref: "sunset", priority: "must" }), stop(1, "B", { lightPref: "sunset", priority: "high" }), stop(2, "C", { lightPref: "sunset" })] };
+    render(<SharedTripView trip={t} />);
+    const rows = screen.getAllByTestId("shared-stop").map((r) => r.textContent ?? "");
+    expect(rows[0]).toContain("Must-have");
+    expect(rows[1]).toContain("High priority");
+    expect(rows[2]).not.toMatch(/Must-have|High priority/);
   });
 
   it("drops the straight-line caveat when a real driving route is supplied", () => {

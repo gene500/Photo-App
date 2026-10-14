@@ -32,6 +32,7 @@ export const api = {
     request<{ user: { id: string; email: string } }>("/api/signup", send("POST", { email, password, ...guard })),
   signOutEverywhere: () => request<void>("/api/account/sessions", send("DELETE")),
   /** Permanently deletes the signed-in account and everything in it; the password confirms it. */
+  changePassword: (currentPassword: string, newPassword: string) => request<void>("/api/account/password", send("POST", { currentPassword, newPassword })),
   deleteAccount: (password: string) => request<void>("/api/account", send("DELETE", { password })),
   listTrips: () => request<{ trips: TripSummary[] }>("/api/trips"),
   createTrip: (input: TripCreateInput) => request<{ trip: Trip }>("/api/trips", send("POST", input)),

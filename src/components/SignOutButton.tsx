@@ -93,3 +93,56 @@ export function DeleteAccountButton({ className }: { className?: string }) {
     </form>
   );
 }
+
+/** Changes the password. The server ends every session, so on success this signs out and sends the user to log in again. */
+export function ChangePasswordButton({ className }: { className?: string }) {
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function run() {
+    setPending(true);
+    setError(null);
+    try {
+      await api.changePassword(current, next);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't change the password");
+      setPending(false);
+      return;
+    }
+    disableOfflineSaving();
+    clearAllCopies();
+    void signOut({ callbackUrl: "/login" });
+  }
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className={className}>
+        Change password…
+      </button>
+    );
+  }
+  const field = "mt-1 block w-full max-w-xs rounded-lg border border-border bg-surface px-3 py-2 text-sm";
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); void run(); }} className="space-y-2">
+      <label className="block text-sm">
+        <span className="text-muted">Current password</span>
+        <input type="password" required autoFocus autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} className={field} />
+      </label>
+      <label className="block text-sm">
+        <span className="text-muted">New password</span>
+        <input type="password" required minLength={8} autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} className={field} />
+      </label>
+      <p className="text-xs text-muted">At least 8 characters. You will be signed out everywhere and asked to sign in again.</p>
+      <div className="flex gap-2">
+        <button type="submit" disabled={pending || current === "" || next.length < 8} className={className}>
+          {pending ? "Changing…" : "Change password"}
+        </button>
+        <button type="button" disabled={pending} onClick={() => { setOpen(false); setCurrent(""); setNext(""); setError(null); }} className={className}>
+          Cancel
+        </button>
+      </div>
+      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+    </form>
+  );
+}

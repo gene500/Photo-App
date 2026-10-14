@@ -49,7 +49,7 @@ export type Trip = {
 /** One stop as shown on the public share page: no ids, no uploaded photo. */
 export type PublicStop = Pick<
   Stop,
-  "order" | "name" | "lat" | "lng" | "notes" | "source" | "visited" | "lightPref" | "dwellMinutes" | "shotNotes" | "shotChecklist"
+  "order" | "name" | "lat" | "lng" | "notes" | "source" | "visited" | "lightPref" | "priority" | "dwellMinutes" | "shotNotes" | "shotChecklist"
 >;
 
 /** The sanitized, read-only view of a shared trip. Nothing here identifies or can modify the owner's data. */

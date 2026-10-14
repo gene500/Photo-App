@@ -69,7 +69,7 @@ export async function revokeAllSessions(userId: string): Promise<void> {
   versions.delete(userId);
 }
 
-/** Sets a new password after checking the current one, and signs every other device out. */
+/** Sets a new password after checking the current one, and ends every session, this one included. */
 export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) return false;

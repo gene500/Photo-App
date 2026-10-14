@@ -23,7 +23,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
 
   // The map takes Stop objects; the keys are made from the order, never from database ids.
   const mapStops: Stop[] = useMemo(
-    () => trip.stops.map((s) => ({ ...s, id: `stop-${s.order}`, tripId: "", photoUrl: null, priority: "normal" as const })),
+    () => trip.stops.map((s) => ({ ...s, id: `stop-${s.order}`, tripId: "", photoUrl: null, })),
     [trip.stops],
   );
   // The page fetches the real driving route on the server; without one (routing down) the line is straight and the times are estimated from distance.
@@ -89,7 +89,12 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
                           {arrival && !hint && <> · Arrive ~{formatClock(arrival, undefined, tf)}</>}
                         </p>
                       )}
-                      {s.lightPref !== "any" && <p className="text-xs text-muted">Best at {lightLabel(s.lightPref).toLowerCase()}</p>}
+                      {s.lightPref !== "any" && (
+                        <p className="text-xs text-muted">
+                          Best at {lightLabel(s.lightPref).toLowerCase()}
+                          {s.priority !== "normal" && <> · {s.priority === "must" ? "Must-have" : "High priority"}</>}
+                        </p>
+                      )}
                       {s.notes && <p className="whitespace-pre-wrap text-xs">{s.notes}</p>}
                       {s.shotNotes && <p className="whitespace-pre-wrap text-xs">{s.shotNotes}</p>}
                       {s.shotChecklist.length > 0 && (

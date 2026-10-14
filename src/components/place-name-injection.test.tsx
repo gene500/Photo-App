@@ -52,7 +52,7 @@ describe("hostile place names are rendered as text", () => {
   });
 
   it("share page", () => {
-    const trip: PublicTrip = { name: EVIL, plannedDate: "2026-07-01", departAt: null, stops: [stop(0)].map(({ order, name, lat, lng, notes, source, visited, lightPref, dwellMinutes, shotNotes, shotChecklist }) => ({ order, name, lat, lng, notes, source, visited, lightPref, dwellMinutes, shotNotes, shotChecklist })) };
+    const trip: PublicTrip = { name: EVIL, plannedDate: "2026-07-01", departAt: null, stops: [stop(0)].map(({ order, name, lat, lng, notes, source, visited, lightPref, priority, dwellMinutes, shotNotes, shotChecklist }) => ({ order, name, lat, lng, notes, source, visited, lightPref, priority, dwellMinutes, shotNotes, shotChecklist })) };
     const { container } = render(<SharedTripView trip={trip} />);
     expect(container.textContent).toContain(EVIL);
     noInjectedNodes(container);

@@ -126,12 +126,12 @@ describe("hover photo beside the suggestion", () => {
       render(<SuggestionsPanel {...props} suggestions={[one]} />);
       const accept = screen.getByRole("button", { name: /^Accept/ });
       spy.mockReturnValue(rect(0, 320));
-      accept.focus();
+      act(() => accept.focus());
       expect(screen.queryByTestId("suggestion-hover-photo")).toBeNull();
-      accept.blur();
+      act(() => accept.blur());
       spy.mockReturnValue(rect(0, 100)); // a wide window leaves plenty of room on the right
       Object.defineProperty(window, "innerWidth", { configurable: true, value: 1024 });
-      accept.focus();
+      act(() => accept.focus());
       expect(screen.getByTestId("suggestion-hover-photo")).toBeTruthy();
     } finally {
       Object.defineProperty(window, "innerWidth", { configurable: true, value: prevWidth });

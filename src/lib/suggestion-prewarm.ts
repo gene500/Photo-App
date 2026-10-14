@@ -17,7 +17,7 @@ export const PREWARM_MIN_PLACES = 5;
 /** An older list than this is not reused. */
 export const PREWARM_MAX_AGE_MS = 10 * 60_000;
 /** The route must stay unchanged this long before a search is started for it. */
-export const PREWARM_DELAY_MS = 1500;
+export const PREWARM_DELAY_MS = 600;
 
 export function startPrewarm(search: () => Promise<Suggestion[]>, now = Date.now()): Prewarm {
   const items = search();

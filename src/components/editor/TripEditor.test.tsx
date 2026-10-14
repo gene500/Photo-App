@@ -219,6 +219,20 @@ describe("TripEditor", () => {
     await waitFor(() => expect(api.suggestionPopularity).toHaveBeenCalled());
   });
 
+  it("a quick 'Find' searches once and the pending quiet search does not repeat it", async () => {
+    const six = Array.from({ length: 6 }, (_, i) => ({ osmId: `node/${i}`, name: `Spot ${i}`, lat: 37.7 + i / 100, lng: -119.7, kind: "viewpoint" as const }));
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.mocked(api.suggestions).mockResolvedValue({ suggestions: six });
+    vi.mocked(api.suggestionPopularity).mockResolvedValue({ counts: six.map(() => 7) });
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/\d mi\b/));
+    await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+    expect((await screen.findAllByTestId("suggestion-card")).length).toBeGreaterThan(0);
+    await new Promise((r) => setTimeout(r, 900)); // past the quiet-search delay
+    expect(api.suggestions).toHaveBeenCalledTimes(1);
+  });
+
   it("searches again when the quiet search found only a thin list", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });

@@ -203,11 +203,13 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   // Once the route has been steady for a moment, fetch the place list quietly (popularity waits for the click), so
   // "Find photo spots" answers from what has already come in. Dropped when the stops change.
   const prewarmRef = useRef<{ key: string; prewarm: Prewarm } | null>(null);
+  const askedKeyRef = useRef<string | null>(null); // the route "Find" last searched, so a pending prewarm does not repeat it
   useEffect(() => {
     if (!activeRoute) return;
     const geometry = activeRoute.geometry;
     let entry: { key: string; prewarm: Prewarm } | null = null;
     const timer = setTimeout(() => {
+      if (askedKeyRef.current === waypointKey) return;
       entry = { key: waypointKey, prewarm: startPrewarm(async () => (await api.suggestions(downsampleRoute(geometry), { enrich: false })).suggestions) };
       prewarmRef.current = entry;
     }, PREWARM_DELAY_MS);
@@ -495,6 +497,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     const key = waypointKey;
     const placed = stops;
     setSuggestionsState({ key, items: [], status: "loading", error: null });
+    askedKeyRef.current = key;
     const warm = prewarmRef.current?.key === key ? prewarmRef.current.prewarm : null;
     prewarmRef.current = null; // adopted once; a retry searches afresh
     try {

@@ -18,10 +18,13 @@ test("deleting the account needs the password, signs out, and the login stops wo
   await page.getByRole("button", { name: "Delete my account" }).click();
   await expect(page).toHaveURL(/\/login/);
 
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Log in" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toBeVisible();
+  // The server-rendered form can be clicked before React hydrates, so retry the whole attempt until the error shows.
+  await expect(async () => {
+    await page.getByLabel("Email").fill(email);
+    await page.getByLabel("Password").fill("correct-horse-battery");
+    await page.getByRole("button", { name: "Log in" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toBeVisible({ timeout: 4_000 });
+  }).toPass({ timeout: 30_000 });
 });
 
 test("privacy and terms are public", async ({ page }) => {

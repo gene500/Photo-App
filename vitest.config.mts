@@ -19,9 +19,9 @@ export default defineConfig({
       SIGNUP_MIN_SECONDS: "0",
     },
     fileParallelism: false, // DB-backed tests share one SQLite file
-    reporters: [
-      "default",
-      ["tdd-guard-vitest", { projectRoot: "/Users/genestone/road-trip-photo-planner" }],
-    ],
+    // The tdd-guard reporter is a local dev aid; it is skipped on CI, where it only adds a path that can fail to write.
+    reporters: process.env.CI
+      ? ["default"]
+      : ["default", ["tdd-guard-vitest", { projectRoot: import.meta.dirname }]],
   },
 });

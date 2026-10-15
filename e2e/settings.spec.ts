@@ -76,20 +76,20 @@ test("explicit theme beats the OS colour scheme in both directions", async ({ pa
   await page.goto("/settings");
 
   await page.emulateMedia({ colorScheme: "dark" });
-  expect(await bodyBg(page)).toBe(DARK_BG); // system follows the OS
+  await expect.poll(() => bodyBg(page)).toBe(DARK_BG); // system follows the OS
   await page.getByRole("radio", { name: "Light", exact: true }).check();
-  expect(await bodyBg(page)).toBe(LIGHT_BG); // explicit light on a dark OS
+  await expect.poll(() => bodyBg(page)).toBe(LIGHT_BG); // explicit light on a dark OS
   await page.reload();
-  expect(await bodyBg(page)).toBe(LIGHT_BG);
+  await expect.poll(() => bodyBg(page)).toBe(LIGHT_BG);
 
   await page.emulateMedia({ colorScheme: "light" });
-  expect(await bodyBg(page)).toBe(LIGHT_BG);
+  await expect.poll(() => bodyBg(page)).toBe(LIGHT_BG);
   await page.getByRole("radio", { name: "Dark", exact: true }).check();
-  expect(await bodyBg(page)).toBe(DARK_BG); // explicit dark on a light OS
+  await expect.poll(() => bodyBg(page)).toBe(DARK_BG); // explicit dark on a light OS
   await page.reload();
-  expect(await bodyBg(page)).toBe(DARK_BG);
+  await expect.poll(() => bodyBg(page)).toBe(DARK_BG);
   await page.getByRole("radio", { name: "System", exact: true }).check();
-  expect(await bodyBg(page)).toBe(LIGHT_BG);
+  await expect.poll(() => bodyBg(page)).toBe(LIGHT_BG);
 });
 
 test("settings apply to the public share page without logging in", async ({ page, browser }) => {

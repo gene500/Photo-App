@@ -120,3 +120,27 @@ describe("optimizeSchedule", () => {
     expect(Math.max(...pos("sunrise"))).toBeLessThan(Math.min(...pos("sunset")));
   });
 });
+
+describe("search-size thresholds", () => {
+  // Exact search covers up to 7 free stops (8 total); 9 total and beyond use the local search.
+  it.each([7, 8, 9, 10])("returns a valid, stable, fast schedule for %i stops", (n) => {
+    const prefs: LightPref[] = ["sunrise", "sunset", "any", "golden", "any", "sunrise", "sunset", "any", "sunrise", "any"];
+    const stops = Array.from({ length: n }, (_, i) => stop(prefs[i]!, 20, { lat: 37.7 + i * 0.01 }));
+    const durations = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 0 : 600 + ((i * 7 + j * 13) % 11) * 120)));
+    const run = () => optimizeSchedule({ durations, stops, plannedDate: DATE, defaultDeparture });
+    const t0 = performance.now();
+    const a = run();
+    expect(performance.now() - t0).toBeLessThan(3000);
+    expect(a.order[0]).toBe(0);
+    expect([...a.order].sort((x, y) => x - y)).toEqual(Array.from({ length: n }, (_, i) => i));
+    expect(run()).toEqual(a);
+  });
+
+  it("survives duplicate stops and missing or unreachable durations", () => {
+    const stops = [stop("sunrise"), stop("sunrise"), stop("sunset"), stop("any")];
+    const durations = [[0, 0, NaN, 600], [0, 0, 600, Infinity], [NaN, 600, 0, 600], [600, 600, 600, 0]];
+    const r = optimizeSchedule({ durations, stops, plannedDate: DATE, defaultDeparture });
+    expect([...r.order].sort()).toEqual([0, 1, 2, 3]);
+    expect(Number.isFinite(r.departAt.getTime())).toBe(true);
+  });
+});

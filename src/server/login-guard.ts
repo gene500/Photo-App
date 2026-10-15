@@ -1,5 +1,6 @@
 import { assertSameOrigin, jsonError } from "./http";
-import { clientIp, hit, isBlocked } from "./rate-limit";
+import { clientIp } from "./rate-limit";
+import { hitShared, isBlockedShared } from "./shared-limit";
 import { RATE_LIMITED } from "./auth";
 
 /**
@@ -21,7 +22,7 @@ export async function guardAuthPost(req: Request): Promise<Response | null> {
       { url: `${url.origin}/login?error=${RATE_LIMITED}` },
       { status: 429, headers: { "Retry-After": String(retryAfter) } },
     );
-  const ip = hit("login-ip", clientIp(req.headers));
+  const ip = await hitShared("login-ip", clientIp(req.headers));
   if (!ip.ok) return limited(ip.retryAfter);
 
   let email = "";
@@ -31,7 +32,7 @@ export async function guardAuthPost(req: Request): Promise<Response | null> {
     // Not a form post; NextAuth will reject it.
   }
   if (email) {
-    const blocked = isBlocked("login-email-failures", email);
+    const blocked = await isBlockedShared("login-email-failures", email);
     if (!blocked.ok) return limited(blocked.retryAfter);
   }
   return null;

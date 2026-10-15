@@ -12,6 +12,7 @@
 - [ ] Live site: sign-in, map, suggestions, photo upload, privacy/terms, account deletion, Imperial/Metric setting, Escape key, prewarm speed.
 
 ## Your accounts and settings
+- [ ] Set `CRON_SECRET` in Vercel (any long random string) so the daily photo-cleanup cron works; without it the route does nothing.
 - [ ] Turn on Sign in with Google: create an OAuth client in Google Cloud Console (redirect URI `https://photo-app-pi2o.vercel.app/api/auth/callback/google`), then set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in Vercel. The button stays hidden until both are set. Not testable end to end locally (unit tests only).
 - [ ] Use a separate unrestricted server Mapbox token (`MAPBOX_TOKEN`); URL-restrict the public `NEXT_PUBLIC_MAPBOX_TOKEN`; set a Mapbox spend cap.
 - [ ] Rotate Vercel Blob credentials and restrict them to Production.
@@ -26,7 +27,8 @@
 - [ ] No email verification; signup email enumeration (409).
 - [ ] CSP still allows `'unsafe-inline'`.
 - [ ] Share page `no-referrer` vs a URL-restricted Mapbox token.
-- [ ] Offline copies persist until sign-out; orphaned Blob files if deletion fails.
+- [ ] Offline copies persist until sign-out.
+- [ ] Rate limits other than login/signup/password/delete are per instance (see README); no monitoring or alerting yet.
 - [ ] `updateTrip` find-then-update is not atomic.
 - [ ] Playwright timezone is not pinned for specs other than the hydration one.
 - [ ] Skills in `.agents/skills` reference plugin commands that are not installed (prompt-audit findings).

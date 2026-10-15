@@ -5,6 +5,8 @@ export async function resetDb(): Promise<void> {
   await prisma.stop.deleteMany();
   await prisma.trip.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.rateLimitCounter.deleteMany();
+  await prisma.pendingPhotoDeletion.deleteMany();
 }
 
 export async function createTestUser(email = `user-${randomUUID()}@example.com`) {

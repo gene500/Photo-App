@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { signupSchema } from "@/lib/validation";
 import { handle, HttpError, readJson } from "@/server/http";
-import { clientIp, enforceLimit } from "@/server/rate-limit";
+import { clientIp } from "@/server/rate-limit";
+import { enforceSharedLimit } from "@/server/shared-limit";
 import { checkSignupToken } from "@/server/signup-guard";
 import { createUser, DuplicateEmailError } from "@/server/users";
 
@@ -9,7 +10,7 @@ import { createUser, DuplicateEmailError } from "@/server/users";
 const guardSchema = z.object({ website: z.string().max(500).optional(), formToken: z.string().max(200).optional() });
 
 export const POST = handle(async (req: Request) => {
-  enforceLimit("signup-ip", clientIp(req.headers));
+  await enforceSharedLimit("signup-ip", clientIp(req.headers));
   const body = await readJson(req);
   const { website, formToken } = guardSchema.parse(body ?? {});
   if (website) {
@@ -20,7 +21,7 @@ export const POST = handle(async (req: Request) => {
   if (token === "invalid" || token === "expired") throw new HttpError(400, "Please reload the page and try again");
   if (token === "too-fast") throw new HttpError(400, "That was quick. Please wait a moment and try again");
   const { email, password } = signupSchema.parse(body);
-  enforceLimit("signup-email", email);
+  await enforceSharedLimit("signup-email", email);
   try {
     const user = await createUser(email, password);
     return Response.json({ user }, { status: 201 });

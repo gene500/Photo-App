@@ -81,3 +81,17 @@ model Place {
 
   @@index([cell])
 }
+
+/// Shared counters for the auth-sensitive rate limits, so the limit holds across serverless instances.
+model RateLimitCounter {
+  key     String @id
+  count   Int
+  resetAt BigInt
+}
+
+/// Photo files whose removal failed; retried later so they do not stay in storage forever.
+model PendingPhotoDeletion {
+  photoUrl  String   @id
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+}

@@ -82,7 +82,7 @@ total drive time. The first stop stays the starting point and the last stop is
 free (an open path, not a round trip). The server (`POST /api/optimize`) asks the
 Mapbox Matrix API (`directions-matrix/v1/mapbox/driving`, `annotations=duration`)
 for pairwise drive times, then solves the order in `src/lib/optimize-order.ts`:
-exact for up to 9 stops, nearest-neighbour plus 2-opt/or-opt above that. The
+exact (Held-Karp) for up to 9 stops, nearest-neighbour plus 2-opt/or-opt above that. The
 Matrix API allows at most 25 coordinates per request, which matches the app's
 25-stop limit. **Undo** restores the previous order until the stops change again.
 
@@ -103,8 +103,8 @@ chooses the visiting order *and* the departure time (`src/lib/optimize-schedule.
   `[arrival, arrival + time here]` overlaps a window; otherwise the miss is the
   gap to the nearest window.
 - Departures tried: the default (sunrise at the first stop) plus every 15 minutes
-  from 1 h before it to 14 h after it. Up to 8 free stops (9 total) the search is
-  exact over all orders; above that it is a deterministic local search (swap,
+  from 1 h before it to 14 h after it. Up to 7 free stops (8 total) the search is
+  exact over all orders (8 stops held the server for about a second per request); above that it is a deterministic local search (swap,
   2-opt, or-opt) seeded from nearest-neighbour and sunrise-first/sunset-last orders.
 - With no preferences it is exactly the shortest-drive order and the departure
   stays at sunrise.
@@ -317,7 +317,24 @@ whitespace, which shows up as a Turso `401` during the build.
   builds also run `vercel-build`, which migrates the database named by
   `TURSO_*`, so a preview build would change the production database.
 - `vercel-build` migrates the database **before** `next build`. A build that
-  fails after the migration step still leaves the database migrated.
+  fails after the migration step still leaves the database migrated. Each
+  migration runs in one transaction with its bookkeeping row, so a failed
+  migration applies nothing. Write migrations so the previous app version still
+  works against the new schema (add columns and tables first, remove old ones in a
+  later release).
+- Turso keeps point-in-time restore for your database: before a risky migration,
+  note the time (or create a branch/fork of the database in the Turso dashboard) so
+  you can restore if needed.
+- **Maintenance cron.** `vercel.json` schedules `/api/cron/photo-cleanup` daily. It
+  retries photo-file deletions that failed earlier and clears expired rate-limit
+  counters. Set `CRON_SECRET` (any long random string) in Vercel; without it the
+  route answers 404 and does nothing.
+- **Rate limits** for login, signup, password change and account deletion are
+  counted in the database, so they hold across serverless instances. The other
+  limits (geocoding, suggestions, uploads, ...) are per instance; put Vercel's WAF
+  rate limiting in front if you need exact global limits.
+- **CI** (`.github/workflows/ci.yml`) runs type-check, lint, unit tests, build,
+  `npm audit` (critical only) and the Playwright suite on every push and pull request.
 - A local `.env.local` created by `vercel env pull` makes `npm run dev` use the
   production Turso database and Blob store. Remove `TURSO_*` and
   `BLOB_READ_WRITE_TOKEN` from it (or do not pull them) for local work.

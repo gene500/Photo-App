@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { checkPhotoFile, type PhotoType } from "@/lib/photo-rules";
+import { prisma } from "./db";
 
 export const PHOTO_URL_PREFIX = "/api/uploads/";
 
@@ -77,8 +78,8 @@ export async function readPhoto(
   }
 }
 
-/** Removes a stored photo. Resolves false (and logs the file name, never its owner) when the file could not be removed. */
-export async function deletePhotoFile(photoUrl: string | null | undefined): Promise<boolean> {
+/** Removes the stored file. True when it is gone (including already gone); false when removal failed. */
+export async function removeStoredPhoto(photoUrl: string | null | undefined): Promise<boolean> {
   if (!photoUrl?.startsWith(PHOTO_URL_PREFIX)) return true;
   const name = photoUrl.slice(PHOTO_URL_PREFIX.length);
   if (!isValidPhotoName(name)) return true;
@@ -91,4 +92,45 @@ export async function deletePhotoFile(photoUrl: string | null | undefined): Prom
     console.error(`photo ${name} could not be removed`);
     return false;
   }
+}
+
+/**
+ * Removes a stored photo. When that fails, the photo is queued in the database so a later retry can finish the job
+ * instead of leaving the file in storage for good. Resolves false when the file could not be removed right now.
+ */
+export async function deletePhotoFile(photoUrl: string | null | undefined): Promise<boolean> {
+  const ok = await removeStoredPhoto(photoUrl);
+  if (!ok && photoUrl) {
+    try {
+      await prisma.pendingPhotoDeletion.upsert({ where: { photoUrl }, create: { photoUrl }, update: {} });
+    } catch {
+      console.error("photo cleanup could not be queued");
+    }
+  }
+  return ok;
+}
+
+export const MAX_CLEANUP_ATTEMPTS = 8;
+
+/** Retries queued photo removals (oldest first). Safe to run repeatedly: a photo that is already gone counts as done. */
+export async function retryPendingDeletions(batch = 25): Promise<{ removed: number; failed: number; gaveUp: number }> {
+  const rows = await prisma.pendingPhotoDeletion.findMany({
+    where: { attempts: { lt: MAX_CLEANUP_ATTEMPTS } },
+    orderBy: { createdAt: "asc" },
+    take: batch,
+  });
+  let removed = 0;
+  let failed = 0;
+  for (const row of rows) {
+    if (await removeStoredPhoto(row.photoUrl)) {
+      await prisma.pendingPhotoDeletion.deleteMany({ where: { photoUrl: row.photoUrl } });
+      removed++;
+    } else {
+      await prisma.pendingPhotoDeletion.update({ where: { photoUrl: row.photoUrl }, data: { attempts: { increment: 1 } } });
+      failed++;
+    }
+  }
+  const gaveUp = await prisma.pendingPhotoDeletion.count({ where: { attempts: { gte: MAX_CLEANUP_ATTEMPTS } } });
+  if (gaveUp > 0) console.error(`photo cleanup: ${gaveUp} file(s) still could not be removed after ${MAX_CLEANUP_ATTEMPTS} tries`);
+  return { removed, failed, gaveUp };
 }

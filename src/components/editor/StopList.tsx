@@ -11,15 +11,17 @@ import { describeBestTime, type BestTime } from "@/lib/best-time";
 import { describeLightHint } from "@/lib/light-windows";
 import { useMounted } from "@/lib/use-mounted";
 import { useSettings } from "@/components/settings/SettingsProvider";
-import { stopColor } from "@/lib/stop-style";
+import { PRIORITIES, PRIORITY_LABEL, stopColor } from "@/lib/stop-style";
 import { useWeatherLine } from "@/lib/use-weather";
 import { weatherAriaLabel } from "@/lib/weather";
-import type { Stop } from "@/lib/types";
+import type { Stop, StopPriority } from "@/lib/types";
 
 type Handlers = {
   onToggleVisited: (stopId: string, visited: boolean) => void;
   onDelete: (stopId: string) => void;
   onSelect: (stopId: string) => void;
+  /** When given, stops with a best light show a small priority slider. */
+  onPriorityChange?: (stopId: string, priority: StopPriority) => void;
 };
 
 type Props = Handlers & { stops: Stop[]; bestTimes: BestTime[]; arrivals?: (Date | null)[]; onReorder: (stopIds: string[]) => void };
@@ -67,7 +69,7 @@ export function StopList({ stops, bestTimes, arrivals, onReorder, ...handlers }:
 // Hover-capable pointers reveal the secondary controls on row hover/focus; touch always shows them.
 const REVEAL = "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 focus-visible:!opacity-100";
 
-function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVisited, onDelete, onSelect }: Handlers & { stop: Stop; index: number; bestTime: BestTime; arrival: Date | null; role: "Start" | "End" | null; first: boolean; last: boolean }) {
+function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVisited, onDelete, onSelect, onPriorityChange }: Handlers & { stop: Stop; index: number; bestTime: BestTime; arrival: Date | null; role: "Start" | "End" | null; first: boolean; last: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id });
   const { settings } = useSettings();
   const mounted = useMounted(); // clock text is in the viewer's time zone: only a placeholder until mounted
@@ -131,6 +133,22 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
         )}
         {stop.notes && <p className="truncate text-xs text-muted">{stop.notes}</p>}
       </div>
+      {onPriorityChange && stop.lightPref !== "any" && (
+        <label className="flex w-14 shrink-0 flex-col items-center pt-1" title="Priority: how hard Optimize route works to land this stop in its light">
+          <input
+            type="range"
+            min={0}
+            max={PRIORITIES.length - 1}
+            step={1}
+            value={PRIORITIES.indexOf(stop.priority)}
+            onChange={(e) => onPriorityChange(stop.id, PRIORITIES[Number(e.target.value)] ?? "normal")}
+            aria-label={`Priority for ${stop.name}`}
+            aria-valuetext={PRIORITY_LABEL[stop.priority]}
+            className="h-1 w-full accent-accent-strong"
+          />
+          <span aria-hidden className="mt-1 text-[10px] leading-none text-muted">{PRIORITY_LABEL[stop.priority]}</span>
+        </label>
+      )}
       {stop.photoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- user uploads served by an auth-checked route
         <img src={stop.photoUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />

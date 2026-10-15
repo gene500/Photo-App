@@ -732,6 +732,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
               arrivals={arrivals}
               onReorder={(ids) => void reorder(ids)}
               onToggleVisited={(id, visited) => void patchStop(id, { visited })}
+              onPriorityChange={(id, priority) => void patchStop(id, { priority })}
               onDelete={(id) => void removeStop(id)}
               onSelect={openFromList}
             />

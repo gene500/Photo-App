@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getSunWindows } from "@/lib/best-time";
@@ -90,6 +90,16 @@ describe("StopList", () => {
     expect(within(rows[0]).getByTestId("best-time").textContent).toMatch(/^Golden hour · /);
     expect(rows[0].textContent).toContain("bring ND filter");
     expect(within(rows[1]).getByTestId("best-time").textContent).toBe("No daylight");
+  });
+
+  it("shows a priority slider on stops with a best light and reports changes", () => {
+    const onPriorityChange = vi.fn();
+    render(<StopList stops={[stop("a", "Tunnel View", { lightPref: "golden" }), stop("b", "Gas stop")]} bestTimes={[null, null]} {...handlers} onPriorityChange={onPriorityChange} />);
+    expect(screen.queryByLabelText("Priority for Gas stop")).toBeNull(); // Any light: nothing to prioritise
+    const slider = screen.getByLabelText("Priority for Tunnel View");
+    expect(slider.getAttribute("aria-valuetext")).toBe("Normal");
+    fireEvent.change(slider, { target: { value: "2" } });
+    expect(onPriorityChange).toHaveBeenCalledWith("a", "must");
   });
 
   it("calls handlers for visited, delete, and select", async () => {

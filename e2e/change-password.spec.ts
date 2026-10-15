@@ -18,6 +18,7 @@ test("change password: wrong current password is refused, then sign in again wit
   await page.getByLabel("Current password").fill("correct-horse-battery");
   await page.getByRole("button", { name: "Change password", exact: true }).click();
   await expect(page).toHaveURL(/\/login/);
+  await page.waitForLoadState("networkidle"); // fill only after the page has hydrated, or React can reset the fields
 
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("brand-new-password-1");

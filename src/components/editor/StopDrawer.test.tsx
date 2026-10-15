@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -27,20 +27,6 @@ describe("StopDrawer", () => {
     // notes stayed blank (null), so only the visited change is sent
     expect(onSave).toHaveBeenCalledWith({ visited: true });
     expect(onClose).toHaveBeenCalled();
-  });
-
-  it("has a priority slider that is off until a light is chosen, and saves the level", async () => {
-    const onSave = vi.fn(async () => {});
-    render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
-    const slider = screen.getByLabelText("Priority") as HTMLInputElement;
-    expect(slider.disabled).toBe(true);
-    expect(slider.getAttribute("aria-valuetext")).toBe("Normal");
-    await userEvent.selectOptions(screen.getByLabelText("Best light"), "golden");
-    expect(slider.disabled).toBe(false);
-    fireEvent.change(slider, { target: { value: "2" } });
-    expect(slider.getAttribute("aria-valuetext")).toBe("Must-have");
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(onSave).toHaveBeenCalledWith({ lightPref: "golden", priority: "must" });
   });
 
   it("sends only the fields changed in the drawer, so a Visited tick made elsewhere is not undone", async () => {

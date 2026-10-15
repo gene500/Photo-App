@@ -5,7 +5,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost, btnPrimary, inputClass, btnIcon } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { checkPhotoFile, PHOTO_TYPES } from "@/lib/photo-rules";
-import type { LightPref, ShotItem, Stop, StopPriority, Suggestion } from "@/lib/types";
+import type { LightPref, ShotItem, Stop, Suggestion } from "@/lib/types";
 import { AlternativesPanel } from "./AlternativesPanel";
 import type { SuggestionsStatus } from "./SuggestionsPanel";
 import { MAX_DWELL_MINUTES, MAX_SHOT_ITEMS, MAX_SHOT_NOTES, MAX_SHOT_TEXT, type StopPatch } from "@/lib/validation";
@@ -19,8 +19,6 @@ type Props = {
   alternatives?: { status: SuggestionsStatus; items: Suggestion[]; error: string | null; onFind: () => void; onSwap: (s: Suggestion) => void | Promise<void>; onDismissError: () => void };
 };
 
-const PRIORITIES: StopPriority[] = ["normal", "high", "must"];
-const PRIORITY_LABEL: Record<StopPriority, string> = { normal: "Normal", high: "High", must: "Must-have" };
 const LIGHT_OPTIONS: [LightPref, string][] = [["any", "Any"], ["sunrise", "Sunrise"], ["golden", "Golden hour"], ["sunset", "Sunset"]];
 
 // Checklist rows carry a local id (never sent to the server) so React keys survive deleting or reordering rows.
@@ -32,12 +30,11 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives }: Props) {
-  const [initial] = useState({ name: stop.name, notes: stop.notes ?? null, visited: stop.visited, lightPref: stop.lightPref, priority: stop.priority, dwellMinutes: stop.dwellMinutes, shotNotes: stop.shotNotes, shotChecklist: JSON.stringify(stop.shotChecklist) });
+  const [initial] = useState({ name: stop.name, notes: stop.notes ?? null, visited: stop.visited, lightPref: stop.lightPref, dwellMinutes: stop.dwellMinutes, shotNotes: stop.shotNotes, shotChecklist: JSON.stringify(stop.shotChecklist) });
   const [name, setName] = useState(stop.name);
   const [notes, setNotes] = useState(stop.notes ?? "");
   const [visited, setVisited] = useState(stop.visited);
   const [lightPref, setLightPref] = useState<LightPref>(stop.lightPref);
-  const [priority, setPriority] = useState<StopPriority>(stop.priority);
   const [dwell, setDwell] = useState(String(stop.dwellMinutes));
   const [shotNotes, setShotNotes] = useState(stop.shotNotes ?? "");
   const nextId = useRef(stop.shotChecklist.length);
@@ -80,7 +77,7 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives 
 
   // Swapping replaces the stop and closes the drawer, which would silently throw typed edits away; so it waits for Save.
   const dirty =
-    name !== initial.name || (notes.trim() === "" ? null : notes) !== initial.notes || visited !== initial.visited || lightPref !== initial.lightPref || priority !== initial.priority ||
+    name !== initial.name || (notes.trim() === "" ? null : notes) !== initial.notes || visited !== initial.visited || lightPref !== initial.lightPref ||
     dwell !== String(stop.dwellMinutes) || (shotNotes.trim() === "" ? null : shotNotes) !== initial.shotNotes ||
     JSON.stringify(plain(shots)) !== initial.shotChecklist || newShot.trim() !== "";
 
@@ -101,7 +98,6 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives 
       if (nextNotes !== initial.notes) patch.notes = nextNotes;
       if (visited !== initial.visited) patch.visited = visited;
       if (lightPref !== initial.lightPref) patch.lightPref = lightPref;
-      if (priority !== initial.priority) patch.priority = priority;
       if (dwellMinutes !== initial.dwellMinutes) patch.dwellMinutes = dwellMinutes;
       const nextShotNotes = shotNotes.trim() === "" ? null : shotNotes;
       if (nextShotNotes !== initial.shotNotes) patch.shotNotes = nextShotNotes;
@@ -188,23 +184,6 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives 
           <input type="number" inputMode="numeric" min={0} max={MAX_DWELL_MINUTES} step={5} value={dwell} onChange={(e) => setDwell(e.target.value)} className={inputClass} />
         </label>
       </div>
-      <label className="flex items-center gap-3 text-sm text-muted">
-        <span className="shrink-0">Priority</span>
-        <input
-          type="range"
-          min={0}
-          max={PRIORITIES.length - 1}
-          step={1}
-          value={PRIORITIES.indexOf(priority)}
-          disabled={lightPref === "any"}
-          onChange={(e) => setPriority(PRIORITIES[Number(e.target.value)] ?? "normal")}
-          aria-label="Priority"
-          aria-valuetext={PRIORITY_LABEL[priority]}
-          title="How hard Optimize route works to land this stop in its light"
-          className="h-1 min-w-0 flex-1 accent-accent-strong disabled:opacity-40"
-        />
-        <span className="w-20 shrink-0 text-right text-xs">{lightPref === "any" ? "Pick a light" : PRIORITY_LABEL[priority]}</span>
-      </label>
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">Shot list</legend>
         <label className="block">

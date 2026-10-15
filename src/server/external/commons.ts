@@ -9,6 +9,10 @@ const SEARCH_RADIUS_M = 300;
 const PHOTO_MIMES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const QUALITY_CATEGORY = /Featured pictures|Quality images|Valued images/i;
 const MAX_TEXT = 80;
+/** Without a name match, only a file taken this close to the spot is plausibly of the place. */
+const UNNAMED_MAX_M = 100;
+/** Portraits and snapshots of people turn up near any point; they never illustrate a place. */
+const PEOPLE = /\b(portrait|portraits|people|persons?|men|women|man|woman|boys?|girls?|children|faces?|selfies?|self-portraits?|crowds?|wedding|actors?|actresses|musicians?)\b/i;
 
 type Meta = Record<string, { value?: unknown } | undefined>;
 type FilePage = {
@@ -16,7 +20,7 @@ type FilePage = {
   categories?: { title?: string }[];
   imageinfo?: { thumburl?: string; descriptionurl?: string; mime?: string; extmetadata?: Meta }[];
 };
-type Candidate = { title: string; thumb: string; pageUrl: string; credit: string; quality: boolean; dist: number };
+type Candidate = { title: string; thumb: string; pageUrl: string; credit: string; quality: boolean; dist: number; people: boolean };
 
 /** Plain text from the HTML snippets Commons puts in extmetadata (never returned as markup). */
 export function htmlToText(html: string): string {
@@ -61,7 +65,8 @@ function toCandidate(page: FilePage, place: PlaceQuery): Candidate | null {
   const lat = coord(meta, "GPSLatitude");
   const lng = coord(meta, "GPSLongitude");
   const dist = lat !== null && lng !== null ? haversineMeters(place, { lat, lng }) : SEARCH_RADIUS_M;
-  return { title: fileTitleToName(title), thumb, pageUrl, credit, quality: cats.some((c) => QUALITY_CATEGORY.test(c)), dist };
+  const people = PEOPLE.test(fileTitleToName(title)) || cats.some((c) => PEOPLE.test(c.replace(/^Category:/i, "")));
+  return { title: fileTitleToName(title), thumb, pageUrl, credit, quality: cats.some((c) => QUALITY_CATEGORY.test(c)), dist, people };
 }
 
 /**
@@ -90,8 +95,11 @@ export async function getCommonsPhoto(place: PlaceQuery, fetchImpl: typeof fetch
     const pages = Object.values(json?.query?.pages ?? {});
     const best = pages
       .map((p) => toCandidate(p, place))
-      .filter((c): c is Candidate => c !== null && c.dist <= SEARCH_RADIUS_M)
+      .filter((c): c is Candidate => c !== null && c.dist <= SEARCH_RADIUS_M && !c.people)
       .map((c) => ({ c, score: nameScore(place.name, c.title) }))
+      // A file that does not name the place must have been taken right at it (or be a curated quality image within the search
+      // radius), else it is just something nearby.
+      .filter(({ c, score }) => score > 0 || c.dist <= UNNAMED_MAX_M || c.quality)
       .sort((a, b) => Number(b.c.quality) - Number(a.c.quality) || b.score - a.score || a.c.dist - b.c.dist)[0]?.c;
     return best ? { url: best.thumb, title: best.title, pageUrl: best.pageUrl, credit: best.credit } : null;
   } catch {

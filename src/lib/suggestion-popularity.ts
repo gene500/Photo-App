@@ -1,20 +1,14 @@
 import { api } from "./api-client";
-import type { Suggestion, SuggestionKind } from "./types";
+import { rankByScore } from "./suggestion-rank";
+import type { Suggestion } from "./types";
 
 /** The first chunk shows right away; each further chunk of this size is revealed as its popularity arrives. */
 export const POPULARITY_BATCH = 5;
 /** Only the first 40 suggestions are ranked by popularity (the same cap the server used). */
 export const POPULARITY_MAX = 40;
 
-const KIND_RANK: Record<SuggestionKind, number> = { viewpoint: 0, peak: 1, attraction: 2 };
-
-/** Kind tier first (viewpoints, peaks, attractions), then photo count descending; unknown counts rank as 0, ties keep order. */
-export function rankSuggestions(items: Suggestion[]): Suggestion[] {
-  return items
-    .map((s, i) => ({ s, i }))
-    .sort((a, b) => KIND_RANK[a.s.kind] - KIND_RANK[b.s.kind] || (b.s.popularity ?? 0) - (a.s.popularity ?? 0) || a.i - b.i)
-    .map((x) => x.s);
-}
+/** Best score first (Wikipedia notability, then photo count, then kind); weak places last; ties keep order. */
+export const rankSuggestions = rankByScore;
 
 /** Batches in flight at once; their results are still delivered in order so the list reveals chunk by chunk. */
 export const POPULARITY_PARALLEL = 8; // a full list (40 places) is 8 batches: one round trip, under the 60/min limit
@@ -24,18 +18,21 @@ export const POPULARITY_PARALLEL = 8; // a full list (40 places) is 8 batches: o
  * `onBatch` after each in order (with the counts found, possibly none) so the list can be re-ranked and the next chunk
  * revealed. `onDone` follows the last batch. Returns a cancel function. A failed batch is skipped: popularity is only a ranking bonus.
  */
-export function loadPopularityInBatches(items: readonly Suggestion[], onBatch: (counts: Map<string, number>) => void, onDone?: () => void): () => void {
+export function loadPopularityInBatches(items: readonly Suggestion[], onBatch: (counts: Map<string, number>, notable: Map<string, boolean>) => void, onDone?: () => void): () => void {
   const todo = items.slice(0, POPULARITY_MAX).filter((s) => s.popularity === undefined);
   const batches: Suggestion[][] = [];
   for (let i = 0; i < todo.length; i += POPULARITY_BATCH) batches.push(todo.slice(i, i + POPULARITY_BATCH));
   let cancelled = false;
-  const request = async (batch: Suggestion[]): Promise<Map<string, number> | null> => {
+  type Found = { counts: Map<string, number>; notable: Map<string, boolean> };
+  const request = async (batch: Suggestion[]): Promise<Found | null> => {
     try {
-      const { counts } = await api.suggestionPopularity(batch.map((s) => ({ lat: s.lat, lng: s.lng })));
-      const found = new Map<string, number>();
+      const { counts, notable } = await api.suggestionPopularity(batch.map((s) => ({ lat: s.lat, lng: s.lng, name: s.name })));
+      const found: Found = { counts: new Map(), notable: new Map() };
       batch.forEach((s, j) => {
         const n = counts[j];
-        if (typeof n === "number") found.set(s.osmId, n);
+        if (typeof n === "number") found.counts.set(s.osmId, n);
+        const w = notable?.[j];
+        if (typeof w === "boolean") found.notable.set(s.osmId, w);
       });
       return found;
     } catch {
@@ -43,7 +40,7 @@ export function loadPopularityInBatches(items: readonly Suggestion[], onBatch: (
     }
   };
   void (async () => {
-    const started: Promise<Map<string, number> | null>[] = [];
+    const started: Promise<Found | null>[] = [];
     const start = (i: number) => {
       if (i < batches.length && started.length === i) started.push(request(batches[i]));
     };
@@ -52,7 +49,7 @@ export function loadPopularityInBatches(items: readonly Suggestion[], onBatch: (
       const found = await started[i];
       if (cancelled) return;
       start(i + POPULARITY_PARALLEL); // keep the window of requests full while this batch is shown
-      onBatch(found ?? new Map());
+      onBatch(found?.counts ?? new Map(), found?.notable ?? new Map());
     }
     if (!cancelled) onDone?.();
   })();

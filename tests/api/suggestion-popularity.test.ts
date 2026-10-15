@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
 import { getCurrentUserId } from "@/server/session";
@@ -8,7 +8,13 @@ import { jsonRequest } from "../helpers/requests";
 const place = { lat: 36.7, lng: -119.7 };
 
 describe("POST /api/suggestions/popularity", () => {
-  beforeEach(() => vi.mocked(getCurrentUserId).mockResolvedValue("u1"));
+  const wikiBody = { query: { pages: { "1": { title: "Half Dome", coordinates: [{ lat: 36.7, lon: -119.7 }], pageviews: { "2026-10-01": 400 } } } } };
+  beforeEach(() => {
+    vi.mocked(getCurrentUserId).mockResolvedValue("u1");
+    // Never reach the real Commons/Wikipedia: the route calls the global fetch.
+    vi.stubGlobal("fetch", vi.fn(async (u: string | URL | Request) => new Response(JSON.stringify(String(u).includes("wikipedia.org") ? wikiBody : { query: { geosearch: [{}, {}, {}] } }))));
+  });
+  afterEach(() => vi.unstubAllGlobals());
 
   it("requires sign-in", async () => {
     vi.mocked(getCurrentUserId).mockResolvedValue(null);
@@ -26,5 +32,11 @@ describe("POST /api/suggestions/popularity", () => {
     expect(res.status).toBe(200);
     const { counts } = await res.json();
     expect(counts).toHaveLength(2);
+  });
+
+  it("also says whether Wikipedia has a well-read article about each place (matched by name, or very close)", async () => {
+    const res = await POST(jsonRequest("POST", "/api/suggestions/popularity", { places: [{ ...place, name: "Half Dome" }, { lat: 10, lng: 10, name: "Somewhere Else" }] }));
+    const { notable } = await res.json();
+    expect(notable).toEqual([true, false]);
   });
 });

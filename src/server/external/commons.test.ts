@@ -117,4 +117,19 @@ describe("htmlToText", () => {
     expect(htmlToText("<<script>script>alert(1)<</script>/script>")).not.toMatch(/[<>]/);
     expect(htmlToText("&lt;img src=x onerror=alert(1)&gt;")).not.toMatch(/[<>]/);
   });
+
+  it("never shows a portrait or a photo of people, even right at the spot", async () => {
+    const portrait = file("Portrait of a man.jpg", { cats: ["Portrait photographs of men"], lat: "34.118439" });
+    const crowd = file("Visitors.jpg", { cats: ["People at Griffith Observatory"], lat: "34.118439" });
+    expect(await getCommonsPhoto(obs, ok(response(portrait, crowd)))).toBeNull();
+    const view = file("Griffith Observatory 3.jpg");
+    expect((await getCommonsPhoto(obs, ok(response(portrait, view))))?.title).toBe("Griffith Observatory 3");
+  });
+
+  it("requires a file that does not name the place to have been taken right at it", async () => {
+    const nearby = file("Some tree.jpg", { lat: "34.1200" }); // ~180 m away, name unrelated
+    expect(await getCommonsPhoto(obs, ok(response(nearby)))).toBeNull();
+    const there = file("Some tree.jpg", { lat: "34.11845" });
+    expect((await getCommonsPhoto(obs, ok(response(there))))?.title).toBe("Some tree");
+  });
 });

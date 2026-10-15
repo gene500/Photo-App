@@ -63,8 +63,8 @@ export const api = {
   suggestions: (route: LngLat[] | { around: LngLat; radiusKm?: number }, opts: { enrich?: boolean } = {}) =>
     request<{ suggestions: Suggestion[]; degraded?: boolean }>("/api/suggestions", send("POST", { ...(Array.isArray(route) ? { coordinates: route } : route), ...opts })),
   /** Photo-count popularity for up to 10 places; a null count means unknown. */
-  suggestionPopularity: (places: { lat: number; lng: number }[]) =>
-    request<{ counts: (number | null)[] }>("/api/suggestions/popularity", send("POST", { places })),
+  suggestionPopularity: (places: { lat: number; lng: number; name?: string }[]) =>
+    request<{ counts: (number | null)[]; notable?: (boolean | null)[] }>("/api/suggestions/popularity", send("POST", { places })),
   geocode: (q: string, proximity?: { lat: number; lng: number }) =>
     request<{ places: Place[] }>(
       `/api/geocode?q=${encodeURIComponent(q)}${proximity ? `&proximity=${proximity.lng.toFixed(6)},${proximity.lat.toFixed(6)}` : ""}`,

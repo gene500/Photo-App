@@ -130,12 +130,18 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     if (popularityKey === null) return;
     return loadPopularityInBatches(
       suggestionItemsRef.current,
-      (counts) => {
+      (counts, notable) => {
         setSuggestionsState((prev) =>
           prev && prev.key === popularityKey
             ? {
                 ...prev,
-                items: rankSuggestions(prev.items.map((s) => (counts.has(s.osmId) ? { ...s, popularity: counts.get(s.osmId) } : s))),
+                items: rankSuggestions(
+                  prev.items.map((s) => ({
+                    ...s,
+                    ...(counts.has(s.osmId) ? { popularity: counts.get(s.osmId) } : {}),
+                    ...(notable.has(s.osmId) ? { notable: notable.get(s.osmId) } : {}),
+                  })),
+                ),
                 shown: prev.shown === undefined ? undefined : prev.shown + POPULARITY_BATCH,
               }
             : prev,

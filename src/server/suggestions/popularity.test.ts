@@ -11,18 +11,28 @@ describe("enrichPopularity", () => {
     delete process.env.FLICKR_API_KEY;
   });
 
-  it("re-ranks within each kind tier by popularity, keeping incoming order for ties and unknowns", async () => {
+  it("ranks by score, keeping incoming order for ties and unknowns", async () => {
     const counts: Record<string, number | undefined> = { "node/1": 5, "node/2": 50, "node/3": undefined, "node/4": 50, "node/5": 1000, "node/6": 0 };
     const input = [s(1), s(2), s(3), s(4), s(5, "peak"), s(6, "peak")];
-    const out = await enrichPopularity(input, { count: async (x) => counts[x.osmId] });
-    expect(out.map(idOf)).toEqual(["2", "4", "1", "3", "5", "6"]); // viewpoints: 50,50 (stable), 5, unknown; peaks: 1000, 0
+    const out = await enrichPopularity(input, { count: async (x) => counts[x.osmId], notable: async () => undefined });
+    expect(out.map(idOf)).toEqual(["5", "2", "4", "1", "3", "6"]);
     expect(out.find((x) => x.osmId === "node/6")?.popularity).toBe(0);
     expect(out.find((x) => x.osmId === "node/3")).not.toHaveProperty("popularity");
   });
 
-  it("never lets a popular attraction outrank a viewpoint (tiers stay)", async () => {
-    const out = await enrichPopularity([s(1), s(2, "attraction")], { count: async (x) => (x.kind === "attraction" ? 9999 : 1) });
-    expect(out.map(idOf)).toEqual(["1", "2"]);
+  it("lets a popular attraction outrank an obscure viewpoint, and a Wikipedia article outrank photo counts", async () => {
+    const out = await enrichPopularity([s(1), s(2, "attraction"), s(3)], {
+      count: async (x) => (x.kind === "attraction" ? 9999 : 1),
+      notable: async (x) => x.osmId === "node/3",
+    });
+    expect(out.map(idOf)).toEqual(["3", "2", "1"]);
+    expect(out.find((x) => x.osmId === "node/3")?.notable).toBe(true);
+    expect(out.find((x) => x.osmId === "node/1")?.notable).toBe(false);
+  });
+
+  it("leaves notable unset when the Wikipedia lookup fails", async () => {
+    const out = await enrichPopularity([s(1)], { count: async () => 5, notable: async () => undefined });
+    expect(out[0]).not.toHaveProperty("notable");
   });
 
   it("only enriches the first 40, 5 at a time", async () => {
@@ -74,11 +84,12 @@ describe("enrichPopularity", () => {
       urls.push(String(u));
       return new Response(JSON.stringify({ stat: "ok", photos: { total: "6170", photo: [] } }));
     }) as unknown as typeof fetch;
-    expect((await enrichPopularity([s(1)], { fetchImpl }))[0].popularity).toBe(6170);
+    const noWiki = async () => undefined;
+    expect((await enrichPopularity([s(1)], { fetchImpl, notable: noWiki }))[0].popularity).toBe(6170);
     expect(urls[0]).toContain("api.flickr.com");
     resetSharedCounter(); // the Flickr answer above is remembered per place
     const failing = vi.fn(async () => new Response(JSON.stringify({ stat: "fail" }))) as unknown as typeof fetch;
-    expect((await enrichPopularity([s(1)], { fetchImpl: failing }))[0].popularity).toBeUndefined();
+    expect((await enrichPopularity([s(1)], { fetchImpl: failing, notable: noWiki }))[0].popularity).toBeUndefined();
     expect(failing).toHaveBeenCalledTimes(1);
   });
 });
@@ -116,5 +127,24 @@ describe("cachedCounter", () => {
     t += 6 * 3600_000 + 1;
     await cached(place, fetch);
     expect(count).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("cachedNotable", () => {
+  it("asks once per place and name, joins in-flight lookups, and does not remember failures", async () => {
+    const { cachedNotable } = await import("./popularity");
+    const check = vi.fn(async () => true as boolean | undefined);
+    const cached = cachedNotable(check);
+    const a = { osmId: "", name: "Half Dome", kind: "viewpoint" as const, lat: 1, lng: 1 };
+    await Promise.all([cached(a, fetch), cached(a, fetch)]);
+    await cached(a, fetch);
+    expect(check).toHaveBeenCalledTimes(1);
+    await cached({ ...a, name: "Other" }, fetch);
+    expect(check).toHaveBeenCalledTimes(2);
+    const flaky = vi.fn(async () => undefined as boolean | undefined);
+    const c2 = cachedNotable(flaky);
+    await c2(a, fetch);
+    await c2(a, fetch);
+    expect(flaky).toHaveBeenCalledTimes(2);
   });
 });

@@ -21,6 +21,8 @@
 - [ ] Get legal review of the privacy and terms pages.
 
 ## Known gaps
+- [ ] Suggestion quality: the local places table has no OSM tags, so memorial/bench/wikidata tags cannot be used yet. Add `wikidata`, `memorial` and `access` to the extract script (`scripts/extract-places.py`), rebuild and re-import, then filter and boost on them. Until then dedication-style names are filtered by name only.
+- [ ] Optional: a free Flickr API key (`FLICKR_API_KEY`) still gives the strongest photo counts; without it Wikipedia notability plus Commons counts are used.
 - [ ] Google accounts are never auto-linked: an existing password account with the same email must keep using its password.
 - [ ] Must-have priority is a heavy weight, not a hard block.
 - [ ] Optimize with light preferences can pick its own start time.

@@ -170,7 +170,7 @@ export const suggestionsRequestSchema = z
 export const POPULARITY_BATCH_SIZE = 10;
 
 export const popularityRequestSchema = z.object({
-  places: z.array(z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) })).min(1).max(POPULARITY_BATCH_SIZE),
+  places: z.array(z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), name: z.string().max(200).optional() })).min(1).max(POPULARITY_BATCH_SIZE),
 });
 
 /** "tripName" -> "Trip name". */

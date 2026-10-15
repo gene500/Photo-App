@@ -2,7 +2,8 @@ import type { Suggestion } from "@/lib/types";
 import { getCommonsPhotoCount } from "../external/commons";
 import { flickrKey, getFlickrPhotoCount } from "../external/flickr";
 import { TtlCache } from "./cache";
-import { KIND_RANK } from "./parse";
+import { rankByScore } from "@/lib/suggestion-rank";
+import { getWikipediaNotable } from "../external/wikipedia-notability";
 
 export const POPULARITY_MAX_CANDIDATES = 40;
 export const POPULARITY_CONCURRENCY = 5;
@@ -11,6 +12,7 @@ export const POPULARITY_TIMEOUT_MS = 5000;
 export const POPULARITY_BUDGET_MS = 4000;
 
 type Counter = (s: Suggestion, fetchImpl: typeof fetch) => Promise<number | undefined>;
+type NotableCheck = (s: Suggestion, fetchImpl: typeof fetch) => Promise<boolean | undefined>;
 
 /** Flickr totals when a key is configured (strong signal), else the number of Commons files nearby (weaker, max 50). */
 export function defaultCounter(): Counter {
@@ -49,8 +51,31 @@ export function cachedCounter(count: Counter, now: () => number = Date.now): Cou
 /** The counter used by the routes: the default source behind the shared cache. */
 let shared: Counter | undefined;
 export const sharedCounter = (): Counter => (shared ??= cachedCounter(defaultCounter()));
+/** Whether Wikipedia has a well-read article about the place, behind a per-instance cache (keyed on the place's cell and name). */
+let sharedNotableCheck: NotableCheck | undefined;
+export const sharedNotable = (): NotableCheck => (sharedNotableCheck ??= cachedNotable((s, f) => getWikipediaNotable(s, f, POPULARITY_TIMEOUT_MS)));
+export function cachedNotable(check: NotableCheck, now: () => number = Date.now): NotableCheck {
+  const cache = new TtlCache<boolean>(COUNT_CACHE_TTL_MS, COUNT_CACHE_MAX, now);
+  const inFlight = new Map<string, Promise<boolean | undefined>>();
+  return (s, fetchImpl) => {
+    const key = `${s.lat.toFixed(4)},${s.lng.toFixed(4)}|${s.name.toLowerCase()}`;
+    const hit = cache.get(key);
+    if (hit !== undefined) return Promise.resolve(hit);
+    const pending = inFlight.get(key);
+    if (pending) return pending;
+    const p = check(s, fetchImpl)
+      .then((v) => {
+        if (typeof v === "boolean") cache.set(key, v);
+        return v;
+      })
+      .finally(() => inFlight.delete(key));
+    inFlight.set(key, p);
+    return p;
+  };
+}
 export const resetSharedCounter = (): void => {
   shared = undefined;
+  sharedNotableCheck = undefined;
 };
 
 /**
@@ -60,23 +85,23 @@ export const resetSharedCounter = (): void => {
  */
 export async function enrichPopularity(
   suggestions: Suggestion[],
-  deps: { count?: Counter; fetchImpl?: typeof fetch; budgetMs?: number } = {},
+  deps: { count?: Counter; notable?: NotableCheck; fetchImpl?: typeof fetch; budgetMs?: number } = {},
 ): Promise<Suggestion[]> {
   const count = deps.count ?? sharedCounter();
+  const notableCheck = deps.notable ?? sharedNotable();
   const fetchImpl = deps.fetchImpl ?? fetch;
   const head = suggestions.slice(0, POPULARITY_MAX_CANDIDATES);
   const result: (number | undefined)[] = new Array(head.length).fill(undefined);
+  const notableResult: (boolean | undefined)[] = new Array(head.length).fill(undefined);
   let next = 0;
   const deadline = Date.now() + (deps.budgetMs ?? POPULARITY_BUDGET_MS);
   const worker = async () => {
     while (next < head.length && Date.now() < deadline) {
       const i = next++;
-      try {
-        const n = await count(head[i], fetchImpl);
-        if (typeof n === "number" && Number.isFinite(n) && n >= 0) result[i] = n;
-      } catch {
-        /* no popularity for this one */
-      }
+      // The photo count and the Wikipedia lookup go to different sites, so they run side by side.
+      const [n, w] = await Promise.all([count(head[i], fetchImpl).catch(() => undefined), notableCheck(head[i], fetchImpl).catch(() => undefined)]);
+      if (typeof n === "number" && Number.isFinite(n) && n >= 0) result[i] = n;
+      if (typeof w === "boolean") notableResult[i] = w;
     }
   };
   const workers = Promise.all(Array.from({ length: Math.min(POPULARITY_CONCURRENCY, head.length) }, worker));
@@ -86,10 +111,12 @@ export async function enrichPopularity(
   clearTimeout(timer);
   // Late results must not mutate what we are about to rank.
   const done = result.slice();
+  const doneNotable = notableResult.slice();
 
-  const enriched = suggestions.map((s, i) => (done[i] === undefined ? s : { ...s, popularity: done[i] }));
-  return enriched
-    .map((s, i) => ({ s, i }))
-    .sort((a, b) => KIND_RANK[a.s.kind] - KIND_RANK[b.s.kind] || (b.s.popularity ?? 0) - (a.s.popularity ?? 0) || a.i - b.i)
-    .map((x) => x.s);
+  const enriched = suggestions.map((s, i) => ({
+    ...s,
+    ...(done[i] === undefined ? {} : { popularity: done[i] }),
+    ...(doneNotable[i] === undefined ? {} : { notable: doneNotable[i] }),
+  }));
+  return rankByScore(enriched);
 }

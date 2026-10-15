@@ -88,6 +88,8 @@ export type Suggestion = {
   kind: SuggestionKind;
   /** Photos taken nearby (Flickr total when a key is set, else Commons files, capped at 50); used to rank and to caption. */
   popularity?: number;
+  /** True when Wikipedia has a well-read article about the place (a strong sign it is worth a stop); false when it does not. */
+  notable?: boolean;
 };
 
 /** A photo of a place from Flickr, Wikimedia Commons or Wikipedia (decorative; always credited). */

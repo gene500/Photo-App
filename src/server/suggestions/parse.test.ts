@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyKind, parseOverpassResponse, SUGGESTION_CAP } from "./parse";
+import { classifyKind, isDedicationName, parseOverpassResponse, SUGGESTION_CAP } from "./parse";
 
 describe("classifyKind", () => {
   it("maps OSM tags to suggestion kinds", () => {
@@ -110,5 +110,21 @@ describe("parseOverpassResponse distance ordering", () => {
   it("is deterministic for equal distances (by id)", () => {
     const result = parseOverpassResponse({ elements: [vp(9, 0.02), vp(2, -0.02)] }, 40, origin);
     expect(result.map((s) => s.osmId)).toEqual(["node/2", "node/9"]);
+  });
+});
+
+describe("dedication names", () => {
+  it.each(["The Tiffany & Co. Foundation Overlook", "Charles & Lotte Melhorn Memorial Bench", "In loving memory of Ann", "Donated by the Smith family", "Rotary Plaque"])("flags %s", (n) => {
+    expect(isDedicationName(n)).toBe(true);
+  });
+
+  it.each(["Glacier Point", "Universal City Overlook", "Christine's Point", "Trustworthy Peak", "Memorial Day Beach"].slice(0, 4))("keeps %s", (n) => {
+    expect(isDedicationName(n)).toBe(false);
+  });
+
+  it("drops dedication-named viewpoints from the results but keeps real ones", () => {
+    const el = (id: number, name: string) => ({ type: "node", id, lat: 37 + id / 1000, lon: -119, tags: { tourism: "viewpoint", name } });
+    const out = parseOverpassResponse({ elements: [el(1, "Foundation Overlook"), el(2, "Glacier Point"), el(3, "Memorial Bench")] });
+    expect(out.map((x) => x.name)).toEqual(["Glacier Point"]);
   });
 });

@@ -8,15 +8,36 @@ import { loadPopularityInBatches, POPULARITY_MAX, rankSuggestions } from "./sugg
 const s = (i: number, kind: Suggestion["kind"] = "viewpoint", popularity?: number): Suggestion => ({ osmId: `node/${i}`, name: `P${i}`, lat: i, lng: i, kind, popularity });
 
 describe("rankSuggestions", () => {
-  it("orders by kind tier, then popularity descending, keeping ties in order", () => {
+  it("orders by score: more photos first, kind only breaks near-ties, ties keep order", () => {
     const ranked = rankSuggestions([s(1, "attraction", 99), s(2, "viewpoint", 1), s(3, "viewpoint", 40), s(4, "peak"), s(5, "viewpoint", 40)]);
-    expect(ranked.map((x) => x.osmId)).toEqual(["node/3", "node/5", "node/2", "node/4", "node/1"]);
+    expect(ranked.map((x) => x.osmId)).toEqual(["node/3", "node/5", "node/1", "node/2", "node/4"]);
+  });
+
+  it("puts places with a well-read Wikipedia article first, even an attraction over a viewpoint", () => {
+    const ranked = rankSuggestions([s(1, "viewpoint", 30), { ...s(2, "attraction", 3), notable: true }, s(3, "viewpoint", 10)]);
+    expect(ranked.map((x) => x.osmId)).toEqual(["node/2", "node/1", "node/3"]);
+  });
+
+  it("sinks weak places (few photos, no article) to the end, but never places with unknown data", () => {
+    const weak = { ...s(1, "viewpoint", 1), notable: false };
+    const unknown = s(2, "peak");
+    const ranked = rankSuggestions([weak, unknown, { ...s(3, "attraction", 20), notable: false }]);
+    expect(ranked.map((x) => x.osmId)).toEqual(["node/3", "node/2", "node/1"]);
   });
 });
 
 describe("loadPopularityInBatches", () => {
   beforeEach(() => {
     suggestionPopularity.mockReset();
+  });
+
+  it("sends each place's name and reports which ones have a Wikipedia article", async () => {
+    suggestionPopularity.mockResolvedValue({ counts: [4, null], notable: [true, null] });
+    const seen: [Map<string, number>, Map<string, boolean>][] = [];
+    await new Promise<void>((resolve) => loadPopularityInBatches([s(1), s(2)], (c, n) => seen.push([c, n]), resolve));
+    expect(suggestionPopularity).toHaveBeenCalledWith([{ lat: 1, lng: 1, name: "P1" }, { lat: 2, lng: 2, name: "P2" }]);
+    expect([...seen[0][0]]).toEqual([["node/1", 4]]);
+    expect([...seen[0][1]]).toEqual([["node/1", true]]);
   });
 
   it("asks 5 places at a time, in order, reports each batch, then says it is done", async () => {

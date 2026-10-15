@@ -11,6 +11,13 @@ export function classifyKind(tags: Record<string, string>): SuggestionKind | nul
   return null;
 }
 
+/**
+ * Names that dedicate a bench, plaque or donated viewing spot rather than name a place ("... Foundation", "In memory of
+ * ..."). Map contributors tag these as viewpoints, but they are not somewhere to plan a stop.
+ */
+const DEDICATION_NAME = /\b(foundation|memorial|in (loving )?memory|in (honou?r|tribute) of|bench|plaque|dedicated|donated by|donation|endowment|trust fund)\b/i;
+export const isDedicationName = (name: string): boolean => DEDICATION_NAME.test(name);
+
 const DEFAULT_NAME: Record<SuggestionKind, string> = {
   viewpoint: "Viewpoint",
   peak: "Peak",
@@ -42,6 +49,7 @@ function toCandidate(el: OverpassElement): Candidate | null {
     return null;
   }
   const name = tags.name?.trim();
+  if (name && isDedicationName(name)) return null;
   return {
     osmId: `${el.type}/${el.id}`,
     name: name || DEFAULT_NAME[kind],

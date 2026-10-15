@@ -21,7 +21,7 @@ describe("findSuggestions", () => {
   it("queries Overpass with a polygon around the route and parses the result", async () => {
     const fetchOverpass = vi.fn<(query: string) => Promise<typeof overpassJson>>(async () => overpassJson);
     const result = await findSuggestions(ROUTE, { fetchOverpass, fetchImpl });
-    expect(result).toEqual([{ osmId: "node/1", name: "Spot", lat: 37.2, lng: -119.6, kind: "viewpoint", popularity: 3 }]);
+    expect(result).toMatchObject([{ osmId: "node/1", name: "Spot", lat: 37.2, lng: -119.6, kind: "viewpoint", popularity: 3 }]);
     expect(fetchOverpass.mock.calls[0][0]).toContain('(poly:"');
   });
 

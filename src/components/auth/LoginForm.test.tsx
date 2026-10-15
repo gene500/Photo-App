@@ -30,6 +30,11 @@ describe("LoginForm", () => {
     expect(signIn).toHaveBeenCalledWith("google", { callbackUrl: "/trips" });
   });
 
+  it("submits by POST if the form is used before the page is interactive, so a password never lands in the URL", () => {
+    const { container } = render(<LoginForm />);
+    expect(container.querySelector("form")?.getAttribute("method")).toBe("post");
+  });
+
   it("explains a Google sign-in refusal passed in the URL", () => {
     render(<LoginForm google urlError="GoogleEmailInUse" />);
     expect(screen.getByText(/already exists/i)).toBeTruthy();

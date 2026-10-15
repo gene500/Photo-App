@@ -34,7 +34,7 @@ export function LoginForm({ google = false, urlError = null }: { google?: boolea
   }
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mx-auto mt-[12vh] w-full max-w-sm space-y-4 rounded-2xl bg-surface p-7 shadow-lg ring-1 ring-border">
+    <form method="post" onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mx-auto mt-[12vh] w-full max-w-sm space-y-4 rounded-2xl bg-surface p-7 shadow-lg ring-1 ring-border">
       <h1 className="text-2xl font-semibold">Log in</h1>
       {google && <GoogleButton />}
       <label className="block">

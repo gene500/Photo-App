@@ -21,6 +21,10 @@ async function submit() {
 }
 
 describe("SignupForm", () => {
+  it("submits by POST if used before the page is interactive, so a password never lands in the URL", () => {
+    const { container } = render(<SignupForm />);
+    expect(container.querySelector("form")?.getAttribute("method")).toBe("post");
+  });
   beforeEach(() => vi.clearAllMocks());
 
   it("shows the server's validation message", async () => {

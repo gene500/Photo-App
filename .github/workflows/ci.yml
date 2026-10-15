@@ -23,6 +23,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # PageProps/LayoutProps are generated types; a fresh checkout has none until typegen runs.
+      - run: npx next typegen
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm test

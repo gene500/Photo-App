@@ -75,7 +75,7 @@ export function DeleteAccountButton({ className, hasPassword = true, email = nul
     );
   }
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void run(); }} className="space-y-2">
+    <form method="post" onSubmit={(e) => { e.preventDefault(); void run(); }} className="space-y-2">
       <p className="text-xs text-muted">This permanently deletes your account, all your trips, stops and photos. It cannot be undone. {hasPassword ? "Enter your password to confirm." : `Type your email address${email ? ` (${email})` : ""} to confirm.`}</p>
       <label className="block text-sm">
         <span className="text-muted">{hasPassword ? "Password" : "Email address"}</span>
@@ -124,7 +124,7 @@ export function ChangePasswordButton({ className }: { className?: string }) {
   }
   const field = "mt-1 block w-full max-w-xs rounded-lg border border-border bg-surface px-3 py-2 text-sm";
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void run(); }} className="space-y-2">
+    <form method="post" onSubmit={(e) => { e.preventDefault(); void run(); }} className="space-y-2">
       <label className="block text-sm">
         <span className="text-muted">Current password</span>
         <input type="password" required autoFocus autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} className={field} />

@@ -36,7 +36,7 @@ export function SignupForm({ formToken, google = false }: { formToken?: string; 
   }
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mx-auto mt-[12vh] w-full max-w-sm space-y-4 rounded-2xl bg-surface p-7 shadow-lg ring-1 ring-border">
+    <form method="post" onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mx-auto mt-[12vh] w-full max-w-sm space-y-4 rounded-2xl bg-surface p-7 shadow-lg ring-1 ring-border">
       <h1 className="text-2xl font-semibold">Create an account</h1>
       {google && <GoogleButton />}
       <label className="block">

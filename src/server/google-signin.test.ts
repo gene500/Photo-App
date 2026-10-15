@@ -58,4 +58,16 @@ describe("google sign-in", () => {
     expect(await deleteAccount(acct.id, { confirmEmail: " Bye@Example.com " })).toEqual({ photoUrls: [] });
     expect(await prisma.user.count()).toBe(0);
   });
+
+  it("a password account cannot be deleted by typing its email", async () => {
+    const user = await createUser("pw@example.com", "correct-horse");
+    expect(await deleteAccount(user.id, { confirmEmail: "pw@example.com" })).toBeNull();
+    expect(await deleteAccount(user.id, {})).toBeNull();
+    expect(await prisma.user.count()).toBe(1);
+  });
+
+  it("a stored googleSub cannot be reached through the password login", async () => {
+    await findOrCreateGoogleUser("sub-5", "g5@example.com");
+    expect(await verifyCredentials("g5@example.com", "")).toBeNull();
+  });
 });

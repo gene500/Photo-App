@@ -7,10 +7,11 @@ import { useState } from "react";
 import { enableOfflineSaving } from "@/lib/offline-store";
 import { btnPrimary, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
+import { GoogleButton } from "./GoogleButton";
 
 
 /** `formToken` is signed by the server when the page renders (see signup-guard.ts); `website` is a honeypot. */
-export function SignupForm({ formToken }: { formToken?: string }) {
+export function SignupForm({ formToken, google = false }: { formToken?: string; google?: boolean }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,6 +38,7 @@ export function SignupForm({ formToken }: { formToken?: string }) {
   return (
     <form onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mx-auto mt-[12vh] w-full max-w-sm space-y-4 rounded-2xl bg-surface p-7 shadow-lg ring-1 ring-border">
       <h1 className="text-2xl font-semibold">Create an account</h1>
+      {google && <GoogleButton />}
       <label className="block">
         <span className="text-sm text-muted">Email</span>
         <input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />

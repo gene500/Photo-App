@@ -11,6 +11,10 @@ model User {
   id             String   @id @default(cuid())
   email          String   @unique
   passwordHash   String
+  /// Google's stable account id ("sub") for accounts created with Google sign-in; null otherwise.
+  googleSub      String?  @unique
+  /// False for Google-only accounts: their passwordHash is a random unusable value and password login is refused.
+  passwordSet    Boolean  @default(true)
   /// Bumped to revoke every existing sign-in token (sign out everywhere, password change).
   sessionVersion Int      @default(0)
   createdAt      DateTime @default(now())

@@ -48,7 +48,7 @@ function Segmented<K extends keyof Settings>({ legend, hint, name, value, option
   );
 }
 
-export function SettingsView({ email }: { email: string | null }) {
+export function SettingsView({ email, hasPassword = true }: { email: string | null; hasPassword?: boolean }) {
   const { settings, update, reset } = useSettings();
   const dwellId = useId();
   // The text being typed may be empty or out of range; only a valid number is saved, and blur snaps it back.
@@ -165,8 +165,9 @@ export function SettingsView({ email }: { email: string | null }) {
           <SignOutEverywhereButton className={btnSecondary} />
           <p className="mt-2 text-xs text-muted">Ends every session on every device, including this one. Use it if you lost a phone or signed in on a shared computer.</p>
         </div>
-        <div><ChangePasswordButton className={btnSecondary} /></div>
-        <div><DeleteAccountButton className={btnSecondary} /></div>
+        {hasPassword && <div><ChangePasswordButton className={btnSecondary} /></div>}
+        {!hasPassword && <p className="text-xs text-muted">You sign in with Google, so there is no password to change.</p>}
+        <div><DeleteAccountButton className={btnSecondary} hasPassword={hasPassword} email={email} /></div>
       </Section>
 
       <div>

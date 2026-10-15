@@ -12,6 +12,7 @@
 - [ ] Live site: sign-in, map, suggestions, photo upload, privacy/terms, account deletion, Imperial/Metric setting, Escape key, prewarm speed.
 
 ## Your accounts and settings
+- [ ] Turn on Sign in with Google: create an OAuth client in Google Cloud Console (redirect URI `https://photo-app-pi2o.vercel.app/api/auth/callback/google`), then set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in Vercel. The button stays hidden until both are set. Not testable end to end locally (unit tests only).
 - [ ] Use a separate unrestricted server Mapbox token (`MAPBOX_TOKEN`); URL-restrict the public `NEXT_PUBLIC_MAPBOX_TOKEN`; set a Mapbox spend cap.
 - [ ] Rotate Vercel Blob credentials and restrict them to Production.
 - [ ] Delete the duplicate empty Vercel project `photo-app`.
@@ -19,9 +20,9 @@
 - [ ] Get legal review of the privacy and terms pages.
 
 ## Known gaps
+- [ ] Google accounts are never auto-linked: an existing password account with the same email must keep using its password.
 - [ ] Must-have priority is a heavy weight, not a hard block.
 - [ ] Optimize with light preferences can pick its own start time.
-- [ ] Sign in with Google (later): needs a Google OAuth client in Vercel env, a nullable password hash migration, account linking by email, and a non-password confirmation for delete-account and change-password.
 - [ ] No email verification; signup email enumeration (409).
 - [ ] CSP still allows `'unsafe-inline'`.
 - [ ] Share page `no-referrer` vs a URL-restricted Mapbox token.

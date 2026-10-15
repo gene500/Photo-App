@@ -1,7 +1,8 @@
 import type { NextAuthOptions, Session } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
 import { hit, isBlocked, resetLimit } from "./rate-limit";
-import { getSessionVersion, verifyCredentials } from "./users";
+import { EMAIL_IN_USE, findOrCreateGoogleUser, getSessionVersion, verifyCredentials } from "./users";
 
 export const RATE_LIMITED = "RateLimited";
 
@@ -16,6 +17,25 @@ export async function authorizeCredentials(
   if (user) resetLimit("login-email-failures", key);
   else hit("login-email-failures", key);
   return user;
+}
+
+/** Google sign-in is offered only when both values are configured. */
+export const googleConfigured = () => Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+
+/**
+ * Runs after Google has authenticated someone: finds or creates the app account for that Google identity and puts
+ * its id on `user`, so the token carries our id and not Google's. Returns false or a /login?error=… URL to refuse.
+ */
+export async function handleGoogleSignIn(
+  user: { id?: string; email?: string | null },
+  profile: { sub?: string; email?: string; email_verified?: boolean } | undefined,
+): Promise<boolean | string> {
+  if (!profile?.sub || !profile.email || profile.email_verified !== true) return "/login?error=GoogleUnverified";
+  const account = await findOrCreateGoogleUser(profile.sub, profile.email);
+  if (account === EMAIL_IN_USE) return "/login?error=GoogleEmailInUse";
+  user.id = account.id;
+  user.email = account.email;
+  return true;
 }
 
 // The Credentials provider only supports the JWT strategy: an encrypted
@@ -33,8 +53,15 @@ export const authOptions: NextAuthOptions = {
       },
       authorize: (credentials) => authorizeCredentials(credentials),
     }),
+    ...(googleConfigured()
+      ? [GoogleProvider({ clientId: process.env.GOOGLE_CLIENT_ID!, clientSecret: process.env.GOOGLE_CLIENT_SECRET! })]
+      : []),
   ],
   callbacks: {
+    async signIn({ user, account, profile }) {
+      if (account?.provider !== "google") return true;
+      return handleGoogleSignIn(user, profile as { sub?: string; email?: string; email_verified?: boolean } | undefined);
+    },
     async jwt({ token, user }) {
       if (user) {
         token.sub = user.id;

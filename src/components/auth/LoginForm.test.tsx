@@ -21,6 +21,20 @@ async function submit() {
 describe("LoginForm", () => {
   beforeEach(() => { vi.clearAllMocks(); installMemoryStorage(); });
 
+  it("shows the Google button only when enabled, and starts the Google flow", async () => {
+    const { unmount } = render(<LoginForm />);
+    expect(screen.queryByRole("button", { name: /google/i })).toBeNull();
+    unmount();
+    render(<LoginForm google />);
+    await userEvent.click(screen.getByRole("button", { name: "Continue with Google" }));
+    expect(signIn).toHaveBeenCalledWith("google", { callbackUrl: "/trips" });
+  });
+
+  it("explains a Google sign-in refusal passed in the URL", () => {
+    render(<LoginForm google urlError="GoogleEmailInUse" />);
+    expect(screen.getByText(/already exists/i)).toBeTruthy();
+  });
+
   it("shows an inline error for bad credentials", async () => {
     vi.mocked(signIn).mockResolvedValue({ error: "CredentialsSignin", ok: false, status: 401, url: null, code: undefined } as never);
     render(<LoginForm />);

@@ -72,7 +72,7 @@ describe("deleteAccount", () => {
   it("refuses a wrong password and keeps everything", async () => {
     const { deleteAccount } = await import("./users");
     const user = await createUser("del@example.com", "correct-horse");
-    expect(await deleteAccount(user.id, "wrong-password")).toBeNull();
+    expect(await deleteAccount(user.id, { password: "wrong-password" })).toBeNull();
     expect(await prisma.user.count()).toBe(1);
   });
 
@@ -83,7 +83,7 @@ describe("deleteAccount", () => {
     const trip = await prisma.trip.create({ data: { userId: user.id, name: "t", plannedDate: new Date("2026-07-01") } });
     await prisma.trip.create({ data: { userId: other.id, name: "keep", plannedDate: new Date("2026-07-01") } });
     await prisma.stop.create({ data: { tripId: trip.id, name: "s", lat: 1, lng: 2, order: 0, source: "manual", photoUrl: "/api/uploads/a.jpg" } });
-    expect(await deleteAccount(user.id, "correct-horse")).toEqual({ photoUrls: ["/api/uploads/a.jpg"] });
+    expect(await deleteAccount(user.id, { password: "correct-horse" })).toEqual({ photoUrls: ["/api/uploads/a.jpg"] });
     expect(await prisma.user.findUnique({ where: { id: user.id } })).toBeNull();
     expect(await prisma.stop.count()).toBe(0);
     expect(await prisma.trip.count()).toBe(1);

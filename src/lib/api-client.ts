@@ -33,7 +33,7 @@ export const api = {
   signOutEverywhere: () => request<void>("/api/account/sessions", send("DELETE")),
   /** Permanently deletes the signed-in account and everything in it; the password confirms it. */
   changePassword: (currentPassword: string, newPassword: string) => request<void>("/api/account/password", send("POST", { currentPassword, newPassword })),
-  deleteAccount: (password: string) => request<void>("/api/account", send("DELETE", { password })),
+  deleteAccount: (proof: { password?: string; confirmEmail?: string }) => request<void>("/api/account", send("DELETE", proof)),
   listTrips: () => request<{ trips: TripSummary[] }>("/api/trips"),
   createTrip: (input: TripCreateInput) => request<{ trip: Trip }>("/api/trips", send("POST", input)),
   updateTrip: (id: string, patch: TripPatch) => request<{ trip: Trip }>(`/api/trips/${id}`, send("PATCH", patch)),

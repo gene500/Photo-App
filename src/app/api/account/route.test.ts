@@ -32,7 +32,7 @@ describe("DELETE /api/account", () => {
   it("deletes the account and its photo files", async () => {
     vi.mocked(deleteAccount).mockResolvedValue({ photoUrls: ["/api/uploads/a.jpg", "/api/uploads/b.jpg"] });
     expect((await DELETE(del({ password: "right" }))).status).toBe(204);
-    expect(deleteAccount).toHaveBeenCalledWith("u1", "right");
+    expect(deleteAccount).toHaveBeenCalledWith("u1", { password: "right" });
     expect(deletePhotoFile).toHaveBeenCalledTimes(2);
   });
 });

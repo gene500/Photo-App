@@ -210,4 +210,6 @@ export const weatherBatchSchema = z.object({
   points: z.array(z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) })).min(1).max(WEATHER_BATCH_MAX),
 });
 
-export const deleteAccountSchema = z.object({ password: z.string().min(1).max(200) });
+export const deleteAccountSchema = z
+  .object({ password: z.string().min(1).max(200).optional(), confirmEmail: z.string().min(1).max(254).optional() })
+  .refine((v) => v.password !== undefined || v.confirmEmail !== undefined, "Confirm with your password");

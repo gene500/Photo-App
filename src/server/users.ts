@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
 import { TtlCache } from "./suggestions/cache";
@@ -43,8 +44,38 @@ export async function verifyCredentials(
   password: string,
 ): Promise<{ id: string; email: string } | null> {
   const user = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
-  const ok = await bcrypt.compare(password, user?.passwordHash ?? (await getDummyHash()));
-  return user && ok ? { id: user.id, email: user.email } : null;
+  // A Google-only account has no password: compare against the dummy so the timing matches, and refuse.
+  const usable = user?.passwordSet ? user.passwordHash : undefined;
+  const ok = await bcrypt.compare(password, usable ?? (await getDummyHash()));
+  return user && usable && ok ? { id: user.id, email: user.email } : null;
+}
+
+export const EMAIL_IN_USE = "email-in-use";
+
+/**
+ * The account for a verified Google identity, created on first use. An existing account that has the same email but
+ * was not made with this Google identity is never taken over: the caller refuses the sign-in (EMAIL_IN_USE).
+ */
+export async function findOrCreateGoogleUser(sub: string, email: string): Promise<{ id: string; email: string } | typeof EMAIL_IN_USE> {
+  const bySub = await prisma.user.findUnique({ where: { googleSub: sub } });
+  if (bySub) return { id: bySub.id, email: bySub.email };
+  const normalized = normalizeEmail(email);
+  if (await prisma.user.findUnique({ where: { email: normalized } })) return EMAIL_IN_USE;
+  // The password is random and never shown: this account signs in with Google only.
+  const passwordHash = await bcrypt.hash(randomBytes(32).toString("hex"), BCRYPT_COST);
+  try {
+    const user = await prisma.user.create({ data: { email: normalized, passwordHash, passwordSet: false, googleSub: sub } });
+    return { id: user.id, email: user.email };
+  } catch (e) {
+    if (isUniqueViolation(e)) return EMAIL_IN_USE; // lost a race with a concurrent signup of the same email
+    throw e;
+  }
+}
+
+/** Whether this account has a password (false for Google-only accounts). */
+export async function hasPassword(userId: string): Promise<boolean> {
+  const row = await prisma.user.findUnique({ where: { id: userId }, select: { passwordSet: true } });
+  return row?.passwordSet ?? true;
 }
 
 // Every signed-in request checks the session version, which is a database round trip. Remember the answer briefly per
@@ -75,7 +106,7 @@ export async function revokeAllSessions(userId: string): Promise<void> {
 /** Sets a new password after checking the current one, and ends every session, this one included. */
 export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) return false;
+  if (!user || !user.passwordSet || !(await bcrypt.compare(currentPassword, user.passwordHash))) return false;
   // Compare-and-swap on the hash that was just checked: of several simultaneous changes only one wins.
   const { count } = await prisma.user.updateMany({
     where: { id: userId, passwordHash: user.passwordHash },
@@ -86,12 +117,17 @@ export async function changePassword(userId: string, currentPassword: string, ne
 }
 
 /**
- * Permanently deletes the account after checking the password. Trips and stops go with it (cascade); the stops'
+ * Permanently deletes the account after checking the password (or, for a Google-only account, the typed email). Trips and stops go with it (cascade); the stops'
  * photo URLs are returned so the caller can remove the files. null = wrong password or no such account.
  */
-export async function deleteAccount(userId: string, password: string): Promise<{ photoUrls: string[] } | null> {
+export async function deleteAccount(userId: string, proof: { password?: string; confirmEmail?: string }): Promise<{ photoUrls: string[] } | null> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user || !(await bcrypt.compare(password, user.passwordHash))) return null;
+  if (!user) return null;
+  // Password accounts confirm with the password; Google-only accounts (no password) by typing their email address.
+  const confirmed = user.passwordSet
+    ? proof.password !== undefined && (await bcrypt.compare(proof.password, user.passwordHash))
+    : proof.confirmEmail !== undefined && normalizeEmail(proof.confirmEmail) === user.email;
+  if (!confirmed) return null;
   // One transaction, so a photo attached between the read and the delete cannot be left behind.
   const stops = await prisma.$transaction(async (tx) => {
     const rows = await tx.stop.findMany({ where: { trip: { userId } }, select: { photoUrl: true } });

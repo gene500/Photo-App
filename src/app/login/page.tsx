@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { googleConfigured } from "@/server/auth";
 import { getCurrentUserId } from "@/server/session";
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   if (await getCurrentUserId()) redirect("/trips");
-  return <main className="px-4"><LoginForm /></main>;
+  const { error } = await searchParams;
+  return <main className="px-4"><LoginForm google={googleConfigured()} urlError={typeof error === "string" ? error : null} /></main>;
 }

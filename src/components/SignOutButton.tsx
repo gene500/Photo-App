@@ -48,7 +48,7 @@ export function SignOutButton({ className }: { className?: string }) {
 }
 
 /** Permanent account deletion: asks for the password, then wipes this device's offline copies and signs out. */
-export function DeleteAccountButton({ className }: { className?: string }) {
+export function DeleteAccountButton({ className, hasPassword = true, email = null }: { className?: string; hasPassword?: boolean; email?: string | null }) {
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
@@ -57,7 +57,7 @@ export function DeleteAccountButton({ className }: { className?: string }) {
     setPending(true);
     setError(null);
     try {
-      await api.deleteAccount(password);
+      await api.deleteAccount(hasPassword ? { password } : { confirmEmail: password });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't delete the account");
       setPending(false);
@@ -76,10 +76,10 @@ export function DeleteAccountButton({ className }: { className?: string }) {
   }
   return (
     <form onSubmit={(e) => { e.preventDefault(); void run(); }} className="space-y-2">
-      <p className="text-xs text-muted">This permanently deletes your account, all your trips, stops and photos. It cannot be undone. Enter your password to confirm.</p>
+      <p className="text-xs text-muted">This permanently deletes your account, all your trips, stops and photos. It cannot be undone. {hasPassword ? "Enter your password to confirm." : `Type your email address${email ? ` (${email})` : ""} to confirm.`}</p>
       <label className="block text-sm">
-        <span className="text-muted">Password</span>
-        <input type="password" required autoFocus autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 block w-full max-w-xs rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
+        <span className="text-muted">{hasPassword ? "Password" : "Email address"}</span>
+        <input type={hasPassword ? "password" : "email"} required autoFocus autoComplete={hasPassword ? "current-password" : "off"} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 block w-full max-w-xs rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
       </label>
       <div className="flex gap-2">
         <button type="submit" disabled={pending || password === ""} className="inline-flex min-h-9 items-center rounded-lg bg-danger px-3 text-sm text-white disabled:opacity-50">

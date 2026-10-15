@@ -41,7 +41,7 @@ export function StartTimeControl({ plannedDate, departAt, defaultDepartAt = null
   disabled?: boolean;
   /** Resolves when saved. `null` clears the start time. */
   onChange: (iso: string | null) => void | Promise<void>;
-  /** Clears the start time back to now; the button shows only while a start time is set. */
+  /** Clears the start time back to now; the button shows only while the start time differs from now. */
   onReset?: () => void;
 }) {
   const id = useId();
@@ -83,7 +83,7 @@ export function StartTimeControl({ plannedDate, departAt, defaultDepartAt = null
         onKeyDown={(e) => { if (e.key === "Enter") void commit(); }}
         className={`${inputClass} !mt-0 w-auto min-w-0`}
       />
-      {departAt && onReset && (
+      {departAt && onReset && saved !== toTimeValue(defaultDepartAt) && (
         <button type="button" disabled={disabled} onClick={onReset} className={btnGhost}>
           Reset to now
         </button>

@@ -125,7 +125,7 @@ export function SettingsView({ email }: { email: string | null }) {
 
       <Section title="New stops">
         <div>
-          <label htmlFor={dwellId} className="text-sm font-medium">Time at each new stop (minutes)</label>
+          <label htmlFor={dwellId} className="block text-sm font-medium">Time at each new stop (minutes)</label>
           <input
             id={dwellId}
             type="number"
@@ -160,7 +160,7 @@ export function SettingsView({ email }: { email: string | null }) {
 
       <Section title="Account">
         <p className="text-sm">Signed in as <span className="font-medium">{email ?? "your account"}</span></p>
-        <div><SignOutButton /></div>
+        <div><SignOutButton className={btnSecondary} /></div>
         <div>
           <SignOutEverywhereButton className={btnSecondary} />
           <p className="mt-2 text-xs text-muted">Ends every session on every device, including this one. Use it if you lost a phone or signed in on a shared computer.</p>

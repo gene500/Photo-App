@@ -132,23 +132,24 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
           </p>
         )}
         {stop.notes && <p className="truncate text-xs text-muted">{stop.notes}</p>}
+        {onPriorityChange && stop.lightPref !== "any" && (
+          <label className="mt-1 flex items-center gap-2 text-[11px] text-muted" title="Priority: how hard Optimize route works to land this stop in its light">
+            <span className="shrink-0">Priority</span>
+            <input
+              type="range"
+              min={0}
+              max={PRIORITIES.length - 1}
+              step={1}
+              value={PRIORITIES.indexOf(stop.priority)}
+              onChange={(e) => onPriorityChange(stop.id, PRIORITIES[Number(e.target.value)] ?? "normal")}
+              aria-label={`Priority for ${stop.name}`}
+              aria-valuetext={PRIORITY_LABEL[stop.priority]}
+              className="h-1 w-16 shrink-0 accent-accent-strong"
+            />
+            <span aria-hidden className="truncate">{PRIORITY_LABEL[stop.priority]}</span>
+          </label>
+        )}
       </div>
-      {onPriorityChange && stop.lightPref !== "any" && (
-        <label className="flex w-14 shrink-0 flex-col items-center pt-1" title="Priority: how hard Optimize route works to land this stop in its light">
-          <input
-            type="range"
-            min={0}
-            max={PRIORITIES.length - 1}
-            step={1}
-            value={PRIORITIES.indexOf(stop.priority)}
-            onChange={(e) => onPriorityChange(stop.id, PRIORITIES[Number(e.target.value)] ?? "normal")}
-            aria-label={`Priority for ${stop.name}`}
-            aria-valuetext={PRIORITY_LABEL[stop.priority]}
-            className="h-1 w-full accent-accent-strong"
-          />
-          <span aria-hidden className="mt-1 text-[10px] leading-none text-muted">{PRIORITY_LABEL[stop.priority]}</span>
-        </label>
-      )}
       {stop.photoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- user uploads served by an auth-checked route
         <img src={stop.photoUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />

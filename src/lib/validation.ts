@@ -12,7 +12,7 @@ export const MAX_DWELL_MINUTES = 480;
 const lat = z.number().min(-90).max(90);
 const lng = z.number().min(-180).max(180);
 
-const inYearRange = (ms: number) => {
+export const inYearRange = (ms: number) => {
   const y = new Date(ms).getUTCFullYear();
   return y >= 1970 && y <= 2200;
 };
@@ -173,12 +173,25 @@ export const popularityRequestSchema = z.object({
   places: z.array(z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) })).min(1).max(POPULARITY_BATCH_SIZE),
 });
 
-/** First issue as a user-facing string, prefixed with its field path when there is one. */
+/** "tripName" -> "Trip name". */
+function fieldLabel(path: PropertyKey[]): string {
+  const key = String(path[path.length - 1] ?? "");
+  const words = key.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+  return words ? words[0]!.toUpperCase() + words.slice(1) : "This field";
+}
+
+/**
+ * First issue as a user-facing string. Messages written in the schemas are already plain sentences and pass through;
+ * zod's own defaults ("Too big: expected string to have <=120 characters") are rewritten from the field name.
+ */
 export function formatZodError(error: z.ZodError): string {
   const issue = error.issues[0];
   if (!issue) return "Invalid request";
-  const path = issue.path.join(".");
-  return path ? `${path}: ${issue.message}` : issue.message;
+  if (!/^(Too (big|small)|Invalid )/.test(issue.message)) return issue.message;
+  const label = fieldLabel(issue.path);
+  if (issue.code === "too_big" && issue.origin === "string") return `${label} must be at most ${issue.maximum} characters`;
+  if (issue.code === "too_small" && issue.origin === "string") return `${label} must be at least ${issue.minimum} characters`;
+  return `${label} is not valid`;
 }
 
 // Query-string coordinates. Plain decimals only: z.coerce would turn "" or " " into 0 and accept "1e2" or "0x10".

@@ -35,7 +35,7 @@ describe("POST /api/signup", () => {
   it("returns 400 for invalid input", async () => {
     const res = await signup({ email: "not-an-email", password: "short" });
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("email: Enter a valid email address");
+    expect((await res.json()).error).toBe("Enter a valid email address");
   });
 
   it("silently ignores a filled honeypot without creating an account", async () => {

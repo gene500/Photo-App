@@ -19,7 +19,7 @@ export type Schedule = { order: number[]; departAt: Date; misses: ScheduleMiss[]
 const MISS_WEIGHT_SECONDS_PER_MIN = 3 * 60;
 /** Multiplier on a stop's missed minutes. "must" is large enough that no amount of driving outweighs missing it. */
 const PRIORITY_WEIGHT: Record<StopPriority, number> = { normal: 1, high: 8, must: 1000 };
-const EXACT_MAX_STOPS = 8;
+const EXACT_MAX_STOPS = 7; // 8 stops (7! orders x ~65 departures) held the event loop for ~0.9 s per request
 const STEP_MS = 15 * 60_000;
 const DAY_MS = 86_400_000;
 const PENALTY = 1e9; // unreachable / missing durations, as in optimizeOrder

@@ -56,6 +56,16 @@ describe("users", () => {
   });
 });
 
+describe("changePassword races", () => {
+  beforeEach(resetDb);
+  it("lets only one of several simultaneous changes win", async () => {
+    const user = await createUser("race@example.com", "correct-horse");
+    const results = await Promise.all(["aaaa-1111", "bbbb-2222", "cccc-3333"].map((p) => changePassword(user.id, "correct-horse", p)));
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(await getSessionVersion(user.id)).toBe(1);
+  });
+});
+
 describe("deleteAccount", () => {
   beforeEach(resetDb);
 

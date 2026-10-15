@@ -5,13 +5,14 @@ import { SharedTripView } from "@/components/share/SharedTripView";
 import type { RouteResult } from "@/lib/types";
 import { enforceLimit } from "@/server/rate-limit";
 import { getDirections } from "@/server/external/mapbox";
-import { getSharedTrip } from "@/server/share";
+import { loadSharedTrip } from "@/server/share";
 
 // A revoked link must stop working immediately, so this page is never cached or prerendered.
 export const dynamic = "force-dynamic";
 
 // Page and metadata both need the trip; React.cache makes that one query per request.
-const load = cache(getSharedTrip);
+const loadShared = cache(loadSharedTrip);
+const load = async (token: string) => (await loadShared(token))?.trip ?? null;
 
 const PRIVATE: Pick<Metadata, "robots" | "referrer"> = {
   robots: { index: false, follow: false },
@@ -26,10 +27,11 @@ export async function generateMetadata({ params }: PageProps<"/s/[token]">): Pro
 }
 
 /** The real driving route, fetched here because the directions API needs a login. Null (straight line) on any failure. */
-async function routeFor(token: string, stops: { lng: number; lat: number }[]): Promise<RouteResult | null> {
+async function routeFor(token: string, ownerId: string, stops: { lng: number; lat: number }[]): Promise<RouteResult | null> {
   if (stops.length < 2) return null;
   try {
     enforceLimit("directions", `share:${token}`);
+    enforceLimit("share-directions", ownerId); // one account's many links share one budget
     return await getDirections(stops.map((s) => [s.lng, s.lat]));
   } catch {
     return null;
@@ -39,7 +41,7 @@ async function routeFor(token: string, stops: { lng: number; lat: number }[]): P
 /** Public, login-free, read-only view of a shared trip. */
 export default async function SharedTripPage({ params }: PageProps<"/s/[token]">) {
   const { token } = await params;
-  const trip = await load(token);
-  if (!trip) notFound();
-  return <SharedTripView trip={trip} route={await routeFor(token, trip.stops)} />;
+  const shared = await loadShared(token);
+  if (!shared) notFound();
+  return <SharedTripView trip={shared.trip} route={await routeFor(token, shared.ownerId, shared.trip.stops)} />;
 }

@@ -38,7 +38,7 @@ describe("trip routes", () => {
   it("returns 400 for an invalid trip", async () => {
     const res = await POST(jsonRequest("POST", "/api/trips", { ...sampleTripInput, name: "" }));
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("name: Trip name is required");
+    expect((await res.json()).error).toBe("Trip name is required");
   });
 
   it("returns 404 for another user's trip", async () => {
@@ -70,6 +70,14 @@ describe("trip routes", () => {
     expect((await moved.json()).trip.departAt).toBe(new Date(Date.parse(dep) + days * 86_400_000).toISOString());
     const both = await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { plannedDate: "2026-09-02", departAt: dep }), idParams(trip.id));
     expect((await both.json()).trip.departAt).toBe(dep);
+  });
+
+  it("drops a start time that the date change would push outside the allowed years", async () => {
+    const created = await POST(jsonRequest("POST", "/api/trips", { ...sampleTripInput, plannedDate: "1970-01-01", departAt: "2200-12-31T23:00:00.000Z" }));
+    const trip = (await created.json()).trip;
+    const res = await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { plannedDate: "2200-12-31" }), idParams(trip.id));
+    expect(res.status).toBe(200);
+    expect((await res.json()).trip.departAt).toBeNull();
   });
 
   it("keeps the start time when a rename re-sends the same date", async () => {

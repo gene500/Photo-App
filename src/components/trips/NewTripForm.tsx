@@ -49,7 +49,7 @@ export function NewTripForm() {
       <h2 className="text-lg font-semibold">New trip</h2>
       <label className="block">
         <span className="text-sm text-muted">Trip name</span>
-        <input required value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+        <input required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
       </label>
       <label className="block">
         <span className="text-sm text-muted">Planned date</span>

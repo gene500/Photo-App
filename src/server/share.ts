@@ -25,9 +25,14 @@ export async function revokeShareToken(userId: string, tripId: string): Promise<
   return count > 0;
 }
 
-/** The sanitized read-only trip for a share token, or null for an unknown, malformed or revoked one. */
-export async function getSharedTrip(token: string): Promise<PublicTrip | null> {
+/** The sanitized trip plus its owner's id (for per-owner limits only; never sent to the page). Null for an unknown, malformed or revoked token. */
+export async function loadSharedTrip(token: string): Promise<{ trip: PublicTrip; ownerId: string } | null> {
   if (!TOKEN_RE.test(token)) return null;
   const row = await prisma.trip.findUnique({ where: { shareToken: token }, include: { stops: true } });
-  return row ? toPublicTripDto(row) : null;
+  return row ? { trip: toPublicTripDto(row), ownerId: row.userId } : null;
+}
+
+/** The sanitized read-only trip for a share token, or null for an unknown, malformed or revoked one. */
+export async function getSharedTrip(token: string): Promise<PublicTrip | null> {
+  return (await loadSharedTrip(token))?.trip ?? null;
 }

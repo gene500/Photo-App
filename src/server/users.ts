@@ -50,7 +50,10 @@ export async function verifyCredentials(
 // Every signed-in request checks the session version, which is a database round trip. Remember the answer briefly per
 // server instance; revoking clears it on the instance that handled the revoke, and other instances see it within the TTL.
 export const SESSION_VERSION_TTL_MS = 15_000;
-const versions = new TtlCache<number | null>(SESSION_VERSION_TTL_MS, 2000);
+// Next bundles route handlers and pages as separate module instances, so the cache lives on globalThis: a revoke made
+// in a route handler must clear the entry the page-side check reads, or the old session stays valid for the whole TTL.
+const globalForVersions = globalThis as unknown as { __sessionVersions?: TtlCache<number | null> };
+const versions = (globalForVersions.__sessionVersions ??= new TtlCache<number | null>(SESSION_VERSION_TTL_MS, 2000));
 export const clearSessionVersionCache = () => versions.clear();
 
 /** The user's current session version, or null when the account no longer exists. */
@@ -73,12 +76,13 @@ export async function revokeAllSessions(userId: string): Promise<void> {
 export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) return false;
-  await prisma.user.update({
-    where: { id: userId },
+  // Compare-and-swap on the hash that was just checked: of several simultaneous changes only one wins.
+  const { count } = await prisma.user.updateMany({
+    where: { id: userId, passwordHash: user.passwordHash },
     data: { passwordHash: await bcrypt.hash(newPassword, BCRYPT_COST), sessionVersion: { increment: 1 } },
   });
   versions.delete(userId);
-  return true;
+  return count === 1;
 }
 
 /**

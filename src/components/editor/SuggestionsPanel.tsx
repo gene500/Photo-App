@@ -61,14 +61,15 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
   useEffect(() => {
     if (!hover) return;
     const clear = () => setHover(null);
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") clear(); };
+    // Escape also drops the map dot's popup, which follows the same hover state.
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { clear(); onHover?.(null); } };
     window.addEventListener("scroll", clear, true);
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("scroll", clear, true);
       window.removeEventListener("keydown", onKey);
     };
-  }, [hover]);
+  }, [hover, onHover]);
   // A re-rank or a changed list moves the rows, so a card anchored to the old layout is dropped (see `order` below).
   const order = suggestions.map((x) => x.osmId).join("|");
   const [accepting, setAccepting] = useState<ReadonlySet<string>>(new Set());
@@ -111,7 +112,7 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
         {suggestions.map((s, i) => {
           const line = weather?.get(s.osmId);
           return (
-          <li key={s.osmId} data-testid="suggestion-card" data-id={s.osmId} style={{ animationDelay: `${(i % 5) * 50}ms` }} onPointerEnter={(e) => { if (isHoverPointer(e)) { onHover?.(s.osmId); setHover({ s, rect: e.currentTarget.getBoundingClientRect(), order }); } }} onPointerLeave={() => { onHover?.(null); setHover(null); }} onFocus={(e) => { onHover?.(s.osmId); if (keyboardFocus(e.target as HTMLElement) && hasRoomBeside(e.currentTarget.getBoundingClientRect())) setHover({ s, rect: e.currentTarget.getBoundingClientRect(), order }); }} onBlur={() => { onHover?.(null); setHover(null); }} className="anim-rise flex items-center justify-between gap-2 rounded-xl px-2 py-2 hover:bg-hover">
+          <li key={s.osmId} data-testid="suggestion-card" data-id={s.osmId} style={{ animationDelay: `${(i % 5) * 50}ms` }} onPointerEnter={(e) => { if (isHoverPointer(e)) { onHover?.(s.osmId); const rect = e.currentTarget.getBoundingClientRect(); if (hasRoomBeside(rect)) setHover({ s, rect, order }); } }} onPointerLeave={() => { onHover?.(null); setHover(null); }} onFocus={(e) => { onHover?.(s.osmId); if (keyboardFocus(e.target as HTMLElement) && hasRoomBeside(e.currentTarget.getBoundingClientRect())) setHover({ s, rect: e.currentTarget.getBoundingClientRect(), order }); }} onBlur={() => { onHover?.(null); setHover(null); }} className="anim-rise flex items-center justify-between gap-2 rounded-xl px-2 py-2 hover:bg-hover">
             <div className="min-w-0">
               <p data-testid="suggestion-name" className="truncate text-sm font-medium">{s.name}</p>
               <p className="text-xs text-muted">

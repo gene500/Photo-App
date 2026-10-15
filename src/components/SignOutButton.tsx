@@ -33,7 +33,7 @@ export function SignOutEverywhereButton({ className }: { className?: string }) {
   );
 }
 
-export function SignOutButton() {
+export function SignOutButton({ className }: { className?: string }) {
   return (
     <button type="button" onClick={() => {
         // A shared device must not keep this user's trips. Saving is switched off first so a pending
@@ -41,7 +41,7 @@ export function SignOutButton() {
         disableOfflineSaving();
         clearAllCopies();
         void signOut({ callbackUrl: "/login" });
-      }} className="inline-flex min-h-9 items-center rounded-lg px-3 text-sm text-muted transition hover:bg-hover hover:text-foreground">
+      }} className={className ?? "inline-flex min-h-9 items-center rounded-lg px-3 text-sm text-muted transition hover:bg-hover hover:text-foreground"}>
       Sign out
     </button>
   );

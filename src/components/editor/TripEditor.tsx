@@ -12,7 +12,7 @@ import { prefetchPlacePhotos } from "@/lib/place-photo-cache";
 import { useSuggestionWeather } from "@/lib/use-weather";
 import { holdWeather } from "@/lib/weather-cache";
 import { loadPopularityInBatches, POPULARITY_BATCH, rankSuggestions } from "@/lib/suggestion-popularity";
-import { computeArrivals, computeBestTimes } from "@/lib/best-time";
+import { computeArrivals, computeBestTimes, formatClock } from "@/lib/best-time";
 import { useMounted } from "@/lib/use-mounted";
 import { fromTimeValue, toTimeValue } from "./StartTimeControl";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
@@ -391,7 +391,10 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         }
       }
       setUndo({ previousIds, appliedIds: ids, previousDepartAt, appliedDepartAt });
-      if (missNote) setOptimizeNote({ text: missNote, idsKey: ids.join(",") });
+      // Say so when the start time moved, so the change in the Start time field is not a surprise.
+      const moveNote = appliedDepartAt !== previousDepartAt && appliedDepartAt ? `Start time moved to ${formatClock(new Date(appliedDepartAt), undefined, settings.timeFormat)} so stops land in their light` : null;
+      const note = [moveNote, missNote].filter(Boolean).join(". ");
+      if (note) setOptimizeNote({ text: note, idsKey: ids.join(",") });
     } catch (e) {
       setStopsError(errorMessage(e, "Couldn't optimize the route"));
     } finally {

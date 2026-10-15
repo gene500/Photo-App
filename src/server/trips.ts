@@ -1,6 +1,6 @@
 import { dateOnlyToUtc } from "@/lib/dates";
 import type { Trip, TripSummary, TripWithStops } from "@/lib/types";
-import type { TripCreateInput, TripPatch } from "@/lib/validation";
+import { inYearRange, type TripCreateInput, type TripPatch } from "@/lib/validation";
 import { prisma } from "./db";
 import { toStopDto, toTripDto } from "./mappers";
 
@@ -9,7 +9,9 @@ const DAY_MS = 86_400_000;
 /** The same time of day on the new date: a start time moves with the trip's day instead of resetting. */
 function shiftedDeparture(departAt: Date | null, from: Date, to: Date): Date | null {
   if (!departAt) return null;
-  return new Date(departAt.getTime() + Math.round((to.getTime() - from.getTime()) / DAY_MS) * DAY_MS);
+  const shifted = new Date(departAt.getTime() + Math.round((to.getTime() - from.getTime()) / DAY_MS) * DAY_MS);
+  // A start time pushed outside the years the API accepts is dropped (the editor then starts at "now").
+  return inYearRange(shifted.getTime()) ? shifted : null;
 }
 
 function patchData(patch: TripPatch, shiftedDepartAt: Date | null | undefined) {

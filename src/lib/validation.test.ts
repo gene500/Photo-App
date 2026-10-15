@@ -24,7 +24,7 @@ describe("tripInputSchema", () => {
     const r = tripInputSchema.safeParse({ ...validTrip, plannedDate: "2026-02-30" });
     expect(r.success).toBe(false);
     expect(formatZodError(r.error!)).toBe(
-      "plannedDate: Planned date must be a valid YYYY-MM-DD date",
+      "Planned date must be a valid YYYY-MM-DD date",
     );
   });
 
@@ -139,7 +139,14 @@ describe("signupSchema", () => {
 
   it("rejects short passwords", () => {
     const r = signupSchema.safeParse({ email: "a@b.co", password: "short" });
-    expect(formatZodError(r.error!)).toBe("password: Password must be at least 8 characters");
+    expect(formatZodError(r.error!)).toBe("Password must be at least 8 characters");
+  });
+});
+
+describe("formatZodError defaults", () => {
+  it("rewrites zod's own wording from the field name", () => {
+    const r = tripInputSchema.safeParse({ ...validTrip, name: "x".repeat(500) });
+    expect(formatZodError(r.error!)).toMatch(/^Name must be at most \d+ characters$/);
   });
 });
 
@@ -147,7 +154,7 @@ describe("directionsRequestSchema", () => {
   it("caps waypoints at 25", () => {
     const coords = Array.from({ length: 26 }, (_, i) => [i * 0.01, 0] as [number, number]);
     const r = directionsRequestSchema.safeParse({ coordinates: coords });
-    expect(formatZodError(r.error!)).toBe("coordinates: Routing supports at most 25 stops per trip");
+    expect(formatZodError(r.error!)).toBe("Routing supports at most 25 stops per trip");
   });
 });
 

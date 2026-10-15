@@ -43,7 +43,7 @@ export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: 
       <header className="relative">
         {/* Wraps: with large text the buttons move under the name instead of squeezing it to nothing. */}
         <div className="flex flex-wrap items-start justify-between gap-x-2">
-          <h1 className="min-w-0 max-w-full flex-1 basis-28 truncate text-lg font-semibold leading-9">{trip.name}</h1>
+          <h1 title={trip.name} className="min-w-0 max-w-full flex-1 basis-28 truncate text-lg font-semibold leading-9">{trip.name}</h1>
           <div className="flex shrink-0 flex-wrap justify-end">
             <button type="button" onClick={beginEdit} className={btnGhost}>Edit trip</button>
             {exportData && <ExportControl tripName={trip.name} plannedDate={trip.plannedDate} stops={exportData.stops} route={exportData.route} />}
@@ -59,7 +59,7 @@ export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: 
     <form onSubmit={(e) => { e.preventDefault(); void save(); }} className="space-y-3 pb-2">
       <label className="block">
         <span className="text-sm text-muted">Trip name</span>
-        <input required value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+        <input required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
       </label>
       <label className="block">
         <span className="text-sm text-muted">Planned date</span>

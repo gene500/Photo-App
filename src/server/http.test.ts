@@ -11,6 +11,13 @@ describe("handle", () => {
     expect(res.status).toBe(200);
   });
 
+  it("keeps API responses out of shared caches unless the route set its own policy", async () => {
+    expect((await handle(async () => Response.json({}))()).headers.get("Cache-Control")).toBe("private, no-store");
+    expect((await handle(async () => { throw new HttpError(401, "x"); })()).headers.get("Cache-Control")).toBe("private, no-store");
+    const own = await handle(async () => Response.json({}, { headers: { "Cache-Control": "private, max-age=300" } }))();
+    expect(own.headers.get("Cache-Control")).toBe("private, max-age=300");
+  });
+
   it("maps HttpError to its status and message", async () => {
     const res = await handle(async () => {
       throw new HttpError(404, "Trip not found");
@@ -25,7 +32,7 @@ describe("handle", () => {
       return Response.json({});
     })();
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: "name: Name is required" });
+    expect(await res.json()).toEqual({ error: "Name is required" });
   });
 
   it("hides unexpected errors behind a generic 500", async () => {

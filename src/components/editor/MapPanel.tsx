@@ -46,10 +46,11 @@ function rootScale(): number {
 }
 
 // Keep fitted/flown-to points clear of what floats over the map: the bottom sheet on phones, the left card on desktop.
-function viewPadding(): mapboxgl.PaddingOptions {
+// The shared (read-only) page uses a taller sheet (55% of the height), so it needs more room below the points.
+function viewPadding(readOnly = false): mapboxgl.PaddingOptions {
   const phone = typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
   return phone
-    ? { top: 72, right: 24, left: 24, bottom: Math.round(window.innerHeight * 0.45) }
+    ? { top: 72, right: 24, left: 24, bottom: Math.round(window.innerHeight * (readOnly ? 0.57 : 0.45)) }
     : { top: 72, right: 64, bottom: 64, left: Math.round(400 * rootScale()) };
 }
 
@@ -154,10 +155,10 @@ export default function MapPanel({
     if (!fittedRef.current && routeGeometry && routeGeometry.length > 1) {
       const bounds = new mapboxgl.LngLatBounds(routeGeometry[0], routeGeometry[0]);
       for (const c of routeGeometry) bounds.extend(c);
-      map.fitBounds(bounds, { padding: viewPadding(), duration: 0 });
+      map.fitBounds(bounds, { padding: viewPadding(readOnly), duration: 0 });
       fittedRef.current = true;
     }
-  }, [loaded, routeGeometry]);
+  }, [loaded, routeGeometry, readOnly]);
 
   // Numbered, draggable stop markers, diffed by stop id so a state update never destroys a marker mid-drag.
   useEffect(() => {
@@ -285,7 +286,7 @@ export default function MapPanel({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !flyTo) return;
-    map.flyTo({ center: [flyTo.lng, flyTo.lat], zoom: Math.max(map.getZoom(), 12), padding: viewPadding() });
+    map.flyTo({ center: [flyTo.lng, flyTo.lat], zoom: Math.max(map.getZoom(), 12), padding: viewPadding(readOnly) });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the request nonce only
   }, [flyNonce]);
 

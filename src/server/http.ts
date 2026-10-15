@@ -60,6 +60,16 @@ function logUnexpected(e: unknown): void {
   console.error(`${e.name}: ${e.message}`, e.stack);
 }
 
+/** API responses are per-user: unless a route chose its own caching, keep them out of shared caches. */
+function withNoStore(res: Response): Response {
+  try {
+    if (!res.headers.has("Cache-Control")) res.headers.set("Cache-Control", "private, no-store");
+  } catch {
+    // Immutable headers (a proxied response): leave it as is.
+  }
+  return res;
+}
+
 /** Wraps a route handler so thrown errors become safe JSON responses. */
 export function handle<A extends unknown[]>(
   fn: (...args: A) => Promise<Response>,
@@ -67,12 +77,12 @@ export function handle<A extends unknown[]>(
   return async (...args: A) => {
     try {
       if (args[0] instanceof Request) assertSameOrigin(args[0]);
-      return await fn(...args);
+      return withNoStore(await fn(...args));
     } catch (e) {
-      if (e instanceof HttpError) return jsonError(e.status, e.message, e.retryAfter);
-      if (e instanceof ZodError) return jsonError(400, formatZodError(e));
+      if (e instanceof HttpError) return withNoStore(jsonError(e.status, e.message, e.retryAfter));
+      if (e instanceof ZodError) return withNoStore(jsonError(400, formatZodError(e)));
       logUnexpected(e);
-      return jsonError(500, "Something went wrong");
+      return withNoStore(jsonError(500, "Something went wrong"));
     }
   };
 }

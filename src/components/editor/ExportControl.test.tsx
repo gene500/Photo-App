@@ -63,6 +63,20 @@ describe("ExportControl", () => {
       expect(screen.queryByRole("group", { name: "Export trip" })).toBeNull();
     });
 
+    it("adds a note when every arrival is missing, and none when some are known", async () => {
+      vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["x"]));
+      const { unmount } = render(<ExportControl tripName="T" stops={two} route={null} pdf={pdf} />);
+      await userEvent.click(screen.getByRole("button", { name: "Export" }));
+      await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
+      expect(vi.mocked(createItineraryPdf).mock.calls[0][0].input.note).toBe("Arrival times are unavailable because the route has not been calculated.");
+      unmount();
+      const some = { ...pdf, stops: [{ ...pdf.stops[0], arrival: new Date("2026-10-16T10:00:00Z") }, pdf.stops[1]] };
+      render(<ExportControl tripName="T" stops={two} route={null} pdf={some} />);
+      await userEvent.click(screen.getByRole("button", { name: "Export" }));
+      await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
+      expect(vi.mocked(createItineraryPdf).mock.calls[1][0].input.note).toBeNull();
+    });
+
     it("shows Preparing PDF... and disables the item while pending", async () => {
       let resolve!: (b: Blob) => void;
       vi.mocked(createItineraryPdf).mockReturnValue(new Promise<Blob>((r) => { resolve = r; }));

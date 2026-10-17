@@ -184,6 +184,9 @@ describe("edge cases", () => {
 });
 
 describe("pdfSafe", () => {
+  it("composes decomposed accents", () => {
+    expect(pdfSafe("Cafe\u0301")).toBe("Caf\u00e9");
+  });
   it("replaces characters above U+00FF and strips control characters", () => {
     const out = pdfSafe("Café – ’ 東京 ☀️\u0007");
     expect(out).toContain("Café");

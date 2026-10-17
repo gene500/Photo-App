@@ -13,7 +13,7 @@ const WIN_ANSI_EXTRA = new Set([..."\u2013\u2014\u2018\u2019\u201c\u201d\u2022\u
 /** Standard PDF fonts draw Latin-1 plus a few Windows-1252 marks: other characters become `?`, tabs a space, other control characters (except newline) go. */
 export function pdfSafe(text: string): string {
   let out = "";
-  for (const ch of text) {
+  for (const ch of text.normalize("NFC")) {
     const code = ch.codePointAt(0)!;
     if (ch === "\n") out += ch;
     else if (ch === "\t") out += " ";

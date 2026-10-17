@@ -56,6 +56,7 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
         totalDurationS: pdf.totalDurationS,
         stops: pdf.stops,
         weather,
+        note: pdf.stops.length >= 2 && pdf.stops.every((s) => s.arrival === null) ? "Arrival times are unavailable because the route has not been calculated." : null,
         timeFormat: settings.timeFormat,
         distanceUnit: settings.distanceUnit,
       });

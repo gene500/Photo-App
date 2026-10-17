@@ -74,4 +74,21 @@ describe("loadWeatherLines", () => {
     expect(await loadWeatherLines({ stops: [{ lat: 1, lng: 0, lightPref: "any", arrival: past }], unit: "km" })).toEqual([null]);
     expect(loadForecast).not.toHaveBeenCalled();
   });
+  it("resolves every stop to null when the weather step exceeds the timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(loadForecast).mockImplementation(() => new Promise<WeatherForecast>(() => {}));
+      const stop = (lat: number) => ({ lat, lng: 0, lightPref: "any" as const, arrival: day });
+      const p = loadWeatherLines({ stops: [stop(1), stop(2)], unit: "km" });
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(await p).toEqual([null, null]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("returns fast forecasts without waiting for the timeout", async () => {
+    vi.mocked(loadForecast).mockResolvedValue(forecast);
+    const lines = await loadWeatherLines({ stops: [{ lat: 1, lng: 0, lightPref: "any", arrival: day }], unit: "km", timeoutMs: 50 });
+    expect(lines[0]).not.toBeNull();
+  });
 });

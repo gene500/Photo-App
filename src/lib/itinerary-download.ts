@@ -37,9 +37,14 @@ export async function loadMapImage(url: string | null, opts: { timeoutMs?: numbe
 type WeatherStop = { lat: number; lng: number; lightPref: LightPref; arrival: Date | null };
 
 /** One weather line per stop with the same rules as `useWeatherLine`; a failed lookup is null for that stop only. */
-export async function loadWeatherLines(a: { stops: WeatherStop[]; unit: "km" | "mi" }): Promise<(WeatherLine | null)[]> {
+export async function loadWeatherLines(a: { stops: WeatherStop[]; unit: "km" | "mi"; timeoutMs?: number }): Promise<(WeatherLine | null)[]> {
   const today = new Date().toISOString().slice(0, 10);
-  return Promise.all(
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // The forecast queue can wait behind the weather idle gate for a long time; the PDF is better without weather than late.
+  const timeout = new Promise<(WeatherLine | null)[]>((resolve) => {
+    timer = setTimeout(() => resolve(a.stops.map(() => null)), a.timeoutMs ?? 6000);
+  });
+  const lines = Promise.all(
     a.stops.map(async (s) => {
       try {
         const target = forecastTarget(s.lat, s.lng, s.arrival, s.lightPref, today);
@@ -52,6 +57,11 @@ export async function loadWeatherLines(a: { stops: WeatherStop[]; unit: "km" | "
       }
     }),
   );
+  try {
+    return await Promise.race([lines, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function createItineraryPdf(a: {

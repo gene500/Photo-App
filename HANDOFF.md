@@ -24,8 +24,8 @@ Last updated 2026-10-16.
 | P9 | Final whole-branch review (Opus) | completed | fixes `6af16a0`; parked: per-stop weather requests on cold cache, `plannedDate ?? ""` |
 | P10 | Test in the real app with the Mapbox token | completed | real Mapbox static request returned 200 with CORS open from the browser (editor and share page); both PDFs rendered with the real map, pins, route and schedule (checked visually). Fake directions were used, so the route line was straight | editor + share link; force the static-map request to fail to see the fallback; check a URL-restricted token on the share page (`no-referrer`) |
 | P11 | Sweep 1: full-codebase check (Opus) | completed | fixes `7de1487`; parked: weather lib->hook coupling, shared stop-mapping helper, jsPDF optional deps, config drift, per-stop weather requests, thin tests | whole repo on the feature branch; read-only report, fixes ruled and applied after |
-| P12 | Sweep 2: bug sweep (Opus) | in progress | run after P11, one at a time |
-| P13 | Sweep 3: security sweep (Opus) | pending | run after P12; include auth, share links, CSP, the Mapbox token, PDF/static-map inputs |
+| P12 | Sweep 2: bug sweep (Opus) | completed | PDF fixes `c432c60` (NFC accents, 6 s weather cap, note when times missing); older bugs listed in W5 | run after P11, one at a time |
+| P13 | Sweep 3: security sweep (Opus) | in progress | run after P12; include auth, share links, CSP, the Mapbox token, PDF/static-map inputs |
 | P14 | Merge `feat/pdf-itinerary` into `main`, push, check Vercel and CI | pending | push only when the owner says "push" |
 | P15 | Clear `~/.playwright-mcp` | pending | |
 
@@ -36,6 +36,7 @@ Last updated 2026-10-16.
 | W1 | Push local `main` to GitHub | pending | `git log origin/main..main` lists what is waiting (speed-up merge, test fix, PDF spec/plan, handoff) |
 | W2 | Delete leftover branch `worktree-agent-a22e92e8e241870c4` | pending | owner's decision |
 | W3 | Share link opens the generic page, not the shared trip (reported 2026-10-14) | blocked | not reproduced locally or live; need the device used and what the page showed. Hypotheses: installed PWA capturing the link (manifest `start_url` is `/trips`), mangled token, production data |
+| W5 | Older bugs found by Sweep 2 (not PDF related, still on `main`) | pending | (1) Important: loop routes lose the corridor hole, `src/server/suggestions/corridor.ts:47-48` keeps only `coordinates[0]`, so suggestions fill the inside of a loop; (2) Optimize replaces a working start time and says it moved it (`src/app/api/optimize/route.ts`, `optimize-schedule.ts` bestDeparture; may be intended); (3) changing the trip date across a DST change shifts the start time by an hour (`src/server/trips.ts` shiftedDeparture); (4) `reorderStops` checks outside its transaction (500 instead of 404 on a race); (5) `cellsForCircle` does not wrap at +-180 longitude. Fix on a separate branch |
 | W4 | Email verification and signup email enumeration (409) | blocked | choose a mail provider |
 
 ### Backlog (from the old TODO.md; not started)

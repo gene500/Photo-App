@@ -119,3 +119,14 @@ describe("optimizeOrder", () => {
     expect(optimizeOrder(withNull)).toEqual([0, 2, 1]);
   });
 });
+
+describe("optimizeOrder exact range", () => {
+  it("is optimal for 10 stops with asymmetric durations", () => {
+    for (let seed = 1; seed <= 5; seed++) {
+      const r = rng(seed);
+      const d = Array.from({ length: 10 }, (_, i) => Array.from({ length: 10 }, (_, j) => (i === j ? 0 : 60 + Math.floor(r() * 3000))));
+      expect(cost(d, optimizeOrder(d)), `seed ${seed}`).toBeCloseTo(bruteForce(d), 6);
+    }
+  }, 60_000);
+});
+

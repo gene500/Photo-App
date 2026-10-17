@@ -761,6 +761,53 @@ describe("TripEditor", () => {
       expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
     });
 
+    it("says 'No faster order found' where the answer came from a heuristic, by stop count", async () => {
+      const many = (n: number) => Array.from({ length: n }, (_, i) => newStop({ id: `s${i}`, order: i, name: `S${i}`, lat: 36 + i * 0.1, lng: -119 }));
+      for (const [n, sunset, text] of [[13, false, "No faster order found"], [12, false, "Already the fastest order"], [9, true, "No faster order found"], [8, true, "Already the fastest order"]] as const) {
+        vi.mocked(api.optimizeOrder).mockResolvedValue({ order: Array.from({ length: n }, (_, i) => i), ...(sunset ? { departAt: null, misses: [] } : {}) });
+        const stops = many(n).map((s, i) => (sunset && i === n - 1 ? { ...s, lightPref: "sunset" as const } : s));
+        const user = userEvent.setup();
+        const { unmount } = render(<TripEditor initialTrip={withStops(stops)} />);
+        await user.click(screen.getByRole("button", { name: "Optimize route" }));
+        await waitFor(() => expect(screen.getByTestId("optimize-status").textContent, `${n} stops`).toContain(text));
+        unmount();
+      }
+    });
+
+    it("does not bring a stale Undo back when the stops are dragged into the applied order again", async () => {
+      reorderEcho();
+      vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1] });
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(three)} />);
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      await screen.findByRole("button", { name: "Undo" });
+      await user.click(screen.getByRole("button", { name: "reorder" })); // a, c, b -> b, c, a
+      await waitFor(() => expect(rowNames()[0]).toContain("B"));
+      await user.click(screen.getByRole("button", { name: "reorder" })); // back to a, c, b
+      await waitFor(() => expect(rowNames()[0]).toContain("A"));
+      expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
+    });
+
+    it("sends one start-time save when Undo is clicked twice while it is saving", async () => {
+      const sunsetC = [three[0], three[1], { ...three[2], lightPref: "sunset" as const }];
+      const lit = { ...withStops(sunsetC), departAt: null };
+      vi.mocked(api.updateTrip).mockImplementation(async (_id, patch) => ({ trip: { ...lit, ...patch } as never }));
+      vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], departAt: "2026-07-01T23:15:00.000Z", misses: [] });
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={lit} />);
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      const undoButton = await screen.findByRole("button", { name: "Undo" });
+      let release!: () => void;
+      vi.mocked(api.updateTrip).mockImplementationOnce(
+        (_id, patch) => new Promise((res) => (release = () => res({ trip: { ...lit, ...patch } as never }))),
+      );
+      await user.click(undoButton);
+      expect((undoButton as HTMLButtonElement).disabled).toBe(true);
+      await user.click(undoButton);
+      await act(async () => release());
+      expect(api.updateTrip).toHaveBeenCalledTimes(2); // the optimize and one undo
+    });
+
     it("shows the server's error and ignores a second click while busy", async () => {
       let rejectIt!: (e: Error) => void;
       vi.mocked(api.optimizeOrder).mockReturnValue(new Promise((_, rej) => (rejectIt = rej)));

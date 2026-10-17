@@ -27,7 +27,7 @@ describe("NewTripForm", () => {
     render(<NewTripForm />);
     await userEvent.type(screen.getByLabelText("Trip name"), "Sierra loop");
     await userEvent.click(screen.getByRole("button", { name: "Create trip" }));
-    expect(api.createTrip).toHaveBeenCalledWith({ name: "Sierra loop", plannedDate: "2026-07-01", departAt: new Date(2026, 6, 1, 12).toISOString() });
+    expect(api.createTrip).toHaveBeenCalledWith({ name: "Sierra loop", plannedDate: "2026-07-01" });
     expect(push).toHaveBeenCalledWith("/trips/t9");
   });
 });

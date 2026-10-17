@@ -17,6 +17,7 @@ import { useMounted } from "@/lib/use-mounted";
 import { fromTimeValue, toTimeValue } from "./StartTimeControl";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useOfflineCopy } from "@/lib/use-offline-copy";
+import { isExactOptimization } from "@/lib/optimize-schedule";
 import { defaultLightPref } from "@/lib/light-windows";
 import { formatDistance, formatDuration } from "@/lib/format";
 import { coordsLabel, haversineMeters } from "@/lib/geo";
@@ -70,6 +71,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   // makes them stale, so they are simply not shown (and a late response is dropped).
   const [suggestionsState, setSuggestionsState] = useState<{ key: string; items: Suggestion[]; status: SuggestionsStatus; error: string | null; shown?: number } | null>(null);
   const [optimizing, setOptimizing] = useState(false);
+  const [undoing, setUndoing] = useState(false);
   // Remembered so the optimization can be undone. Only honoured while the list still
   // matches `appliedIds`, so any later add/remove/reorder retires it without bookkeeping.
   const [undo, setUndo] = useState<{
@@ -389,7 +391,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const orderChanged = ids.join(",") !== startKey;
       const departChanged = !sameInstant(nextDepartAt, previousDepartAt);
       if (!orderChanged && !departChanged) {
-        setOptimizeNote({ text: ["Already the fastest order", missNote].filter(Boolean).join(". "), idsKey: startKey });
+        const usesLight = before.some((s) => s.lightPref !== "any");
+        const verdict = isExactOptimization(before.length, usesLight) ? "Already the fastest order" : "No faster order found";
+        setOptimizeNote({ text: [verdict, missNote].filter(Boolean).join(". "), idsKey: startKey });
         return;
       }
       const previousIds = before.map((s) => s.id);
@@ -416,15 +420,20 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }
 
   async function undoOptimize() {
-    if (!undo) return;
+    if (!undo || undoing) return;
     const { previousIds, previousDepartAt } = undo;
-    if (previousIds.join(",") !== idsKey && !(await reorder(previousIds))) return;
-    if (previousDepartAt !== trip.departAt) {
-      try {
-        await saveTrip({ departAt: previousDepartAt });
-      } catch (e) {
-        setStopsError(errorMessage(e, "Couldn't restore the departure time"));
+    setUndoing(true);
+    try {
+      if (previousIds.join(",") !== idsKey && !(await reorder(previousIds))) return;
+      if (previousDepartAt !== trip.departAt) {
+        try {
+          await saveTrip({ departAt: previousDepartAt });
+        } catch (e) {
+          setStopsError(errorMessage(e, "Couldn't restore the departure time"));
+        }
       }
+    } finally {
+      setUndoing(false);
     }
   }
 
@@ -445,6 +454,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }
 
   const canUndo = undo !== null && undo.appliedIds.join(",") === idsKey && undo.appliedDepartAt === trip.departAt;
+  // Once the list or start time has moved on, this Undo is retired for good: matching them again must not revive it.
+  // (Not while the optimize or the undo itself is writing, when the state is only briefly in between.)
+  if (undo && !canUndo && !optimizing && !undoing) setUndo(null);
 
   /** Copy only `keys` from the server's stop onto the latest local one, so a response
    *  that raced a reorder can't overwrite `order` (or anything else it didn't change). */
@@ -750,6 +762,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                 <button
                   type="button"
                   onClick={() => void undoOptimize()}
+                  disabled={undoing}
                   className="inline-flex min-h-9 items-center rounded-full bg-hover px-4 text-sm font-medium text-foreground ring-1 ring-border transition active:scale-[0.97] hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
                 >
                   Undo

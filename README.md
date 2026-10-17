@@ -313,7 +313,7 @@ Google again" (Google's account chooser) and the user retries.
 Each stop's best shooting window is derived, not stored. The trip's
 departure time is assumed to be sunrise at the first stop on the
 trip's planned date unless the trip has a chosen departure (`departAt`,
-set by light-aware optimization; the API refuses one that is not on the planned day at the first stop); estimated arrival at each stop is that
+set by light-aware optimization; the API refuses a changed one that is not on the planned day at the first stop; a value that equals the stored one, is on the stored one's day, or equals the server's shift of it on a date change is accepted so old off-day rows stay editable); estimated arrival at each stop is that
 departure plus the cumulative Mapbox Directions leg durations and the
 "time here" minutes (default 30) of every earlier stop. The arrival time is then bucketed
 against that stop's own sunrise/golden-hour/sunset times (computed

@@ -106,8 +106,21 @@ export async function updateTrip(
       select: { plannedDate: true, departAt: true, stops: { orderBy: { order: "asc" }, take: 1, select: { lng: true } } },
     });
     if (!current) return null;
-    // Re-sending the stored value (Undo of an old row) is not a change, so it is not checked.
-    if (patch.departAt && current.departAt?.getTime() !== new Date(patch.departAt).getTime()) assertOnPlannedDay(new Date(patch.departAt), patch.plannedDate ?? utcToDateOnly(current.plannedDate), current.stops[0]?.lng ?? null);
+    // The start time is validated only when it is different from the stored one AND on a day different from both the
+    // stored one's day and the planned day. So Undo or a rename that resends a legacy off-day value (or another time on
+    // that same day) still saves, while a start time moved to some new wrong day is refused. On a date change the server
+    // derives the shifted start itself, so a sent value that merely equals it is not validated either.
+    if (patch.departAt) {
+      const sent = new Date(patch.departAt);
+      const lng = current.stops[0]?.lng ?? null;
+      const dayOf = (d: Date) => (lng === null ? d.toISOString().slice(0, 10) : solarDateAt(d, lng));
+      const planned = patch.plannedDate ?? utcToDateOnly(current.plannedDate);
+      const next = patch.plannedDate ? dateOnlyToUtc(patch.plannedDate) : null;
+      const shifted = next && current.plannedDate.getTime() !== next.getTime() ? shiftedDeparture(current.departAt, current.plannedDate, next) : null;
+      const unchanged = current.departAt?.getTime() === sent.getTime();
+      const sameStoredDay = current.departAt !== null && dayOf(current.departAt) === dayOf(sent);
+      if (!unchanged && !sameStoredDay && shifted?.getTime() !== sent.getTime()) assertOnPlannedDay(sent, planned, lng);
+    }
     if (patch.plannedDate) {
       const next = dateOnlyToUtc(patch.plannedDate);
       if (current.plannedDate.getTime() !== next.getTime()) shiftedDepartAt = shiftedDeparture(current.departAt, current.plannedDate, next);

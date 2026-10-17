@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { shiftDepartAtLocal } from "@/lib/dates";
 import { prisma } from "./db";
 import { createTrip, deleteTrip, DepartAtMismatchError, getTrip, listTrips, updateTrip } from "./trips";
 import { createTestUser, resetDb, sampleTripInput } from "../../tests/helpers/db";
@@ -28,6 +29,28 @@ describe("trips data access", () => {
     const same = await updateTrip(user.id, trip.id, { departAt: legacy });
     expect(same?.departAt).toBe(legacy);
     await expect(updateTrip(user.id, trip.id, { departAt: "2030-01-02T12:00:00.000Z" })).rejects.toBeInstanceOf(DepartAtMismatchError);
+  });
+
+  it("saves a rename plus date change when the stored start time is a legacy off-day value (the shifted value is not validated)", async () => {
+    const user = await createTestUser();
+    const trip = await createTrip(user.id, sampleTripInput);
+    const legacy = "2030-01-01T12:00:00.000Z";
+    await prisma.trip.update({ where: { id: trip.id }, data: { departAt: new Date(legacy) } });
+    const shifted = shiftDepartAtLocal(legacy, sampleTripInput.plannedDate, "2026-07-05");
+    const saved = await updateTrip(user.id, trip.id, { name: "Renamed", plannedDate: "2026-07-05", departAt: shifted });
+    expect(saved?.name).toBe("Renamed");
+    expect(saved?.plannedDate).toBe("2026-07-05");
+    expect(saved?.departAt).toBe(shifted);
+  });
+
+  it("saves an Undo to an earlier value on the same legacy off-day as the stored one", async () => {
+    const user = await createTestUser();
+    const trip = await createTrip(user.id, sampleTripInput);
+    await prisma.trip.update({ where: { id: trip.id }, data: { departAt: new Date("2030-01-01T12:00:00.000Z") } });
+    const earlier = "2030-01-01T09:30:00.000Z"; // differs from the stored value, same off-day
+    expect((await updateTrip(user.id, trip.id, { departAt: earlier }))?.departAt).toBe(earlier);
+    // A different off-day (neither the stored day nor the planned day) is still refused.
+    await expect(updateTrip(user.id, trip.id, { departAt: "2030-03-01T09:30:00.000Z" })).rejects.toBeInstanceOf(DepartAtMismatchError);
   });
 
   it("lists only the caller's trips with stop counts, newest first", async () => {

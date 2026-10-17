@@ -16,8 +16,7 @@ Last updated 2026-10-17.
 | # | Task | Status | Notes |
 |---|---|---|---|
 | S5 | Security L5: Mapbox tokens: use a separate server `MAPBOX_TOKEN`, URL-restrict `NEXT_PUBLIC_MAPBOX_TOKEN`, set a spend cap | blocked | owner action in the Mapbox and Vercel dashboards (cannot be done from code); steps will be given in the reply. L1 (signup 409) is accepted, no work |
-| P1 | Search revamp: search bar finds landmarks, viewpoints and any point of interest by name (no address needed). Cause: Mapbox Geocoding v6 `forward` has no POI data. Plan: Search Box API `suggest` + `retrieve`, landmark-first ranking, subtitle with region | completed | implemented, reviewed and merged into `release/combined` (together with the break-test fixes F1-F6); reaches `main` with the final row below |
-| B6 | FINAL (always the last row, combined): full codebase check (Opus), handle its findings, then merge, push to `main`, and confirm both Vercel (`photo-app-pi2o`) and CI succeeded | in progress | pushed `6e803a7`: Opus check found 1 blocker (Google prompt=login), fixed in `38aa09a`; Vercel photo-app-pi2o success and CI success. owner 2026-10-16: the final full codebase check always includes merge, push and the Vercel/CI confirmation; nothing goes after it. Replaces the earlier separate B6 (review/merge/push) and B7 (check) rows |
+| B7 | FINAL (always the last row, combined): full codebase check (Opus), handle its findings, then merge, push to `main`, and confirm both Vercel (`photo-app-pi2o`) and CI succeeded | pending | standing row for the next batch of work. Last run: pushed `2fa85d1` (break-test fixes + landmark search), Vercel and CI both succeeded. Owner follow-ups: try landmark search once on the live site with the real Mapbox token; check whether Mapbox Search Box terms allow storing results as stops (storage rights); header trade-off at 320 px; deferred break-test items are listed in Known gaps |
 
 ### Place search (P1)
 

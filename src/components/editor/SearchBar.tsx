@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api-client";
 import { card } from "@/components/ui/styles";
 import type { Place, SearchSuggestion } from "@/lib/types";
+import { newSessionId } from "@/lib/session-id";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 
 const MIN_CHARS = 2;
@@ -27,9 +28,11 @@ export function SearchBar({ getProximity, onSelect }: Props) {
   const keyed = useDebouncedValue(`${nonce}|${query}`, DEBOUNCE_MS);
   const debounced = keyed.slice(keyed.indexOf("|") + 1);
   // One Mapbox search session: the suggests and the retrieve of a pick share it, then a pick starts the next one.
-  const sessionRef = useRef(crypto.randomUUID());
+  const sessionRef = useRef<string | null>(null);
+  sessionRef.current ??= newSessionId();
   // The suggestion being retrieved (buttons stay disabled meanwhile) and any failure of that retrieve.
   const [picking, setPicking] = useState<string | null>(null);
+  const retrieving = useRef(false); // strict in-flight guard: state alone lets two clicks in one tick both through
   const [pickError, setPickError] = useState<string | null>(null);
   // Bumped whenever the text changes or is cleared, so a retrieve finishing after that is dropped.
   const pickSeq = useRef(0);
@@ -41,7 +44,7 @@ export function SearchBar({ getProximity, onSelect }: Props) {
   useEffect(() => {
     if (debounced.length < MIN_CHARS) return;
     let cancelled = false;
-    api.geocode(debounced, sessionRef.current, getProximityRef.current() ?? undefined).then(
+    api.geocode(debounced, sessionRef.current ?? newSessionId(), getProximityRef.current() ?? undefined).then(
       ({ suggestions }) => {
         if (!cancelled) setOutcome({ query: debounced, suggestions, error: suggestions.length === 0 ? "No matches found" : null });
       },
@@ -59,6 +62,7 @@ export function SearchBar({ getProximity, onSelect }: Props) {
 
   function clear() {
     pickSeq.current++;
+    retrieving.current = false;
     setText("");
     setOutcome(null);
     setPicking(null);
@@ -67,25 +71,28 @@ export function SearchBar({ getProximity, onSelect }: Props) {
   }
 
   function pick(s: SearchSuggestion) {
-    if (picking) return;
+    if (retrieving.current) return;
     if (s.lat !== undefined && s.lng !== undefined) {
+      sessionRef.current = newSessionId();
       onSelect({ name: s.name, lat: s.lat, lng: s.lng });
       clear();
       return;
     }
     if (!s.mapboxId) return;
     const seq = ++pickSeq.current;
+    retrieving.current = true;
     setPicking(s.mapboxId);
     setPickError(null);
-    api.retrievePlace(s.mapboxId, sessionRef.current).then(
+    api.retrievePlace(s.mapboxId, sessionRef.current ?? newSessionId()).then(
       ({ place }) => {
         if (seq !== pickSeq.current) return;
-        sessionRef.current = crypto.randomUUID();
+        sessionRef.current = newSessionId();
         onSelect(place);
         clear();
       },
       (e: unknown) => {
         if (seq !== pickSeq.current) return;
+        retrieving.current = false;
         setPicking(null);
         setPickError(e instanceof Error ? e.message : "Couldn't load that place");
       },
@@ -103,6 +110,7 @@ export function SearchBar({ getProximity, onSelect }: Props) {
         value={text}
         onChange={(e) => {
           pickSeq.current++;
+          retrieving.current = false;
           setPicking(null);
           setPickError(null);
           setText(e.target.value);

@@ -80,6 +80,42 @@ describe("SearchBar", () => {
     expect((screen.getByRole("button", { name: /Horseshoe Bend/ }) as HTMLButtonElement).disabled).toBe(false); // can retry
   });
 
+  it("renews the session after picking a fallback row too", async () => {
+    vi.mocked(api.geocode).mockResolvedValue({ suggestions: [fresno] });
+    render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
+    await userEvent.type(input(), "Fres");
+    await userEvent.click(await screen.findByRole("button", { name: "Fresno, California" }));
+    await userEvent.type(input(), "Fres");
+    await vi.waitFor(() => expect(api.geocode).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(api.geocode).mock.calls[1][1]).not.toBe(vi.mocked(api.geocode).mock.calls[0][1]);
+  });
+
+  it("still works where crypto.randomUUID is unavailable (insecure context)", async () => {
+    vi.stubGlobal("crypto", { getRandomValues: crypto.getRandomValues.bind(crypto) });
+    try {
+      vi.mocked(api.geocode).mockResolvedValue({ suggestions: [fresno] });
+      render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
+      await userEvent.type(input(), "Fres");
+      await screen.findByRole("button", { name: "Fresno, California" });
+      expect(vi.mocked(api.geocode).mock.calls[0][1]).toMatch(UUID);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("starts only one retrieve for two clicks in the same tick", async () => {
+    vi.mocked(api.geocode).mockResolvedValue({ suggestions: [bend] });
+    vi.mocked(api.retrievePlace).mockImplementation(() => new Promise(() => {}));
+    render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
+    await userEvent.type(input(), "Horseshoe");
+    const button = await screen.findByRole("button", { name: /Horseshoe Bend/ });
+    await act(async () => {
+      button.click();
+      button.click();
+    });
+    expect(api.retrievePlace).toHaveBeenCalledTimes(1);
+  });
+
   it("searches again when identical text is retyped right after a clear", async () => {
     vi.mocked(api.geocode).mockResolvedValue({ suggestions: [fresno] });
     render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);

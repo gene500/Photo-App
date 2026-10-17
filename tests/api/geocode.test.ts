@@ -65,6 +65,8 @@ describe("GET /api/geocode/retrieve", () => {
     expect((await retrieve(retrieveUrl(`session=${SESSION}`))).status).toBe(400);
     expect((await retrieve(retrieveUrl(`id=${"a".repeat(301)}&session=${SESSION}`))).status).toBe(400);
     expect((await retrieve(retrieveUrl(`id=a%2F..%2Fb&session=${SESSION}`))).status).toBe(400);
+    expect((await retrieve(retrieveUrl(`id=..&session=${SESSION}`))).status).toBe(400);
+    expect((await retrieve(retrieveUrl(`id=.&session=${SESSION}`))).status).toBe(400);
     expect((await retrieve(retrieveUrl(`id=abc&session=nope`))).status).toBe(400);
     expect((await retrieve(retrieveUrl(`id=abc`))).status).toBe(400);
     expect(retrievePlace).not.toHaveBeenCalled();

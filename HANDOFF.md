@@ -24,6 +24,15 @@ Last updated 2026-10-16.
 | P1 | Search revamp: search bar finds landmarks, viewpoints and any point of interest by name (no address needed). Cause: Mapbox Geocoding v6 `forward` has no POI data. Plan: Search Box API `suggest` + `retrieve`, landmark-first ranking, subtitle with region | in progress | design approved; implemented on `feat/poi-search` (worktree `/Users/genestone/photo-search`), awaiting review and merge; B6 (Opus check on `fix/break-test`) is still queued behind it only by list order, the Opus limit resets 3:40am PT |
 | B6 | FINAL (always the last row, combined): full codebase check (Opus), handle its findings, then merge, push to `main`, and confirm both Vercel (`photo-app-pi2o`) and CI succeeded | in progress | pushed `6e803a7`: Opus check found 1 blocker (Google prompt=login), fixed in `38aa09a`; Vercel photo-app-pi2o success and CI success. owner 2026-10-16: the final full codebase check always includes merge, push and the Vercel/CI confirmation; nothing goes after it. Replaces the earlier separate B6 (review/merge/push) and B7 (check) rows |
 
+### Place search (P1, branch `feat/poi-search`)
+
+- Search bar uses the Mapbox Search Box API: `/api/geocode` (suggest, `{suggestions}`) then `/api/geocode/retrieve` (coordinates, `{place}`). POIs rank first. Details in the README "Place search" section.
+- One uuid session per search, made in `SearchBar` by `newSessionId()` (`src/lib/session-id.ts`, falls back where `crypto.randomUUID` is missing) and renewed after every pick, including fallback picks.
+- If suggest fails, the v6 forward geocoder answers with coordinates already set. Fallback results are not cached, so landmarks come back as soon as suggest recovers. Suggest and retrieve results are cached 10 min in memory.
+- Retrieve ids must be URL-safe, at most 300 characters, and contain a letter or digit (so `..` is rejected).
+- Fake mode (`EXTERNAL_APIS_FAKE=1`): canned landmarks (Horseshoe Bend, Griffith Observatory, Yosemite Valley Viewpoint) plus the old fake address.
+- Still owed: one smoke test against real Mapbox (confirms Search Box is enabled for the token and the real subtitle/category text).
+
 ### Waiting on the owner
 
 | # | Task | Status | Notes |

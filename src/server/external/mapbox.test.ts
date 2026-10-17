@@ -262,6 +262,18 @@ describe("searchPlaces / retrievePlace (Search Box API)", () => {
     expect(f).toHaveBeenCalledTimes(1);
   });
 
+  it("does not remember fallback results, so landmarks return as soon as suggest recovers", async () => {
+    let down = true;
+    const f = vi.fn(async (url: string) =>
+      url.includes("/searchbox/")
+        ? down ? json({}, 429) : json(suggestBody)
+        : json({ features: [{ geometry: { coordinates: [1, 2] }, properties: { name: "Addr" } }] }),
+    );
+    expect((await searchPlaces("horseshoe", { sessionToken: SESSION }, f as unknown as typeof fetch))[0].name).toBe("Addr");
+    down = false;
+    expect((await searchPlaces("horseshoe", { sessionToken: SESSION }, f as unknown as typeof fetch))[0].name).toBe("Horseshoe Bend");
+  });
+
   it("falls back to the v6 geocoder, with coordinates, when suggest is not ok", async () => {
     const f = vi.fn(async (url: string) =>
       url.includes("/searchbox/") ? json({ message: "nope" }, 500) : json({ features: [{ geometry: { coordinates: [-119.79, 36.74] }, properties: { full_address: "1 Fresno St" } }] }),

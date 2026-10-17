@@ -4,7 +4,8 @@ import { handle, HttpError, requireUserId } from "@/server/http";
 import { enforceLimit } from "@/server/rate-limit";
 
 // The id goes into an upstream URL path, so only URL-safe characters are let through.
-const idSchema = z.string().min(1, "id is required").max(300).regex(/^[A-Za-z0-9_\-=.:]+$/, "invalid id");
+const idSchema = z.string().min(1, "id is required").max(300).regex(/^[A-Za-z0-9_\-=.:]+$/, "invalid id")
+  .refine((id) => /[A-Za-z0-9]/.test(id), "invalid id"); // not just dots: ".." would be normalised out of the upstream path
 const sessionSchema = z.string().uuid("session must be a uuid");
 
 export const GET = handle(async (req: Request) => {

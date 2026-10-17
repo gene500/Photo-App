@@ -173,11 +173,10 @@ export type SearchOptions = GeocodeOptions & {
   sessionToken: string;
 };
 
-/** Landmarks and viewpoints before towns and addresses; Array.sort is stable, so Mapbox's order holds within each group. */
-
 /**
  * Search Box suggest finds POIs by name (the v6 geocoder has none) but returns no coordinates;
- * pick one with retrievePlace. If suggest fails, the v6 geocoder answers instead, with coordinates already in place.
+ * pick one with retrievePlace. Landmarks and viewpoints rank before towns and addresses (the sort is stable, so Mapbox's order holds
+ * within each group). If suggest fails, the v6 geocoder answers instead, with coordinates already in place.
  */
 export async function searchPlaces(query: string, options: SearchOptions, fetchImpl: typeof fetch = fetch): Promise<SearchSuggestion[]> {
   if (isFakeExternal()) return fakeSearch(query);
@@ -200,9 +199,8 @@ export async function searchPlaces(query: string, options: SearchOptions, fetchI
   }
   if (!raw) {
     const places = await geocode(query, { proximity: options.proximity }, fetchImpl);
-    const results = places.map((p) => ({ name: p.name, lat: p.lat, lng: p.lng }));
-    searchCache.set(cacheKey, results);
-    return results;
+    // Not cached: a brief suggest outage must not hide landmarks for the whole TTL.
+    return places.map((p) => ({ name: p.name, lat: p.lat, lng: p.lng }));
   }
   const results = raw
     .filter((s) => s && typeof s.name === "string" && s.name && typeof s.mapbox_id === "string" && s.mapbox_id)

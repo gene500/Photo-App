@@ -271,10 +271,27 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const dwell = settings.defaultDwellMinutes === DEFAULT_SETTINGS.defaultDwellMinutes ? {} : { dwellMinutes: settings.defaultDwellMinutes };
       const { stop } = await api.addStop(trip.id, { ...dwell, ...input });
       setStops((prev) => [...prev, stop]);
+      if (stops.length === 0 && trip.departAt === null) void saveFirstStart(stop.lng);
       return stop;
     } catch (e) {
       setStopsError(errorMessage(e, "Couldn't add the stop"));
       return null;
+    }
+  }
+
+  /**
+   * A new trip is created without a start time (it has no stops, so no solar day yet). With its first stop the start is
+   * saved as now on the planned day at that stop, so shared and offline views show the same start as this editor.
+   */
+  async function saveFirstStart(lng: number) {
+    const now = new Date();
+    const clock = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const iso = fromTimeValue(trip.plannedDate, clock, lng);
+    if (!iso) return;
+    try {
+      await saveTrip({ departAt: iso });
+    } catch (e) {
+      setStopsError(errorMessage(e, "Couldn't save the start time"));
     }
   }
 

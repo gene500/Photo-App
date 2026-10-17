@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { departureTime, getSunWindows } from "./best-time";
 import { lightWindows } from "./light-windows";
 import { optimizeOrder } from "./optimize-order";
@@ -136,6 +136,19 @@ describe("optimizeSchedule", () => {
     // Sunrise stops first, sunset stops last, leaving at sunrise: the obvious plan the search must at least match.
     const baseline = [0, ...[2, 6, 10, 1, 3, 4, 5, 7, 8, 9, 11]];
     expect(scheduleCost(input, r.order, r.departAt)).toBeLessThanOrEqual(scheduleCost(input, baseline, defaultDeparture));
+    // Drive time is the same for every order here, so the cost difference is all missed light (weighted minutes).
+    const missed = (order: number[], at: Date) => (scheduleCost(input, order, at) - order.slice(1).reduce((sum, v, k) => sum + input.durations[order[k]!]![v]!, 0)) / 180;
+    expect(missed(r.order, r.departAt)).toBeLessThanOrEqual(missed(baseline, defaultDeparture));
+  });
+
+  it("puts sunrise stops before sunset stops when a day of stops lies between them", () => {
+    // Short drives and long stays at the unconstrained stops fill the day, so driving overnight cannot be cheaper.
+    const kinds: LightPref[] = ["any", "sunrise", "any", "sunset", "sunrise", "any", "sunset", "any", "any", "sunrise", "any", "sunset"];
+    const stops = kinds.map((k, i) => stop(k, i === 0 ? 10 : k === "any" ? 150 : 20, { lat: base.lat + i * 0.01 }));
+    const r = optimizeSchedule({ durations: flat(12, 300), stops, plannedDate: DATE, defaultDeparture });
+    const pos = (p: LightPref) => r.order.map((i, k) => (stops[i]!.lightPref === p ? k : -1)).filter((k) => k >= 0);
+    expect(r.misses).toEqual([]);
+    expect(Math.max(...pos("sunrise"))).toBeLessThan(Math.min(...pos("sunset")));
   });
 });
 
@@ -201,6 +214,21 @@ describe("9-stop local search against the exact search", () => {
     }
     console.log("worst local/exact cost ratio", worst);
   }, 120_000);
+
+  it.each([15, 25])("gives identical output for %i stops however fast the machine is", (n) => {
+    const input = instance(7, n);
+    input.stops.forEach((s, i) => { if (i > 0) s.lightPref = prefs[1 + (i % 5)]!; });
+    const first = optimizeSchedule(input);
+    expect(optimizeSchedule(input)).toEqual(first);
+    // A clock that jumps a second per reading (a very slow machine) must not change the answer.
+    let t = 0;
+    const spy = vi.spyOn(performance, "now").mockImplementation(() => (t += 1000));
+    try {
+      expect(optimizeSchedule(input)).toEqual(first);
+    } finally {
+      spy.mockRestore();
+    }
+  });
 
   it("stays under about 400 ms for 25 stops with light preferences on every stop", () => {
     const input = instance(99, 25);

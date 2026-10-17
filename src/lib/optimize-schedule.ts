@@ -218,16 +218,17 @@ function exactSearch(ctx: Evaluator, n: number): Solution {
 
 const MAX_ROUNDS = 25;
 
-/** Extra perturbed restarts after the seeded descents, and the time after which no new one starts (25 stops stay well under ~400 ms). */
-const RESTARTS = 200;
-const RESTART_DEADLINE_MS = 250;
+/**
+ * Extra perturbed restarts after the seeded descents. A fixed count per size (never a clock) so the answer is the same on
+ * every machine; each restart costs more as stops are added, so large trips get fewer (25 stops take ~250 ms).
+ */
+const restartsFor = (n: number) => (n <= 12 ? 200 : Math.max(4, Math.floor(300 / n)));
 
 /**
  * Local search: descents from several seeds (nearest-neighbour, window-sorted, must-stops-first, shortest drive), then
  * iterated local search that perturbs the best order with a fixed-seed generator, so the same input gives the same answer.
  */
 function localSearch(ctx: Evaluator, n: number): Solution {
-  const started = performance.now();
   const seeds = [nearestNeighbour(ctx.d, n), windowSorted(ctx.stops, n), mustFirst(ctx.stops, n), optimizeOrder(ctx.d)];
   let best: Solution | null = null;
   for (const seed of seeds) {
@@ -239,7 +240,7 @@ function localSearch(ctx: Evaluator, n: number): Solution {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
     return Math.floor((state / 4294967296) * max);
   };
-  for (let r = 0; r < RESTARTS && performance.now() - started < RESTART_DEADLINE_MS; r++) {
+  for (let r = 0, restarts = restartsFor(n); r < restarts; r++) {
     const order = best!.order.slice();
     // Alternate a few random swaps with a reversed random segment; stop 0 never moves.
     for (let k = 0; k < 2 + (r % 3); k++) {

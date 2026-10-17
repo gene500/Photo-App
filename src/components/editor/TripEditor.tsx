@@ -747,7 +747,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                 {optimizing ? "Optimizing…" : "Optimize route"}
               </button>
               {canUndo && undo && (
-                <button type="button" onClick={() => void undoOptimize()} className={btnGhost}>
+                <button
+                  type="button"
+                  onClick={() => void undoOptimize()}
+                  className="inline-flex min-h-9 items-center rounded-full bg-hover px-4 text-sm font-medium text-foreground ring-1 ring-border transition active:scale-[0.97] hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
+                >
                   Undo
                 </button>
               )}

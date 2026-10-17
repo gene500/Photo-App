@@ -23,8 +23,11 @@ Last updated 2026-10-16.
 | P8 | Task 7: e2e `e2e/pdf-itinerary.spec.ts` and full gates | in progress | |
 | P9 | Final whole-branch review (Opus) | pending | |
 | P10 | Test in the real app with the Mapbox token | pending | editor + share link; force the static-map request to fail to see the fallback; check a URL-restricted token on the share page (`no-referrer`) |
-| P11 | Merge `feat/pdf-itinerary` into `main`, push, check Vercel and CI | pending | push only when the owner says "push" |
-| P12 | Clear `~/.playwright-mcp`; commit `CLAUDE.md` | pending | |
+| P11 | Sweep 1: full-codebase check (Opus) | pending | whole repo on the feature branch; read-only report, fixes ruled and applied after |
+| P12 | Sweep 2: bug sweep (Opus) | pending | run after P11, one at a time |
+| P13 | Sweep 3: security sweep (Opus) | pending | run after P12; include auth, share links, CSP, the Mapbox token, PDF/static-map inputs |
+| P14 | Merge `feat/pdf-itinerary` into `main`, push, check Vercel and CI | pending | push only when the owner says "push" |
+| P15 | Clear `~/.playwright-mcp` | pending | |
 
 ### Waiting on the owner
 

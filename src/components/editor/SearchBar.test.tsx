@@ -62,6 +62,21 @@ describe("SearchBar", () => {
     expect(calls[0][1]).toBe(calls[1][1]);
   });
 
+  it("starts a new session when the search is cleared with Escape or by deleting the text", async () => {
+    vi.mocked(api.geocode).mockResolvedValue({ suggestions: [bend] });
+    render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
+    await userEvent.type(input(), "Hor");
+    await vi.waitFor(() => expect(api.geocode).toHaveBeenCalledTimes(1));
+    await userEvent.keyboard("{Escape}");
+    await userEvent.type(input(), "Bend");
+    await vi.waitFor(() => expect(api.geocode).toHaveBeenCalledTimes(2));
+    await userEvent.clear(input());
+    await userEvent.type(input(), "Lake");
+    await vi.waitFor(() => expect(api.geocode).toHaveBeenCalledTimes(3));
+    const calls = vi.mocked(api.geocode).mock.calls;
+    expect(new Set(calls.map((c) => c[1])).size).toBe(3);
+  });
+
   it("ignores extra clicks while retrieving and shows an error if it fails", async () => {
     vi.mocked(api.geocode).mockResolvedValue({ suggestions: [bend] });
     let rejectRetrieve!: (e: Error) => void;

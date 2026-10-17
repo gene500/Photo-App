@@ -61,6 +61,8 @@ export function SearchBar({ getProximity, onSelect }: Props) {
   const shown = query.length >= MIN_CHARS && outcome?.query === query ? outcome : null;
 
   function clear() {
+    // A cleared search is a new one: the next suggests get a fresh Mapbox session.
+    sessionRef.current = newSessionId();
     pickSeq.current++;
     retrieving.current = false;
     setText("");
@@ -73,7 +75,6 @@ export function SearchBar({ getProximity, onSelect }: Props) {
   function pick(s: SearchSuggestion) {
     if (retrieving.current) return;
     if (s.lat !== undefined && s.lng !== undefined) {
-      sessionRef.current = newSessionId();
       onSelect({ name: s.name, lat: s.lat, lng: s.lng });
       clear();
       return;
@@ -86,7 +87,6 @@ export function SearchBar({ getProximity, onSelect }: Props) {
     api.retrievePlace(s.mapboxId, sessionRef.current ?? newSessionId()).then(
       ({ place }) => {
         if (seq !== pickSeq.current) return;
-        sessionRef.current = newSessionId();
         onSelect(place);
         clear();
       },
@@ -113,6 +113,7 @@ export function SearchBar({ getProximity, onSelect }: Props) {
           retrieving.current = false;
           setPicking(null);
           setPickError(null);
+          if (e.target.value === "") sessionRef.current = newSessionId();
           setText(e.target.value);
         }}
         onKeyDown={(e) => {

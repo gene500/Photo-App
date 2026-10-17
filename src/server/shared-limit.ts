@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { prisma } from "./db";
 import { HttpError } from "./http";
 import { hit, isBlocked, POLICIES, resetLimit, type LimitResult, type PolicyName } from "./rate-limit";
@@ -10,6 +11,8 @@ import { hit, isBlocked, POLICIES, resetLimit, type LimitResult, type PolicyName
  */
 
 const disabled = () => process.env.NODE_ENV !== "production" && process.env.RATE_LIMIT_DISABLED === "1";
+/** A key that is safe to store: short keys as they are, anything over 254 characters as its sha256 hex. */
+export const limitKey = (key: string) => (key.length > 254 ? createHash("sha256").update(key).digest("hex") : key);
 const rowKey = (name: PolicyName, key: string) => `${name}:${key}`;
 const fail = (retryAfterMs: number): LimitResult => ({ ok: false, retryAfter: Math.max(1, Math.ceil(retryAfterMs / 1000)) });
 

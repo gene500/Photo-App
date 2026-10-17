@@ -173,6 +173,12 @@ describe("suggestionsRequestSchema", () => {
 });
 
 describe("signupSchema limits", () => {
+  it("rejects an all-whitespace password but allows inner whitespace", () => {
+    expect(signupSchema.safeParse({ email: "a@example.com", password: "        " }).success).toBe(false);
+    expect(signupSchema.safeParse({ email: "a@example.com", password: "\t\n \u00a0 \t \n" }).success).toBe(false);
+    expect(signupSchema.safeParse({ email: "a@example.com", password: "two words here" }).success).toBe(true);
+  });
+
   it("rejects an email longer than 254 characters", () => {
     const email = `${"a".repeat(64)}@${"b".repeat(60)}.${"c".repeat(60)}.${"d".repeat(60)}.${"e".repeat(60)}.com`;
     expect(email.length).toBeGreaterThan(254);

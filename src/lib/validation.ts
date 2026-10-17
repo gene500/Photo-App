@@ -94,6 +94,7 @@ const newPasswordSchema = z
   .string()
   .min(8, "Password must be at least 8 characters")
   .max(200, "Password is too long")
+  .refine((p) => p.trim().length > 0, "Password cannot be only spaces")
   // bcrypt only reads the first 72 bytes, so anything longer would silently not count.
   .refine((p) => new TextEncoder().encode(p).length <= 72, "Password must be at most 72 bytes");
 

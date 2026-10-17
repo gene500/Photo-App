@@ -112,7 +112,8 @@ export async function readBodyBytes(req: Request, maxBytes: number): Promise<Uin
     if (done) break;
     total += value.byteLength;
     if (total > maxBytes) {
-      await reader.cancel().catch(() => undefined);
+      // Not awaited: on a cloned request (tee) the cancel only settles once the other branch is cancelled too.
+      void reader.cancel().catch(() => undefined);
       throw tooLarge();
     }
     chunks.push(value);

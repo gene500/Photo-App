@@ -47,6 +47,7 @@ Last updated 2026-10-16.
 | S4 | Security L6: pin GitHub Actions by commit SHA in `.github/workflows/ci.yml`; check whether a Prisma version without the 4 tooling-only audit advisories exists | pending | |
 | S5 | Security L5: Mapbox tokens: use a separate server `MAPBOX_TOKEN`, URL-restrict `NEXT_PUBLIC_MAPBOX_TOKEN`, set a spend cap | blocked | owner action in the Mapbox and Vercel dashboards (cannot be done from code); steps will be given in the reply. L1 (signup 409) is accepted, no work |
 | U2 | Trip header: Edit trip, Export and Share sit to the right of the trip name on the same line (they wrap under the name in the narrow panel today) | pending | owner 2026-10-16 (screenshot). `src/components/editor/TripHeader.tsx` outer row has `flex-wrap`; brief `u2-brief.md` |
+| U3 | Remove the Optimize note text under the button ("Start time moved to … Can't fit N stops in their light: …") | pending | owner 2026-10-16 (screenshot); removes both sentences; brief `u3-brief.md`; runs after B2 is merged in the same branch, so it is safe to edit that code |
 | B6 | FINAL (always the last row, combined): full codebase check (Opus), handle its findings, then merge, push to `main`, and confirm both Vercel (`photo-app-pi2o`) and CI succeeded | pending | owner 2026-10-16: the final full codebase check always includes merge, push and the Vercel/CI confirmation; nothing goes after it. Replaces the earlier separate B6 (review/merge/push) and B7 (check) rows |
 
 ### Waiting on the owner

@@ -61,16 +61,15 @@ describe("TripHeader", () => {
     expect((screen.getByRole("button", { name: "Export" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("keeps the name and the buttons on one non-wrapping row", () => {
+  it("keeps the name and the buttons on one row, wrapping only when the name would get too narrow", () => {
     render(<TripHeader trip={trip} onSave={vi.fn()} onShareChange={vi.fn()} exportData={{ stops: [], route: null }} />);
     const heading = screen.getByRole("heading", { name: "Sierra loop" });
     expect(heading.getAttribute("title")).toBe("Sierra loop");
     const row = heading.parentElement!;
-    expect(row.className).not.toMatch(/flex-wrap/);
-    expect(row.className).toMatch(/flex-nowrap|\bflex\b/);
+    expect(row.className).toMatch(/\bflex-wrap\b/);
+    expect(heading.className).toMatch(/min-w-\[7ch\]/); // scales with the text size
     const buttons = screen.getByRole("button", { name: "Edit trip" }).parentElement!;
     expect(buttons.parentElement).toBe(row);
-    expect(buttons.className).not.toMatch(/flex-wrap/);
     expect(buttons.className).toMatch(/shrink-0/);
     expect(buttons.contains(screen.getByRole("button", { name: "Export" }))).toBe(true);
     expect(buttons.contains(screen.getByRole("button", { name: "Share" }))).toBe(true);

@@ -8,7 +8,7 @@ export function LegalPage({ title, children }: { title: string; children: ReactN
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-10">
       <nav className="mb-6 text-sm">
-        <Link href="/" className="text-muted underline underline-offset-2">← Photo Op Planner</Link>
+        <Link href="/" className="inline-flex min-h-6 items-center text-muted underline underline-offset-2">← Photo Op Planner</Link>
       </nav>
       <h1 className="text-3xl font-semibold">{title}</h1>
       <p className="mt-1 text-sm text-muted">Last updated {LEGAL_UPDATED}</p>
@@ -16,9 +16,9 @@ export function LegalPage({ title, children }: { title: string; children: ReactN
         {children}
       </div>
       <footer className="mt-10 border-t border-border pt-4 text-sm text-muted">
-        <Link href="/privacy" className="underline underline-offset-2">Privacy</Link>
+        <Link href="/privacy" className="inline-flex min-h-6 items-center underline underline-offset-2">Privacy</Link>
         {" · "}
-        <Link href="/terms" className="underline underline-offset-2">Terms</Link>
+        <Link href="/terms" className="inline-flex min-h-6 items-center underline underline-offset-2">Terms</Link>
       </footer>
     </main>
   );
@@ -27,9 +27,9 @@ export function LegalPage({ title, children }: { title: string; children: ReactN
 export function LegalLinks() {
   return (
     <p className="text-xs text-muted">
-      <Link href="/privacy" className="underline underline-offset-2">Privacy</Link>
+      <Link href="/privacy" className="inline-flex min-h-6 items-center underline underline-offset-2">Privacy</Link>
       {" · "}
-      <Link href="/terms" className="underline underline-offset-2">Terms</Link>
+      <Link href="/terms" className="inline-flex min-h-6 items-center underline underline-offset-2">Terms</Link>
     </p>
   );
 }

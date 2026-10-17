@@ -86,7 +86,7 @@ export function SettingsView({ email, hasPassword = true }: { email: string | nu
           hint={<span data-testid="text-preview">The light is best an hour before sunset, so plan to arrive early.</span>}
         />
         <label className="flex items-start gap-3">
-          <input type="checkbox" checked={settings.reduceMotion} onChange={(e) => update({ reduceMotion: e.target.checked })} className="mt-1 h-4 w-4 accent-[var(--accent-strong)]" />
+          <input type="checkbox" checked={settings.reduceMotion} onChange={(e) => update({ reduceMotion: e.target.checked })} className="h-6 w-6 shrink-0 accent-[var(--accent-strong)]" />
           <span className="text-sm">
             <span className="font-medium">Reduce motion</span>
             <span className="block text-xs text-muted">Turns off animations and transitions. Your device&apos;s own reduce-motion setting is always respected.</span>

@@ -57,7 +57,7 @@ function PriorityPill({ stopId, name, value, onChange }: { stopId: string; name:
     select(next, true);
   };
   return (
-    <div role="radiogroup" aria-label={`Priority for ${name}`} className="relative grid w-48 max-w-full min-w-0 grid-cols-3 rounded-full bg-hover p-0.5 ring-1 ring-border">
+    <div role="radiogroup" aria-label={`Priority for ${name}`} className="relative grid w-48 min-w-[8.5rem] max-w-full grid-cols-3 rounded-full bg-hover p-0.5 ring-1 ring-border">
       <span
         aria-hidden
         data-testid="priority-thumb"
@@ -76,7 +76,7 @@ function PriorityPill({ stopId, name, value, onChange }: { stopId: string; name:
           tabIndex={p === value ? 0 : -1}
           onClick={() => select(i)}
           onKeyDown={onKeyDown}
-          className={`relative min-h-7 min-w-0 truncate rounded-full px-0.5 text-[11px] font-medium focus-visible:outline-2 focus-visible:outline-accent-strong ${p === value ? "text-accent-foreground" : "text-muted hover:text-foreground"}`}
+          className={`relative min-h-7 min-w-[2.75rem] truncate rounded-full px-0.5 text-[11px] font-medium focus-visible:outline-2 focus-visible:outline-accent-strong ${p === value ? "text-accent-foreground" : "text-muted hover:text-foreground"}`}
         >
           {PRIORITY_SHORT[p]}
         </button>
@@ -188,7 +188,7 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
         {weather?.warning && <p data-testid="light-warning" className="text-xs text-sand">{weather.warning}</p>}
         {stop.notes && <p className="truncate text-xs text-muted">{stop.notes}</p>}
         {onPriorityChange && stop.lightPref !== "any" && (
-          <div className="mt-1 flex items-center gap-2 text-[11px] text-muted" title="Priority: how hard Optimize route works to land this stop in its light">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted" title="Priority: how hard Optimize route works to land this stop in its light">
             <span className="shrink-0">Priority</span>
             <PriorityPill stopId={stop.id} name={stop.name} value={stop.priority} onChange={onPriorityChange} />
           </div>

@@ -49,10 +49,10 @@ export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: 
     return (
       // The Export/Share popovers anchor to this header (not their own button), so they stay inside the panel.
       <header className="relative">
-        {/* One row: the name truncates, the buttons keep their size (tighter padding so a short name stays readable in a narrow sidebar). */}
-        <div className="flex items-start justify-between gap-x-1">
-          <h1 title={trip.name} className="min-w-0 flex-1 truncate text-lg font-semibold leading-9">{trip.name}</h1>
-          <div className="flex shrink-0 justify-end [&>button]:px-1.5 [&>div>button]:px-1.5">
+        {/* One row: the name truncates, the buttons keep their size (tighter padding so a short name stays readable in a narrow sidebar). The buttons only drop to a second line when the name would get narrower than about 7 characters (narrow phone or large text); the minimum is in ch so it scales with the text size. */}
+        <div className="flex flex-wrap items-start justify-between gap-x-1">
+          <h1 title={trip.name} className="min-w-[7ch] grow basis-[7ch] truncate text-lg font-semibold leading-9">{trip.name}</h1>
+          <div className="ml-auto flex max-w-full shrink-0 flex-wrap justify-end [&>button]:whitespace-nowrap [&>button]:px-1.5 [&>div>button]:whitespace-nowrap [&>div>button]:px-1.5">
             <button type="button" onClick={beginEdit} className={btnGhost}>Edit trip</button>
             {exportData && <ExportControl tripName={trip.name} plannedDate={trip.plannedDate} stops={exportData.stops} route={exportData.route} pdf={exportData.pdf} />}
             {onShareChange && <ShareControl tripId={trip.id} shareToken={trip.shareToken} onChange={onShareChange} />}

@@ -52,14 +52,15 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, suggestio
       data-snap={snap}
       className={`absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-2xl bg-surface text-foreground shadow-2xl ring-1 ring-border lg:inset-x-auto lg:left-3 lg:top-3 lg:w-[22.5rem] lg:rounded-2xl ${SNAP_CLASS[snap]}`}
     >
-      <div className="flex items-start gap-2 px-4 pb-1 pt-3">
+      {/* Wraps (arrows drop below) only when the header could not keep a readable width beside them, e.g. 200% text on a phone. */}
+      <div className="flex flex-wrap items-start gap-x-2 px-4 pb-1 pt-3">
         {open ? (
-          <div className="min-w-0 flex-1">{header}</div>
+          <div className="min-w-[8rem] flex-1">{header}</div>
         ) : (
           <p className="min-w-0 flex-1 truncate py-2 text-sm font-medium">{collapsedSummary}</p>
         )}
         {/* One arrow per direction, so the arrow always does what it says. */}
-        <div className="flex shrink-0">
+        <div className="ml-auto flex shrink-0">
           {SMALLER[snap] && (
             <button type="button" aria-label="Shrink panel" onClick={() => setSnap(SMALLER[snap]!)} className={arrowClass}>
               ▾

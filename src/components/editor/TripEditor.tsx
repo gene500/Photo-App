@@ -619,15 +619,17 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const cardStop = cardIndex >= 0 ? stops[cardIndex] : null;
   const drawerStop = stops.find((s) => s.id === drawerId) ?? null;
   // Memoised: the real map redraws its sky lines whenever this object's identity changes.
+  // The open drawer's stop wins over the map card's, so a stop opened from the list gets its lines too.
+  const skyStop = drawerStop ?? cardStop;
   const sky = useMemo(() => {
-    if (!cardStop || !/^\d{4}-\d{2}-\d{2}$/.test(trip.plannedDate)) return null;
+    if (!skyStop || !/^\d{4}-\d{2}-\d{2}$/.test(trip.plannedDate)) return null;
     try {
-      const info = getSkyInfo(cardStop.lat, cardStop.lng, trip.plannedDate);
-      return { lat: cardStop.lat, lng: cardStop.lng, sunrise: info.sunrise?.bearing ?? null, sunset: info.sunset?.bearing ?? null };
+      const info = getSkyInfo(skyStop.lat, skyStop.lng, trip.plannedDate);
+      return { lat: skyStop.lat, lng: skyStop.lng, sunrise: info.sunrise?.bearing ?? null, sunset: info.sunset?.bearing ?? null };
     } catch {
       return null;
     }
-  }, [cardStop, trip.plannedDate]);
+  }, [skyStop, trip.plannedDate]);
   const freshAlternatives = alternativesState?.stopId === drawerId && alternativesState.key === waypointKey ? alternativesState : null;
 
   return (

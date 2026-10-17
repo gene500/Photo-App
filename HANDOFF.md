@@ -36,7 +36,7 @@ Last updated 2026-10-16.
 | # | Task | Status | Notes |
 |---|---|---|---|
 | B1 | Loop routes keep the corridor hole (`corridor.ts`) | completed | `c66e340` on `fix/sweep2-bugs`; Overpass results are post-filtered (the `poly:` filter takes no holes), so a dense loop interior can still use up the 500-element cap: a set difference in the query would be the full fix |
-| B2 | Optimize keeps a saved start time that already works | completed (e2e regression being fixed) | `116950b`, reviewed and approved |
+| B2 | Optimize keeps a saved start time that already works | completed | `116950b` + `22dff14` (fix: search window back to sunrise, saved start only wins ties; the e2e caught the first version), reviewed and approved |
 | B3 | Trip date change across DST keeps the clock time | completed | `33956a0`, reviewed and approved |
 | B4 | `reorderStops` answers 404/409, not 500, on a race | completed | `1da4d5f`, reviewed and approved; answers 409 |
 | B5 | Date-line wrap in `cellsForCircle`; `saveTripCopy` orphan | completed | `e1ba19b`, reviewed and approved; parked low items: a place at exactly lng 180.0 is missed (make `cellOf` wrap), weak mid-longitude test, untested had-entry save path |
@@ -46,7 +46,7 @@ Last updated 2026-10-16.
 | S3 | Security L4: clear offline trip copies when a page finds there is no session (`src/lib/offline-store.ts`) | completed | `88fc5ee`, reviewed and approved (adds signup coverage; login already cleared). |
 | S4 | Security L6: pin GitHub Actions by commit SHA in `.github/workflows/ci.yml`; check whether a Prisma version without the 4 tooling-only audit advisories exists | completed | `0a21928`, reviewed and approved; Prisma 7.10.1 clears the 4 advisories, CI audit now fails on high. |
 | S5 | Security L5: Mapbox tokens: use a separate server `MAPBOX_TOKEN`, URL-restrict `NEXT_PUBLIC_MAPBOX_TOKEN`, set a spend cap | blocked | owner action in the Mapbox and Vercel dashboards (cannot be done from code); steps will be given in the reply. L1 (signup 409) is accepted, no work |
-| U2 | Trip header: Edit trip, Export and Share sit to the right of the trip name on the same line (they wrap under the name in the narrow panel today) | pending | owner 2026-10-16 (screenshot). `src/components/editor/TripHeader.tsx` outer row has `flex-wrap`; brief `u2-brief.md` |
+| U2 | Trip header: Edit trip, Export and Share sit to the right of the trip name on the same line (they wrap under the name in the narrow panel today) | in progress | owner 2026-10-16 (screenshot). `src/components/editor/TripHeader.tsx` outer row has `flex-wrap`; brief `u2-brief.md` |
 | U3 | Remove the Optimize note text under the button ("Start time moved to … Can't fit N stops in their light: …") | pending | owner 2026-10-16 (screenshot); removes both sentences; brief `u3-brief.md`; runs after B2 is merged in the same branch, so it is safe to edit that code |
 | U4 | Undo beside Optimize route looks like a button (it is plain grey text today) | pending | owner 2026-10-16 (screenshot); `TripEditor.tsx` ~745-755; brief `u4-brief.md` |
 | U5 | "Misses golden hour" and "likely washed out" warning text is beige instead of orange-pink, and the End badge no longer breaks the last stop text layout (new token; real errors keep the danger colour) | pending | owner 2026-10-16 (screenshot); brief `u5-brief.md` |

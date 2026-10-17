@@ -7,6 +7,7 @@ and `PROGRESS.md` over memory. The sections after "Current work" are history.
 ## Task board
 
 Statuses: pending, in progress, completed, blocked, removed. Exactly one item is in progress at a time.
+Ordering rule (owner, 2026-10-16): anything added goes toward the end of the list, in the order asked; the absolute final row of every list is always a full codebase check (Opus), and nothing goes after it.
 Last updated 2026-10-16.
 
 ### PDF itinerary (feature branch `feat/pdf-itinerary`, worktree `/Users/genestone/photo-pdf-itinerary`)
@@ -38,7 +39,9 @@ Last updated 2026-10-16.
 | B3 | Trip date change across DST keeps the clock time | pending | |
 | B4 | `reorderStops` answers 404/409, not 500, on a race | pending | |
 | B5 | Date-line wrap in `cellsForCircle`; `saveTripCopy` orphan | pending | |
+| U1 | Priority control becomes a tappable pill split into thirds (no dragging) | pending | owner request 2026-10-16 (screenshot of the Stops list); `src/components/editor/StopList.tsx` |
 | B6 | Final Opus review of the branch, merge, push, then confirm Vercel and CI succeeded | pending | the owner asked for explicit confirmation that the deploy succeeded |
+| B7 | FINAL: full codebase check (Opus) on the merged result | pending | always the last row; nothing goes after it |
 
 ### Waiting on the owner
 

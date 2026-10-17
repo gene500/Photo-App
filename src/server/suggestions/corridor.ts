@@ -99,7 +99,11 @@ function splitAtDateLine(shape: CorridorShape): CorridorShape[] {
 export function buildCorridorShapes(route: LngLat[], radiusKm: number = CORRIDOR_KM): CorridorShape[] {
   if (route.length < 2) throw new CorridorError("Route needs at least 2 coordinates");
   try {
-    return splitAtDateLine(buildShapeNear(unwrapRoute(route), radiusKm));
+    const flat = unwrapRoute(route);
+    // A route that winds more than once round the globe (near a pole) overlaps itself once unwrapped; no corridor is built for it.
+    const xs = flat.map((p) => p[0]);
+    if (Math.max(...xs) - Math.min(...xs) > 360) throw new CorridorError("Route winds more than once around the globe");
+    return splitAtDateLine(buildShapeNear(flat, radiusKm));
   } catch (e) {
     throw e instanceof CorridorError ? e : new CorridorError(e instanceof Error ? e.message : "Could not build a route corridor");
   }

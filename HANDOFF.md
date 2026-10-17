@@ -26,14 +26,14 @@ Last updated 2026-10-16.
 | P11 | Sweep 1: full-codebase check (Opus) | completed | fixes `7de1487`; parked: weather lib->hook coupling, shared stop-mapping helper, jsPDF optional deps, config drift, per-stop weather requests, thin tests | whole repo on the feature branch; read-only report, fixes ruled and applied after |
 | P12 | Sweep 2: bug sweep (Opus) | completed | PDF fixes `c432c60` (NFC accents, 6 s weather cap, note when times missing); older bugs listed in W5 | run after P11, one at a time |
 | P13 | Sweep 3: security sweep (Opus) | completed | no Critical/High/Medium; six Low items recorded in W6, none needing PDF code changes | run after P12; include auth, share links, CSP, the Mapbox token, PDF/static-map inputs |
-| P14 | Merge `feat/pdf-itinerary` into `main`, push, check Vercel and CI | in progress | merge locally first, run the gates on merged `main`, then wait for the owner's "push" | push only when the owner says "push" |
-| P15 | Clear `~/.playwright-mcp` | pending | |
+| P14 | Merge `feat/pdf-itinerary` into `main`, push, check Vercel and CI | in progress | merged locally into `main` as `7b2a928`; gates on merged `main` are green (typecheck, lint, 1115 unit tests, all 27 e2e); waiting only for the owner's "push" | push only when the owner says "push" |
+| P15 | Clear `~/.playwright-mcp` | completed | |
 
 ### Waiting on the owner
 
 | # | Task | Status | Notes |
 |---|---|---|---|
-| W1 | Push local `main` to GitHub | pending | `git log origin/main..main` lists what is waiting (speed-up merge, test fix, PDF spec/plan, handoff) |
+| W1 | Push local `main` to GitHub (includes the merged PDF feature) | pending | `git log origin/main..main` lists what is waiting (speed-up merge, test fix, PDF spec/plan, handoff) |
 | W2 | Delete leftover branch `worktree-agent-a22e92e8e241870c4` | pending | owner's decision |
 | W3 | Share link opens the generic page, not the shared trip (reported 2026-10-14) | blocked | not reproduced locally or live; need the device used and what the page showed. Hypotheses: installed PWA capturing the link (manifest `start_url` is `/trips`), mangled token, production data |
 | W6 | Low security findings from Sweep 3 (all pre-existing or config) | pending | L1 signup 409 reveals registered emails (known gap, needs email channel); L2 per-email login limit can be overshot by parallel requests (`src/server/auth.ts:15-19`, record the attempt before bcrypt); L3 a Google-only account can be deleted by typing its email and the prompt shows the email (`src/server/users.ts:136`, `SignOutButton.tsx:83`); L4 offline copies persist after a session ends without explicit sign-out (`src/lib/offline-store.ts`); L5 use a separate server Mapbox token and URL-restrict `NEXT_PUBLIC_MAPBOX_TOKEN` (share-page visitors can now trigger Static Images calls with the public token, so also set the Mapbox spend cap); L6 pin GitHub Actions by SHA, upgrade Prisma when a fix for the 4 high tooling-only audit advisories ships |

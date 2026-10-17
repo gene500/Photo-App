@@ -2,10 +2,10 @@ import type { PhotoType } from "@/lib/photo-rules";
 
 /**
  * Upload hygiene without an image library: each format is walked structurally (so truncated or odd files are refused),
- * its size limits are checked, and everything that can carry metadata is dropped (EXIF/GPS, XMP, IPTC, comments, text
+ * its size limits are checked, and everything that can carry metadata is dropped (EXIF/GPS, XMP, IPTC, comments, unknown WebP chunks, text
  * and time chunks, trailing bytes). The pixel data is copied untouched, so there is no re-encode and no quality loss.
  */
-export const MAX_PHOTO_SIDE = 12000;
+export const MAX_PHOTO_SIDE = 30000;
 export const MAX_PHOTO_PIXELS = 50_000_000;
 
 export type SanitizedPhoto = { ok: true; bytes: Uint8Array; width: number; height: number } | { ok: false; error: string };
@@ -209,6 +209,8 @@ function sanitizePng(b: Uint8Array): SanitizedPhoto {
 
 // ---- WebP ----
 
+const WEBP_KEEP = new Set(["VP8 ", "VP8L", "ALPH", "ANIM", "ANMF", "ICCP"]); // VP8X is handled apart
+
 function sanitizeWebp(b: Uint8Array): SanitizedPhoto {
   if (b.length < 20 || !startsWith(b, 0, "RIFF") || !startsWith(b, 8, "WEBP")) return BAD;
   const total = le32(b, 4) + 8;
@@ -230,8 +232,8 @@ function sanitizeWebp(b: Uint8Array): SanitizedPhoto {
       const fixed = Uint8Array.from(b.subarray(pos, end));
       fixed[8] &= ~0x0c; // EXIF and XMP flags
       parts.push(fixed);
-    } else if (name === "EXIF" || name === "XMP ") {
-      // metadata: dropped
+    } else if (!WEBP_KEEP.has(name)) {
+      // EXIF, XMP and any unknown (vendor) chunk: dropped
     } else {
       if (name === "VP8 ") {
         if (len < 10 || data[3] !== 0x9d || data[4] !== 0x01 || data[5] !== 0x2a) return BAD;

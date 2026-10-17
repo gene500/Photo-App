@@ -90,6 +90,12 @@ describe("sanitizePhoto: JPEG", () => {
     expect([...r.bytes.slice(-2)]).toEqual([0xff, 0xd9]);
     expect([...dht].every((v) => out.includes(String.fromCharCode(v)))).toBe(true);
   });
+  it("accepts a very wide panorama up to 30000 px per side while the 50 megapixel cap stays", () => {
+    expect(MAX_PHOTO_SIDE).toBe(30000);
+    expect(sanitizePhoto(jpeg({ w: 20000, h: 2000 }), "image/jpeg").ok).toBe(true);
+    expect(sanitizePhoto(jpeg({ w: 30000, h: 1000 }), "image/jpeg").ok).toBe(true);
+    expect(sanitizePhoto(jpeg({ w: 20000, h: 3000 }), "image/jpeg").ok).toBe(false); // 60 MP
+  });
   it("rejects truncated, frame-less and oversized files", () => {
     expect(sanitizePhoto(jpeg().slice(0, 30), "image/jpeg").ok).toBe(false);
     expect(sanitizePhoto(u8([0xff, 0xd8, 0xff, 0xd9]), "image/jpeg").ok).toBe(false);
@@ -163,6 +169,15 @@ describe("sanitizePhoto: WebP", () => {
     const bits = w | (h << 14);
     const lossless = sanitizePhoto(riff(wchunk("VP8L", [0x2f, ...le32(bits).slice(0, 4), 0])), "image/webp");
     expect(lossless.ok && [lossless.width, lossless.height]).toEqual([33, 22]);
+  });
+  it("drops unknown vendor chunks but keeps the allow-listed ones", () => {
+    const r = sanitizePhoto(riff(vp8x(0x20, 64, 48), wchunk("ICCP", [1, 2, 3, 4]), wchunk("VNDR", [...u8("SECRETGPS")]), vp8(64, 48)), "image/webp");
+    if (!r.ok) throw new Error(r.error);
+    const out = text(r.bytes);
+    expect(out).not.toContain("VNDR");
+    expect(out).not.toContain("SECRETGPS");
+    expect(out).toContain("ICCP");
+    expect(out).toContain("VP8 ");
   });
   it("rejects a bad RIFF size, a chunk running past the end, no image chunk and oversized dimensions", () => {
     const good = riff(vp8(10, 10));

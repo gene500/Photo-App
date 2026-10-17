@@ -16,14 +16,7 @@ Last updated 2026-10-17.
 | # | Task | Status | Notes |
 |---|---|---|---|
 | S5 | Security L5: Mapbox tokens: use a separate server `MAPBOX_TOKEN`, URL-restrict `NEXT_PUBLIC_MAPBOX_TOKEN`, set a spend cap | blocked | owner action in the Mapbox and Vercel dashboards (cannot be done from code); steps will be given in the reply. L1 (signup 409) is accepted, no work |
-| G1 | Login lockout can be abused to lock out a victim: key lockout by email + client IP (plus a high per-email cap that only slows, never locks) | pending | ruling by controller; owner said fix all deferred items |
-| G2 | Stop notes are visible on public share links and the share PDF: hide notes from share page, share API and share PDF (owner still sees them) | pending | ruling: private by default |
-| G3 | Non-Latin text in the PDF (Cyrillic, Greek, extended Latin, Vietnamese at least): embed a Unicode font loaded only on click; unsupported scripts get a clear placeholder, not garbage | pending | report honestly which scripts work |
-| G4 | Header at 320 px: shorten the button labels so a 9+ character trip name stays on one row with the buttons | pending | ruling: shorter labels, not a cut-off name |
-| G5 | Geo and time lows: place at exactly lng 180, routes winding >360 degrees around a pole, route-level corridor 400 test, server API-only DST shift, departAt vs plannedDate validation, spring-forward gap | pending | |
-| G6 | Photo, UI and auth lows: photo EXIF stripping and deeper JPEG validation, Escape in the stop drawer must not discard edits silently, offline temporary-deletion window, delete-account and sign-out-everywhere `void signOut`, sign-out server 500 counted as success, tab/newline in names become spaces and LRM/RLM/ALM/U+2028/2029 stripped, unused `freeText` label | pending | |
-| G7 | PDF and API lows: tests for `saveBlob`, `mapTokenFromEnv`, `createItineraryPdf`, title page-break check, PDF error alert visible without the Export menu open, TripEditor `pdf` prop test, share-page PDF arrival times; Flickr quota: cache and per-user limit on the popularity route | pending | |
-| B7 | FINAL (always the last row, combined): full codebase check (Opus), handle its findings, then merge, push to `main`, and confirm both Vercel (`photo-app-pi2o`) and CI succeeded | pending | standing row for the next batch of work. Last run: pushed `2fa85d1` (break-test fixes + landmark search), Vercel and CI both succeeded. Owner follow-ups: try landmark search once on the live site with the real Mapbox token; check whether Mapbox Search Box terms allow storing results as stops (storage rights); header trade-off at 320 px; deferred break-test items are listed in Known gaps |
+| B7 | FINAL (always the last row, combined): full codebase check (Opus), handle its findings, then merge, push to `main`, and confirm both Vercel (`photo-app-pi2o`) and CI succeeded | pending | standing row for the next batch of work. Last run: deferred fixes G1-G7 merged and pushed (see git log); owner follow-ups: try landmark search once on the live site; re-run `import-places` so places at exactly lng 180.0 become reachable |
 
 ### Place search (P1)
 

@@ -33,7 +33,7 @@ describe("white surfaces set their own text colour", () => {
     expect(screen.getByRole("region", { name: "Selected stop" }).className).toContain("text-foreground");
   });
   it("StopDrawer", () => {
-    render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
     expect(screen.getByRole("dialog").className).toContain("text-foreground");
   });
   it("StopList rows", () => {

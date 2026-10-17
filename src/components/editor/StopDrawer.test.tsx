@@ -25,7 +25,7 @@ describe("StopDrawer", () => {
   it("shows the poor-light warning as plain text with no actions, and follows the Best light control", async () => {
     const arrival = new Date("2026-07-01T20:00:00Z");
     useWeatherLine.mockImplementation((_a, _b, _at, pref) => ({ text: "cloudy", quality: "poor", warning: `${pref}: 85% cloud, likely washed out` }));
-    render(<StopDrawer stop={stop} arrival={arrival} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} arrival={arrival} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
     const badge = screen.getByTestId("light-warning");
     expect(badge.textContent).toBe("any: 85% cloud, likely washed out");
     expect(badge.querySelector("button")).toBeNull();
@@ -36,17 +36,17 @@ describe("StopDrawer", () => {
 
   it("shows no warning badge when the line has no warning or there is no forecast", () => {
     useWeatherLine.mockReturnValue({ text: "clear", quality: "good" });
-    const { rerender } = render(<StopDrawer stop={stop} arrival={new Date()} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    const { rerender } = render(<StopDrawer plannedDate="2026-07-01" stop={stop} arrival={new Date()} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
     expect(screen.queryByTestId("light-warning")).toBeNull();
     useWeatherLine.mockReturnValue(null);
-    rerender(<StopDrawer stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    rerender(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
     expect(screen.queryByTestId("light-warning")).toBeNull();
   });
 
   it("saves edits (blank notes become null) and closes", async () => {
     const onSave = vi.fn(async () => {});
     const onClose = vi.fn();
-    render(<StopDrawer stop={stop} onClose={onClose} onSave={onSave} onPhotoChange={vi.fn()} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={onClose} onSave={onSave} onPhotoChange={vi.fn()} />);
     await userEvent.type(screen.getByLabelText("Notes"), "   ");
     await userEvent.click(screen.getByLabelText("Visited"));
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -57,8 +57,8 @@ describe("StopDrawer", () => {
 
   it("sends only the fields changed in the drawer, so a Visited tick made elsewhere is not undone", async () => {
     const onSave = vi.fn(async () => {});
-    const { rerender } = render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
-    rerender(<StopDrawer stop={{ ...stop, visited: true }} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />); // ticked in the list
+    const { rerender } = render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    rerender(<StopDrawer plannedDate="2026-07-01" stop={{ ...stop, visited: true }} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />); // ticked in the list
     await userEvent.type(screen.getByLabelText("Notes"), "Golden light at 7");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).toHaveBeenCalledWith({ notes: "Golden light at 7" });
@@ -66,7 +66,7 @@ describe("StopDrawer", () => {
 
   it("saves a changed best light and time here", async () => {
     const onSave = vi.fn(async () => {});
-    render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
     await userEvent.selectOptions(screen.getByLabelText("Best light"), "sunset");
     const dwell = screen.getByLabelText("Time here (min)");
     await userEvent.clear(dwell);
@@ -77,7 +77,7 @@ describe("StopDrawer", () => {
 
   it("rejects a time here outside 0 to 480 minutes", async () => {
     const onSave = vi.fn(async () => {});
-    render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
     const dwell = screen.getByLabelText("Time here (min)");
     await userEvent.clear(dwell);
     await userEvent.type(dwell, "500");
@@ -88,7 +88,7 @@ describe("StopDrawer", () => {
 
   it("adds checklist items with Enter, ticks and deletes them, and saves the whole list", async () => {
     const onSave = vi.fn(async () => {});
-    render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
     const add = screen.getByLabelText("Add a shot");
     await userEvent.type(add, "Wide from the rail{Enter}");
     await userEvent.type(add, "Detail of bark{Enter}");
@@ -106,13 +106,13 @@ describe("StopDrawer", () => {
 
   it("keeps a typed but unconfirmed shot on save and ignores blank ones", async () => {
     const onSave = vi.fn(async () => {});
-    const { unmount } = render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    const { unmount } = render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
     await userEvent.type(screen.getByLabelText("Add a shot"), "Last light");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).toHaveBeenCalledWith({ shotChecklist: [{ text: "Last light", done: false }] });
     unmount();
     onSave.mockClear();
-    render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
     await userEvent.type(screen.getByLabelText("Add a shot"), "   {Enter}");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).not.toHaveBeenCalled();
@@ -121,7 +121,7 @@ describe("StopDrawer", () => {
   it("shows existing shots and sends nothing when they are untouched", async () => {
     const onSave = vi.fn(async () => {});
     const withShots = { ...stop, shotNotes: "Golden hour", shotChecklist: [{ text: "Silhouette", done: true }] };
-    render(<StopDrawer stop={withShots} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={withShots} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
     expect((screen.getByLabelText("Silhouette") as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText("Shot notes") as HTMLTextAreaElement).value).toBe("Golden hour");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
@@ -130,12 +130,12 @@ describe("StopDrawer", () => {
 
   it("stops accepting shots at 20", async () => {
     const full = { ...stop, shotChecklist: Array.from({ length: 20 }, (_, i) => ({ text: `s${i}`, done: false })) };
-    render(<StopDrawer stop={full} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={full} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
     expect((screen.getByLabelText("Add a shot") as HTMLInputElement).disabled).toBe(true);
   });
 
   it("labels an existing photo as the reference photo", () => {
-    render(<StopDrawer stop={{ ...stop, photoUrl: "/api/uploads/x.png" }} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={{ ...stop, photoUrl: "/api/uploads/x.png" }} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
     expect(screen.getByText("Reference photo")).toBeTruthy();
     expect(screen.getByAltText("Reference for Tunnel View")).toBeTruthy();
   });
@@ -143,7 +143,7 @@ describe("StopDrawer", () => {
   it("closes without saving when nothing changed", async () => {
     const onSave = vi.fn(async () => {});
     const onClose = vi.fn();
-    render(<StopDrawer stop={stop} onClose={onClose} onSave={onSave} onPhotoChange={vi.fn()} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={onClose} onSave={onSave} onPhotoChange={vi.fn()} />);
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalled();
@@ -151,7 +151,7 @@ describe("StopDrawer", () => {
 
   it("shows save errors and stays open", async () => {
     const onClose = vi.fn();
-    render(<StopDrawer stop={stop} onClose={onClose} onSave={vi.fn(async () => { throw new Error("Stop not found"); })} onPhotoChange={vi.fn()} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={onClose} onSave={vi.fn(async () => { throw new Error("Stop not found"); })} onPhotoChange={vi.fn()} />);
     await userEvent.type(screen.getByLabelText("Name"), "!");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect((await screen.findByRole("alert")).textContent).toContain("Stop not found");
@@ -159,7 +159,7 @@ describe("StopDrawer", () => {
   });
 
   it("rejects an oversized photo before uploading", async () => {
-    render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
     const big = new File([new Uint8Array(MAX_PHOTO_BYTES + 1)], "big.png", { type: "image/png" });
     await userEvent.upload(screen.getByLabelText("Upload photo"), big);
     expect((await screen.findByRole("alert")).textContent).toContain("Photo must be 4 MB or smaller");
@@ -168,7 +168,7 @@ describe("StopDrawer", () => {
 
   it("rejects a non-image type before uploading", async () => {
     const user = userEvent.setup({ applyAccept: false });
-    render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
     await user.upload(screen.getByLabelText("Upload photo"), new File(["x"], "a.txt", { type: "text/plain" }));
     expect((await screen.findByRole("alert")).textContent).toContain("JPEG, PNG, or WebP");
   });
@@ -177,7 +177,7 @@ describe("StopDrawer", () => {
     const updated = { ...stop, photoUrl: "/api/uploads/x.png" };
     vi.mocked(api.uploadPhoto).mockResolvedValue({ stop: updated });
     const onPhotoChange = vi.fn();
-    render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={onPhotoChange} />);
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={onPhotoChange} />);
     const file = new File([new Uint8Array([0x89, 0x50])], "a.png", { type: "image/png" });
     await userEvent.upload(screen.getByLabelText("Upload photo"), file);
     expect(api.uploadPhoto).toHaveBeenCalledWith("s1", file);
@@ -187,7 +187,7 @@ describe("StopDrawer", () => {
   describe("modal behaviour", () => {
     it("closes on Escape", async () => {
       const onClose = vi.fn();
-      render(<StopDrawer stop={stop} onClose={onClose} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+      render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={onClose} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
       await userEvent.keyboard("{Escape}");
       expect(onClose).toHaveBeenCalledTimes(1);
     });
@@ -196,7 +196,7 @@ describe("StopDrawer", () => {
       const opener = document.createElement("button");
       document.body.append(opener);
       opener.focus();
-      const { unmount } = render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+      const { unmount } = render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
       expect(screen.getByRole("dialog").contains(document.activeElement)).toBe(true);
       unmount();
       expect(document.activeElement).toBe(opener);
@@ -204,7 +204,7 @@ describe("StopDrawer", () => {
     });
 
     it("keeps Tab and Shift+Tab inside the drawer", async () => {
-      render(<StopDrawer stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+      render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
       const dialog = screen.getByRole("dialog");
       const close = screen.getByRole("button", { name: "Close" });
       const save = screen.getByRole("button", { name: "Save" });
@@ -215,5 +215,13 @@ describe("StopDrawer", () => {
       expect(document.activeElement).toBe(save);
       expect(dialog.contains(document.activeElement)).toBe(true);
     });
+  });
+});
+
+describe("StopDrawer sky card", () => {
+  it("shows the sun and moon card for the stop and planned date", () => {
+    useWeatherLine.mockReturnValue(null);
+    render(<StopDrawer stop={stop} plannedDate="2026-07-01" onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    expect(screen.getByTestId("sky-card")).toBeTruthy();
   });
 });

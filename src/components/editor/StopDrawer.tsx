@@ -8,11 +8,14 @@ import { useWeatherLine } from "@/lib/use-weather";
 import { checkPhotoFile, PHOTO_TYPES } from "@/lib/photo-rules";
 import type { LightPref, ShotItem, Stop, Suggestion } from "@/lib/types";
 import { AlternativesPanel } from "./AlternativesPanel";
+import { SkyCard } from "./SkyCard";
 import type { SuggestionsStatus } from "./SuggestionsPanel";
 import { MAX_DWELL_MINUTES, MAX_SHOT_ITEMS, MAX_SHOT_NOTES, MAX_SHOT_TEXT, type StopPatch } from "@/lib/validation";
 
 type Props = {
   stop: Stop;
+  /** The trip date (YYYY-MM-DD); the sky card shows sun and moon for this day at the stop. */
+  plannedDate: string;
   /** When the trip reaches this stop; lets the drawer warn if the chosen light is forecast to be poor. */
   arrival?: Date | null;
   onClose: () => void;
@@ -32,7 +35,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
-export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives, arrival }: Props) {
+export function StopDrawer({ stop, plannedDate, onClose, onSave, onPhotoChange, alternatives, arrival }: Props) {
   const [initial] = useState({ name: stop.name, notes: stop.notes ?? null, visited: stop.visited, lightPref: stop.lightPref, dwellMinutes: stop.dwellMinutes, shotNotes: stop.shotNotes, shotChecklist: JSON.stringify(stop.shotChecklist) });
   const [name, setName] = useState(stop.name);
   const [notes, setNotes] = useState(stop.notes ?? "");
@@ -189,6 +192,7 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives,
         </label>
       </div>
       {weather?.warning && <p data-testid="light-warning" className="text-xs text-danger">{weather.warning}</p>}
+      <SkyCard lat={stop.lat} lng={stop.lng} plannedDate={plannedDate} />
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">Shot list</legend>
         <label className="block">

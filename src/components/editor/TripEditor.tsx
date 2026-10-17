@@ -768,6 +768,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         <StopDrawer
           key={drawerStop.id}
           stop={drawerStop}
+          plannedDate={trip.plannedDate}
           onClose={() => setDrawerId(null)}
           onSave={async (patch) => mergeStop((await api.updateStop(drawerStop.id, patch)).stop, Object.keys(patch) as (keyof Stop)[])}
           onPhotoChange={(stop) => mergeStop(stop, ["photoUrl"])}

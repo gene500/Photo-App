@@ -11,6 +11,13 @@ export class InvalidReorderError extends Error {
   }
 }
 
+export class StopsChangedError extends Error {
+  constructor() {
+    super("The trip's stops changed; reload and try again");
+    this.name = "StopsChangedError";
+  }
+}
+
 export class TooManyStopsError extends Error {
   constructor() {
     super(`A trip can have at most ${MAX_ROUTE_WAYPOINTS} stops`);
@@ -145,9 +152,14 @@ export async function reorderStops(
   ) {
     throw new InvalidReorderError();
   }
-  await prisma.$transaction(
-    stopIds.map((id, order) => prisma.stop.update({ where: { id }, data: { order } })),
-  );
+  try {
+    await prisma.$transaction(
+      stopIds.map((id, order) => prisma.stop.update({ where: { id }, data: { order } })),
+    );
+  } catch (e) {
+    if (typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2025") throw new StopsChangedError();
+    throw e;
+  }
   const rows = await prisma.stop.findMany({ where: { tripId }, orderBy: { order: "asc" } });
   return rows.map(toStopDto);
 }

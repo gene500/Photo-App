@@ -23,3 +23,14 @@ export function localDateOnly(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
+
+/**
+ * The same clock time in the viewer's own time zone on `to`, for a start time saved on `from` (both "YYYY-MM-DD").
+ * Moves by calendar days rather than 24 h blocks, so a daylight-saving change in between does not shift the hour.
+ */
+export function shiftDepartAtLocal(departAt: string, from: string, to: string): string {
+  const days = Math.round((dateOnlyToUtc(to).getTime() - dateOnlyToUtc(from).getTime()) / 86_400_000);
+  const d = new Date(departAt);
+  d.setDate(d.getDate() + days);
+  return d.toISOString();
+}

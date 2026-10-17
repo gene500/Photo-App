@@ -29,6 +29,7 @@ describe("StopDrawer", () => {
     const badge = screen.getByTestId("light-warning");
     expect(badge.textContent).toBe("any: 85% cloud, likely washed out");
     expect(badge.querySelector("button")).toBeNull();
+    expect(badge.className).toContain("text-sand");
     await userEvent.selectOptions(screen.getByLabelText("Best light"), "sunset");
     expect(useWeatherLine).toHaveBeenLastCalledWith(37.7156, -119.6773, arrival, "sunset");
     expect(screen.getByTestId("light-warning").textContent).toBe("sunset: 85% cloud, likely washed out");

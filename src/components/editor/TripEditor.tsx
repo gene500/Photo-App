@@ -46,6 +46,11 @@ type Pending = LatLng & { name: string; source: StopSource; osmId?: string; ligh
 const NO_SUGGESTIONS: Suggestion[] = [];
 const errorMessage = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
+/** True when both are the same moment (or both absent), whatever their ISO spelling. */
+function sameInstant(a: string | null, b: string | null): boolean {
+  return a === b || (a !== null && b !== null && Date.parse(a) === Date.parse(b));
+}
+
 export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops; /** Signed-in user; enables the offline copy. */ userId?: string }) {
   const { stops: initialStops, ...initialFields } = initialTrip;
   const { settings } = useSettings();
@@ -361,6 +366,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const result = await api.optimizeOrder(before.map((s): LngLat => [s.lng, s.lat]), {
         stops: before.map((s) => ({ lightPref: s.lightPref, priority: s.priority, dwellMinutes: s.dwellMinutes })),
         plannedDate: trip.plannedDate,
+        ...(previousDepartAt ? { departAt: previousDepartAt } : {}),
       });
       if (
         idsKeyRef.current !== startKey ||
@@ -381,7 +387,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       // null means no stop has a light preference: leave the departure alone.
       const nextDepartAt = result.departAt ?? previousDepartAt;
       const orderChanged = ids.join(",") !== startKey;
-      const departChanged = nextDepartAt !== previousDepartAt;
+      const departChanged = !sameInstant(nextDepartAt, previousDepartAt);
       if (!orderChanged && !departChanged) {
         setOptimizeNote({ text: ["Already the fastest order", missNote].filter(Boolean).join(". "), idsKey: startKey });
         return;
@@ -399,7 +405,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       }
       setUndo({ previousIds, appliedIds: ids, previousDepartAt, appliedDepartAt });
       // Say so when the start time moved, so the change in the Start time field is not a surprise.
-      const moveNote = appliedDepartAt !== previousDepartAt && appliedDepartAt ? `Start time moved to ${formatClock(new Date(appliedDepartAt), undefined, settings.timeFormat)} so stops land in their light` : null;
+      const moveNote = !sameInstant(appliedDepartAt, previousDepartAt) && appliedDepartAt ? `Start time moved to ${formatClock(new Date(appliedDepartAt), undefined, settings.timeFormat)} so stops land in their light` : null;
       const note = [moveNote, missNote].filter(Boolean).join(". ");
       if (note) setOptimizeNote({ text: note, idsKey: ids.join(",") });
     } catch (e) {
@@ -741,14 +747,17 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                 {optimizing ? "Optimizing…" : "Optimize route"}
               </button>
               {canUndo && undo && (
-                <button type="button" onClick={() => void undoOptimize()} className={btnGhost}>
+                <button
+                  type="button"
+                  onClick={() => void undoOptimize()}
+                  className="inline-flex min-h-9 items-center rounded-full bg-hover px-4 text-sm font-medium text-foreground ring-1 ring-border transition active:scale-[0.97] hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
+                >
                   Undo
                 </button>
               )}
               {stops.length < 3 && <p className="text-xs text-muted">Add at least 3 stops to optimize the order.</p>}
-              {optimizeNote?.idsKey === idsKey && (
-                <p role="status" className="anim-fade text-xs text-muted">{optimizeNote.text}</p>
-              )}
+              {/* Screen-reader only: always mounted so a text change is announced; nothing shows under the button. */}
+              <p role="status" data-testid="optimize-status" className="sr-only">{optimizeNote?.idsKey === idsKey ? optimizeNote.text : ""}</p>
             </div>
             {swapNote && canUndoSwap && (
               <div role="status" data-testid="swap-note" className="flex flex-wrap items-center gap-x-2 text-sm text-muted">

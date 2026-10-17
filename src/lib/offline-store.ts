@@ -77,6 +77,7 @@ export function saveTripCopy(trip: TripWithStops, now: Date = new Date()): boole
   const payload = JSON.stringify({ savedAt, trip: sanitize(trip) } satisfies TripCopy);
   const entry: TripCopySummary = { id: trip.id, name: trip.name, plannedDate: trip.plannedDate, savedAt, stopCount: trip.stops.length };
   let index = [entry, ...readIndex(s).filter((e) => e.id !== trip.id)].sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+  const hadEntry = readIndex(s).some((e) => e.id === trip.id);
   const evict = (list: TripCopySummary[]) => {
     for (const e of list) s.removeItem(tripKey(e.id));
   };
@@ -90,7 +91,17 @@ export function saveTripCopy(trip: TripWithStops, now: Date = new Date()): boole
       return true;
     } catch {
       const oldest = index.length > 1 ? index[index.length - 1] : null;
-      if (!oldest || oldest.id === trip.id) return false;
+      if (!oldest || oldest.id === trip.id) {
+        // The payload may have been written without its index entry: do not leave it orphaned (best effort).
+        if (!hadEntry) {
+          try {
+            s.removeItem(tripKey(trip.id));
+          } catch {
+            /* nothing more can be done */
+          }
+        }
+        return false;
+      }
       s.removeItem(tripKey(oldest.id));
       index = index.slice(0, -1);
     }

@@ -116,13 +116,26 @@ export async function changePassword(userId: string, currentPassword: string, ne
   return count === 1;
 }
 
+/** A Google-only account may be deleted only this long after the user last signed in. */
+export const REAUTH_WINDOW_MS = 5 * 60 * 1000;
+/** Returned by deleteAccount when a Google-only account's sign-in is too old: sign in again, then retry. */
+export const REAUTH_REQUIRED = "reauth-required";
+
 /**
- * Permanently deletes the account after checking the password (or, for a Google-only account, the typed email). Trips and stops go with it (cascade); the stops'
- * photo URLs are returned so the caller can remove the files. null = wrong password or no such account.
+ * Permanently deletes the account after checking the password (or, for a Google-only account, the typed email
+ * plus a sign-in within REAUTH_WINDOW_MS; `authTime` is the epoch ms of that sign-in). Trips and stops go with it
+ * (cascade); the stops' photo URLs are returned so the caller can remove the files.
+ * null = wrong password/email or no such account; REAUTH_REQUIRED = the sign-in is too old.
  */
-export async function deleteAccount(userId: string, proof: { password?: string; confirmEmail?: string }): Promise<{ photoUrls: string[] } | null> {
+export async function deleteAccount(
+  userId: string,
+  proof: { password?: string; confirmEmail?: string; authTime?: number },
+): Promise<{ photoUrls: string[] } | typeof REAUTH_REQUIRED | null> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) return null;
+  // The email is not a secret to whoever holds the session, so a Google-only account also needs a fresh sign-in.
+  // A token without a sign-in time (issued before this check existed) counts as stale.
+  if (!user.passwordSet && !(proof.authTime !== undefined && Date.now() - proof.authTime <= REAUTH_WINDOW_MS)) return REAUTH_REQUIRED;
   // Password accounts confirm with the password; Google-only accounts (no password) by typing their email address.
   const confirmed = user.passwordSet
     ? proof.password !== undefined && (await bcrypt.compare(proof.password, user.passwordHash))

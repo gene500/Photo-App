@@ -26,7 +26,12 @@ const POLYGON_SIMPLIFY_DEG = 0.002;
 // pathological input or a corridor too complex to be a useful request anyway.
 const MAX_SIMPLIFIED_ROUTE_POINTS = 200;
 
-export function buildCorridor(route: LngLat[], radiusKm: number = CORRIDOR_KM): LngLat[] {
+/** A corridor polygon: its outer ring, and the rings of any holes in it (a loop route encloses an area far from every road). */
+export type CorridorShape = { outer: LngLat[]; holes: LngLat[][] };
+
+const toLngLats = (ring: number[][]): LngLat[] => ring.map(([lng, lat]) => [lng, lat] as LngLat);
+
+export function buildCorridorShape(route: LngLat[], radiusKm: number = CORRIDOR_KM): CorridorShape {
   if (route.length < 2) throw new Error("Route needs at least 2 coordinates");
   const input = lineString(route);
   let used = ROUTE_SIMPLIFY_STEPS_DEG[0];
@@ -44,9 +49,15 @@ export function buildCorridor(route: LngLat[], radiusKm: number = CORRIDOR_KM): 
   if (!corridor) throw new Error("Could not build a corridor around the route");
   const simple = simplify(corridor, { tolerance: POLYGON_SIMPLIFY_DEG, highQuality: false });
   const g = simple.geometry;
-  const rings = g.type === "Polygon" ? [g.coordinates[0]] : g.coordinates.map((p) => p[0]);
-  const outer = rings.reduce((a, b) => (b.length > a.length ? b : a));
-  return outer.map(([lng, lat]) => [lng, lat] as LngLat);
+  // A MultiPolygon (rare) keeps only its largest polygon, as before, with that polygon's holes.
+  const polygons = g.type === "Polygon" ? [g.coordinates] : g.coordinates;
+  const biggest = polygons.reduce((a, b) => (b[0].length > a[0].length ? b : a));
+  return { outer: toLngLats(biggest[0]), holes: biggest.slice(1).map(toLngLats) };
+}
+
+/** The outer ring of the corridor (see `buildCorridorShape` for its holes). */
+export function buildCorridor(route: LngLat[], radiusKm: number = CORRIDOR_KM): LngLat[] {
+  return buildCorridorShape(route, radiusKm).outer;
 }
 
 /** About 15 miles: the search radius around a trip's first stop, before there is a route to follow. */

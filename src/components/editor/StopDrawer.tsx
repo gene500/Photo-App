@@ -191,7 +191,7 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onPhotoChange, 
           <input type="number" inputMode="numeric" min={0} max={MAX_DWELL_MINUTES} step={5} value={dwell} onChange={(e) => setDwell(e.target.value)} className={inputClass} />
         </label>
       </div>
-      {weather?.warning && <p data-testid="light-warning" className="text-xs text-danger">{weather.warning}</p>}
+      {weather?.warning && <p data-testid="light-warning" className="text-xs text-sand">{weather.warning}</p>}
       <SkyCard lat={stop.lat} lng={stop.lng} plannedDate={plannedDate} />
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">Shot list</legend>

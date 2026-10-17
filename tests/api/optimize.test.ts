@@ -66,6 +66,33 @@ describe("POST /api/optimize", () => {
     expect(Date.parse(body.departAt)).toBeGreaterThan(Date.parse("2026-07-01T18:00:00Z"));
   });
 
+  describe("with a saved departure", () => {
+    const coords = [[-119.6, 37.7], [-119.6, 38.7], [-119.6, 39.7]];
+    const lights = (last: string) => [
+      { lightPref: "any", dwellMinutes: 30 },
+      { lightPref: "any", dwellMinutes: 30 },
+      { lightPref: last, dwellMinutes: 30 },
+    ];
+
+    it("keeps it when it already meets every light window", async () => {
+      const departAt = "2026-07-01T23:52:00.000Z";
+      const body = await (await post(coords, { plannedDate: "2026-07-01", stops: lights("sunset"), departAt })).json();
+      expect(body.misses).toEqual([]);
+      expect(body.departAt).toBe(departAt);
+    });
+
+    it("changes it when it does not meet the light", async () => {
+      const departAt = "2026-07-01T12:00:00.000Z";
+      const body = await (await post(coords, { plannedDate: "2026-07-01", stops: lights("sunset"), departAt })).json();
+      expect(body.misses).toEqual([]);
+      expect(body.departAt).not.toBe(departAt);
+    });
+
+    it("rejects a malformed departAt", async () => {
+      expect((await post(coords, { departAt: "tomorrow" })).status).toBe(400);
+    });
+  });
+
   it("reports stops whose light cannot be met", async () => {
     const coords = [[-119.6, 37.7], [-119.6, 38.7], [-119.6, 39.7]];
     const res = await post(coords, {

@@ -20,6 +20,12 @@ beforeEach(() => {
 });
 
 describe("offline-store", () => {
+  it("removes the trip payload when its index entry cannot be written", () => {
+    mem.failWrites = (k) => k === "rtpp.offline.index";
+    expect(saveTripCopy(trip("a"), at(1))).toBe(false);
+    expect(mem.getItem("rtpp.offline.trip.a")).toBeNull();
+  });
+
   it("drops a copy whose dates are corrupt instead of showing Invalid Date", () => {
     saveTripCopy(trip("a"), at(1));
     const stored = JSON.parse(mem.getItem("rtpp.offline.trip.a")!);

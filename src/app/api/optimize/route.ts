@@ -13,7 +13,7 @@ import { handle, HttpError, readJson, requireUserId } from "@/server/http";
 export const POST = handle(async (req: Request) => {
   const userId = await requireUserId();
   enforceLimit("optimize", userId);
-  const { coordinates, stops: prefs, plannedDate } = optimizeRequestSchema.parse(await readJson(req));
+  const { coordinates, stops: prefs, plannedDate, departAt } = optimizeRequestSchema.parse(await readJson(req));
   try {
     const durations = await getDurationMatrix(coordinates);
     const date = plannedDate ?? new Date().toISOString().slice(0, 10);
@@ -30,6 +30,7 @@ export const POST = handle(async (req: Request) => {
       stops,
       plannedDate: date,
       defaultDeparture: departureTime(stops[0]!, date),
+      preferredDeparture: departAt ? new Date(departAt) : undefined,
     });
     return Response.json({
       order: result.order,

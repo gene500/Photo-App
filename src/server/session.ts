@@ -15,3 +15,8 @@ export async function getCurrentUser(): Promise<{ id: string; email: string | nu
   const id = session?.user?.id;
   return id ? { id, email: session.user.email ?? null } : null;
 }
+
+/** Epoch ms of the current session's sign-in, or undefined for tokens issued before it was recorded. */
+export async function getAuthTime(): Promise<number | undefined> {
+  return (await currentSession())?.authTime;
+}

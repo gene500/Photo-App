@@ -91,3 +91,24 @@ describe("cellsForRing fills wide corridors", () => {
     expect(cells.has(cellOf(37.25, -119.75))).toBe(true);
   });
 });
+
+describe("antimeridian wrapping", () => {
+  it("a circle at lng 179.9 includes cells on both sides of the date line", () => {
+    const cells = new Set(cellsForCircle(-17.7, 179.9, 40));
+    expect(cells.has(cellOf(-17.7, 179.95))).toBe(true);
+    expect(cells.has(cellOf(-17.7, -179.9))).toBe(true);
+    expect(cells.has(cellOf(-17.7, -179.8))).toBe(true);
+  });
+
+  it("a mid-longitude circle is unchanged (all columns consecutive, none wrapped)", () => {
+    const cells = cellsForCircle(37.2982, -113.0263, 24);
+    expect(cells.every((c) => c % 10_000 > 600 && c % 10_000 < 1000)).toBe(true);
+  });
+
+  it("a corridor ring crossing the date line covers both sides", () => {
+    const ring: LngLat[] = [[179.8, 50], [180.2, 50], [180.2, 50.1], [179.8, 50.1]];
+    const cells = new Set(cellsForRing(ring));
+    expect(cells.has(cellOf(50.05, 179.85))).toBe(true);
+    expect(cells.has(cellOf(50.05, -179.85))).toBe(true);
+  });
+});

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { handleGoogleSignIn } from "./auth";
 import { prisma } from "./db";
-import { changePassword, createUser, deleteAccount, EMAIL_IN_USE, findOrCreateGoogleUser, hasPassword, verifyCredentials } from "./users";
+import { changePassword, createUser, deleteAccount, EMAIL_IN_USE, REAUTH_REQUIRED, REAUTH_WINDOW_MS, findOrCreateGoogleUser, hasPassword, verifyCredentials } from "./users";
 import { resetDb } from "../../tests/helpers/db";
 
 describe("google sign-in", () => {
@@ -51,17 +51,30 @@ describe("google sign-in", () => {
     expect(await changePassword(acct.id, "x", "new-password-123")).not.toBe(true);
   });
 
-  it("Google-only accounts delete by confirming their email", async () => {
+  it("Google-only accounts delete by confirming their email after a recent sign-in", async () => {
     const acct = (await findOrCreateGoogleUser("sub-4", "bye@example.com")) as { id: string };
-    expect(await deleteAccount(acct.id, { confirmEmail: "wrong@example.com" })).toBeNull();
-    expect(await deleteAccount(acct.id, { password: "guess" })).toBeNull();
-    expect(await deleteAccount(acct.id, { confirmEmail: " Bye@Example.com " })).toEqual({ photoUrls: [] });
+    const fresh = Date.now() - 1000;
+    expect(await deleteAccount(acct.id, { confirmEmail: "wrong@example.com", authTime: fresh })).toBeNull();
+    expect(await deleteAccount(acct.id, { password: "guess", authTime: fresh })).toBeNull();
+    expect(await deleteAccount(acct.id, { confirmEmail: " Bye@Example.com ", authTime: fresh })).toEqual({ photoUrls: [] });
     expect(await prisma.user.count()).toBe(0);
+  });
+
+  it("a Google-only account with a stale or missing sign-in time must sign in again and keeps everything", async () => {
+    const acct = (await findOrCreateGoogleUser("sub-6", "stale@example.com")) as { id: string };
+    const stale = Date.now() - REAUTH_WINDOW_MS - 1000;
+    expect(await deleteAccount(acct.id, { confirmEmail: "stale@example.com", authTime: stale })).toBe(REAUTH_REQUIRED);
+    expect(await deleteAccount(acct.id, { confirmEmail: "stale@example.com" })).toBe(REAUTH_REQUIRED);
+    expect(await prisma.user.count()).toBe(1);
+  });
+
+  it("the sign-in window is five minutes", () => {
+    expect(REAUTH_WINDOW_MS).toBe(5 * 60 * 1000);
   });
 
   it("a password account cannot be deleted by typing its email", async () => {
     const user = await createUser("pw@example.com", "correct-horse");
-    expect(await deleteAccount(user.id, { confirmEmail: "pw@example.com" })).toBeNull();
+    expect(await deleteAccount(user.id, { confirmEmail: "pw@example.com", authTime: Date.now() })).toBeNull();
     expect(await deleteAccount(user.id, {})).toBeNull();
     expect(await prisma.user.count()).toBe(1);
   });

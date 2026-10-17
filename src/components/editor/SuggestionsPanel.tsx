@@ -120,7 +120,7 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
                 {formatPhotoCount(s.popularity) && <span data-testid="suggestion-popularity"> · {formatPhotoCount(s.popularity)}</span>}
               </p>
               {line && (
-                <p data-testid="suggestion-weather" data-light-quality={line.quality ?? undefined} title={line.label} className={`text-xs ${line.quality === "poor" ? "text-danger" : "text-muted"}`}>
+                <p data-testid="suggestion-weather" data-light-quality={line.quality ?? undefined} title={line.label} className={`text-xs ${line.quality === "poor" ? "text-sand" : "text-muted"}`}>
                   <span role="img" aria-label={weatherAriaLabel(line)}>{line.text}</span>
                 </p>
               )}

@@ -3,10 +3,13 @@ import type { NewStopInput, StopPatch, TripCreateInput, TripPatch } from "./vali
 
 export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  /** Machine-readable cause when the server gives one (e.g. "reauth"). */
+  readonly reason?: string;
+  constructor(status: number, message: string, reason?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.reason = reason;
   }
 }
 
@@ -17,8 +20,8 @@ async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
     headers: isForm || init.body === undefined ? init.headers : { "Content-Type": "application/json" },
   });
   if (res.status === 204) return undefined as T;
-  const body = (await res.json().catch(() => null)) as { error?: string } | null;
-  if (!res.ok) throw new ApiError(res.status, body?.error ?? `Request failed (${res.status})`);
+  const body = (await res.json().catch(() => null)) as { error?: string; reason?: string } | null;
+  if (!res.ok) throw new ApiError(res.status, body?.error ?? `Request failed (${res.status})`, body?.reason);
   return body as T;
 }
 
@@ -54,7 +57,7 @@ export const api = {
   removePhoto: (stopId: string) => request<{ stop: Stop }>(`/api/stops/${stopId}/photo`, send("DELETE")),
   directions: (coordinates: LngLat[]) =>
     request<{ route: RouteResult }>("/api/directions", send("POST", { coordinates })),
-  optimizeOrder: (coordinates: LngLat[], light?: { stops: { lightPref: LightPref; priority?: StopPriority; dwellMinutes: number }[]; plannedDate: string }) =>
+  optimizeOrder: (coordinates: LngLat[], light?: { stops: { lightPref: LightPref; priority?: StopPriority; dwellMinutes: number }[]; plannedDate: string; departAt?: string }) =>
     request<{ order: number[]; departAt?: string | null; misses?: { stopIndex: number; minutes: number; priority?: StopPriority }[] }>(
       "/api/optimize",
       send("POST", { coordinates, ...light }),

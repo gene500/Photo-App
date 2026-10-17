@@ -32,6 +32,7 @@ const PAIRS: [string, string][] = [
   ["foreground", "background"], ["foreground", "surface"], ["muted", "background"], ["muted", "surface"], ["muted", "hover"],
   ["muted", "accent-soft"], ["accent-strong", "surface"], ["accent-strong", "background"], ["accent-strong", "accent-soft"],
   ["accent-foreground", "accent"], ["ink-foreground", "ink"], ["danger", "surface"], ["danger", "danger-soft"],
+  ["sand", "surface"], ["sand", "background"],
 ];
 
 describe.each([

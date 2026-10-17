@@ -76,6 +76,12 @@ describe("deleteAccount", () => {
     expect(await prisma.user.count()).toBe(1);
   });
 
+  it("password accounts do not need a recent sign-in", async () => {
+    const { deleteAccount } = await import("./users");
+    const user = await createUser("old@example.com", "correct-horse");
+    expect(await deleteAccount(user.id, { password: "correct-horse", authTime: 1 })).toEqual({ photoUrls: [] });
+  });
+
   it("deletes the user with trips and stops, returning photo urls", async () => {
     const { deleteAccount } = await import("./users");
     const user = await createUser("del2@example.com", "correct-horse");

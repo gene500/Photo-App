@@ -691,7 +691,16 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       )}
 
       <StopsPanel
-        header={<TripHeader trip={trip} onSave={saveTrip} onShareChange={(shareToken) => setTrip((t) => ({ ...t, shareToken }))} exportData={{ stops, route: activeRoute?.geometry ?? null }} />}
+        header={<TripHeader trip={trip} onSave={saveTrip} onShareChange={(shareToken) => setTrip((t) => ({ ...t, shareToken }))} exportData={{
+          stops,
+          route: activeRoute?.geometry ?? null,
+          pdf: {
+            departAt: departAt ? new Date(departAt) : null,
+            totalDistanceM: activeRoute?.distance ?? null,
+            totalDurationS: activeRoute?.duration ?? null,
+            stops: stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: s.notes, shotNotes: s.shotNotes, lightPref: s.lightPref, arrival: arrivals[i] ?? null })),
+          },
+        }} />}
         collapsedSummary={
           activeRoute
             ? `${stops.length} ${stops.length === 1 ? "stop" : "stops"} · ${formatDuration(activeRoute.duration)}`

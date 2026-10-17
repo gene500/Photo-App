@@ -3,7 +3,15 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createItineraryPdf, loadWeatherLines, saveBlob } from "@/lib/itinerary-download";
 import { ExportControl } from "./ExportControl";
+
+vi.mock("@/lib/itinerary-download", () => ({
+  createItineraryPdf: vi.fn(),
+  loadWeatherLines: vi.fn(),
+  saveBlob: vi.fn(),
+  mapTokenFromEnv: vi.fn(() => null),
+}));
 
 const stop = (i: number) => ({ name: `S${i}`, lat: 40 + i, lng: -120, notes: null });
 
@@ -18,6 +26,64 @@ describe("ExportControl", () => {
     });
   });
   afterEach(() => vi.restoreAllMocks());
+
+  describe("Download PDF", () => {
+    const two = [stop(0), stop(1)];
+    const pdf = {
+      departAt: null,
+      totalDistanceM: 1000,
+      totalDurationS: 600,
+      stops: two.map((s) => ({ ...s, lightPref: "any" as const, arrival: null })),
+    };
+    beforeEach(() => {
+      vi.mocked(createItineraryPdf).mockReset();
+      vi.mocked(saveBlob).mockReset();
+      vi.mocked(loadWeatherLines).mockReset().mockResolvedValue([null, null]);
+    });
+
+    it("is not offered without the pdf prop", async () => {
+      render(<ExportControl tripName="T" stops={two} route={null} />);
+      await userEvent.click(screen.getByRole("button", { name: "Export" }));
+      expect(screen.queryByRole("button", { name: "Download PDF" })).toBeNull();
+    });
+
+    it("builds and saves the PDF", async () => {
+      const blob = new Blob(["x"]);
+      vi.mocked(createItineraryPdf).mockResolvedValue(blob);
+      render(<ExportControl tripName="Big Sur / 2026" stops={two} route={null} pdf={pdf} />);
+      await userEvent.click(screen.getByRole("button", { name: "Export" }));
+      await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
+      expect(createItineraryPdf).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(createItineraryPdf).mock.calls[0][0].input.stops).toHaveLength(2);
+      expect(saveBlob).toHaveBeenCalledWith(blob, "Big-Sur-2026-itinerary.pdf");
+      expect(screen.queryByRole("group", { name: "Export trip" })).toBeNull();
+    });
+
+    it("shows Preparing PDF... and disables the item while pending", async () => {
+      let resolve!: (b: Blob) => void;
+      vi.mocked(createItineraryPdf).mockReturnValue(new Promise<Blob>((r) => { resolve = r; }));
+      render(<ExportControl tripName="T" stops={two} route={null} pdf={pdf} />);
+      await userEvent.click(screen.getByRole("button", { name: "Export" }));
+      await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
+      const busy = (await screen.findByRole("button", { name: "Preparing PDF..." })) as HTMLButtonElement;
+      expect(busy.disabled).toBe(true);
+      await act(async () => resolve(new Blob(["x"])));
+      expect(saveBlob).toHaveBeenCalledTimes(1);
+    });
+
+    it("shows an alert when it fails and the menu still works", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.mocked(createItineraryPdf).mockRejectedValue(new Error("boom"));
+      render(<ExportControl tripName="T" stops={two} route={null} pdf={pdf} />);
+      await userEvent.click(screen.getByRole("button", { name: "Export" }));
+      await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
+      expect((await screen.findByRole("alert")).textContent).toBe("Could not create the PDF. Try again.");
+      expect(saveBlob).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "Download GPX" })).toBeTruthy();
+      await userEvent.click(screen.getByRole("button", { name: "Export" }));
+      expect(screen.queryByRole("group", { name: "Export trip" })).toBeNull();
+    });
+  });
 
   it("is disabled with fewer than 2 stops", () => {
     render(<ExportControl tripName="T" stops={[stop(0)]} route={null} />);

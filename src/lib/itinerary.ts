@@ -7,6 +7,7 @@ import { lightLabel } from "./light-windows";
 import type { DistanceUnit, TimeFormat } from "./settings";
 import type { LightPref } from "./types";
 import type { WeatherLine } from "./use-weather";
+import { weatherAriaLabel } from "./weather";
 
 export type ItineraryStopSource = {
   name: string;
@@ -33,6 +34,8 @@ export type ItineraryInput = {
   dateLine: string;
   startLine: string | null;
   routeLine: string | null;
+  /** Caveat printed under the route line (for example that times are estimates). */
+  note: string | null;
   stops: ItineraryStop[];
 };
 
@@ -40,7 +43,8 @@ type WeatherSource = Pick<WeatherLine, "text" | "label" | "warning">;
 
 function weatherText(w: WeatherSource | null | undefined): string | null {
   if (!w) return null;
-  const words = w.label ?? w.text;
+  const spoken = weatherAriaLabel(w);
+  const words = spoken.charAt(0).toUpperCase() + spoken.slice(1);
   return w.warning ? `${words}. ${w.warning}` : words;
 }
 
@@ -54,6 +58,7 @@ export function buildItinerary(a: {
   weather?: (WeatherSource | null)[];
   timeFormat: TimeFormat;
   distanceUnit: DistanceUnit;
+  note?: string | null;
 }): ItineraryInput {
   const clock = (d: Date) => formatClock(d, undefined, a.timeFormat);
   return {
@@ -64,6 +69,7 @@ export function buildItinerary(a: {
       a.totalDistanceM !== null && a.totalDurationS !== null
         ? `${formatDistance(a.totalDistanceM, a.distanceUnit)} · ${formatDuration(a.totalDurationS)}`
         : null,
+    note: a.note ?? null,
     stops: a.stops.map((s, i) => ({
       index: i + 1,
       name: s.name,

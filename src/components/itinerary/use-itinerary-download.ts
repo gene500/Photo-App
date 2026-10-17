@@ -6,6 +6,7 @@ import { saveBlob } from "@/lib/itinerary-download";
 export function useItineraryDownload(): {
   busy: boolean;
   error: string | null;
+  clearError: () => void;
   run: (make: () => Promise<{ blob: Blob; fileName: string }>) => Promise<void>;
 } {
   const [busy, setBusy] = useState(false);
@@ -27,5 +28,6 @@ export function useItineraryDownload(): {
       setBusy(false);
     }
   }, []);
-  return { busy, error, run };
+  const clearError = useCallback(() => setError(null), []);
+  return { busy, error, clearError, run };
 }

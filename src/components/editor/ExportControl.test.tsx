@@ -66,7 +66,9 @@ describe("ExportControl", () => {
       await userEvent.click(screen.getByRole("button", { name: "Export" }));
       await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
       const busy = (await screen.findByRole("button", { name: "Preparing PDF..." })) as HTMLButtonElement;
-      expect(busy.disabled).toBe(true);
+      expect(busy.getAttribute("aria-disabled")).toBe("true");
+      await userEvent.click(busy);
+      expect(createItineraryPdf).toHaveBeenCalledTimes(1);
       await act(async () => resolve(new Blob(["x"])));
       expect(saveBlob).toHaveBeenCalledTimes(1);
     });

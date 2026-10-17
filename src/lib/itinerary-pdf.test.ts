@@ -55,6 +55,7 @@ function input(n: number, over: Partial<ItineraryStop> = {}): ItineraryInput {
     dateLine: "Planned for 2026-10-16",
     startLine: "Starts 7:00 AM",
     routeLine: "12 mi · 1 h 5 min",
+    note: null,
     stops: Array.from({ length: n }, (_, i) => stop(i + 1, over)),
   };
 }
@@ -109,6 +110,19 @@ describe("renderItineraryPdf", () => {
     const s = await render(input(2, { bestLight: null, weather: null, notes: null }));
     expect(s).not.toMatch(/\((?:[^()]*\b)?(?:null|undefined)\b/);
     expect(s).not.toContain("undefined");
+  });
+});
+
+describe("note and large routes", () => {
+  it("prints the note when given and nothing when null", async () => {
+    expect(await render({ ...input(1), note: "Times are estimates notetext." })).toContain("Times are estimates notetext.");
+    expect(await render(input(1))).not.toContain("estimates");
+  });
+
+  it("renders a 50,000-point route without throwing and stays small", async () => {
+    const big: [number, number][] = Array.from({ length: 50000 }, (_, i) => [-122 + i / 50000, 37 + Math.sin(i / 500) / 10]);
+    const blob = await renderItineraryPdf(input(2), fallback, big, latLng);
+    expect(blob.size).toBeLessThan(200 * 1024);
   });
 });
 

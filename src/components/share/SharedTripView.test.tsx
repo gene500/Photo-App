@@ -122,6 +122,15 @@ describe("SharedTripView Download PDF", () => {
     render(<SharedTripView trip={trip} />);
     await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
     expect(vi.mocked(createItineraryPdf).mock.calls[0]![0].input.routeLine).toBeNull();
+    expect(vi.mocked(createItineraryPdf).mock.calls[0]![0].input.note).toBe("Times are estimates from straight-line distances.");
+  });
+
+  it("has no estimates note when a route exists", async () => {
+    vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["x"]));
+    const route = { geometry: [[-120, 36.3], [-120, 36.6]] as [number, number][], legs: [{ distance: 40000, duration: 2400 }], distance: 40000, duration: 2400 };
+    render(<SharedTripView trip={trip} route={route} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
+    expect(vi.mocked(createItineraryPdf).mock.calls[0]![0].input.note).toBeNull();
   });
 
   it("shows Preparing PDF... and disables the button while pending", async () => {
@@ -130,7 +139,9 @@ describe("SharedTripView Download PDF", () => {
     render(<SharedTripView trip={trip} />);
     await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
     const busy = (await screen.findByRole("button", { name: "Preparing PDF..." })) as HTMLButtonElement;
-    expect(busy.disabled).toBe(true);
+    expect(busy.getAttribute("aria-disabled")).toBe("true");
+    await userEvent.click(busy);
+    expect(createItineraryPdf).toHaveBeenCalledTimes(1);
     await act(async () => resolve(new Blob(["x"])));
     expect(saveBlob).toHaveBeenCalledTimes(1);
   });

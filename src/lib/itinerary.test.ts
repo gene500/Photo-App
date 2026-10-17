@@ -58,6 +58,18 @@ describe("buildItinerary", () => {
     expect(build([stop()]).stops[0].weather).toBeNull();
   });
 
+  it("reads the weather like the screen, with the temperature and a capital letter", () => {
+    const w = [{ text: "☀️ 21°C", label: "sunny" }, { text: "x 9°C", label: "light rain, 9°C", warning: "Wind" }];
+    const out = build([stop(), stop()], { weather: w });
+    expect(out.stops.map((s) => s.weather)).toEqual(["Sunny, 21°C", "Light rain, 9°C. Wind"]);
+  });
+
+  it("passes the note through, null by default", () => {
+    expect(build([stop()], { note: "Estimates" }).note).toBe("Estimates");
+    expect(build([stop()]).note).toBeNull();
+    expect(build([stop()], { note: null }).note).toBeNull();
+  });
+
   it("builds the route, start and date lines", () => {
     const out = build([stop()], { totalDistanceM: 120000, totalDurationS: 5400, departAt: new Date(2026, 9, 16, 5, 0) });
     expect(out.routeLine).toBe("120 km · 1 h 30 min");

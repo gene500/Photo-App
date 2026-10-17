@@ -1,5 +1,6 @@
 // Draws the itinerary as an A4 PDF with jsPDF (loaded on demand, never at module load).
 
+import { downsampleRoute } from "./downsample";
 import type { ItineraryInput } from "./itinerary";
 import type { LngLat } from "./types";
 
@@ -47,7 +48,7 @@ function drawFallbackMap(doc: Doc, x: number, y: number, w: number, h: number, g
   doc.setFillColor(243, 244, 246);
   doc.setDrawColor(200, 200, 200);
   doc.rect(x, y, w, h, "FD");
-  const rawPts: LngLat[] = geometry.length >= 2 ? geometry : stops.map((s) => [s.lng, s.lat]);
+  const rawPts: LngLat[] = geometry.length >= 2 ? downsampleRoute(geometry, 1000) : stops.map((s) => [s.lng, s.lat]);
   const rawStops = stops.map((s): LngLat => [s.lng, s.lat]);
   const pts = unwrapLongitudes(rawPts);
   const refLng = pts.length ? pts.reduce((a, p) => a + p[0], 0) / pts.length : 0;
@@ -59,10 +60,17 @@ function drawFallbackMap(doc: Doc, x: number, y: number, w: number, h: number, g
   const px = (p: LngLat) => p[0] * k;
   const xs = all.map(px);
   const ys = all.map((p) => p[1]);
-  const minX = Math.min(...xs);
-  const minY = Math.min(...ys);
-  const spanX = Math.max(...xs) - minX;
-  const spanY = Math.max(...ys) - minY;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const v of xs) {
+    if (v < minX) minX = v;
+    if (v > maxX) maxX = v;
+  }
+  for (const v of ys) {
+    if (v < minY) minY = v;
+    if (v > maxY) maxY = v;
+  }
+  const spanX = maxX - minX;
+  const spanY = maxY - minY;
   const degenerate = spanX < 1e-6 && spanY < 1e-6;
   const m = 28;
   const scale = degenerate ? 0 : Math.min((w - 2 * m) / Math.max(spanX, 1e-9), (h - 2 * m) / Math.max(spanY, 1e-9));
@@ -124,6 +132,13 @@ export async function renderItineraryPdf(
     for (const l of wrap(line, contentW)) {
       doc.text(l, MARGIN, y);
       y += 15;
+    }
+  }
+  if (input.note) {
+    doc.setFontSize(10);
+    for (const l of wrap(input.note, contentW)) {
+      doc.text(l, MARGIN, y);
+      y += 13;
     }
   }
   doc.setTextColor(0, 0, 0);

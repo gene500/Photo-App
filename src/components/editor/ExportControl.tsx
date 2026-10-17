@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { btnGhost, card } from "@/components/ui/styles";
 import { appleMapsUrls, buildGpx, googleMapsUrl, gpxFileName, type ExportStop } from "@/lib/export";
 import type { LngLat } from "@/lib/types";
@@ -27,6 +28,10 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
   const { open, setOpen, close, toggle, rootRef, triggerRef, panelRef, panelId } = usePopover();
   const { settings } = useSettings();
   const download = useItineraryDownload();
+  const openRef = useRef(open);
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
   const enough = stops.length >= 2;
   if (open && !enough) setOpen(false); // stops were removed while the menu was open
   const google = googleMapsUrl(stops);
@@ -66,7 +71,7 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
       made = true;
       return { blob, fileName: itineraryFileName(tripName) };
     });
-    if (made) close();
+    if (made && openRef.current) close();
   }
 
   return (
@@ -74,7 +79,10 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
       <button
         ref={triggerRef}
         type="button"
-        onClick={toggle}
+        onClick={() => {
+          if (!open) download.clearError();
+          toggle();
+        }}
         disabled={!enough}
         aria-expanded={open && enough}
         aria-controls={open && enough ? panelId : undefined}
@@ -87,7 +95,7 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
         <div ref={panelRef} id={panelId} role="group" aria-label="Export trip" className={`absolute right-0 top-full z-20 mt-1 w-56 max-w-full p-1 ${card}`}>
           <button type="button" onClick={downloadGpx} className={item}>Download GPX</button>
           {pdf && (
-            <button type="button" onClick={() => void downloadPdf()} disabled={download.busy} className={`${item} disabled:opacity-50`}>
+            <button type="button" onClick={() => void downloadPdf()} aria-disabled={download.busy || undefined} className={`${item} aria-disabled:opacity-50`}>
               {download.busy ? "Preparing PDF..." : "Download PDF"}
             </button>
           )}

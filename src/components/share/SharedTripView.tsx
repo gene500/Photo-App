@@ -15,6 +15,7 @@ import { stopColor } from "@/lib/stop-style";
 import type { LngLat, PublicTrip, RouteResult, Stop } from "@/lib/types";
 
 const noop = () => {};
+const ESTIMATE_NOTE = "Times are estimates from straight-line distances.";
 
 /** Read-only trip for the public share page: map with numbered pins, then the stops with times. */
 export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route?: RouteResult | null }) {
@@ -57,6 +58,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
         totalDurationS: route?.duration ?? null,
         stops: trip.stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: s.notes, shotNotes: s.shotNotes, lightPref: s.lightPref, arrival: arrivals[i] ?? null })),
         weather: trip.stops.map(() => null),
+        note: route ? null : ESTIMATE_NOTE,
         timeFormat: tf,
         distanceUnit: settings.distanceUnit,
       });
@@ -83,7 +85,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
           <div className="flex flex-wrap items-start justify-between gap-x-2">
             <h1 className="min-w-0 max-w-full flex-1 basis-28 text-lg font-semibold">{trip.name}</h1>
             {canDownload && (
-              <button type="button" onClick={() => void downloadPdf()} disabled={download.busy} className={`${btnGhost} shrink-0 disabled:opacity-50`}>
+              <button type="button" onClick={() => void downloadPdf()} aria-disabled={download.busy || undefined} className={`${btnGhost} shrink-0 aria-disabled:opacity-50`}>
                 {download.busy ? "Preparing PDF..." : "Download PDF"}
               </button>
             )}
@@ -143,7 +145,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
                 );
               })}
             </ol>
-            {!route && <p className="px-4 pb-3 text-xs text-muted">Times are estimates from straight-line distances.</p>}
+            {!route && <p className="px-4 pb-3 text-xs text-muted">{ESTIMATE_NOTE}</p>}
           </>
         )}
       </aside>

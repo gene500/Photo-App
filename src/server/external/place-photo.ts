@@ -10,8 +10,8 @@ export type PhotoProvider = (place: PlaceQuery, fetchImpl: typeof fetch) => Prom
 /** Run together; the first in this order that has a photo wins. Flickr skips itself when FLICKR_API_KEY is not set. */
 export const PHOTO_PROVIDERS: readonly PhotoProvider[] = [getFlickrPhoto, getCommonsPhoto, getWikipediaPhoto];
 
-export const PHOTO_CACHE_MAX = 500;
-export const PHOTO_HIT_TTL_MS = 6 * 3600_000;
+export const PHOTO_CACHE_MAX = 1500;
+export const PHOTO_HIT_TTL_MS = 24 * 3600_000;
 export const PHOTO_MISS_TTL_MS = 15 * 60_000;
 
 export function photoCacheKey(p: PlaceQuery): string {
@@ -20,7 +20,7 @@ export function photoCacheKey(p: PlaceQuery): string {
 }
 
 /**
- * Photo lookup with a bounded in-memory LRU (hits 6 h, misses 15 min) and in-flight de-duplication, so repeated
+ * Photo lookup with a bounded in-memory LRU (hits 24 h, misses 15 min) and in-flight de-duplication, so repeated
  * hovers - or many clients - cannot multiply requests to the photo sites. Every failure resolves to null.
  */
 export function createPlacePhotoLookup(opts: { providers?: readonly PhotoProvider[]; fetchImpl?: typeof fetch; now?: () => number } = {}) {

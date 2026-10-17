@@ -80,6 +80,40 @@ export function cellsForRing(ring: readonly LngLat[]): number[] {
   return [...cells];
 }
 
+/**
+ * Same answer as `pointInRing`, built for testing many points against one ring: a bounding-box reject, then only the edges
+ * that span the point's latitude strip are ray-cast (a corridor ring has hundreds of edges, a point touches a handful).
+ */
+export function createRingTester(ring: readonly LngLat[]): (lng: number, lat: number) => boolean {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const [x, y] of ring) {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  const strips = Math.max(1, Math.min(256, ring.length));
+  const span = maxY - minY || 1;
+  const stripOf = (y: number) => Math.min(strips - 1, Math.max(0, Math.floor(((y - minY) / span) * strips)));
+  const edges: number[][] = Array.from({ length: strips }, () => []);
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const lo = stripOf(Math.min(ring[i][1], ring[j][1]));
+    const hi = stripOf(Math.max(ring[i][1], ring[j][1]));
+    for (let s = lo; s <= hi; s++) edges[s].push(i, j);
+  }
+  return (lng, lat) => {
+    if (!(lng >= minX && lng <= maxX && lat >= minY && lat <= maxY)) return false;
+    const list = edges[stripOf(lat)];
+    let inside = false;
+    for (let k = 0; k < list.length; k += 2) {
+      const [xi, yi] = ring[list[k]];
+      const [xj, yj] = ring[list[k + 1]];
+      if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+}
+
 /** Ray casting: is the point inside the polygon ring? */
 export function pointInRing(lng: number, lat: number, ring: readonly LngLat[]): boolean {
   let inside = false;

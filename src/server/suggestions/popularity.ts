@@ -21,11 +21,11 @@ export function defaultCounter(): Counter {
     : (s, f) => getCommonsPhotoCount(s, f, POPULARITY_TIMEOUT_MS);
 }
 
-export const COUNT_CACHE_TTL_MS = 6 * 3600_000;
-export const COUNT_CACHE_MAX = 2000;
+export const COUNT_CACHE_TTL_MS = 24 * 3600_000;
+export const COUNT_CACHE_MAX = 5000;
 
 /**
- * Wraps a counter with a per-instance cache (6 h, keyed on the ~10 m grid cell) and in-flight de-duplication, so a place
+ * Wraps a counter with a per-instance cache (24 h - photo counts barely move, keyed on the ~10 m grid cell) and in-flight de-duplication, so a place
  * that shows up in a second search - or in two at once - is counted once. Failures (undefined) are not remembered.
  */
 export function cachedCounter(count: Counter, now: () => number = Date.now): Counter {

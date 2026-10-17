@@ -2,7 +2,7 @@ import { haversineMeters } from "@/lib/geo";
 import type { LngLat } from "@/lib/types";
 import { prisma } from "../db";
 import { TtlCache } from "./cache";
-import { cellRuns, cellsForCircle, cellsForRing, pointInRing } from "./places-grid";
+import { cellRuns, cellsForCircle, cellsForRing, createRingTester, pointInRing } from "./places-grid";
 
 /** Rows of the local `Place` table. */
 export type PlaceRow = { id: string; name: string; kind: string; lat: number; lng: number };
@@ -56,7 +56,9 @@ type RunReader = (runs: [number, number][]) => Promise<(PlaceRow & { cell: numbe
 const readRuns: RunReader = async (runs) => {
   const where = runs.map(() => "cell BETWEEN ? AND ?").join(" OR ");
   const rows = await prisma.$queryRawUnsafe<(PlaceRow & { cell: number | bigint })[]>(`SELECT id, name, kind, lat, lng, cell FROM Place WHERE ${where}`, ...runs.flat());
-  return rows.map((r) => ({ ...r, cell: Number(r.cell) }));
+  // Fixed up in place: copying every row (thousands per search) just to convert one column is measurable.
+  for (const r of rows) if (typeof r.cell !== "number") r.cell = Number(r.cell);
+  return rows as (PlaceRow & { cell: number })[];
 };
 
 /**
@@ -81,7 +83,8 @@ export function createCellReader(readRunRows: RunReader, now: () => number = Dat
       for (let i = 0; i < runs.length; i += RUNS_PER_QUERY) groups.push(runs.slice(i, i + RUNS_PER_QUERY));
       const fetched = (await Promise.all(groups.map(readRunRows))).flat();
       const byCell = new Map<number, PlaceRow[]>(missing.map((c) => [c, []]));
-      for (const { cell, ...row } of fetched) byCell.get(cell)?.push(row);
+      // An explicit literal rather than `{ cell, ...row }`: object rest is several times slower per row.
+      for (const r of fetched) byCell.get(r.cell)?.push({ id: r.id, name: r.name, kind: r.kind, lat: r.lat, lng: r.lng });
       for (const [cell, rows] of byCell) {
         cache.set(String(cell), rows);
         have.set(cell, rows);
@@ -145,5 +148,6 @@ async function ringRows(ring: LngLat[], read: CellReader): Promise<unknown[] | n
   const cells = cellsForRing(ring);
   if (cells.length > MAX_RING_CELLS) return null; // not a real corridor: do not read the map for it
   const rows = await read(cells);
-  return toElements(rows.filter((r) => pointInRing(r.lng, r.lat, ring)));
+  const inside = createRingTester(ring);
+  return toElements(rows.filter((r) => inside(r.lng, r.lat)));
 }

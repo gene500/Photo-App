@@ -117,14 +117,14 @@ describe("cachedCounter", () => {
     expect(count).toHaveBeenCalledTimes(1);
   });
 
-  it("does not remember a failure, and forgets a count after 6 hours", async () => {
+  it("does not remember a failure, and forgets a count after 24 hours", async () => {
     let t = 0;
     const count = vi.fn<() => Promise<number | undefined>>().mockResolvedValueOnce(undefined).mockResolvedValue(3);
     const cached = cachedCounter(count, () => t);
     expect(await cached(place, fetch)).toBeUndefined();
     expect(await cached(place, fetch)).toBe(3);
     expect(count).toHaveBeenCalledTimes(2);
-    t += 6 * 3600_000 + 1;
+    t += 24 * 3600_000 + 1;
     await cached(place, fetch);
     expect(count).toHaveBeenCalledTimes(3);
   });

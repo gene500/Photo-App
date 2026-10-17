@@ -193,6 +193,25 @@ describe("StopDrawer", () => {
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 
+    it("does not close on Escape while there are unsaved edits: it asks in the page, and the edits survive", async () => {
+      const onClose = vi.fn();
+      const onSave = vi.fn(async () => {});
+      render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={onClose} onSave={onSave} onPhotoChange={vi.fn()} />);
+      await userEvent.type(screen.getByLabelText("Notes"), "bring a tripod");
+      await userEvent.keyboard("{Escape}");
+      expect(onClose).not.toHaveBeenCalled();
+      expect((await screen.findByRole("alert")).textContent).toContain("unsaved");
+      // Escape again, or "Keep editing", goes back to the form with the text intact.
+      await userEvent.keyboard("{Escape}");
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect((screen.getByLabelText("Notes") as HTMLTextAreaElement).value).toBe("bring a tripod");
+      await userEvent.keyboard("{Escape}");
+      await userEvent.click(screen.getByRole("button", { name: "Discard edits" }));
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
     it("moves focus into the dialog on open and back to the opener on close", () => {
       const opener = document.createElement("button");
       document.body.append(opener);

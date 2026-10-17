@@ -66,10 +66,11 @@ back to `/offline`. `src/app/manifest.ts` makes the app installable; the icons i
 
 ### Name and notes characters
 
-Trip names, stop names and shot-list items are one line: control characters (C0, DEL, C1) and bidi overrides/isolates are
-removed (not rejected) on the server, and a name must keep at least one visible character (zero-width characters alone do
+Trip names, stop names and shot-list items are one line: a tab or newline becomes a single space, and other control
+characters (C0, DEL, C1), bidi marks/overrides/isolates (LRM, RLM, ALM, ...) and U+2028/U+2029 are removed (not
+rejected) on the server, and a name must keep at least one visible character (zero-width characters alone do
 not count). Notes and shot notes keep newlines and tabs but lose other control characters. Names that come from
-OpenStreetMap or Mapbox are cleaned the same way and cut to the limit without splitting a character. Because the text is
+OpenStreetMap or Mapbox are cleaned the same way and cut to the limit without splitting a surrogate pair (an emoji ZWJ sequence can still be cut between its parts). Because the text is
 cleaned rather than refused, an older stored value with such a character never blocks an unrelated edit. Helpers live in
 `src/lib/text.ts`.
 

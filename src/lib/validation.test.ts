@@ -201,7 +201,7 @@ describe("name hygiene", () => {
     expect(newStopSchema.safeParse({ name, lat: 1, lng: 1, source: "manual" }).success).toBe(true);
   });
   const emptyNames = ["\u200B\u200C\u200D", "\u2060\uFEFF", " \u200B ", "", "\u0000\u202E", "\t\n"];
-  const dirtyNames: [string, string][] = [["a\u0000b", "ab"], ["tab\tname", "tabname"], ["new\nline", "newline"], ["a\u007Fb", "ab"], ["a\u0085b", "ab"], ["evil\u202Ename", "evilname"], ["iso\u2066late\u2069", "isolate"]];
+  const dirtyNames: [string, string][] = [["a\u0000b", "ab"], ["tab\tname", "tab name"], ["new\nline", "new line"], ["lrm\u200Em\u200Frk\u061C\u2028\u2029", "lrmmrk"], ["a\u007Fb", "ab"], ["a\u0085b", "ab"], ["evil\u202Ename", "evilname"], ["iso\u2066late\u2069", "isolate"]];
   it.each(emptyNames)("rejects %j when nothing visible remains", (name) => {
     expect(tripInputSchema.safeParse({ ...validTrip, name }).success).toBe(false);
     expect(stopPatchSchema.safeParse({ name }).success).toBe(false);
@@ -238,7 +238,7 @@ describe("legacy stored text does not block unrelated edits", () => {
   const legacy = "Old\u202E trip\tname";
   it("lets a date change resend a legacy trip name", () => {
     const r = tripPatchSchema.safeParse({ name: legacy, plannedDate: "2026-07-01" });
-    expect(r.success && r.data.name).toBe("Old tripname");
+    expect(r.success && r.data.name).toBe("Old trip name");
   });
   it("lets a shot be ticked when another checklist item holds a legacy character", () => {
     const r = stopPatchSchema.safeParse({ shotChecklist: [{ text: "Wide\u0007 shot", done: true }, { text: "Tele", done: false }] });

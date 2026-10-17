@@ -139,29 +139,45 @@ export async function renderItineraryPdf(
 
   const wrap = (text: string, width: number): string[] => doc.splitTextToSize(safe(text), width) as string[];
 
-  doc.setFont(family, "bold");
-  doc.setFontSize(24);
+  // A line drawn with its baseline at y needs a little room below it; otherwise it starts the next page.
+  const startFresh = (ascent: number, restore: () => void) => {
+    doc.addPage();
+    y = MARGIN + ascent;
+    restore();
+  };
+  const setTitleFont = () => {
+    doc.setFont(family, "bold");
+    doc.setFontSize(24);
+  };
+  const setInfoFont = (size: number) => () => {
+    doc.setFont(family, "normal");
+    doc.setFontSize(size);
+    doc.setTextColor(GREY);
+  };
+
+  setTitleFont();
   const title = wrap(input.tripName, contentW);
   y += 20;
   for (const line of title) {
+    if (y + 8 > limit) startFresh(20, setTitleFont);
     doc.text(line, MARGIN, y);
     y += 28;
   }
   y -= 8;
 
-  doc.setFont(family, "normal");
-  doc.setFontSize(11);
-  doc.setTextColor(GREY);
+  setInfoFont(11)();
   for (const line of [input.dateLine, input.startLine, input.routeLine]) {
     if (!line) continue;
     for (const l of wrap(line, contentW)) {
+      if (y + 4 > limit) startFresh(11, setInfoFont(11));
       doc.text(l, MARGIN, y);
       y += 15;
     }
   }
   if (input.note) {
-    doc.setFontSize(10);
+    setInfoFont(10)();
     for (const l of wrap(input.note, contentW)) {
+      if (y + 4 > limit) startFresh(10, setInfoFont(10));
       doc.text(l, MARGIN, y);
       y += 13;
     }

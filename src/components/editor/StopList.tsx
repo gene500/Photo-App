@@ -181,7 +181,7 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
           )}
         </p>
         {weather && (
-          <p data-testid="stop-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-danger" : "text-muted"}`}>
+          <p data-testid="stop-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-sand" : "text-muted"}`}>
             <span role="img" aria-label={weatherAriaLabel(weather)}>{weather.text}</span>
           </p>
         )}

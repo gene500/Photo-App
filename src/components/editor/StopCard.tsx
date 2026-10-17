@@ -38,7 +38,7 @@ export function StopCard({ stop, bestTime, arrival, onToggleVisited, onOpenDetai
       )}
       {mounted && arrival && <p className="text-xs text-muted">Arrive ~{formatClock(arrival, undefined, settings.timeFormat)}</p>}
       {weather && (
-        <p data-testid="card-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-danger" : "text-muted"}`}>
+        <p data-testid="card-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-sand" : "text-muted"}`}>
           <span role="img" aria-label={weatherAriaLabel(weather)}>{weather.text}</span>
         </p>
       )}

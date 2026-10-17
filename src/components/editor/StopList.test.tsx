@@ -41,7 +41,7 @@ describe("StopList", () => {
     const weather = screen.getAllByTestId("stop-weather");
     expect(weather).toHaveLength(2);
     expect(weather[0].textContent).toBe("mostly clear, 15% rain");
-    expect(weather[0].className).toContain("text-danger");
+    expect(weather[0].className).toContain("text-sand");
     expect(useWeatherLine).toHaveBeenCalledWith(37, -119, new Date("2026-07-01T20:00:00Z"), "sunset");
     expect(useWeatherLine).toHaveBeenCalledWith(37, -119, new Date("2026-07-01T21:00:00Z"), "any");
   });

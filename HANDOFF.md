@@ -1,78 +1,100 @@
-# Handoff
+# Handoff and task board
 
-How to pick this project back up in a new session, device, or after a
-compaction. Updated at phase transitions, not every task — check the
-ledger (below) for exact task-by-task status.
+The one file that tracks the work and lets another Claude session or machine pick it up. It replaces the old
+`TODO.md`. **Update the Task board below the moment any status changes** (and commit it), then trust it, `git log`
+and `PROGRESS.md` over memory. The sections after "Current work" are history.
 
-## Current work: PDF itinerary (2026-10-16, IN PROGRESS)
+## Task board
 
-Read this section first; the older sections below are history.
+Statuses: pending, in progress, completed, blocked, removed. Exactly one item is in progress at a time.
+Last updated 2026-10-16.
 
-**Goal:** a "Download PDF" action in the editor's Export menu and on the public share page: a schedule of
-every stop plus a route map. Built in the browser with jsPDF (loaded only on click).
+### PDF itinerary (feature branch `feat/pdf-itinerary`, worktree `/Users/genestone/photo-pdf-itinerary`)
 
-**Documents (all committed on local `main`):**
-- Spec: `docs/superpowers/specs/2026-10-16-pdf-itinerary-design.md`
-- Plan (7 tasks): `docs/superpowers/plans/2026-10-16-pdf-itinerary.md`, including a "Deviations" section
-  (fallback map is drawn with PDF vector shapes; editor weather is fetched at click time).
-
-**Where the code is:** worktree `/Users/genestone/photo-pdf-itinerary`, branch `feat/pdf-itinerary`
-(based on local `main` at `682414c`). **This branch is local only and must not be pushed** (Preview builds
-hold the Turso credentials, see the deploy caution below). If you are on another machine it does not exist
-there: the work only reaches GitHub when merged into `main` and pushed.
-
-| Task | What | Status | Commit |
+| # | Task | Status | Notes |
 |---|---|---|---|
-| 1 | `src/lib/itinerary.ts` data builder | done, reviewed | `8aa6381` |
-| 2 | `src/lib/static-map.ts` Mapbox static map URL | done, reviewed | `50c29be` |
-| 3 | `src/lib/itinerary-pdf.ts` jsPDF renderer (jspdf 4.2.1 exact pin) | done, reviewed + fix | `bea92fe`, `c42d112` |
-| 4 | `src/lib/itinerary-download.ts` + `use-itinerary-download.ts` | done, reviewed | `39c1c37` |
-| 5 | Export-menu item (`ExportControl`, `TripHeader`, `TripEditor`) | done, reviewed | `e3360ca` |
-| 6 | Share-page button (`SharedTripView`) | in progress when this was written | |
-| 7 | `e2e/pdf-itinerary.spec.ts` + full gates | pending | |
+| P1 | Design approved, spec, plan | completed | `docs/superpowers/specs/2026-10-16-pdf-itinerary-design.md`, `.../plans/2026-10-16-pdf-itinerary.md` |
+| P2 | Task 1: data builder `src/lib/itinerary.ts` | completed | `8aa6381` |
+| P3 | Task 2: Mapbox static map URL `src/lib/static-map.ts` | completed | `50c29be` |
+| P4 | Task 3: jsPDF renderer `src/lib/itinerary-pdf.ts` | completed | `bea92fe`, fix `c42d112` |
+| P5 | Task 4: download logic and hook | completed | `39c1c37` |
+| P6 | Task 5: Export-menu item | completed | `e3360ca` |
+| P7 | Task 6: share-page button | in progress | built `72c0ea0`, review running |
+| P8 | Task 7: e2e `e2e/pdf-itinerary.spec.ts` and full gates | pending | |
+| P9 | Final whole-branch review (Opus) | pending | |
+| P10 | Test in the real app with the Mapbox token | pending | editor + share link; force the static-map request to fail to see the fallback; check a URL-restricted token on the share page (`no-referrer`) |
+| P11 | Merge `feat/pdf-itinerary` into `main`, push, check Vercel and CI | pending | push only when the owner says "push" |
+| P12 | Clear `~/.playwright-mcp`; commit `CLAUDE.md` | pending | |
 
-**Still to do after Task 7:** final whole-branch review (on **Opus**, per the standing rule below); test in the
-real app with the Mapbox token from the gitignored `.env` (download once from the editor and once from a share
-link, and force the static-map request to fail to see the fallback; confirm api.mapbox.com allows the browser
-fetch, and that a URL-restricted token still works from the share page, which sends `no-referrer`); merge
-`feat/pdf-itinerary` into `main` (ff-only if possible); push to `main` only when the owner says "push"; then check
-Vercel and CI.
+### Waiting on the owner
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| W1 | Push local `main` to GitHub | pending | `git log origin/main..main` lists what is waiting (speed-up merge, test fix, PDF spec/plan, handoff) |
+| W2 | Delete leftover branch `worktree-agent-a22e92e8e241870c4` | pending | owner's decision |
+| W3 | Share link opens the generic page, not the shared trip (reported 2026-10-14) | blocked | not reproduced locally or live; need the device used and what the page showed. Hypotheses: installed PWA capturing the link (manifest `start_url` is `/trips`), mangled token, production data |
+| W4 | Email verification and signup email enumeration (409) | blocked | choose a mail provider |
+
+### Backlog (from the old TODO.md; not started)
+
+To verify by hand:
+- Apple Maps link with every stop, on a real iPhone (the multi-`daddr` format is unconfirmed).
+- Google Maps link with every stop (up to 11 stops per link; longer trips split into parts).
+- Hover photo card stays fully on screen in the Suggestions tab.
+- Stop priority slider (Stops tab) and optimize behavior with a Must-have stop.
+- Live site: sign-in, map, suggestions, photo upload, privacy/terms, account deletion, Imperial/Metric setting, Escape key, prewarm speed.
+
+Owner's accounts and settings:
+- Set `CRON_SECRET` in Vercel (any long random string) so the daily photo-cleanup cron works; without it the route does nothing.
+- Sign in with Google: create an OAuth client in Google Cloud Console (redirect URI `https://photo-app-pi2o.vercel.app/api/auth/callback/google`), then set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in Vercel. The button stays hidden until both are set.
+- Use a separate unrestricted server Mapbox token (`MAPBOX_TOKEN`); URL-restrict the public `NEXT_PUBLIC_MAPBOX_TOKEN`; set a Mapbox spend cap (each PDF download is one static-image request).
+- Rotate Vercel Blob credentials and restrict them to Production.
+- Delete the duplicate empty Vercel project `photo-app`.
+- Replace the GitHub-issues contact link (`CONTACT_URL` in `src/components/legal/LegalPage.tsx`).
+- Get legal review of the privacy and terms pages.
+
+Known gaps:
+- Suggestion quality: the local places table has no OSM tags; add `wikidata`, `memorial` and `access` to `scripts/extract-places.py`, rebuild, re-import, then filter and boost on them.
+- Optional free Flickr API key (`FLICKR_API_KEY`) for the strongest photo counts.
+- Google accounts are never auto-linked to an existing password account with the same email.
+- Must-have priority is a heavy weight, not a hard block.
+- Optimize with light preferences can pick its own start time.
+- CSP still allows `'unsafe-inline'`.
+- Share page `no-referrer` vs a URL-restricted Mapbox token.
+- Offline copies persist until sign-out.
+- Rate limits other than login/signup/password/delete are per instance; no monitoring or alerting yet.
+- `updateTrip` find-then-update is not atomic.
+- Playwright timezone is not pinned for specs other than the hydration one.
+- Skills in `.agents/skills` reference plugin commands that are not installed.
+- Parked PDF review findings (none blocking): no tests for `saveBlob`, `mapTokenFromEnv`, `createItineraryPdf`; PDF title loop has no page-break check (names are capped at 120 chars); the editor's PDF error alert shows only while the Export menu is open; no TripEditor-level test for the `pdf` prop; antimeridian and long-title tests assert only valid output.
+
+## Current work: PDF itinerary (2026-10-16)
+
+**Goal:** a "Download PDF" action in the editor's Export menu and on the public share page: a schedule of every stop
+plus a route map, built in the browser with jsPDF (loaded only on click). The plan has a "Deviations" section
+(the fallback map is drawn with PDF vector shapes; editor weather is fetched at click time).
+
+**Where the code is:** branch `feat/pdf-itinerary` (based on local `main` at `682414c`), worktree
+`/Users/genestone/photo-pdf-itinerary`. **The branch is local only and must not be pushed** (Preview builds hold the
+Turso credentials, see the deploy caution below). On another machine it does not exist: the work only reaches
+GitHub when merged into `main` and pushed.
 
 **Resuming the subagent build:** the controller ledger is
-`/Users/genestone/photo-pdf-itinerary/.superpowers/sdd/2026-10-16-pdf-itinerary/progress.md` (git-ignored, local;
-if gone, trust `git log feat/pdf-itinerary`). Briefs and reports sit next to it as `task-N-brief.md` and
-`task-N-report.md`. Do not re-dispatch a task that has a `complete` line in the ledger.
-
-**Minor review findings parked (none blocking):** no tests for `saveBlob`, `mapTokenFromEnv`,
-`createItineraryPdf`; PDF title loop has no page-break check (trip names are capped at 120 chars); the editor's
-error alert only shows while the Export menu is open; no TripEditor-level test for the `pdf` prop; antimeridian
-and long-title tests only assert valid output.
-
-**Local `main` is ahead of GitHub (not pushed):** the speed-up merge (`06f68ed`), the popularity test fix
-(`ea649b8`), the PDF spec and plan docs, and the sky/weather work is already pushed (`b90f726`). Run
-`git log origin/main..main` to see the exact list. `CLAUDE.md` in the repo root is still **uncommitted**: it holds
-the owner's rules (below), so commit it.
-
-**Other open items:**
-- Share-link bug (shared link opens the generic page): not reproduced locally or on the live site; needs the
-  device used and what the page showed. Hypotheses: an installed PWA capturing the link (manifest `start_url`
-  is `/trips`), a mangled token, or production data.
-- Email verification (and the 409 on signup that reveals whether an email exists): blocked on choosing a mail
-  provider.
-- Branch `worktree-agent-a22e92e8e241870c4` (leftover) is awaiting the owner's decision to delete.
-- `~/.playwright-mcp` holds screenshots from testing; clear it when the PDF work is done.
+`/Users/genestone/photo-pdf-itinerary/.superpowers/sdd/2026-10-16-pdf-itinerary/progress.md` (git-ignored, local; if
+gone, trust `git log feat/pdf-itinerary`). Briefs and reports sit next to it as `task-N-brief.md` and
+`task-N-report.md`. Do not re-dispatch a task with a `complete` line in the ledger.
 
 **Owner's standing rules (also in memory and `CLAUDE.md`):**
 - "push" means push to `main` of `gene500/Photo-App`; never push other branches.
 - After every push, check that Vercel deployed: only project `photo-app-pi2o` counts
-  (https://photo-app-pi2o.vercel.app); command in `CLAUDE.md`. Also watch the GitHub Actions run.
-- Keep a visible to-do list with statuses and report progress against it.
-- Run subagents one at a time, not in parallel. Implementers and per-task reviews on Sonnet; final reviews on Opus.
+  (https://photo-app-pi2o.vercel.app); the command is in `CLAUDE.md`. Also watch the GitHub Actions run.
+- Keep the Task board above current and report progress against it.
+- Run subagents one at a time. Implementers and per-task reviews on Sonnet; final reviews on Opus.
 - Commit trailers: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` and a `Claude-Session:` line.
 - Never print or commit the Mapbox `pk.` token; it lives only in gitignored `.env` files.
 
 **Setup on a new machine:** clone the repo, `npm ci`, copy `.env.example` to `.env` and `.env.local` and fill in values
-(the Mapbox token is not in git), `npm run typecheck && npm run lint && npm test`. Next.js here is 16.x with
+(the Mapbox token is not in git), then `npm run typecheck && npm run lint && npm test`. Next.js here is 16.x with
 breaking changes: read `node_modules/next/dist/docs/` before writing Next-specific code (see `AGENTS.md`).
 
 ## What this is

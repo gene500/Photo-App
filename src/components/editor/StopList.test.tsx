@@ -46,6 +46,23 @@ describe("StopList", () => {
     expect(useWeatherLine).toHaveBeenCalledWith(37, -119, new Date("2026-07-01T21:00:00Z"), "any");
   });
 
+  it("shows the poor-light warning only on rows whose line carries one", () => {
+    useWeatherLine.mockImplementation((_lat, _lng, at: Date | null) =>
+      at ? { text: "overcast", quality: "poor", ...(at.getUTCHours() === 20 ? { warning: "Golden hour: 85% cloud, likely washed out" } : {}) } : null);
+    render(
+      <StopList
+        stops={[stop("a", "Sunset", { lightPref: "golden" }), stop("b", "Plain")]}
+        bestTimes={[null, null]}
+        arrivals={[new Date("2026-07-01T20:00:00Z"), new Date("2026-07-01T21:00:00Z")]}
+        {...handlers}
+      />,
+    );
+    const badges = screen.getAllByTestId("light-warning");
+    expect(badges).toHaveLength(1);
+    expect(badges[0].textContent).toBe("Golden hour: 85% cloud, likely washed out");
+    expect(badges[0].className).toContain("text-danger");
+  });
+
   it("disables browser touch panning on the drag handle so touch drags reach dnd-kit", () => {
     render(<StopList stops={[stop("a", "A")]} bestTimes={[null]} {...handlers} />);
     expect(screen.getByTestId("drag-handle").className).toContain("touch-none");

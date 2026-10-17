@@ -131,6 +131,7 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
             <span role="img" aria-label={weatherAriaLabel(weather)}>{weather.text}</span>
           </p>
         )}
+        {weather?.warning && <p data-testid="light-warning" className="text-xs text-danger">{weather.warning}</p>}
         {stop.notes && <p className="truncate text-xs text-muted">{stop.notes}</p>}
         {onPriorityChange && stop.lightPref !== "any" && (
           <label className="mt-1 flex items-center gap-2 text-[11px] text-muted" title="Priority: how hard Optimize route works to land this stop in its light">

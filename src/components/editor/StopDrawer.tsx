@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost, btnPrimary, inputClass, btnIcon } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
+import { useWeatherLine } from "@/lib/use-weather";
 import { checkPhotoFile, PHOTO_TYPES } from "@/lib/photo-rules";
 import type { LightPref, ShotItem, Stop, Suggestion } from "@/lib/types";
 import { AlternativesPanel } from "./AlternativesPanel";
@@ -12,6 +13,8 @@ import { MAX_DWELL_MINUTES, MAX_SHOT_ITEMS, MAX_SHOT_NOTES, MAX_SHOT_TEXT, type 
 
 type Props = {
   stop: Stop;
+  /** When the trip reaches this stop; lets the drawer warn if the chosen light is forecast to be poor. */
+  arrival?: Date | null;
   onClose: () => void;
   onSave: (patch: StopPatch) => Promise<void>;
   onPhotoChange: (stop: Stop) => void;
@@ -29,12 +32,13 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
-export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives }: Props) {
+export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives, arrival }: Props) {
   const [initial] = useState({ name: stop.name, notes: stop.notes ?? null, visited: stop.visited, lightPref: stop.lightPref, dwellMinutes: stop.dwellMinutes, shotNotes: stop.shotNotes, shotChecklist: JSON.stringify(stop.shotChecklist) });
   const [name, setName] = useState(stop.name);
   const [notes, setNotes] = useState(stop.notes ?? "");
   const [visited, setVisited] = useState(stop.visited);
   const [lightPref, setLightPref] = useState<LightPref>(stop.lightPref);
+  const weather = useWeatherLine(stop.lat, stop.lng, arrival ?? null, lightPref);
   const [dwell, setDwell] = useState(String(stop.dwellMinutes));
   const [shotNotes, setShotNotes] = useState(stop.shotNotes ?? "");
   const nextId = useRef(stop.shotChecklist.length);
@@ -184,6 +188,7 @@ export function StopDrawer({ stop, onClose, onSave, onPhotoChange, alternatives 
           <input type="number" inputMode="numeric" min={0} max={MAX_DWELL_MINUTES} step={5} value={dwell} onChange={(e) => setDwell(e.target.value)} className={inputClass} />
         </label>
       </div>
+      {weather?.warning && <p data-testid="light-warning" className="text-xs text-danger">{weather.warning}</p>}
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">Shot list</legend>
         <label className="block">

@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/api-client", () => ({ api: { uploadPhoto: vi.fn(), removePhoto: vi.fn() } }));
+const useWeatherLine = vi.fn();
+vi.mock("@/lib/use-weather", () => ({ useWeatherLine: (...a: unknown[]) => useWeatherLine(...a) }));
 import { api } from "@/lib/api-client";
 import { MAX_PHOTO_BYTES } from "@/lib/photo-rules";
 import type { Stop } from "@/lib/types";
@@ -15,7 +17,31 @@ const stop: Stop = {
 };
 
 describe("StopDrawer", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useWeatherLine.mockReturnValue(null);
+  });
+
+  it("shows the poor-light warning as plain text with no actions, and follows the Best light control", async () => {
+    const arrival = new Date("2026-07-01T20:00:00Z");
+    useWeatherLine.mockImplementation((_a, _b, _at, pref) => ({ text: "cloudy", quality: "poor", warning: `${pref}: 85% cloud, likely washed out` }));
+    render(<StopDrawer stop={stop} arrival={arrival} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    const badge = screen.getByTestId("light-warning");
+    expect(badge.textContent).toBe("any: 85% cloud, likely washed out");
+    expect(badge.querySelector("button")).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText("Best light"), "sunset");
+    expect(useWeatherLine).toHaveBeenLastCalledWith(37.7156, -119.6773, arrival, "sunset");
+    expect(screen.getByTestId("light-warning").textContent).toBe("sunset: 85% cloud, likely washed out");
+  });
+
+  it("shows no warning badge when the line has no warning or there is no forecast", () => {
+    useWeatherLine.mockReturnValue({ text: "clear", quality: "good" });
+    const { rerender } = render(<StopDrawer stop={stop} arrival={new Date()} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    expect(screen.queryByTestId("light-warning")).toBeNull();
+    useWeatherLine.mockReturnValue(null);
+    rerender(<StopDrawer stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    expect(screen.queryByTestId("light-warning")).toBeNull();
+  });
 
   it("saves edits (blank notes become null) and closes", async () => {
     const onSave = vi.fn(async () => {});

@@ -59,8 +59,8 @@ Last updated 2026-10-16.
 | W1 | Push local `main` to GitHub (includes the merged PDF feature) | completed | pushed as `9d1c5e7`; later docs-only board commits stay local until the next push | `git log origin/main..main` lists what is waiting (speed-up merge, test fix, PDF spec/plan, handoff) |
 | W2 | Delete leftover branch `worktree-agent-a22e92e8e241870c4` | completed | deleted 2026-10-16 at the owner's request; it held one commit, `2cdb6e8` (faster local places query), recoverable from that hash while the object exists |
 | W3 | Share link opens the generic page, not the shared trip (reported 2026-10-14) | removed | owner 2026-10-16: it was fixed in a different session; nothing left to do here |
-| W6 | Low security findings from Sweep 3 (all pre-existing or config) | in progress | now tracked as rows S1-S5 above; details kept here for reference | L1 signup 409 reveals registered emails (accepted: email verification was dropped by the owner, so this stays as a known gap); L2 per-email login limit can be overshot by parallel requests (`src/server/auth.ts:15-19`, record the attempt before bcrypt); L3 a Google-only account can be deleted by typing its email and the prompt shows the email (`src/server/users.ts:136`, `SignOutButton.tsx:83`); L4 offline copies persist after a session ends without explicit sign-out (`src/lib/offline-store.ts`); L5 use a separate server Mapbox token and URL-restrict `NEXT_PUBLIC_MAPBOX_TOKEN` (share-page visitors can now trigger Static Images calls with the public token, so also set the Mapbox spend cap); L6 pin GitHub Actions by SHA, upgrade Prisma when a fix for the 4 high tooling-only audit advisories ships |
-| W5 | Older bugs found by Sweep 2 (not PDF related, still on `main`) | pending | (1) Important: loop routes lose the corridor hole, `src/server/suggestions/corridor.ts:47-48` keeps only `coordinates[0]`, so suggestions fill the inside of a loop; (2) Optimize replaces a working start time and says it moved it (`src/app/api/optimize/route.ts`, `optimize-schedule.ts` bestDeparture; may be intended); (3) changing the trip date across a DST change shifts the start time by an hour (`src/server/trips.ts` shiftedDeparture); (4) `reorderStops` checks outside its transaction (500 instead of 404 on a race); (5) `cellsForCircle` does not wrap at +-180 longitude. Fix on a separate branch |
+| W6 | Low security findings from Sweep 3 (all pre-existing or config) | completed (except S5, owner action) | now tracked as rows S1-S5 above; details kept here for reference | L1 signup 409 reveals registered emails (accepted: email verification was dropped by the owner, so this stays as a known gap); L2 per-email login limit can be overshot by parallel requests (`src/server/auth.ts:15-19`, record the attempt before bcrypt); L3 a Google-only account can be deleted by typing its email and the prompt shows the email (`src/server/users.ts:136`, `SignOutButton.tsx:83`); L4 offline copies persist after a session ends without explicit sign-out (`src/lib/offline-store.ts`); L5 use a separate server Mapbox token and URL-restrict `NEXT_PUBLIC_MAPBOX_TOKEN` (share-page visitors can now trigger Static Images calls with the public token, so also set the Mapbox spend cap); L6 pin GitHub Actions by SHA, upgrade Prisma when a fix for the 4 high tooling-only audit advisories ships |
+| W5 | Older bugs found by Sweep 2 (not PDF related, still on `main`) | completed | fixed in the sweep2 branch (B1-B5); parked low items: a place at exactly lng 180.0 can be missed after the wrap fix (wrap `cellOf` in `places-grid.ts` and `scripts/places-cell.mjs`, then re-import), loop routes drop Overpass results outside the outer ring (check holes only), thin tests for tie-break, route 409, multi-hole corridors, had-entry saveTripCopy | (1) Important: loop routes lose the corridor hole, `src/server/suggestions/corridor.ts:47-48` keeps only `coordinates[0]`, so suggestions fill the inside of a loop; (2) Optimize replaces a working start time and says it moved it (`src/app/api/optimize/route.ts`, `optimize-schedule.ts` bestDeparture; may be intended); (3) changing the trip date across a DST change shifts the start time by an hour (`src/server/trips.ts` shiftedDeparture); (4) `reorderStops` checks outside its transaction (500 instead of 404 on a race); (5) `cellsForCircle` does not wrap at +-180 longitude. Fix on a separate branch |
 | W4 | Email verification and signup email enumeration (409) | removed | owner 2026-10-16: not doing email verification, so no mail provider is needed |
 
 ### Backlog (from the old TODO.md; not started)
@@ -69,7 +69,7 @@ To verify by hand:
 - Apple Maps link with every stop, on a real iPhone (the multi-`daddr` format is unconfirmed).
 - Google Maps link with every stop (up to 11 stops per link; longer trips split into parts).
 - Hover photo card stays fully on screen in the Suggestions tab.
-- Stop priority slider (Stops tab) and optimize behavior with a Must-have stop.
+- Priority pill (Stops tab: Normal / High / Must) and optimize behavior with a Must-have stop, on a real phone.
 - Live site: sign-in, map, suggestions, photo upload, privacy/terms, account deletion, Imperial/Metric setting, Escape key, prewarm speed.
 
 Owner's accounts and settings:
@@ -86,10 +86,12 @@ Known gaps:
 - Optional free Flickr API key (`FLICKR_API_KEY`) for the strongest photo counts.
 - Google accounts are never auto-linked to an existing password account with the same email.
 - Must-have priority is a heavy weight, not a hard block.
-- Optimize with light preferences can pick its own start time.
+- Optimize keeps a saved start time when it costs nothing; otherwise it searches from sunrise (the result is announced to screen readers only).
 - CSP still allows `'unsafe-inline'`.
+- Google-only account deletion re-confirms through Google's account chooser (`prompt=select_account`; `login` is not a documented Google value); existing sessions must sign in once first.
+- Header buttons no longer wrap: at 320 px with extra-large text a long trip name may shrink to almost nothing (unchecked).
 - Share page `no-referrer` vs a URL-restricted Mapbox token.
-- Offline copies persist until sign-out.
+- Offline copies are cleared on sign-out and when the login or signup page is shown (session ended); they stay while the device is offline.
 - Rate limits other than login/signup/password/delete are per instance; no monitoring or alerting yet.
 - `updateTrip` find-then-update is not atomic.
 - Playwright timezone is not pinned for specs other than the hydration one.

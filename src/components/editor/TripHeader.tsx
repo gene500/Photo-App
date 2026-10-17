@@ -3,9 +3,10 @@
 import { useState, type ComponentProps } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost, btnPrimary, btnSecondary, inputClass } from "@/components/ui/styles";
+import { isDateOnly, shiftDepartAtLocal } from "@/lib/dates";
 import type { ExportStop } from "@/lib/export";
 import type { LngLat, Trip } from "@/lib/types";
-import type { TripPatch } from "@/lib/validation";
+import { inYearRange, type TripPatch } from "@/lib/validation";
 import { ExportControl } from "./ExportControl";
 import { ShareControl } from "./ShareControl";
 
@@ -24,11 +25,18 @@ export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: 
     setEditing(true);
   }
 
+  // The server does not know the viewer's time zone, so the moved start time (same clock time, across any daylight-saving change) is computed here.
+  function movedDepartAt(): { departAt?: string } {
+    if (!trip.departAt || !isDateOnly(plannedDate) || Number.isNaN(Date.parse(trip.departAt))) return {};
+    const departAt = shiftDepartAtLocal(trip.departAt, trip.plannedDate, plannedDate);
+    return inYearRange(Date.parse(departAt)) ? { departAt } : {}; // out of range: the server drops the start time
+  }
+
   async function save() {
     setBusy(true);
     setError(null);
     try {
-      await onSave(plannedDate === trip.plannedDate ? { name } : { name, plannedDate });
+      await onSave(plannedDate === trip.plannedDate ? { name } : { name, plannedDate, ...movedDepartAt() });
       setEditing(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't save the trip");

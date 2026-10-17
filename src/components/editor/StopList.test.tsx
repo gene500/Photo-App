@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getSunWindows } from "@/lib/best-time";
@@ -109,14 +109,52 @@ describe("StopList", () => {
     expect(within(rows[1]).getByTestId("best-time").textContent).toBe("No daylight");
   });
 
-  it("shows a priority slider on stops with a best light and reports changes", () => {
-    const onPriorityChange = vi.fn();
-    render(<StopList stops={[stop("a", "Tunnel View", { lightPref: "golden" }), stop("b", "Gas stop")]} bestTimes={[null, null]} {...handlers} onPriorityChange={onPriorityChange} />);
-    expect(screen.queryByLabelText("Priority for Gas stop")).toBeNull(); // Any light: nothing to prioritise
-    const slider = screen.getByLabelText("Priority for Tunnel View");
-    expect(slider.getAttribute("aria-valuetext")).toBe("Normal");
-    fireEvent.change(slider, { target: { value: "2" } });
-    expect(onPriorityChange).toHaveBeenCalledWith("a", "must");
+  describe("priority pill", () => {
+    const setup = (extra: Partial<Stop> = {}) => {
+      const onPriorityChange = vi.fn();
+      render(<StopList stops={[stop("a", "Tunnel View", { lightPref: "golden", ...extra }), stop("b", "Gas stop")]} bestTimes={[null, null]} {...handlers} onPriorityChange={onPriorityChange} />);
+      return { onPriorityChange, group: screen.getByRole("radiogroup", { name: "Priority for Tunnel View" }) };
+    };
+
+    it("shows three radios on stops with a best light and none for any light", () => {
+      const { group } = setup();
+      expect(screen.queryByRole("radiogroup", { name: "Priority for Gas stop" })).toBeNull();
+      expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Normal", "High", "Must-have"]);
+    });
+
+    it("marks the current priority as checked with a roving tabindex", () => {
+      const { group } = setup({ priority: "high" });
+      const [n, h, m] = within(group).getAllByRole("radio");
+      expect([n, h, m].map((r) => r.getAttribute("aria-checked"))).toEqual(["false", "true", "false"]);
+      expect([n, h, m].map((r) => r.getAttribute("tabindex"))).toEqual(["-1", "0", "-1"]);
+    });
+
+    it("selects a third on click", async () => {
+      const { onPriorityChange } = setup();
+      await userEvent.click(screen.getByRole("radio", { name: "High" }));
+      expect(onPriorityChange).toHaveBeenCalledWith("a", "high");
+      await userEvent.click(screen.getByRole("radio", { name: "Must-have" }));
+      expect(onPriorityChange).toHaveBeenCalledWith("a", "must");
+    });
+
+    it("moves the selection with the arrow, Home and End keys", async () => {
+      const { onPriorityChange } = setup({ priority: "high" });
+      screen.getByRole("radio", { name: "High" }).focus();
+      await userEvent.keyboard("{ArrowRight}");
+      expect(onPriorityChange).toHaveBeenLastCalledWith("a", "must");
+      await userEvent.keyboard("{ArrowLeft}");
+      expect(onPriorityChange).toHaveBeenLastCalledWith("a", "normal");
+      await userEvent.keyboard("{End}");
+      expect(onPriorityChange).toHaveBeenLastCalledWith("a", "must");
+      await userEvent.keyboard("{Home}");
+      expect(onPriorityChange).toHaveBeenLastCalledWith("a", "normal");
+    });
+
+    it("does nothing when the selected third is chosen again", async () => {
+      const { onPriorityChange } = setup();
+      await userEvent.click(screen.getByRole("radio", { name: "Normal" }));
+      expect(onPriorityChange).not.toHaveBeenCalled();
+    });
   });
 
   it("calls handlers for visited, delete, and select", async () => {

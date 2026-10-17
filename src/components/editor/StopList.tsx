@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, type KeyboardEvent } from "react";
 import {
   closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from "@dnd-kit/core";
@@ -20,7 +21,7 @@ type Handlers = {
   onToggleVisited: (stopId: string, visited: boolean) => void;
   onDelete: (stopId: string) => void;
   onSelect: (stopId: string) => void;
-  /** When given, stops with a best light show a small priority slider. */
+  /** When given, stops with a best light show a small three-part priority pill. */
   onPriorityChange?: (stopId: string, priority: StopPriority) => void;
 };
 
@@ -31,6 +32,54 @@ export function reorderIds(ids: string[], activeId: string, overId: string): str
   const to = ids.indexOf(overId);
   if (from === -1 || to === -1 || from === to) return null;
   return arrayMove(ids, from, to);
+}
+
+function PriorityPill({ stopId, name, value, onChange }: { stopId: string; name: string; value: StopPriority; onChange: (stopId: string, priority: StopPriority) => void }) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const index = PRIORITIES.indexOf(value);
+  const select = (next: number, focus = false) => {
+    const target = PRIORITIES[next];
+    if (!target) return;
+    if (focus) refs.current[next]?.focus();
+    if (target !== value) onChange(stopId, target);
+  };
+  const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const last = PRIORITIES.length - 1;
+    const next = e.key === "ArrowRight" || e.key === "ArrowDown" ? Math.min(index + 1, last)
+      : e.key === "ArrowLeft" || e.key === "ArrowUp" ? Math.max(index - 1, 0)
+      : e.key === "Home" ? 0
+      : e.key === "End" ? last
+      : null;
+    if (next === null) return;
+    e.preventDefault();
+    select(next, true);
+  };
+  return (
+    <div role="radiogroup" aria-label={`Priority for ${name}`} className="relative grid w-48 max-w-full min-w-0 grid-cols-3 rounded-full bg-hover p-0.5 ring-1 ring-border">
+      <span
+        aria-hidden
+        data-testid="priority-thumb"
+        className="pointer-events-none absolute inset-y-0.5 left-0.5 w-[calc((100%-0.25rem)/3)] rounded-full bg-accent shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none"
+        style={{ transform: `translateX(${index * 100}%)` }}
+      />
+      {PRIORITIES.map((p, i) => (
+        <button
+          key={p}
+          ref={(el) => { refs.current[i] = el; }}
+          type="button"
+          role="radio"
+          title={PRIORITY_LABEL[p]}
+          aria-checked={p === value}
+          tabIndex={p === value ? 0 : -1}
+          onClick={() => select(i)}
+          onKeyDown={onKeyDown}
+          className={`relative min-h-7 min-w-0 truncate rounded-full px-0.5 text-[11px] font-medium focus-visible:outline-2 focus-visible:outline-accent-strong ${p === value ? "text-accent-foreground" : "text-muted hover:text-foreground"}`}
+        >
+          {PRIORITY_LABEL[p]}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export function StopList({ stops, bestTimes, arrivals, onReorder, ...handlers }: Props) {
@@ -134,21 +183,10 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
         {weather?.warning && <p data-testid="light-warning" className="text-xs text-danger">{weather.warning}</p>}
         {stop.notes && <p className="truncate text-xs text-muted">{stop.notes}</p>}
         {onPriorityChange && stop.lightPref !== "any" && (
-          <label className="mt-1 flex items-center gap-2 text-[11px] text-muted" title="Priority: how hard Optimize route works to land this stop in its light">
+          <div className="mt-1 flex items-center gap-2 text-[11px] text-muted" title="Priority: how hard Optimize route works to land this stop in its light">
             <span className="shrink-0">Priority</span>
-            <input
-              type="range"
-              min={0}
-              max={PRIORITIES.length - 1}
-              step={1}
-              value={PRIORITIES.indexOf(stop.priority)}
-              onChange={(e) => onPriorityChange(stop.id, PRIORITIES[Number(e.target.value)] ?? "normal")}
-              aria-label={`Priority for ${stop.name}`}
-              aria-valuetext={PRIORITY_LABEL[stop.priority]}
-              className="h-1 w-16 shrink-0 accent-accent-strong"
-            />
-            <span aria-hidden className="truncate">{PRIORITY_LABEL[stop.priority]}</span>
-          </label>
+            <PriorityPill stopId={stop.id} name={stop.name} value={stop.priority} onChange={onPriorityChange} />
+          </div>
         )}
       </div>
       {stop.photoUrl ? (

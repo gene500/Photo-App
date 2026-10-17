@@ -3,8 +3,11 @@
 import { useMemo, useState } from "react";
 import { MapView } from "@/components/editor/MapView";
 import { useSettings } from "@/components/settings/SettingsProvider";
-import { card } from "@/components/ui/styles";
+import { useItineraryDownload } from "@/components/itinerary/use-itinerary-download";
+import { btnGhost, card } from "@/components/ui/styles";
 import { computeArrivals, computeBestTimes, describeBestTime, formatClock } from "@/lib/best-time";
+import { buildItinerary, itineraryFileName } from "@/lib/itinerary";
+import { createItineraryPdf, mapTokenFromEnv } from "@/lib/itinerary-download";
 import { describeLightHint, lightLabel } from "@/lib/light-windows";
 import { estimateLegDurations } from "@/lib/straight-line";
 import { useMounted } from "@/lib/use-mounted";
@@ -41,6 +44,27 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
     [trip.plannedDate, trip.departAt, trip.stops, legs],
   );
 
+  const download = useItineraryDownload();
+  const canDownload = mounted && trip.stops.length >= 2;
+
+  function downloadPdf() {
+    return download.run(async () => {
+      const input = buildItinerary({
+        tripName: trip.name,
+        plannedDate: trip.plannedDate,
+        departAt: trip.departAt ? new Date(trip.departAt) : null,
+        totalDistanceM: route?.distance ?? null,
+        totalDurationS: route?.duration ?? null,
+        stops: trip.stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: s.notes, shotNotes: s.shotNotes, lightPref: s.lightPref, arrival: arrivals[i] ?? null })),
+        weather: trip.stops.map(() => null),
+        timeFormat: tf,
+        distanceUnit: settings.distanceUnit,
+      });
+      const blob = await createItineraryPdf({ input, geometry: line, stops: trip.stops.map((s) => ({ lat: s.lat, lng: s.lng })), token: mapTokenFromEnv() });
+      return { blob, fileName: itineraryFileName(trip.name) };
+    });
+  }
+
   return (
     <main className="relative h-dvh overflow-hidden">
       <div className="absolute inset-0">
@@ -56,7 +80,15 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
 
       <aside className={`absolute inset-x-0 bottom-0 z-10 flex h-[55dvh] flex-col overflow-hidden rounded-b-none rounded-t-2xl lg:inset-x-auto lg:bottom-3 lg:left-3 lg:top-3 lg:h-auto lg:w-[23.75rem] lg:rounded-2xl ${card}`}>
         <header className="space-y-0.5 px-4 pb-2 pt-3">
-          <h1 className="text-lg font-semibold">{trip.name}</h1>
+          <div className="flex flex-wrap items-start justify-between gap-x-2">
+            <h1 className="min-w-0 max-w-full flex-1 basis-28 text-lg font-semibold">{trip.name}</h1>
+            {canDownload && (
+              <button type="button" onClick={() => void downloadPdf()} disabled={download.busy} className={`${btnGhost} shrink-0 disabled:opacity-50`}>
+                {download.busy ? "Preparing PDF..." : "Download PDF"}
+              </button>
+            )}
+          </div>
+          {download.error && <p role="alert" className="text-sm text-danger">{download.error}</p>}
           <p className="text-sm text-muted">
             View only · planned for {trip.plannedDate}
             {mounted && trip.departAt && <> · Starts {formatClock(new Date(trip.departAt), undefined, tf)}</>}

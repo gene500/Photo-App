@@ -29,12 +29,23 @@ Last updated 2026-10-16.
 | P14 | Merge `feat/pdf-itinerary` into `main`, push, check Vercel and CI | completed | pushed 2026-10-16 as `9d1c5e7`; Vercel `photo-app-pi2o` success; GitHub Actions CI success. Feature branch and worktree deleted |
 | P15 | Clear `~/.playwright-mcp` | completed | |
 
+### Bug fixes from Sweep 2 (branch `fix/sweep2-bugs`, worktree `/Users/genestone/photo-bugfix`, owner said "fix all bugs")
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| B1 | Loop routes keep the corridor hole (`corridor.ts`) | in progress | |
+| B2 | Optimize keeps a saved start time that already works | pending | |
+| B3 | Trip date change across DST keeps the clock time | pending | |
+| B4 | `reorderStops` answers 404/409, not 500, on a race | pending | |
+| B5 | Date-line wrap in `cellsForCircle`; `saveTripCopy` orphan | pending | |
+| B6 | Final Opus review of the branch, merge, push, then confirm Vercel and CI succeeded | pending | the owner asked for explicit confirmation that the deploy succeeded |
+
 ### Waiting on the owner
 
 | # | Task | Status | Notes |
 |---|---|---|---|
 | W1 | Push local `main` to GitHub (includes the merged PDF feature) | completed | pushed as `9d1c5e7`; later docs-only board commits stay local until the next push | `git log origin/main..main` lists what is waiting (speed-up merge, test fix, PDF spec/plan, handoff) |
-| W2 | Delete leftover branch `worktree-agent-a22e92e8e241870c4` | pending | owner's decision |
+| W2 | Delete leftover branch `worktree-agent-a22e92e8e241870c4` | completed | deleted 2026-10-16 at the owner's request; it held one commit, `2cdb6e8` (faster local places query), recoverable from that hash while the object exists |
 | W3 | Share link opens the generic page, not the shared trip (reported 2026-10-14) | blocked | not reproduced locally or live; need the device used and what the page showed. Hypotheses: installed PWA capturing the link (manifest `start_url` is `/trips`), mangled token, production data |
 | W6 | Low security findings from Sweep 3 (all pre-existing or config) | pending | L1 signup 409 reveals registered emails (known gap, needs email channel); L2 per-email login limit can be overshot by parallel requests (`src/server/auth.ts:15-19`, record the attempt before bcrypt); L3 a Google-only account can be deleted by typing its email and the prompt shows the email (`src/server/users.ts:136`, `SignOutButton.tsx:83`); L4 offline copies persist after a session ends without explicit sign-out (`src/lib/offline-store.ts`); L5 use a separate server Mapbox token and URL-restrict `NEXT_PUBLIC_MAPBOX_TOKEN` (share-page visitors can now trigger Static Images calls with the public token, so also set the Mapbox spend cap); L6 pin GitHub Actions by SHA, upgrade Prisma when a fix for the 4 high tooling-only audit advisories ships |
 | W5 | Older bugs found by Sweep 2 (not PDF related, still on `main`) | pending | (1) Important: loop routes lose the corridor hole, `src/server/suggestions/corridor.ts:47-48` keeps only `coordinates[0]`, so suggestions fill the inside of a loop; (2) Optimize replaces a working start time and says it moved it (`src/app/api/optimize/route.ts`, `optimize-schedule.ts` bestDeparture; may be intended); (3) changing the trip date across a DST change shifts the start time by an hour (`src/server/trips.ts` shiftedDeparture); (4) `reorderStops` checks outside its transaction (500 instead of 404 on a race); (5) `cellsForCircle` does not wrap at +-180 longitude. Fix on a separate branch |

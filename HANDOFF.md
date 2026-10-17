@@ -37,8 +37,8 @@ Last updated 2026-10-16.
 |---|---|---|---|
 | B1 | Loop routes keep the corridor hole (`corridor.ts`) | completed | `c66e340` on `fix/sweep2-bugs`; Overpass results are post-filtered (the `poly:` filter takes no holes), so a dense loop interior can still use up the 500-element cap: a set difference in the query would be the full fix |
 | B2 | Optimize keeps a saved start time that already works | completed | `116950b`, reviewed and approved |
-| B3 | Trip date change across DST keeps the clock time | in progress | |
-| B4 | `reorderStops` answers 404/409, not 500, on a race | pending | |
+| B3 | Trip date change across DST keeps the clock time | completed | `33956a0`, reviewed and approved |
+| B4 | `reorderStops` answers 404/409, not 500, on a race | in progress | |
 | B5 | Date-line wrap in `cellsForCircle`; `saveTripCopy` orphan | pending | |
 | U1 | Priority control becomes a tappable pill split into thirds (no dragging) | pending | owner request 2026-10-16 (screenshot of the Stops list); `src/components/editor/StopList.tsx` |
 | S1 | Security L2: record the login attempt before bcrypt so parallel guesses cannot overshoot the per-email limit (`src/server/auth.ts:15-19`) | pending | owner asked 2026-10-16 for the Low security items to come before the final check |
@@ -49,7 +49,7 @@ Last updated 2026-10-16.
 | U2 | Trip header: Edit trip, Export and Share sit to the right of the trip name on the same line (they wrap under the name in the narrow panel today) | pending | owner 2026-10-16 (screenshot). `src/components/editor/TripHeader.tsx` outer row has `flex-wrap`; brief `u2-brief.md` |
 | U3 | Remove the Optimize note text under the button ("Start time moved to … Can't fit N stops in their light: …") | pending | owner 2026-10-16 (screenshot); removes both sentences; brief `u3-brief.md`; runs after B2 is merged in the same branch, so it is safe to edit that code |
 | U4 | Undo beside Optimize route looks like a button (it is plain grey text today) | pending | owner 2026-10-16 (screenshot); `TripEditor.tsx` ~745-755; brief `u4-brief.md` |
-| U5 | "Misses golden hour" and "likely washed out" warning text is beige instead of orange-pink (new token; real errors keep the danger colour) | pending | owner 2026-10-16 (screenshot); brief `u5-brief.md` |
+| U5 | "Misses golden hour" and "likely washed out" warning text is beige instead of orange-pink, and the End badge no longer breaks the last stop text layout (new token; real errors keep the danger colour) | pending | owner 2026-10-16 (screenshot); brief `u5-brief.md` |
 | B6 | FINAL (always the last row, combined): full codebase check (Opus), handle its findings, then merge, push to `main`, and confirm both Vercel (`photo-app-pi2o`) and CI succeeded | pending | owner 2026-10-16: the final full codebase check always includes merge, push and the Vercel/CI confirmation; nothing goes after it. Replaces the earlier separate B6 (review/merge/push) and B7 (check) rows |
 
 ### Waiting on the owner

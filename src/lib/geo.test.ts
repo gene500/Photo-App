@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { haversineMeters, wrapLng } from "./geo";
+import { bearingEndpoint, haversineMeters, wrapLng } from "./geo";
 
 describe("haversineMeters", () => {
   it("measures one degree of longitude at the equator (~111.2 km)", () => {
@@ -22,5 +22,24 @@ describe("wrapLng", () => {
     expect(wrapLng(-190)).toBeCloseTo(170);
     expect(wrapLng(540 + 10)).toBeCloseTo(-170);
     expect(wrapLng(-350)).toBeCloseTo(10);
+  });
+});
+
+describe("bearingEndpoint", () => {
+  it("heads east along the equator", () => {
+    const [lng, lat] = bearingEndpoint({ lat: 0, lng: 0 }, 90, 111.195);
+    expect(Math.abs(lng - 1)).toBeLessThan(0.01);
+    expect(Math.abs(lat)).toBeLessThan(0.01);
+  });
+  it("heads north along a meridian", () => {
+    const [lng, lat] = bearingEndpoint({ lat: 0, lng: 0 }, 0, 111.195);
+    expect(Math.abs(lng)).toBeLessThan(0.01);
+    expect(Math.abs(lat - 1)).toBeLessThan(0.01);
+  });
+  it("stays finite near the pole", () => {
+    const [lng, lat] = bearingEndpoint({ lat: 89, lng: 0 }, 90, 50);
+    expect(Number.isFinite(lng)).toBe(true);
+    expect(Number.isFinite(lat)).toBe(true);
+    expect(Math.abs(lat - 89)).toBeLessThan(0.1);
   });
 });

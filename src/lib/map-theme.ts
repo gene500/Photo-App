@@ -52,7 +52,7 @@ function roadTheme(id: string, type: string): LayerPaint | null {
 
 export function themeLayerPaint(layer: LayerInfo): LayerPaint | null {
   const { id, type } = layer;
-  if (has(id, /^route/)) return null; // our own route layers (route-casing, route-line)
+  if (has(id, /^(route|sky)/)) return null; // our own layers (route-casing, route-line, sky-*)
 
   if (type === "background") return { paint: { "background-color": C.land } };
   if (type === "symbol") return symbolTheme(id);

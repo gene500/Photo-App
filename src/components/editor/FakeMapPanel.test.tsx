@@ -135,3 +135,27 @@ describe("FakeMapPanel", () => {
     });
   });
 });
+
+describe("FakeMapPanel sky lines", () => {
+  const sky = { lat: 37, lng: -119.5, sunrise: 60, sunset: 300 };
+
+  it("draws a sunrise and a sunset line with their bearings", () => {
+    render(<FakeMapPanel {...base} sky={sky} />);
+    expect(screen.getByTestId("sky-line-sunrise").getAttribute("data-bearing")).toBe("60");
+    expect(screen.getByTestId("sky-line-sunset").getAttribute("data-bearing")).toBe("300");
+  });
+
+  it("draws only the line whose bearing is known", () => {
+    render(<FakeMapPanel {...base} sky={{ ...sky, sunrise: null }} />);
+    expect(screen.queryByTestId("sky-line-sunrise")).toBeNull();
+    expect(screen.getByTestId("sky-line-sunset")).toBeTruthy();
+  });
+
+  it("draws nothing without sky", () => {
+    const { rerender } = render(<FakeMapPanel {...base} sky={null} />);
+    expect(screen.queryByTestId("sky-line-sunrise")).toBeNull();
+    expect(screen.queryByTestId("sky-line-sunset")).toBeNull();
+    rerender(<FakeMapPanel {...base} />);
+    expect(screen.queryByTestId("sky-line-sunset")).toBeNull();
+  });
+});

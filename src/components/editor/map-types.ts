@@ -14,6 +14,8 @@ export type MapViewProps = {
   selectedId?: string | null;
   /** Fly to a point; a new `nonce` re-triggers the move. */
   flyTo?: (LatLng & { nonce: number }) | null;
+  /** The selected stop with its sunrise/sunset compass bearings (degrees clockwise from north); null draws no lines. */
+  sky?: { lat: number; lng: number; sunrise: number | null; sunset: number | null } | null;
   onMapClick: (p: LatLng) => void;
   onStopClick: (stopId: string) => void;
   onStopMove?: (stopId: string, p: LatLng) => void;

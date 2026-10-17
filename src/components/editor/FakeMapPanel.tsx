@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { bearingEndpoint } from "@/lib/geo";
 import { latLngToPercent, pixelToLatLng, type Bounds } from "@/lib/map-bounds";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import { stopColor } from "@/lib/stop-style";
@@ -33,8 +34,13 @@ function SuggestionPopup({ suggestion, left, top }: { suggestion: Suggestion; le
   );
 }
 
+/** Fixed hexes, like ROUTE_COLOR in MapPanel: a warm amber for sunrise, a violet for sunset. */
+const SUNRISE_COLOR = "#d9822b";
+const SUNSET_COLOR = "#7b4fa3";
+const SKY_LINE_KM = 30;
+
 /** No-network stand-in for Mapbox GL: used in e2e and when no token is configured. */
-export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, readOnly, onMapClick, onStopClick, onSuggestionClick, onCenterChange }: MapViewProps) {
+export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, readOnly, sky, onMapClick, onStopClick, onSuggestionClick, onCenterChange }: MapViewProps) {
   // The suggestion whose dot is hovered or focused; the panel's highlighted card also opens its popup.
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   useEffect(() => {
@@ -47,6 +53,16 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
     .map(([lng, lat]) => pos({ lat, lng }))
     .map((p) => `${p.left},${p.top}`)
     .join(" ");
+
+  const skyLines = sky
+    ? ([["sunrise", sky.sunrise, SUNRISE_COLOR], ["sunset", sky.sunset, SUNSET_COLOR]] as const).flatMap(([name, bearing, color]) => {
+        if (bearing === null) return [];
+        const [lng, lat] = bearingEndpoint(sky, bearing, SKY_LINE_KM);
+        const a = pos(sky);
+        const b = pos({ lat, lng });
+        return [{ name, bearing, color, points: `${a.left},${a.top} ${b.left},${b.top}` }];
+      })
+    : [];
 
   const popupId = hoveredId ?? highlightedSuggestionId;
   const popupSuggestion = suggestions.find((s) => s.osmId === popupId);
@@ -62,6 +78,9 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
     >
       <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
         {routePoints && <polyline points={routePoints} fill="none" stroke="#b08d57" strokeWidth={0.6} strokeLinecap="round" strokeLinejoin="round" />}
+        {skyLines.map((l) => (
+          <polyline key={l.name} data-testid={`sky-line-${l.name}`} data-bearing={l.bearing} points={l.points} fill="none" stroke={l.color} strokeWidth={0.5} strokeDasharray="1.5 1" strokeLinecap="round" />
+        ))}
       </svg>
       {stops.map((s, i) => {
         const p = pos(s);

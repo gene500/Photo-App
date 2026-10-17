@@ -1,11 +1,11 @@
 "use client";
 
-import type { Feature, LineString } from "geojson";
+import type { Feature, FeatureCollection, LineString } from "geojson";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
 import { diffIds } from "@/lib/diff-ids";
-import { wrapLng } from "@/lib/geo";
+import { bearingEndpoint, wrapLng } from "@/lib/geo";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { applyMapTheme } from "@/lib/map-theme";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
@@ -18,6 +18,12 @@ import { createSuggestionPopupContent } from "./suggestion-popup";
 const ROUTE_SOURCE = "route";
 /** Mapbox paint can't read CSS variables; this is the light-theme `--route` token. */
 const ROUTE_COLOR = "#b08d57";
+const SKY_SOURCE = "sky";
+/** Fixed hexes like ROUTE_COLOR: warm amber for sunrise, violet for sunset; both read on the beige map. */
+const SUNRISE_COLOR = "#d9822b";
+const SUNSET_COLOR = "#7b4fa3";
+/** The direction lines are this long on screen, whatever the zoom. */
+const SKY_LINE_PX = 90;
 const MARKER_CLASS = "map-marker";
 const DEFAULT_CENTER: LngLat = [-98.5, 39.8];
 const STOP_CLASS = "flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-xs font-semibold shadow-md";
@@ -27,6 +33,26 @@ const PENDING_CLASS = "h-5 w-5 rounded-full border-2 border-white bg-[#3b3226] s
 
 function routeData(geometry: LngLat[] | null): Feature<LineString> {
   return { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: geometry ?? [] } };
+}
+
+function emptySky(): FeatureCollection {
+  return { type: "FeatureCollection", features: [] };
+}
+
+/** A line and a label point per known bearing, each SKY_LINE_PX long on screen at this zoom and latitude. */
+function skyData(sky: MapViewProps["sky"], zoom: number): FeatureCollection {
+  if (!sky) return emptySky();
+  const km = (SKY_LINE_PX * 78271.51696 * Math.cos((sky.lat * Math.PI) / 180)) / 2 ** zoom / 1000;
+  const features: Feature[] = [];
+  for (const [kind, name, bearing] of [["sunrise", "Sunrise", sky.sunrise], ["sunset", "Sunset", sky.sunset]] as const) {
+    if (bearing === null) continue;
+    const end = bearingEndpoint(sky, bearing, km);
+    features.push(
+      { type: "Feature", properties: { kind }, geometry: { type: "LineString", coordinates: [[sky.lng, sky.lat], end] } },
+      { type: "Feature", properties: { kind, name }, geometry: { type: "Point", coordinates: end } },
+    );
+  }
+  return { type: "FeatureCollection", features };
 }
 
 function markerElement(className: string, label: string, text = ""): HTMLButtonElement {
@@ -62,7 +88,7 @@ function isDarkNow(): boolean {
 }
 
 export default function MapPanel({
-  stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, flyTo, readOnly,
+  stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, flyTo, readOnly, sky,
   onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange,
 }: MapViewProps) {
   const { settings } = useSettings();
@@ -129,6 +155,37 @@ export default function MapPanel({
         layout: { "line-join": "round", "line-cap": "round" },
         paint: { "line-color": ROUTE_COLOR, "line-width": 4 },
       });
+      // Sunrise/sunset direction lines for the selected stop (data is set by the sky effect).
+      map.addSource(SKY_SOURCE, { type: "geojson", data: emptySky() });
+      for (const [kind, color] of [["sunrise", SUNRISE_COLOR], ["sunset", SUNSET_COLOR]] as const) {
+        map.addLayer({
+          id: `sky-${kind}`,
+          type: "line",
+          source: SKY_SOURCE,
+          filter: ["all", ["==", ["geometry-type"], "LineString"], ["==", ["get", "kind"], kind]],
+          layout: { "line-cap": "round" },
+          paint: { "line-color": color, "line-width": 3, "line-dasharray": [2, 1.5] },
+        });
+      }
+      map.addLayer({
+        id: "sky-names",
+        type: "symbol",
+        source: SKY_SOURCE,
+        filter: ["==", ["geometry-type"], "Point"],
+        layout: {
+          "text-field": ["get", "name"],
+          // The stock light/dark styles serve these glyph ranges.
+          "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
+          "text-size": 12,
+          "text-offset": [0, -1],
+          "text-allow-overlap": true,
+        },
+        paint: {
+          "text-color": ["match", ["get", "kind"], "sunrise", SUNRISE_COLOR, SUNSET_COLOR],
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 1.5,
+        },
+      });
       setLoaded(true);
       reportCenter();
     });
@@ -159,6 +216,18 @@ export default function MapPanel({
       fittedRef.current = true;
     }
   }, [loaded, routeGeometry, readOnly]);
+
+  // Sunrise/sunset lines for the selected stop; redrawn after each zoom so they stay SKY_LINE_PX long.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    const update = () => (map.getSource(SKY_SOURCE) as mapboxgl.GeoJSONSource | undefined)?.setData(skyData(sky, map.getZoom()));
+    update();
+    map.on("zoomend", update);
+    return () => {
+      map.off("zoomend", update);
+    };
+  }, [loaded, sky]);
 
   // Numbered, draggable stop markers, diffed by stop id so a state update never destroys a marker mid-drag.
   useEffect(() => {

@@ -1,8 +1,8 @@
 "use client";
 
-import { signOut } from "next-auth/react";
+import { signIn, signOut } from "next-auth/react";
 import { useState } from "react";
-import { api } from "@/lib/api-client";
+import { api, ApiError } from "@/lib/api-client";
 import { clearAllCopies, disableOfflineSaving } from "@/lib/offline-store";
 
 /** Signing out on a shared device must not leave this user's trips behind (see below). */
@@ -48,18 +48,21 @@ export function SignOutButton({ className }: { className?: string }) {
 }
 
 /** Permanent account deletion: asks for the password, then wipes this device's offline copies and signs out. */
-export function DeleteAccountButton({ className, hasPassword = true, email = null }: { className?: string; hasPassword?: boolean; email?: string | null }) {
+export function DeleteAccountButton({ className, hasPassword = true }: { className?: string; hasPassword?: boolean }) {
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsReauth, setNeedsReauth] = useState(false);
   async function run() {
     setPending(true);
     setError(null);
+    setNeedsReauth(false);
     try {
       await api.deleteAccount(hasPassword ? { password } : { confirmEmail: password });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't delete the account");
+      setNeedsReauth(e instanceof ApiError && e.reason === "reauth");
       setPending(false);
       return;
     }
@@ -76,7 +79,7 @@ export function DeleteAccountButton({ className, hasPassword = true, email = nul
   }
   return (
     <form method="post" onSubmit={(e) => { e.preventDefault(); void run(); }} className="space-y-2">
-      <p className="text-xs text-muted">This permanently deletes your account, all your trips, stops and photos. It cannot be undone. {hasPassword ? "Enter your password to confirm." : `Type your email address${email ? ` (${email})` : ""} to confirm.`}</p>
+      <p className="text-xs text-muted">This permanently deletes your account, all your trips, stops and photos. It cannot be undone. {hasPassword ? "Enter your password to confirm." : "Type your email address to confirm."}</p>
       <label className="block text-sm">
         <span className="text-muted">{hasPassword ? "Password" : "Email address"}</span>
         <input type={hasPassword ? "password" : "email"} required autoFocus autoComplete={hasPassword ? "current-password" : "off"} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 block w-full max-w-xs rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
@@ -85,11 +88,17 @@ export function DeleteAccountButton({ className, hasPassword = true, email = nul
         <button type="submit" disabled={pending || password === ""} className="inline-flex min-h-9 items-center rounded-lg bg-danger px-3 text-sm text-white disabled:opacity-50">
           {pending ? "Deleting…" : "Delete my account"}
         </button>
-        <button type="button" disabled={pending} onClick={() => { setOpen(false); setPassword(""); setError(null); }} className={className}>
+        <button type="button" disabled={pending} onClick={() => { setOpen(false); setPassword(""); setError(null); setNeedsReauth(false); }} className={className}>
           Cancel
         </button>
       </div>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+      {needsReauth && (
+        // prompt=login makes Google ask for a fresh login, which restarts the five-minute window.
+        <button type="button" onClick={() => void signIn("google", { callbackUrl: window.location.href }, { prompt: "login" })} className={className}>
+          Sign in with Google again
+        </button>
+      )}
     </form>
   );
 }

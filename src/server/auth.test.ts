@@ -28,6 +28,17 @@ describe("auth", () => {
   const tokenFor = async (id: string) =>
     authOptions.callbacks!.jwt!({ token: {}, user: { id } } as never) as Promise<JWT>;
 
+  it("stamps authTime on sign-in only, and exposes it on the session", async () => {
+    const user = await createUser("ann@example.com", "correct-horse");
+    const before = Date.now();
+    const token = await tokenFor(user.id);
+    expect(token.authTime).toBeGreaterThanOrEqual(before);
+    // An ordinary token read (no `user`) must not refresh it.
+    const reread = (await authOptions.callbacks!.jwt!({ token: { ...token, authTime: 5 } } as never)) as JWT;
+    expect(reread.authTime).toBe(5);
+    expect((await sessionOf(token) as Session & { authTime?: number }).authTime).toBe(token.authTime);
+  });
+
   it("a token keeps working until the user's session version is bumped", async () => {
     const user = await createUser("ann@example.com", "correct-horse");
     const token = await tokenFor(user.id);

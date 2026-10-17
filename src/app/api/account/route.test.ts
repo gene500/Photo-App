@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
-vi.mock("@/server/users", () => ({ deleteAccount: vi.fn() }));
+vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn(), getAuthTime: vi.fn() }));
+vi.mock("@/server/users", () => ({ deleteAccount: vi.fn(), REAUTH_REQUIRED: "reauth-required" }));
 vi.mock("@/server/photos", () => ({ deletePhotoFile: vi.fn(async () => true) }));
-import { getCurrentUserId } from "@/server/session";
+import { getAuthTime, getCurrentUserId } from "@/server/session";
 import { deleteAccount } from "@/server/users";
 import { deletePhotoFile } from "@/server/photos";
 import { DELETE } from "./route";
@@ -29,10 +29,23 @@ describe("DELETE /api/account", () => {
     expect((await DELETE(del({ password: "nope" }))).status).toBe(403);
     expect(deletePhotoFile).not.toHaveBeenCalled();
   });
+  it("tells a stale Google session to sign in again", async () => {
+    vi.mocked(deleteAccount).mockResolvedValue("reauth-required" as never);
+    const res = await DELETE(del({ confirmEmail: "a@b.com" }));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Please sign in again to delete your account", reason: "reauth" });
+    expect(deletePhotoFile).not.toHaveBeenCalled();
+  });
+  it("passes the sign-in time to the check", async () => {
+    vi.mocked(getAuthTime).mockResolvedValue(1234);
+    vi.mocked(deleteAccount).mockResolvedValue({ photoUrls: [] });
+    await DELETE(del({ confirmEmail: "a@b.com" }));
+    expect(deleteAccount).toHaveBeenCalledWith("u1", { confirmEmail: "a@b.com", authTime: 1234 });
+  });
   it("deletes the account and its photo files", async () => {
     vi.mocked(deleteAccount).mockResolvedValue({ photoUrls: ["/api/uploads/a.jpg", "/api/uploads/b.jpg"] });
     expect((await DELETE(del({ password: "right" }))).status).toBe(204);
-    expect(deleteAccount).toHaveBeenCalledWith("u1", { password: "right" });
+    expect(deleteAccount).toHaveBeenCalledWith("u1", expect.objectContaining({ password: "right" }));
     expect(deletePhotoFile).toHaveBeenCalledTimes(2);
   });
 });

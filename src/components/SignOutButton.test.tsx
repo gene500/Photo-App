@@ -6,10 +6,18 @@ import { installMemoryStorage } from "../../tests/helpers/memory-storage";
 import { enableOfflineSaving, listTripCopies, saveTripCopy } from "@/lib/offline-store";
 
 const signOut = vi.fn();
-vi.mock("next-auth/react", () => ({ signOut: (o: unknown) => signOut(o) }));
+const signIn = vi.fn();
+vi.mock("next-auth/react", () => ({ signOut: (o: unknown) => signOut(o), signIn: (...a: unknown[]) => signIn(...a) }));
 const signOutEverywhere = vi.fn();
-vi.mock("@/lib/api-client", () => ({ api: { signOutEverywhere: () => signOutEverywhere() } }));
-import { SignOutButton, SignOutEverywhereButton } from "./SignOutButton";
+const deleteAccount = vi.fn();
+vi.mock("@/lib/api-client", () => {
+  class ApiError extends Error {
+    constructor(readonly status: number, message: string, readonly reason?: string) { super(message); }
+  }
+  return { ApiError, api: { signOutEverywhere: () => signOutEverywhere(), deleteAccount: (p: unknown) => deleteAccount(p) } };
+});
+import { ApiError } from "@/lib/api-client";
+import { DeleteAccountButton, SignOutButton, SignOutEverywhereButton } from "./SignOutButton";
 
 beforeEach(() => {
   installMemoryStorage();
@@ -56,5 +64,28 @@ describe("SignOutEverywhereButton", () => {
     await userEvent.click(screen.getByRole("button", { name: "Sign out on all devices" }));
     expect((await screen.findByRole("alert")).textContent).toBe("Not signed in");
     expect(signOut).not.toHaveBeenCalled();
+  });
+});
+
+describe("DeleteAccountButton (Google-only account)", () => {
+  beforeEach(() => { signIn.mockReset(); deleteAccount.mockReset(); });
+
+  it("does not print the email in the prompt", async () => {
+    render(<DeleteAccountButton hasPassword={false} />);
+    await userEvent.click(screen.getByRole("button", { name: /Delete account/ }));
+    expect(document.body.textContent).not.toContain("@");
+    expect(document.body.textContent).toContain("Type your email address");
+  });
+
+  it("on a reauth answer shows the message and a button that forces a fresh Google login", async () => {
+    deleteAccount.mockRejectedValue(new ApiError(403, "Please sign in again to delete your account", "reauth"));
+    render(<DeleteAccountButton hasPassword={false} />);
+    await userEvent.click(screen.getByRole("button", { name: /Delete account/ }));
+    await userEvent.type(screen.getByLabelText("Email address"), "me@example.com");
+    await userEvent.click(screen.getByRole("button", { name: "Delete my account" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Please sign in again to delete your account");
+    expect(signOut).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Sign in with Google again" }));
+    expect(signIn).toHaveBeenCalledWith("google", { callbackUrl: window.location.href }, { prompt: "login" });
   });
 });

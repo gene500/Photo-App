@@ -66,6 +66,8 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.sub = user.id;
+        // When the user actually authenticated; set only here, never on ordinary token reads.
+        token.authTime = Date.now();
         // Stamp the token with the user's current session version; bumping it later revokes this token.
         token.sv = (await getSessionVersion(user.id)) ?? 0;
       }
@@ -78,6 +80,7 @@ export const authOptions: NextAuthOptions = {
       const current = await getSessionVersion(token.sub);
       if (current === null || current !== (token.sv ?? 0)) return { expires: session.expires } as Session;
       session.user = { ...session.user, id: token.sub };
+      session.authTime = token.authTime;
       return session;
     },
   },

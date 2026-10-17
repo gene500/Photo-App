@@ -167,7 +167,7 @@ export function SettingsView({ email, hasPassword = true }: { email: string | nu
         </div>
         {hasPassword && <div><ChangePasswordButton className={btnSecondary} /></div>}
         {!hasPassword && <p className="text-xs text-muted">You sign in with Google, so there is no password to change.</p>}
-        <div><DeleteAccountButton className={btnSecondary} hasPassword={hasPassword} email={email} /></div>
+        <div><DeleteAccountButton className={btnSecondary} hasPassword={hasPassword} /></div>
       </Section>
 
       <div>

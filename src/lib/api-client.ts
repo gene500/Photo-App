@@ -15,10 +15,17 @@ export class ApiError extends Error {
 
 async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
   const isForm = init.body instanceof FormData;
-  const res = await fetch(url, {
-    ...init,
-    headers: isForm || init.body === undefined ? init.headers : { "Content-Type": "application/json" },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: isForm || init.body === undefined ? init.headers : { "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    // fetch rejects with a bare TypeError ("Failed to fetch") when offline or the server is unreachable.
+    if (e instanceof TypeError) throw new ApiError(0, "You're offline or the server can't be reached. Try again.");
+    throw e;
+  }
   if (res.status === 204) return undefined as T;
   const body = (await res.json().catch(() => null)) as { error?: string; reason?: string } | null;
   if (!res.ok) throw new ApiError(res.status, body?.error ?? `Request failed (${res.status})`, body?.reason);

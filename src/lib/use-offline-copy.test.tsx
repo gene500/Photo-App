@@ -63,4 +63,18 @@ describe("useOfflineCopy", () => {
     vi.advanceTimersByTime(2000);
     expect(listTripCopies()).toHaveLength(1);
   });
+
+  it("resumes saving after another tab cleared the copies (owner removed), but not after a sign-out", () => {
+    renderHook(() => useOfflineCopy(trip, stops, "u1"));
+    localStorage.removeItem("rtpp.offline.owner");
+    window.dispatchEvent(new StorageEvent("storage", { key: "rtpp.offline.owner", newValue: null }));
+    vi.advanceTimersByTime(2000);
+    expect(listTripCopies().map((e) => e.id)).toEqual(["t1"]);
+    expect(localStorage.getItem("rtpp.offline.owner")).toBe("u1");
+    window.dispatchEvent(new StorageEvent("storage", { key: "rtpp.offline.signedout", newValue: "1" }));
+    const t2 = { ...trip, id: "t2" };
+    renderHook(() => useOfflineCopy(t2, stops, "u1"));
+    vi.advanceTimersByTime(2000);
+    expect(listTripCopies().map((e) => e.id)).toEqual(["t1"]);
+  });
 });

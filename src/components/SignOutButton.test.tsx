@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMemoryStorage } from "../../tests/helpers/memory-storage";
 import { enableOfflineSaving, listTripCopies, saveTripCopy } from "@/lib/offline-store";
 
@@ -26,23 +26,47 @@ beforeEach(() => {
 });
 
 describe("SignOutButton", () => {
-  it("clears the offline copies before signing out", async () => {
+  const assign = vi.fn();
+  beforeEach(() => {
+    assign.mockReset();
+    vi.spyOn(window, "location", "get").mockReturnValue({ ...window.location, assign } as unknown as Location);
+    signOut.mockResolvedValue({ url: "/login" });
+  });
+  afterEach(() => { enableOfflineSaving(); vi.restoreAllMocks(); });
+
+  it("signs out, then clears the offline copies and switches saving off", async () => {
     saveTripCopy({ id: "t", name: "T", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] });
     expect(listTripCopies()).toHaveLength(1);
     let copiesAtSignOut = -1;
-    signOut.mockImplementation(() => { copiesAtSignOut = listTripCopies().length; });
+    signOut.mockImplementation(async () => { copiesAtSignOut = listTripCopies().length; return { url: "/login" }; });
     render(<SignOutButton />);
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    expect(signOut).toHaveBeenCalledWith({ callbackUrl: "/login" });
-    expect(copiesAtSignOut).toBe(0);
+    expect(signOut).toHaveBeenCalledWith({ callbackUrl: "/login", redirect: false });
+    expect(copiesAtSignOut).toBe(1);
     expect(listTripCopies()).toEqual([]);
+    expect(assign).toHaveBeenCalledWith("/login");
+    expect(saveTripCopy({ id: "t", name: "T", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] })).toBe(false);
   });
 
-  it("switches saving off so a late autosave cannot restore a copy", async () => {
+  it("offline: says so and leaves the copies and saving untouched", async () => {
+    saveTripCopy({ id: "t", name: "T", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] });
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     render(<SignOutButton />);
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    expect(saveTripCopy({ id: "t", name: "T", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] })).toBe(false);
-    enableOfflineSaving();
+    expect((await screen.findByRole("alert")).textContent).toContain("offline");
+    expect(signOut).not.toHaveBeenCalled();
+    expect(listTripCopies()).toHaveLength(1);
+    expect(saveTripCopy({ id: "t", name: "T", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] })).toBe(true);
+  });
+
+  it("a failed sign-out is caught and keeps the copies", async () => {
+    saveTripCopy({ id: "t", name: "T", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] });
+    signOut.mockRejectedValue(new TypeError("Failed to fetch"));
+    render(<SignOutButton />);
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Couldn't sign out");
+    expect(listTripCopies()).toHaveLength(1);
+    expect(assign).not.toHaveBeenCalled();
   });
 });
 

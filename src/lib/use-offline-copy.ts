@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { claimOwner, hasOwner, offlineSavingDisabled, onOfflineSavingDisabled, saveTripCopy } from "@/lib/offline-store";
+import { claimOwner, offlineSavingDisabled, onOfflineSavingDisabled, saveTripCopy } from "@/lib/offline-store";
 import type { Stop, Trip } from "@/lib/types";
 
 const SAVE_DELAY_MS = 1500;
@@ -14,7 +14,8 @@ export function useOfflineCopy(trip: Trip, stops: Stop[], userId: string | undef
     const t = setTimeout(() => {
       if (offlineSavingDisabled()) return;
       if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-      if (!hasOwner()) return; // signed out elsewhere (owner mark cleared): never write a copy back
+      // The owner mark is gone when copies were cleared (Settings in another tab): claim it again. A sign-out
+      // elsewhere switches saving off instead (checked above), so it never gets here.
       claimOwner(userId);
       saveTripCopy({ ...trip, stops });
     }, delayMs);

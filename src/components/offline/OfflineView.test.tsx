@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { act } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { installMemoryStorage } from "../../../tests/helpers/memory-storage";
 import { SettingsProvider } from "@/components/settings/SettingsProvider";
 import { SETTINGS_KEY } from "@/lib/settings";
 import { saveTripCopy } from "@/lib/offline-store";
 import type { Stop, TripWithStops } from "@/lib/types";
+const reloadPage = vi.fn();
+vi.mock("@/lib/reload", () => ({ reloadPage: () => reloadPage() }));
 import { OfflineView } from "./OfflineView";
 
 const stop = (i: number, over: Partial<Stop> = {}): Stop => ({
@@ -76,5 +79,15 @@ describe("OfflineView", () => {
     const banner = screen.getByRole("status").textContent ?? "";
     expect(banner).toMatch(/\d{2}:\d{2}/);
     expect(banner).not.toMatch(/AM|PM/);
+  });
+
+  it("offers Try again, and says so when the network returns", async () => {
+    reloadPage.mockReset();
+    render(<OfflineView />);
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(reloadPage).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/back online/)).toBeNull();
+    act(() => { window.dispatchEvent(new Event("online")); });
+    expect(screen.getByText(/You're back online/)).toBeTruthy();
   });
 });

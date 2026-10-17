@@ -98,7 +98,7 @@ export async function updateTrip(
   patch: TripPatch,
 ): Promise<Trip | null> {
   // Only a different day moves the start time: saving the same date again (a rename) must keep it.
-  // An existing start time that no longer matches its day is never checked here: only one sent now is.
+  // An existing start time that no longer matches its day is never checked here: only a different one sent now is.
   let shiftedDepartAt: Date | null | undefined;
   if (patch.plannedDate || patch.departAt) {
     const current = await prisma.trip.findFirst({
@@ -106,7 +106,8 @@ export async function updateTrip(
       select: { plannedDate: true, departAt: true, stops: { orderBy: { order: "asc" }, take: 1, select: { lng: true } } },
     });
     if (!current) return null;
-    if (patch.departAt) assertOnPlannedDay(new Date(patch.departAt), patch.plannedDate ?? utcToDateOnly(current.plannedDate), current.stops[0]?.lng ?? null);
+    // Re-sending the stored value (Undo of an old row) is not a change, so it is not checked.
+    if (patch.departAt && current.departAt?.getTime() !== new Date(patch.departAt).getTime()) assertOnPlannedDay(new Date(patch.departAt), patch.plannedDate ?? utcToDateOnly(current.plannedDate), current.stops[0]?.lng ?? null);
     if (patch.plannedDate) {
       const next = dateOnlyToUtc(patch.plannedDate);
       if (current.plannedDate.getTime() !== next.getTime()) shiftedDepartAt = shiftedDeparture(current.departAt, current.plannedDate, next);

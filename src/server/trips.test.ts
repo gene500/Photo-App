@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "./db";
-import { createTrip, deleteTrip, getTrip, listTrips, updateTrip } from "./trips";
+import { createTrip, deleteTrip, DepartAtMismatchError, getTrip, listTrips, updateTrip } from "./trips";
 import { createTestUser, resetDb, sampleTripInput } from "../../tests/helpers/db";
 
 describe("trips data access", () => {
@@ -18,6 +18,16 @@ describe("trips data access", () => {
     const set = await updateTrip(user.id, trip.id, { departAt: "2026-07-01T17:42:00.000Z" });
     expect(set?.departAt).toBe("2026-07-01T17:42:00.000Z");
     expect((await updateTrip(user.id, trip.id, { departAt: null }))?.departAt).toBeNull();
+  });
+
+  it("only checks a start time against the planned day when it changes (Undo of a legacy mismatched value still saves)", async () => {
+    const user = await createTestUser();
+    const trip = await createTrip(user.id, sampleTripInput);
+    const legacy = "2030-01-01T12:00:00.000Z"; // days away from the planned day
+    await prisma.trip.update({ where: { id: trip.id }, data: { departAt: new Date(legacy) } });
+    const same = await updateTrip(user.id, trip.id, { departAt: legacy });
+    expect(same?.departAt).toBe(legacy);
+    await expect(updateTrip(user.id, trip.id, { departAt: "2030-01-02T12:00:00.000Z" })).rejects.toBeInstanceOf(DepartAtMismatchError);
   });
 
   it("lists only the caller's trips with stop counts, newest first", async () => {

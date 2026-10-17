@@ -119,7 +119,7 @@ describe("StopList", () => {
     it("shows three radios on stops with a best light and none for any light", () => {
       const { group } = setup();
       expect(screen.queryByRole("radiogroup", { name: "Priority for Gas stop" })).toBeNull();
-      expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Normal", "High", "Must-have"]);
+      expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Normal", "High", "Must"]);
     });
 
     it("marks the current priority as checked with a roving tabindex", () => {
@@ -147,6 +147,15 @@ describe("StopList", () => {
       await userEvent.keyboard("{End}");
       expect(onPriorityChange).toHaveBeenLastCalledWith("a", "must");
       await userEvent.keyboard("{Home}");
+      expect(onPriorityChange).toHaveBeenLastCalledWith("a", "normal");
+    });
+
+    it("moves the selection with ArrowUp and ArrowDown", async () => {
+      const { onPriorityChange } = setup({ priority: "high" });
+      screen.getByRole("radio", { name: "High" }).focus();
+      await userEvent.keyboard("{ArrowDown}");
+      expect(onPriorityChange).toHaveBeenLastCalledWith("a", "must");
+      await userEvent.keyboard("{ArrowUp}");
       expect(onPriorityChange).toHaveBeenLastCalledWith("a", "normal");
     });
 

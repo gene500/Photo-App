@@ -34,6 +34,8 @@ export function reorderIds(ids: string[], activeId: string, overId: string): str
   return arrayMove(ids, from, to);
 }
 
+const PRIORITY_SHORT: Record<StopPriority, string> = { normal: "Normal", high: "High", must: "Must" };
+
 function PriorityPill({ stopId, name, value, onChange }: { stopId: string; name: string; value: StopPriority; onChange: (stopId: string, priority: StopPriority) => void }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
   const index = PRIORITIES.indexOf(value);
@@ -69,13 +71,14 @@ function PriorityPill({ stopId, name, value, onChange }: { stopId: string; name:
           type="button"
           role="radio"
           title={PRIORITY_LABEL[p]}
+          aria-label={PRIORITY_LABEL[p]}
           aria-checked={p === value}
           tabIndex={p === value ? 0 : -1}
           onClick={() => select(i)}
           onKeyDown={onKeyDown}
           className={`relative min-h-7 min-w-0 truncate rounded-full px-0.5 text-[11px] font-medium focus-visible:outline-2 focus-visible:outline-accent-strong ${p === value ? "text-accent-foreground" : "text-muted hover:text-foreground"}`}
         >
-          {PRIORITY_LABEL[p]}
+          {PRIORITY_SHORT[p]}
         </button>
       ))}
     </div>

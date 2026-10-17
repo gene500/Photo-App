@@ -36,15 +36,7 @@ const MOON_PHASES: MoonPhaseName[] = [
 
 const COMPASS_POINTS = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
 
-/**
- * Converts a south-based, westward azimuth in radians (suncalc v1 and the textbook formula) to a compass bearing.
- * The installed suncalc v2 already returns north-based degrees, so getSkyInfo uses normalizeBearing instead.
- */
-export function azimuthToBearing(azimuthRad: number): number {
-  return normalizeBearing((azimuthRad * 180) / Math.PI + 180);
-}
-
-/** Wraps degrees into [0, 360). */
+/** Wraps degrees into [0, 360). suncalc v2 azimuths are already north-based clockwise degrees, so no conversion is needed. */
 function normalizeBearing(degrees: number): number {
   return ((degrees % 360) + 360) % 360;
 }

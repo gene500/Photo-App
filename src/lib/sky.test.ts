@@ -1,15 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { solarDayAnchor } from "./best-time";
-import { azimuthToBearing, compassWord, getSkyInfo, moonPhaseName } from "./sky";
-
-describe("azimuthToBearing", () => {
-  it("converts suncalc's south-based azimuth to a compass bearing", () => {
-    expect(azimuthToBearing(0)).toBeCloseTo(180);
-    expect(azimuthToBearing(Math.PI / 2)).toBeCloseTo(270);
-    expect(azimuthToBearing(-Math.PI / 2)).toBeCloseTo(90);
-    expect(azimuthToBearing(Math.PI)).toBeCloseTo(0);
-  });
-});
+import { compassWord, getSkyInfo, moonPhaseName } from "./sky";
 
 describe("compassWord", () => {
   it("names the 16 compass points", () => {

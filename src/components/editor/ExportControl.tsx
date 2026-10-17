@@ -81,7 +81,7 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
         aria-expanded={open && enough}
         aria-controls={open && enough ? panelId : undefined}
         aria-label="Export"
-        title={enough ? undefined : "Add 2 stops to export"}
+        title={enough ? "Export" : "Add 2 stops to export"}
         className={`${btnGhost} disabled:opacity-50`}
       >
         <HeaderButtonLabel icon="export">Export</HeaderButtonLabel>

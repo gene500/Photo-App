@@ -121,6 +121,15 @@ describe("ExportControl", () => {
     expect(screen.getByRole("alert").textContent).toBe("Could not create the PDF. Try again.");
   });
 
+  it("has a tooltip (title) on the icon-only button, with a hint when disabled", () => {
+    const two = [stop(1), stop(2)];
+    const { unmount } = render(<ExportControl tripName="T" stops={two} route={null} />);
+    expect(screen.getByRole("button", { name: "Export" }).getAttribute("title")).toBe("Export");
+    unmount();
+    render(<ExportControl tripName="T" stops={[stop(1)]} route={null} />);
+    expect(screen.getByRole("button", { name: "Export" }).getAttribute("title")).toBe("Add 2 stops to export");
+  });
+
   it("is disabled with fewer than 2 stops", () => {
     render(<ExportControl tripName="T" stops={[stop(0)]} route={null} />);
     expect((screen.getByRole("button", { name: "Export" }) as HTMLButtonElement).disabled).toBe(true);

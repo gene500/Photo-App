@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost, btnPrimary, btnSecondary, inputClass } from "@/components/ui/styles";
 import type { ExportStop } from "@/lib/export";
@@ -10,7 +10,7 @@ import { ExportControl } from "./ExportControl";
 import { ShareControl } from "./ShareControl";
 
 
-export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: Trip; onSave: (patch: TripPatch) => Promise<void>; onShareChange?: (shareToken: string | null) => void; exportData?: { stops: ExportStop[]; route: LngLat[] | null } }) {
+export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: Trip; onSave: (patch: TripPatch) => Promise<void>; onShareChange?: (shareToken: string | null) => void; exportData?: { stops: ExportStop[]; route: LngLat[] | null; pdf?: ComponentProps<typeof ExportControl>["pdf"] } }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(trip.name);
   const [plannedDate, setPlannedDate] = useState(trip.plannedDate);
@@ -46,7 +46,7 @@ export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: 
           <h1 title={trip.name} className="min-w-0 max-w-full flex-1 basis-28 truncate text-lg font-semibold leading-9">{trip.name}</h1>
           <div className="flex shrink-0 flex-wrap justify-end">
             <button type="button" onClick={beginEdit} className={btnGhost}>Edit trip</button>
-            {exportData && <ExportControl tripName={trip.name} plannedDate={trip.plannedDate} stops={exportData.stops} route={exportData.route} />}
+            {exportData && <ExportControl tripName={trip.name} plannedDate={trip.plannedDate} stops={exportData.stops} route={exportData.route} pdf={exportData.pdf} />}
             {onShareChange && <ShareControl tripId={trip.id} shareToken={trip.shareToken} onChange={onShareChange} />}
           </div>
         </div>

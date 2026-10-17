@@ -1,10 +1,19 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createItineraryPdf, loadWeatherLines, saveBlob } from "@/lib/itinerary-download";
 import { installMemoryStorage } from "../../../tests/helpers/memory-storage";
 import { SETTINGS_KEY } from "@/lib/settings";
 import type { PublicTrip } from "@/lib/types";
 import { SharedTripView } from "./SharedTripView";
+
+vi.mock("@/lib/itinerary-download", () => ({
+  createItineraryPdf: vi.fn(),
+  loadWeatherLines: vi.fn(),
+  saveBlob: vi.fn(),
+  mapTokenFromEnv: vi.fn(() => null),
+}));
 
 const stop = (order: number, name: string, extra: Partial<PublicTrip["stops"][number]> = {}): PublicTrip["stops"][number] => ({
   order, name, lat: 36 + order * 0.3, lng: -120, notes: null, source: "manual", visited: false, lightPref: "any", dwellMinutes: 30,
@@ -76,5 +85,73 @@ describe("SharedTripView with saved settings", () => {
     render(<SettingsProvider><View trip={{ ...trip, departAt: "2026-07-01T14:05:00Z" }} /></SettingsProvider>);
     expect(screen.getAllByTestId("shared-time").every((el) => !/[AP]M/.test(el.textContent ?? ""))).toBe(true);
     expect(document.body.textContent).not.toMatch(/Starts \d{1,2}:\d{2} [AP]M/);
+  });
+});
+
+describe("SharedTripView Download PDF", () => {
+  beforeEach(() => {
+    vi.mocked(createItineraryPdf).mockReset();
+    vi.mocked(saveBlob).mockReset();
+    vi.mocked(loadWeatherLines).mockReset();
+  });
+
+  it("is not offered with 0 or 1 stops", () => {
+    const { rerender } = render(<SharedTripView trip={{ ...trip, stops: [] }} />);
+    expect(screen.queryByRole("button", { name: "Download PDF" })).toBeNull();
+    rerender(<SharedTripView trip={{ ...trip, stops: [stop(0, "Only")] }} />);
+    expect(screen.queryByRole("button", { name: "Download PDF" })).toBeNull();
+  });
+
+  it("builds the PDF without weather and saves it", async () => {
+    const blob = new Blob(["x"]);
+    vi.mocked(createItineraryPdf).mockResolvedValue(blob);
+    const route = { geometry: [[-120, 36.3], [-120, 36.6]] as [number, number][], legs: [{ distance: 40000, duration: 2400 }], distance: 40000, duration: 2400 };
+    render(<SharedTripView trip={trip} route={route} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
+    expect(createItineraryPdf).toHaveBeenCalledTimes(1);
+    const arg = vi.mocked(createItineraryPdf).mock.calls[0]![0];
+    expect(arg.input.stops).toHaveLength(2);
+    expect(arg.input.stops.every((s) => s.weather === null)).toBe(true);
+    expect(arg.input.routeLine).toBeTruthy();
+    expect(loadWeatherLines).not.toHaveBeenCalled();
+    expect(saveBlob).toHaveBeenCalledWith(blob, "Coast-run-itinerary.pdf");
+  });
+
+  it("has no route line when routing was unavailable", async () => {
+    vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["x"]));
+    render(<SharedTripView trip={trip} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
+    expect(vi.mocked(createItineraryPdf).mock.calls[0]![0].input.routeLine).toBeNull();
+    expect(vi.mocked(createItineraryPdf).mock.calls[0]![0].input.note).toBe("Times are estimates from straight-line distances.");
+  });
+
+  it("has no estimates note when a route exists", async () => {
+    vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["x"]));
+    const route = { geometry: [[-120, 36.3], [-120, 36.6]] as [number, number][], legs: [{ distance: 40000, duration: 2400 }], distance: 40000, duration: 2400 };
+    render(<SharedTripView trip={trip} route={route} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
+    expect(vi.mocked(createItineraryPdf).mock.calls[0]![0].input.note).toBeNull();
+  });
+
+  it("shows Preparing PDF... and disables the button while pending", async () => {
+    let resolve!: (b: Blob) => void;
+    vi.mocked(createItineraryPdf).mockReturnValue(new Promise<Blob>((r) => { resolve = r; }));
+    render(<SharedTripView trip={trip} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
+    const busy = (await screen.findByRole("button", { name: "Preparing PDF..." })) as HTMLButtonElement;
+    expect(busy.getAttribute("aria-disabled")).toBe("true");
+    await userEvent.click(busy);
+    expect(createItineraryPdf).toHaveBeenCalledTimes(1);
+    await act(async () => resolve(new Blob(["x"])));
+    expect(saveBlob).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an alert when it fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(createItineraryPdf).mockRejectedValue(new Error("boom"));
+    render(<SharedTripView trip={trip} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
+    expect((await screen.findByRole("alert")).textContent).toBe("Could not create the PDF. Try again.");
+    expect(saveBlob).not.toHaveBeenCalled();
   });
 });

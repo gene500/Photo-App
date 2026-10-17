@@ -50,13 +50,18 @@ export function buildGpx({ name, stops, route }: { name: string; stops: ExportSt
   return lines.join("\n");
 }
 
-/** A safe download name: ASCII letters, digits, dashes and underscores only; `trip-<date>.gpx` when nothing usable is left. */
-export function gpxFileName(tripName: string, date: string = new Date().toISOString().slice(0, 10)): string {
-  const slug = tripName
+/** ASCII letters, digits, `_` and dashes only, at most 60 characters; empty when nothing usable is left. */
+export function fileSlug(name: string): string {
+  return name
     .replace(/[^A-Za-z0-9_]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60)
     .replace(/-+$/, "");
+}
+
+/** A safe download name: ASCII letters, digits, dashes and underscores only; `trip-<date>.gpx` when nothing usable is left. */
+export function gpxFileName(tripName: string, date: string = new Date().toISOString().slice(0, 10)): string {
+  const slug = fileSlug(tripName);
   return `${slug || `trip-${date.replace(/[^0-9-]/g, "")}`}.gpx`;
 }
 

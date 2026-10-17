@@ -3,20 +3,6 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
-<<<<<<< HEAD
-## 2026-10-07 (photographer-sourced photos, branch `photo-sources`)
-
-Photo pipeline: Flickr (optional, needs `FLICKR_API_KEY`) -> Wikimedia Commons ->
-Wikipedia, `PlacePhoto.credit` is now full display text. Stricter name matching
-(type-word conflicts such as Eagle Peak vs Eagle Rock rejected), contact
-User-Agent, server LRU/TTL cache with in-flight de-dup, 60 s client failure
-cache, touch-safe hover popups (pointer events, no hover on touch). Popularity:
-top 40 suggestions get a "photos nearby" count (Flickr total with a key, else
-Commons files within 250 m, max 50) and are re-ranked within each kind. Verified
-live: Commons file geosearch + imageinfo and list=geosearch (curl), Wikipedia.
-Flickr is unverified live (no key; Flickr restricts keys to Pro): checked against
-the official docs and fixtures only. Commons popularity is a weaker signal than Flickr.
-
 ## 2026-10-08 (light-aware route optimization, branch `light-aware`)
 
 Stops now have a preferred light (`lightPref`: any/sunrise/golden/sunset) and a
@@ -33,7 +19,19 @@ returns `departAt` and `misses`. UI: drawer fields, row hints, "Starts ..." with
 local libSQL file; existing rows get `any` / 30 / null). Not pushed or merged.
 Still needs a real-Mapbox check (Matrix durations feeding the schedule) and a
 live Turso migration on deploy.
->>>>>>> light-aware
+
+## 2026-10-07 (photographer-sourced photos, branch `photo-sources`)
+
+Photo pipeline: Flickr (optional, needs `FLICKR_API_KEY`) -> Wikimedia Commons ->
+Wikipedia, `PlacePhoto.credit` is now full display text. Stricter name matching
+(type-word conflicts such as Eagle Peak vs Eagle Rock rejected), contact
+User-Agent, server LRU/TTL cache with in-flight de-dup, 60 s client failure
+cache, touch-safe hover popups (pointer events, no hover on touch). Popularity:
+top 40 suggestions get a "photos nearby" count (Flickr total with a key, else
+Commons files within 250 m, max 50) and are re-ranked within each kind. Verified
+live: Commons file geosearch + imageinfo and list=geosearch (curl), Wikipedia.
+Flickr is unverified live (no key; Flickr restricts keys to Pro): checked against
+the official docs and fixtures only. Commons popularity is a weaker signal than Flickr.
 
 ## 2026-10-07 (beige map + suggestion photo popups, branch `ui-redesign`)
 

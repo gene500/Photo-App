@@ -1,7 +1,7 @@
 import type { NextAuthOptions, Session } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
-import { hitShared, isBlockedShared, resetShared } from "./shared-limit";
+import { hitShared, resetShared } from "./shared-limit";
 import { EMAIL_IN_USE, findOrCreateGoogleUser, getSessionVersion, verifyCredentials } from "./users";
 
 export const RATE_LIMITED = "RateLimited";
@@ -11,11 +11,12 @@ export async function authorizeCredentials(
 ): Promise<{ id: string; email: string } | null> {
   if (!credentials?.email || !credentials.password) return null;
   const key = credentials.email.trim().toLowerCase();
-  // Per-email throttle on failures (the per-IP limit is applied in the route before NextAuth runs).
-  if (!(await isBlockedShared("login-email-failures", key)).ok) throw new Error(RATE_LIMITED);
+  // Per-email throttle. The attempt is counted before the slow password check, so parallel guesses see each other
+  // and cannot all slip past the limit; a successful login clears the count. (The per-IP limit is applied in the
+  // route before NextAuth runs.)
+  if (!(await hitShared("login-email-failures", key)).ok) throw new Error(RATE_LIMITED);
   const user = await verifyCredentials(credentials.email, credentials.password);
   if (user) await resetShared("login-email-failures", key);
-  else await hitShared("login-email-failures", key);
   return user;
 }
 

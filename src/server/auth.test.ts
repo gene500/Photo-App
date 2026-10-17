@@ -3,6 +3,7 @@ import type { JWT } from "next-auth/jwt";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { authOptions, authorizeCredentials } from "./auth";
 import { clearAllLimits } from "./rate-limit";
+import * as users from "./users";
 import { clearSessionVersionCache, createUser, revokeAllSessions } from "./users";
 import { prisma } from "./db";
 import { resetDb } from "../../tests/helpers/db";
@@ -80,6 +81,42 @@ describe("auth", () => {
       expect(await authorizeCredentials({ email: "ann@example.com", password: "correct-horse" })).not.toBeNull();
       for (let i = 0; i < 8; i++) await authorizeCredentials({ email: "Ann@Example.com", password: "nope-nope" });
       await expect(authorizeCredentials({ email: "ann@example.com", password: "correct-horse" })).rejects.toThrow("RateLimited");
+    });
+
+    it("counts the attempt before checking the password, so parallel guesses cannot overshoot the limit", async () => {
+      const verify = vi.spyOn(users, "verifyCredentials").mockImplementation(async () => {
+        await new Promise((r) => setTimeout(r, 20)); // stands in for the slow bcrypt compare
+        return null;
+      });
+      try {
+        const results = await Promise.allSettled(
+          Array.from({ length: 30 }, () => authorizeCredentials({ email: "ann@example.com", password: "nope-nope" })),
+        );
+        expect(verify).toHaveBeenCalledTimes(8);
+        expect(results.filter((r) => r.status === "rejected")).toHaveLength(22);
+        expect(results.filter((r) => r.status === "fulfilled" && r.value === null)).toHaveLength(8);
+      } finally {
+        verify.mockRestore();
+      }
+    });
+
+    it("never runs the password check for a blocked email, and a success resets the count", async () => {
+      const verify = vi.spyOn(users, "verifyCredentials").mockResolvedValue(null);
+      try {
+        for (let i = 0; i < 8; i++) await authorizeCredentials({ email: "ann@example.com", password: "x" });
+        verify.mockClear();
+        await expect(authorizeCredentials({ email: "ann@example.com", password: "x" })).rejects.toThrow("RateLimited");
+        expect(verify).not.toHaveBeenCalled();
+        clearAllLimits();
+        await prisma.rateLimitCounter.deleteMany();
+        for (let i = 0; i < 7; i++) await authorizeCredentials({ email: "ann@example.com", password: "x" });
+        verify.mockResolvedValue({ id: "u", email: "ann@example.com" });
+        expect(await authorizeCredentials({ email: "ann@example.com", password: "ok" })).not.toBeNull();
+        verify.mockResolvedValue(null);
+        for (let i = 0; i < 8; i++) expect(await authorizeCredentials({ email: "ann@example.com", password: "x" })).toBeNull();
+      } finally {
+        verify.mockRestore();
+      }
     });
   });
 });

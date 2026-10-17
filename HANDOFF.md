@@ -65,7 +65,8 @@ Known gaps:
 - Optimize keeps a saved start time when it costs nothing; otherwise it searches from sunrise (the result is announced to screen readers only).
 - CSP still allows `'unsafe-inline'`.
 - Google-only account deletion re-confirms through Google's account chooser (`prompt=select_account`; `login` is not a documented Google value); existing sessions must sign in once first.
-- Header buttons wrap to a second line on narrow screens (e15f559, c69544e); the layout at 320 px with extra-large text has not been re-checked by eye.
+- Header: below 360 px wide the Edit/Export/Share buttons become icons (aria-labels kept) so the trip name and buttons share one row; verified by eye at 320 and 390 px and 320 px with 1.5x text. The icon buttons are 32 px wide by 44 px tall (the text buttons above 360 px are 36 px tall).
+- PDF font: full Noto Sans Regular and Bold (about 1.2 MB raw, about 0.6 MB gzipped) are fetched on click; they are not subset because no subsetting tool is in the repo toolchain.
 - Share page `no-referrer` vs a URL-restricted Mapbox token.
 - Offline copies are cleared on sign-out and when the login or signup page is shown (session ended); they stay while the device is offline.
 - Rate limits other than login/signup/password/delete are per instance; no monitoring or alerting yet.

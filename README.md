@@ -192,7 +192,10 @@ trip summary, a Mapbox Static Images map (route and numbered pins; it uses the p
 `NEXT_PUBLIC_MAPBOX_TOKEN`, one request per download, so it counts toward your Mapbox
 usage) and a stop schedule with arrival time, best light, weather (editor only) and notes.
 With no token, in fake-map mode, or when the map request fails (8 s timeout), a drawn
-fallback map is used instead. Characters outside Western European alphabets print as "?".
+fallback map is used instead. The PDF embeds Noto Sans (SIL OFL, `public/fonts/OFL.txt`; about 0.6 MB transferred, fetched only when you click Download PDF), so Latin
+(including Latin Extended and Vietnamese), Cyrillic and Greek names and notes print correctly. Other scripts (Chinese, Japanese, Korean,
+Arabic, Hebrew, Devanagari, Thai, emoji and so on) are not in the font: each run of such characters prints as a single "?". If the font cannot
+be fetched (offline), the PDF is still produced with the built-in fonts, where anything outside Western European alphabets is "?".
 A URL-restricted public token may make the share page's static-map request fail (the page
 sends no Referer); the PDF then falls back to the drawn map. The static map was verified
 against real Mapbox on 2026-10-16 from the editor and the share page with an unrestricted

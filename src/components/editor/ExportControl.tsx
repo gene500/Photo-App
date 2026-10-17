@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { HeaderButtonLabel } from "./HeaderButtonLabel";
 import { btnGhost, card } from "@/components/ui/styles";
 import { appleMapsUrls, buildGpx, googleMapsUrl, gpxFileName, type ExportStop } from "@/lib/export";
 import type { LngLat } from "@/lib/types";
@@ -79,10 +80,11 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
         disabled={!enough}
         aria-expanded={open && enough}
         aria-controls={open && enough ? panelId : undefined}
+        aria-label="Export"
         title={enough ? undefined : "Add 2 stops to export"}
         className={`${btnGhost} disabled:opacity-50`}
       >
-        Export
+        <HeaderButtonLabel icon="export">Export</HeaderButtonLabel>
       </button>
       {open && enough && (
         <div ref={panelRef} id={panelId} role="group" aria-label="Export trip" className={`absolute right-0 top-full z-20 mt-1 w-56 max-w-full p-1 ${card}`}>

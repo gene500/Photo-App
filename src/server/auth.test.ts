@@ -120,6 +120,36 @@ describe("auth", () => {
       }
     });
 
+    describe("lockout is per email and client address", () => {
+      const from = (ip: string) => new Headers({ "x-real-ip": ip });
+      const attempt = (password: string, ip: string, email = "ann@example.com") =>
+        authorizeCredentials({ email, password }, from(ip));
+
+      it("an attacker failing 20 times does not stop the victim from another address", async () => {
+        await createUser("ann@example.com", "correct-horse");
+        for (let i = 0; i < 20; i++) await attempt("nope-nope", "203.0.113.9").catch(() => null);
+        await expect(attempt("correct-horse", "203.0.113.9")).rejects.toThrow("RateLimited");
+        expect(await attempt("correct-horse", "198.51.100.7")).not.toBeNull();
+      });
+
+      it("keeps the lockout for the same address", async () => {
+        for (let i = 0; i < 8; i++) await attempt("nope-nope", "203.0.113.9");
+        await expect(attempt("nope-nope", "203.0.113.9")).rejects.toThrow("RateLimited");
+      });
+
+      it("past the global per-email cap, addresses with failures are refused but a clean one still logs in", async () => {
+        const verify = vi.spyOn(users, "verifyCredentials").mockResolvedValue(null);
+        try {
+          for (let a = 0; a < 50; a++) await attempt("nope-nope", `203.0.113.${a + 1}`);
+          await expect(attempt("nope-nope", "203.0.113.1")).rejects.toThrow("RateLimited");
+          verify.mockResolvedValue({ id: "u", email: "ann@example.com" });
+          expect(await attempt("correct-horse", "198.51.100.77")).not.toBeNull();
+        } finally {
+          verify.mockRestore();
+        }
+      });
+    });
+
     it("never runs the password check for a blocked email, and a success resets the count", async () => {
       const verify = vi.spyOn(users, "verifyCredentials").mockResolvedValue(null);
       try {

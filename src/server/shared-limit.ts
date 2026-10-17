@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { prisma } from "./db";
 import { HttpError } from "./http";
-import { hit, isBlocked, POLICIES, resetLimit, type LimitResult, type PolicyName } from "./rate-limit";
+import { hit, isBlocked, peek, POLICIES, resetLimit, type LimitResult, type PolicyName } from "./rate-limit";
 
 /**
  * Rate limits for the auth-sensitive policies, counted in the database so they hold across serverless instances
@@ -52,6 +52,19 @@ export async function isBlockedShared(name: PolicyName, key: string, now = Date.
     // Database unavailable: keep the in-memory answer.
   }
   return { ok: true };
+}
+
+/** Hits counted in the current window (the larger of this instance's and the shared count), without counting one. */
+export async function peekShared(name: PolicyName, key: string, now = Date.now()): Promise<number> {
+  if (disabled()) return 0;
+  let count = peek(name, key, now);
+  try {
+    const row = await prisma.rateLimitCounter.findUnique({ where: { key: rowKey(name, key) } });
+    if (row && Number(row.resetAt) > now) count = Math.max(count, row.count);
+  } catch {
+    // Database unavailable: keep the in-memory count.
+  }
+  return count;
 }
 
 export async function resetShared(name: PolicyName, key: string): Promise<void> {

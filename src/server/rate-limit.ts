@@ -28,8 +28,10 @@ export const POLICIES = {
   "signup-ip": { limit: 5, windowMs: 60 * MINUTE, message: "Too many sign-up attempts. Try again later." },
   "signup-email": { limit: 3, windowMs: 60 * MINUTE, message: "Too many sign-up attempts. Try again later." },
   "login-ip": { limit: 30, windowMs: 15 * MINUTE, message: "Too many login attempts. Try again later." },
-  /** Counts failed logins only, so an attacker cannot lock a victim out by merely submitting requests that succeed. */
+  /** Counts failed logins only, keyed by email plus hashed client address, so one address's failures never lock the real owner out from another. */
   "login-email-failures": { limit: 8, windowMs: 15 * MINUTE, message: "Too many login attempts. Try again later." },
+  /** Failed logins for an email from all addresses. Once over, only addresses that already failed are refused; a clean one still gets in. */
+  "login-email-global": { limit: 50, windowMs: 60 * MINUTE, message: "Too many login attempts. Try again later." },
   geocode: { limit: 60, windowMs: MINUTE, message: "Too many searches. Slow down a little." },
   "geocode-retrieve": { limit: 60, windowMs: MINUTE, message: "Too many searches. Slow down a little." },
   "reverse-geocode": { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
@@ -115,6 +117,12 @@ export function isBlocked(name: PolicyName, key: string, now = Date.now()): Limi
   const b = mapFor(name).get(key);
   if (!b || b.resetAt <= now) return untrackable(name, key, now) ? fullMapResult(name) : { ok: true };
   return b.count >= POLICIES[name].limit ? { ok: false, retryAfter: Math.max(1, Math.ceil((b.resetAt - now) / 1000)) } : { ok: true };
+}
+
+/** Hits counted in the current window, without counting one. */
+export function peek(name: PolicyName, key: string, now = Date.now()): number {
+  const b = mapFor(name).get(key);
+  return b && b.resetAt > now ? b.count : 0;
 }
 
 export function resetLimit(name: PolicyName, key: string): void {

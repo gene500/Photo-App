@@ -1,7 +1,7 @@
 import { assertSameOrigin, HttpError, jsonError, readBodyBytes } from "./http";
 import { clientIp } from "./rate-limit";
-import { hitShared, isBlockedShared, limitKey } from "./shared-limit";
-import { RATE_LIMITED } from "./auth";
+import { hitShared } from "./shared-limit";
+import { loginRefused, RATE_LIMITED } from "./auth";
 
 /** The auth forms are a few short fields; anything bigger is refused before NextAuth buffers it. */
 const MAX_AUTH_BODY_BYTES = 16 * 1024;
@@ -34,7 +34,7 @@ const isCredentialsCallback = (pathname: string) => {
 };
 
 /**
- * Runs before NextAuth handles a POST: cross-site check, body size cap, then the per-IP (all attempts) and per-email
+ * Runs before NextAuth handles a POST: cross-site check, body size cap, then the per-IP (all attempts) and per-email-and-address
  * (failed attempts) login throttles. Returns the response to send when the request must not proceed.
  * The 429 body mimics NextAuth's JSON so `signIn(..., { redirect: false })` reports `error: "RateLimited"`.
  */
@@ -72,7 +72,7 @@ export async function guardAuthPost(req: Request): Promise<Response | null> {
   }
   // An over-long email can never be a real account; authorize rejects it too, so it never becomes a limiter key.
   if (email && email.length <= 254) {
-    const blocked = await isBlockedShared("login-email-failures", limitKey(email));
+    const blocked = await loginRefused(email, clientIp(req.headers));
     if (!blocked.ok) return limited(blocked.retryAfter);
   }
   return null;

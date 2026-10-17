@@ -1,24 +1,54 @@
 import type { NextAuthOptions, Session } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
-import { hitShared, resetShared } from "./shared-limit";
+import { createHash } from "node:crypto";
+import { clientIp } from "./rate-limit";
+import { hitShared, isBlockedShared, peekShared, resetShared } from "./shared-limit";
 import { EMAIL_IN_USE, findOrCreateGoogleUser, getSessionVersion, verifyCredentials } from "./users";
 
 export const RATE_LIMITED = "RateLimited";
 
+/** Failure-counter key: the email plus a hash of the client address, so one address's failures stay with that address. */
+export const loginEmailKey = (email: string, ip: string) =>
+  `${email}|${createHash("sha256").update(ip).digest("hex").slice(0, 16)}`;
+
+/**
+ * Whether a login for this email from this address must be refused without a password check: the address is over its
+ * own failure limit, or the email is over its global cap and this address has already failed. An address with no
+ * recent failures is never refused by the global cap, so the owner's correct password works while someone else guesses.
+ */
+export async function loginRefused(email: string, ip: string): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+  const pair = loginEmailKey(email, ip);
+  const own = await isBlockedShared("login-email-failures", pair);
+  if (!own.ok) return own;
+  if ((await peekShared("login-email-failures", pair)) === 0) return { ok: true };
+  return isBlockedShared("login-email-global", email);
+}
+
+const headerIp = (headers: Headers | Record<string, unknown> | undefined): string => {
+  if (headers instanceof Headers) return clientIp(headers);
+  const h = new Headers();
+  for (const [k, v] of Object.entries(headers ?? {})) if (typeof v === "string") h.set(k, v);
+  return clientIp(h);
+};
+
 export async function authorizeCredentials(
   credentials: Record<string, string> | undefined,
+  headers?: Headers | Record<string, unknown>,
 ): Promise<{ id: string; email: string } | null> {
   if (!credentials?.email || !credentials.password) return null;
   const key = credentials.email.trim().toLowerCase();
   // No real address is longer; refuse before the limiter so an unbounded string never becomes a key or reaches bcrypt.
   if (key.length > 254) return null;
-  // Per-email throttle. The attempt is counted before the slow password check, so parallel guesses see each other
-  // and cannot all slip past the limit; a successful login clears the count. (The per-IP limit is applied in the
-  // route before NextAuth runs.)
-  if (!(await hitShared("login-email-failures", key)).ok) throw new Error(RATE_LIMITED);
+  const pair = loginEmailKey(key, headerIp(headers));
+  // Per-email-and-address throttle. The attempt is counted before the slow password check, so parallel guesses see
+  // each other and cannot all slip past the limit; a successful login clears the count. (The per-IP limit is applied
+  // in the route before NextAuth runs.) Keying by address means an attacker's failures cannot lock out the real owner.
+  if (!(await loginRefused(key, headerIp(headers))).ok) throw new Error(RATE_LIMITED);
+  if (!(await hitShared("login-email-failures", pair)).ok) throw new Error(RATE_LIMITED);
   const user = await verifyCredentials(credentials.email, credentials.password);
-  if (user) await resetShared("login-email-failures", key);
+  if (user) await resetShared("login-email-failures", pair);
+  else await hitShared("login-email-global", key);
   return user;
 }
 
@@ -54,7 +84,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      authorize: (credentials) => authorizeCredentials(credentials),
+      authorize: (credentials, req) => authorizeCredentials(credentials, req?.headers),
     }),
     ...(googleConfigured()
       ? [GoogleProvider({ clientId: process.env.GOOGLE_CLIENT_ID!, clientSecret: process.env.GOOGLE_CLIENT_SECRET! })]

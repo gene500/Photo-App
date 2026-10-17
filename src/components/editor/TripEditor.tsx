@@ -756,10 +756,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                 </button>
               )}
               {stops.length < 3 && <p className="text-xs text-muted">Add at least 3 stops to optimize the order.</p>}
-              {/* Screen-reader only: the result is announced but nothing shows under the button. */}
-              {optimizeNote?.idsKey === idsKey && (
-                <p role="status" data-testid="optimize-status" className="sr-only">{optimizeNote.text}</p>
-              )}
+              {/* Screen-reader only: always mounted so a text change is announced; nothing shows under the button. */}
+              <p role="status" data-testid="optimize-status" className="sr-only">{optimizeNote?.idsKey === idsKey ? optimizeNote.text : ""}</p>
             </div>
             {swapNote && canUndoSwap && (
               <div role="status" data-testid="swap-note" className="flex flex-wrap items-center gap-x-2 text-sm text-muted">

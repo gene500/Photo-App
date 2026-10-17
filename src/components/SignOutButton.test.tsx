@@ -86,6 +86,6 @@ describe("DeleteAccountButton (Google-only account)", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("Please sign in again to delete your account");
     expect(signOut).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("button", { name: "Sign in with Google again" }));
-    expect(signIn).toHaveBeenCalledWith("google", { callbackUrl: window.location.href }, { prompt: "login" });
+    expect(signIn).toHaveBeenCalledWith("google", { callbackUrl: window.location.href }, { prompt: "select_account" });
   });
 });

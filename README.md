@@ -110,8 +110,10 @@ chooses the visiting order *and* the departure time (`src/lib/optimize-schedule.
   stays at sunrise.
 
 The chosen departure is saved on the trip (`departAt`); the panel shows
-"Starts 5:42 PM" with **Reset to sunrise**. Stops that cannot all be fitted are
-named under the button ("Can't fit 2 stops in their light: A, B."). **Undo**
+"Starts 5:42 PM" with **Reset to sunrise**. A start time you already saved is
+kept when it costs nothing (it is tried first and wins ties); the search window
+still follows sunrise. The result (moved start time, stops that cannot be fitted)
+is announced to screen readers only; nothing shows under the button. **Undo**
 restores the previous order and departure. Each row shows the window and arrival,
 or "Misses sunset by 40 min".
 
@@ -262,7 +264,10 @@ and which providers receive data; update them (and their date in
 legal review, and contact goes through the GitHub issues link in `CONTACT_URL`;
 replace it with a proper contact address before relying on them.
 Account deletion is `DELETE /api/account` (password-confirmed, 5 tries per 15
-minutes), reachable from Settings.
+minutes), reachable from Settings. A Google-only account has no password, so it
+confirms by typing its email address (never shown in the prompt) and must have
+signed in within the last 5 minutes; otherwise the prompt offers "Sign in with
+Google again" (Google's account chooser) and the user retries.
 
 ## 6. How best time is computed
 

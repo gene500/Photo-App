@@ -94,8 +94,8 @@ export function DeleteAccountButton({ className, hasPassword = true }: { classNa
       </div>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       {needsReauth && (
-        // prompt=login makes Google ask for a fresh login, which restarts the five-minute window.
-        <button type="button" onClick={() => void signIn("google", { callbackUrl: window.location.href }, { prompt: "login" })} className={className}>
+        // Google documents only none, consent and select_account for `prompt` (other values can be refused); the account chooser is a fresh sign-in step that restarts the five-minute window.
+        <button type="button" onClick={() => void signIn("google", { callbackUrl: window.location.href }, { prompt: "select_account" })} className={className}>
           Sign in with Google again
         </button>
       )}

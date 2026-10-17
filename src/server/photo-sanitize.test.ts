@@ -60,6 +60,36 @@ describe("sanitizePhoto: JPEG", () => {
     expect(text(r.bytes)).not.toContain("GPS");
     expect(r.bytes[r.bytes.length - 1]).toBe(0xd9);
   });
+  it("cuts at the first end-of-image: an appended second JPEG with EXIF/GPS is dropped", () => {
+    const second = u8([0xff, 0xd8], exifApp1(1), seg(0xfe, u8("SECONDGPS")), sof(8, 8), sos, [1, 2, 3], [0xff, 0xd9]);
+    const r = sanitizePhoto(u8(jpeg(), second), "image/jpeg");
+    if (!r.ok) throw new Error(r.error);
+    expect(text(r.bytes)).not.toContain("SECONDGPS");
+    expect(text(r.bytes)).not.toContain("Exif");
+    expect(Buffer.from(r.bytes).equals(Buffer.from(sanitizePhoto(jpeg(), "image/jpeg").ok ? (sanitizePhoto(jpeg(), "image/jpeg") as { bytes: Uint8Array }).bytes : []))).toBe(true);
+  });
+  it("drops a motion-photo style trailer even when it contains FF D9", () => {
+    const trailer = u8("\0\0\0\x18ftypmp42", "location+37.77-122.41", [0xff, 0xd9, 0x00, 0xff, 0xd9]);
+    const r = sanitizePhoto(u8(jpeg(), trailer), "image/jpeg");
+    if (!r.ok) throw new Error(r.error);
+    expect(text(r.bytes)).not.toContain("location");
+    expect(text(r.bytes)).not.toContain("ftyp");
+    expect(r.bytes.length).toBe(jpeg().length);
+  });
+  it("keeps progressive scans and tables but drops a comment or APP segment between scans; restarts are walked", () => {
+    const dht = seg(0xc4, [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5]);
+    const input = u8([0xff, 0xd8], sof(40, 30), sos, [0x11, 0xff, 0x00, 0xff, 0xd0, 0x22, 0xff, 0xd7, 0x33],
+      seg(0xfe, u8("BETWEEN")), seg(0xe1, u8("Exif\0\0GPSX")), dht, sos, [0x44, 0xff, 0x00, 0x55], [0xff, 0xd9], u8("TRAILGPS"));
+    const r = sanitizePhoto(input, "image/jpeg");
+    if (!r.ok) throw new Error(r.error);
+    const out = text(r.bytes);
+    expect(out).not.toContain("BETWEEN");
+    expect(out).not.toContain("GPSX");
+    expect(out).not.toContain("TRAILGPS");
+    expect(r.bytes.length).toBe(input.length - seg(0xfe, u8("BETWEEN")).length - seg(0xe1, u8("Exif\0\0GPSX")).length - 8);
+    expect([...r.bytes.slice(-2)]).toEqual([0xff, 0xd9]);
+    expect([...dht].every((v) => out.includes(String.fromCharCode(v)))).toBe(true);
+  });
   it("rejects truncated, frame-less and oversized files", () => {
     expect(sanitizePhoto(jpeg().slice(0, 30), "image/jpeg").ok).toBe(false);
     expect(sanitizePhoto(u8([0xff, 0xd8, 0xff, 0xd9]), "image/jpeg").ok).toBe(false);

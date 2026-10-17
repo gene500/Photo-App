@@ -78,6 +78,52 @@ function orientationSegment(orientation: number): Uint8Array {
   return Uint8Array.from([0xff, 0xe1, len >> 8, len & 255, ...payload]);
 }
 
+/**
+ * The parts of a JPEG from its first SOS up to and including the first EOI: entropy-coded data is skipped over (FF00
+ * stuffing, FFD0-D7 restarts), later segments are kept unless they are APPn/COM. Null when the file is malformed.
+ */
+function scanBody(b: Uint8Array, sosAt: number): Uint8Array[] | null {
+  const parts: Uint8Array[] = [];
+  let runStart = sosAt; // start of the bytes not yet copied
+  let pos = sosAt;
+  let inSegment = true; // pos sits on a marker segment (the SOS header) rather than entropy data
+  for (;;) {
+    if (inSegment) {
+      if (pos + 4 > b.length || b[pos] !== 0xff) return null;
+      const len = be16(b, pos + 2);
+      if (len < 2 || pos + 2 + len > b.length) return null;
+      pos += 2 + len;
+      inSegment = false;
+      continue;
+    }
+    if (pos + 2 > b.length) return null;
+    if (b[pos] !== 0xff) {
+      pos++;
+      continue;
+    }
+    const m = b[pos + 1];
+    if (m === 0x00 || (m >= 0xd0 && m <= 0xd7)) pos += 2;
+    else if (m === 0xff) pos++;
+    else if (m === 0xd9) {
+      parts.push(b.subarray(runStart, pos + 2));
+      return parts;
+    } else if (m === 0x01 || m === 0xd8) return null;
+    else {
+      // A segment between scans: tables and the next SOS stay, application data and comments go.
+      if (pos + 4 > b.length) return null;
+      const len = be16(b, pos + 2);
+      if (len < 2 || pos + 2 + len > b.length) return null;
+      if ((m >= 0xe0 && m <= 0xef) || m === 0xfe) {
+        parts.push(b.subarray(runStart, pos));
+        runStart = pos + 2 + len;
+        pos = runStart;
+      } else {
+        inSegment = true;
+      }
+    }
+  }
+}
+
 function sanitizeJpeg(b: Uint8Array): SanitizedPhoto {
   if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return BAD;
   const head: Uint8Array[] = [b.subarray(0, 2)];
@@ -99,17 +145,13 @@ function sanitizeJpeg(b: Uint8Array): SanitizedPhoto {
       if (!frame) return BAD;
       const problem = sizeProblem(frame.width, frame.height);
       if (problem) return problem;
-      // Entropy-coded data (and any further scans) follow; keep up to the last end-of-image marker, drop what trails it.
-      let eoi = -1;
-      for (let i = b.length - 2; i >= end; i--) {
-        if (b[i] === 0xff && b[i + 1] === 0xd9) {
-          eoi = i;
-          break;
-        }
-      }
-      if (eoi < 0) return BAD;
+      // Entropy-coded data follows. Walk it forward to the FIRST end-of-image (so a second JPEG, an MPF image or a
+      // motion-photo video appended after it is never kept), copying every scan and its tables but dropping APPn/COM
+      // segments met between progressive scans.
+      const body = scanBody(b, pos);
+      if (!body) return BAD;
       if (orientation) head.splice(exifAt, 0, orientationSegment(orientation));
-      return { ok: true, bytes: concat([...head, b.subarray(pos, eoi + 2)]), ...frame };
+      return { ok: true, bytes: concat([...head, ...body]), ...frame };
     }
     const isSof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
     if (isSof) {

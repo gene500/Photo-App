@@ -5,9 +5,10 @@ import {
   closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from "@dnd-kit/core";
 import {
-  arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy,
+  arrayMove, SortableContext, useSortable, verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { centreAlignedKeyboardCoordinates } from "./keyboard-coordinates";
 import { describeBestTime, type BestTime } from "@/lib/best-time";
 import { describeLightHint } from "@/lib/light-windows";
 import { useMounted } from "@/lib/use-mounted";
@@ -102,7 +103,7 @@ function PriorityPill({ stopId, name, value: saved, onChange }: { stopId: string
 export function StopList({ stops, bestTimes, arrivals, onReorder, ...handlers }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, { coordinateGetter: centreAlignedKeyboardCoordinates }),
   );
 
   if (stops.length === 0) return <p className="text-sm text-muted">No stops yet.</p>;

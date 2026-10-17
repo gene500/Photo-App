@@ -30,6 +30,17 @@ export function weatherLine(forecast: WeatherForecast | null, pref: LightPref, a
 }
 
 /**
+ * Where and when a stop's weather is read: the forecast instant (middle of the preferred light window), its solar
+ * date at the stop, and whether that date is inside the forecast or typical-weather range. null with no arrival.
+ */
+export function forecastTarget(lat: number, lng: number, arrival: Date | null, pref: LightPref, today: string): { atMs: number; date: string; inRange: boolean } | null {
+  if (!arrival) return null;
+  const atMs = forecastInstant(pref, lat, lng, arrival).getTime();
+  const date = solarDateAt(new Date(atMs), lng);
+  return { atMs, date, inRange: inForecastRange(date, today) || inTypicalRange(date, today) };
+}
+
+/**
  * Lazily fetched weather for a stop: read at the middle of its preferred light window (see forecastInstant), or at
  * `arrival` itself when the preference is "any" or the sun gives no window. null while loading, when there is
  * no arrival, or when the lookup failed: weather is decorative and never blocks the UI. Dates outside the forecast
@@ -37,10 +48,11 @@ export function weatherLine(forecast: WeatherForecast | null, pref: LightPref, a
  */
 export function useWeatherLine(lat: number, lng: number, arrival: Date | null, pref: LightPref = "any"): WeatherLine | null {
   const unit = useSettings().settings.distanceUnit;
-  const atMs = arrival ? forecastInstant(pref, lat, lng, arrival).getTime() : null;
-  const date = atMs === null ? null : solarDateAt(new Date(atMs), lng);
   const today = new Date().toISOString().slice(0, 10);
-  const inRange = date !== null && (inForecastRange(date, today) || inTypicalRange(date, today));
+  const target = forecastTarget(lat, lng, arrival, pref, today);
+  const atMs = target?.atMs ?? null;
+  const date = target?.date ?? null;
+  const inRange = target?.inRange ?? false;
   const key = date === null ? null : `${lat.toFixed(2)},${lng.toFixed(2)}|${date}`;
   const [loaded, setLoaded] = useState<{ key: string; forecast: WeatherForecast | null } | null>(null);
   useEffect(() => {

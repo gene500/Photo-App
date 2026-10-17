@@ -96,6 +96,24 @@ describe("sanitizePhoto: JPEG", () => {
     expect(sanitizePhoto(jpeg({ w: 30000, h: 1000 }), "image/jpeg").ok).toBe(true);
     expect(sanitizePhoto(jpeg({ w: 20000, h: 3000 }), "image/jpeg").ok).toBe(false); // 60 MP
   });
+  it("refuses reserved or extension markers instead of copying their payload (a mutated APP1 marker byte)", () => {
+    for (const marker of [0x02, 0xf0, 0xfd, 0xc8, 0x60]) {
+      const mutated = u8([0xff, 0xd8], seg(marker, u8("GPS=1,2")), sof(40, 30), sos, [0x12, 0xff, 0xd9]);
+      expect(sanitizePhoto(mutated, "image/jpeg").ok).toBe(false);
+    }
+    const between = u8([0xff, 0xd8], sof(40, 30), sos, [0x12], seg(0xf0, u8("GPS=1,2")), sos, [0x13, 0xff, 0xd9]);
+    expect(sanitizePhoto(between, "image/jpeg").ok).toBe(false);
+  });
+  it("refuses a flood of tiny segments cheaply", () => {
+    const empty = (m: number) => [0xff, m, 0, 2];
+    const flood = (m: number, n: number) => Uint8Array.from({ length: n * 4 }, (_, i) => empty(m)[i % 4]);
+    const head = u8([0xff, 0xd8], flood(0xc4, 20000), sof(40, 30), sos, [0x12, 0xff, 0xd9]);
+    expect(sanitizePhoto(head, "image/jpeg").ok).toBe(false);
+    const scans = u8([0xff, 0xd8], sof(40, 30), sos, [0x12], flood(0xfe, 20000), [0xff, 0xd9]);
+    expect(sanitizePhoto(scans, "image/jpeg").ok).toBe(false);
+    // A normal count of tables is fine.
+    expect(sanitizePhoto(u8([0xff, 0xd8], flood(0xdb, 50), sof(40, 30), sos, [0x12, 0xff, 0xd9]), "image/jpeg").ok).toBe(true);
+  });
   it("rejects truncated, frame-less and oversized files", () => {
     expect(sanitizePhoto(jpeg().slice(0, 30), "image/jpeg").ok).toBe(false);
     expect(sanitizePhoto(u8([0xff, 0xd8, 0xff, 0xd9]), "image/jpeg").ok).toBe(false);

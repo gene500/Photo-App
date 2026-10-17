@@ -78,6 +78,13 @@ function orientationSegment(orientation: number): Uint8Array {
   return Uint8Array.from([0xff, 0xe1, len >> 8, len & 255, ...payload]);
 }
 
+/** More marker segments than this is not a photo; it also bounds the work and memory a flood of empty segments can cost. */
+const MAX_SEGMENTS = 10_000;
+/** Markers kept between scans: DHT, DAC, DQT, DRI, SOS, DNL. */
+/** Markers kept before the first scan besides SOFn and the APPn cases: DHT, DAC, DQT, DRI. */
+const HEAD_KEEP = new Set([0xc4, 0xcc, 0xdb, 0xdd]);
+const SCAN_KEEP = new Set([0xc4, 0xcc, 0xdb, 0xdd, 0xda, 0xdc]);
+
 /**
  * The parts of a JPEG from its first SOS up to and including the first EOI: entropy-coded data is skipped over (FF00
  * stuffing, FFD0-D7 restarts), later segments are kept unless they are APPn/COM. Null when the file is malformed.
@@ -86,6 +93,7 @@ function scanBody(b: Uint8Array, sosAt: number): Uint8Array[] | null {
   const parts: Uint8Array[] = [];
   let runStart = sosAt; // start of the bytes not yet copied
   let pos = sosAt;
+  let segments = 0;
   let inSegment = true; // pos sits on a marker segment (the SOS header) rather than entropy data
   for (;;) {
     if (inSegment) {
@@ -113,13 +121,14 @@ function scanBody(b: Uint8Array, sosAt: number): Uint8Array[] | null {
       if (pos + 4 > b.length) return null;
       const len = be16(b, pos + 2);
       if (len < 2 || pos + 2 + len > b.length) return null;
+      if (++segments > MAX_SEGMENTS) return null;
       if ((m >= 0xe0 && m <= 0xef) || m === 0xfe) {
         parts.push(b.subarray(runStart, pos));
         runStart = pos + 2 + len;
         pos = runStart;
-      } else {
+      } else if (SCAN_KEEP.has(m)) {
         inSegment = true;
-      }
+      } else return null; // reserved or extension markers have no place between scans
     }
   }
 }
@@ -131,8 +140,10 @@ function sanitizeJpeg(b: Uint8Array): SanitizedPhoto {
   let frame: { width: number; height: number } | null = null;
   let exifAt = 1; // index in `head` after the leading JFIF segment
   let pos = 2;
+  let segments = 0;
   for (;;) {
     while (b[pos] === 0xff && b[pos + 1] === 0xff) pos++; // fill bytes
+    if (++segments > MAX_SEGMENTS) return BAD;
     if (pos + 4 > b.length || b[pos] !== 0xff) return BAD;
     const marker = b[pos + 1];
     if (marker === 0xd9 || marker === 0xd8 || marker === 0x00 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) return BAD; // no scan yet
@@ -166,6 +177,7 @@ function sanitizeJpeg(b: Uint8Array): SanitizedPhoto {
     else if (marker === 0xe2) keep = startsWith(payload, 0, "ICC_PROFILE\0");
     else if (marker === 0xee) keep = startsWith(payload, 0, "Adobe"); // colour transform flag
     else if ((marker >= 0xe3 && marker <= 0xef) || marker === 0xfe) keep = false; // IPTC, other APPn, comments
+    else if (!isSof && !HEAD_KEEP.has(marker)) return BAD; // reserved, extension or unknown marker: not a photo we can clean
     if (keep) {
       head.push(whole);
       if (marker === 0xe0 && head.length === 2) exifAt = 2;

@@ -5,6 +5,7 @@
 - [ ] Share link opens the app's generic page and not the shared trip (reported 2026-10-14). Not reproduced locally or in e2e; need the exact link behavior to continue.
 
 ## To verify by hand
+- [ ] Sky preview on the real Mapbox map: sunrise/sunset lines and their "Sunrise"/"Sunset" labels (font DIN Pro Medium) show for the selected stop, stay about 90 px long when zooming in and out, and disappear when the stop is deselected.
 - [ ] Apple Maps link with every stop, on a real iPhone (the multi-`daddr` format is unconfirmed).
 - [ ] Google Maps link with every stop (up to 11 stops per link; longer trips split into parts).
 - [ ] Hover photo card stays fully on screen in the Suggestions tab.

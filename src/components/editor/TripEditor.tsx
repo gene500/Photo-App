@@ -20,6 +20,7 @@ import { useOfflineCopy } from "@/lib/use-offline-copy";
 import { defaultLightPref } from "@/lib/light-windows";
 import { formatDistance, formatDuration } from "@/lib/format";
 import { coordsLabel, haversineMeters } from "@/lib/geo";
+import { getSkyInfo } from "@/lib/sky";
 import type { LightPref, LngLat, Place, RouteResult, Stop, StopSource, Suggestion, Trip, TripWithStops } from "@/lib/types";
 import type { StopPatch, TripPatch } from "@/lib/validation";
 import { MapView } from "./MapView";
@@ -617,6 +618,16 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const cardIndex = stops.findIndex((s) => s.id === cardId);
   const cardStop = cardIndex >= 0 ? stops[cardIndex] : null;
   const drawerStop = stops.find((s) => s.id === drawerId) ?? null;
+  // Memoised: the real map redraws its sky lines whenever this object's identity changes.
+  const sky = useMemo(() => {
+    if (!cardStop || !/^\d{4}-\d{2}-\d{2}$/.test(trip.plannedDate)) return null;
+    try {
+      const info = getSkyInfo(cardStop.lat, cardStop.lng, trip.plannedDate);
+      return { lat: cardStop.lat, lng: cardStop.lng, sunrise: info.sunrise?.bearing ?? null, sunset: info.sunset?.bearing ?? null };
+    } catch {
+      return null;
+    }
+  }, [cardStop, trip.plannedDate]);
   const freshAlternatives = alternativesState?.stopId === drawerId && alternativesState.key === waypointKey ? alternativesState : null;
 
   return (
@@ -628,6 +639,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         suggestions={suggestions}
         highlightedSuggestionId={highlightedId}
         selectedId={cardId}
+        sky={sky}
         flyTo={flyTo}
         onMapClick={(p) => void pickPoint(p)}
         onStopClick={clickMarker}
@@ -769,6 +781,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
           key={drawerStop.id}
           stop={drawerStop}
           plannedDate={trip.plannedDate}
+          arrival={arrivals[stops.findIndex((s) => s.id === drawerStop.id)] ?? null}
           onClose={() => setDrawerId(null)}
           onSave={async (patch) => mergeStop((await api.updateStop(drawerStop.id, patch)).stop, Object.keys(patch) as (keyof Stop)[])}
           onPhotoChange={(stop) => mergeStop(stop, ["photoUrl"])}

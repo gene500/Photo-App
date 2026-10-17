@@ -404,8 +404,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
           (mustMisses.length ? ` ${mustMisses.join(", ")} ${mustMisses.length === 1 ? "is a must-have" : "are must-haves"}: try fewer stops or a different order.` : "")
         : null;
       // null means no stop has a light preference: leave the departure alone.
-      // The optimizer's pick is kept on the planned solar day too: the trips API refuses a start time on a neighbouring day.
-      const nextDepartAt = result.departAt ? clampToSolarDay(new Date(result.departAt), trip.plannedDate, before[0].lng).toISOString() : previousDepartAt;
+      // The optimizer's pick is kept on the planned solar day too (at the first stop of the new order, as the server checks it): the trips API refuses a start time on a neighbouring day.
+      const nextDepartAt = result.departAt ? clampToSolarDay(new Date(result.departAt), trip.plannedDate, before[result.order[0] ?? 0].lng).toISOString() : previousDepartAt;
       const orderChanged = ids.join(",") !== startKey;
       const departChanged = !sameInstant(nextDepartAt, previousDepartAt);
       if (!orderChanged && !departChanged) {

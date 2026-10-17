@@ -760,6 +760,19 @@ describe("TripEditor", () => {
         await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toMatch(/^Start time moved to /));
       });
 
+      it("clamps the start time with the longitude of the first stop of the NEW order (the one the server checks)", async () => {
+        const far = [three[0], { ...three[1], lng: 100 }, sunsetC[2]];
+        vi.mocked(api.reorderStops).mockImplementation(async (_t, ids) => ({ stops: ids.map((id, order) => ({ ...far.find((s) => s.id === id)!, order })) }));
+        vi.mocked(api.updateTrip).mockImplementation(async (_id, patch) => ({ trip: { ...withStops(far), departAt: null, ...patch } as never }));
+        vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [1, 0, 2], departAt: "2026-07-02T09:00:00.000Z", misses: [] });
+        const user = userEvent.setup();
+        render(<TripEditor initialTrip={{ ...withStops(far), departAt: null }} />);
+        await user.click(screen.getByRole("button", { name: "Optimize route" }));
+        await waitFor(() => expect(api.updateTrip).toHaveBeenCalledTimes(1));
+        const sent = vi.mocked(api.updateTrip).mock.calls[0]![1].departAt as string;
+        expect(solarDateAt(new Date(sent), 100)).toBe("2026-07-01");
+      });
+
       it("keeps an unchanged order but still applies a new departure", async () => {
         echoTrip();
         vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], departAt: "2026-07-01T23:15:00.000Z", misses: [] });

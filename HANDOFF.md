@@ -23,8 +23,8 @@ Last updated 2026-10-16.
 | P8 | Task 7: e2e `e2e/pdf-itinerary.spec.ts` and full gates | completed | `8e6b10c` |
 | P9 | Final whole-branch review (Opus) | completed | fixes `6af16a0`; parked: per-stop weather requests on cold cache, `plannedDate ?? ""` |
 | P10 | Test in the real app with the Mapbox token | completed | real Mapbox static request returned 200 with CORS open from the browser (editor and share page); both PDFs rendered with the real map, pins, route and schedule (checked visually). Fake directions were used, so the route line was straight | editor + share link; force the static-map request to fail to see the fallback; check a URL-restricted token on the share page (`no-referrer`) |
-| P11 | Sweep 1: full-codebase check (Opus) | in progress | whole repo on the feature branch; read-only report, fixes ruled and applied after |
-| P12 | Sweep 2: bug sweep (Opus) | pending | run after P11, one at a time |
+| P11 | Sweep 1: full-codebase check (Opus) | completed | fixes `7de1487`; parked: weather lib->hook coupling, shared stop-mapping helper, jsPDF optional deps, config drift, per-stop weather requests, thin tests | whole repo on the feature branch; read-only report, fixes ruled and applied after |
+| P12 | Sweep 2: bug sweep (Opus) | in progress | run after P11, one at a time |
 | P13 | Sweep 3: security sweep (Opus) | pending | run after P12; include auth, share links, CSP, the Mapbox token, PDF/static-map inputs |
 | P14 | Merge `feat/pdf-itinerary` into `main`, push, check Vercel and CI | pending | push only when the owner says "push" |
 | P15 | Clear `~/.playwright-mcp` | pending | |

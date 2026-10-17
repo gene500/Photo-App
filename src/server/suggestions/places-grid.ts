@@ -4,6 +4,10 @@ import type { LngLat } from "@/lib/types";
 /** Places are bucketed into 0.1 degree squares (about 11 km), so a search reads a handful of index ranges instead of scanning. */
 const CELL_DEG = 0.1;
 const LNG_STRIDE = 10_000;
+const COLS = Math.round(360 / CELL_DEG);
+
+/** Wraps a grid column across the antimeridian into 0..COLS-1. */
+const wrapCol = (c: number) => ((c % COLS) + COLS) % COLS;
 
 export function cellOf(lat: number, lng: number): number {
   return Math.floor((lat + 90) / CELL_DEG) * LNG_STRIDE + Math.floor((lng + 180) / CELL_DEG);
@@ -19,14 +23,14 @@ export function cellsForCircle(lat: number, lng: number, radiusKm: number): numb
   const row0 = Math.floor((lat - dLat + 90) / CELL_DEG);
   const row1 = Math.floor((lat + dLat + 90) / CELL_DEG);
   const col0 = Math.floor((lng - dLng + 180) / CELL_DEG);
-  const col1 = Math.floor((lng + dLng + 180) / CELL_DEG);
+  const col1 = Math.min(Math.floor((lng + dLng + 180) / CELL_DEG), col0 + COLS - 1);
   // A little slack (1 % + 300 m) keeps this conservative: the box maths and haversine differ slightly, and a cell must never be missed.
   const reach = radiusKm * 1010 + 300;
   for (let r = row0; r <= row1; r++) {
     const nearLat = Math.min(Math.max(lat, r * CELL_DEG - 90), (r + 1) * CELL_DEG - 90);
     for (let c = col0; c <= col1; c++) {
       const nearLng = Math.min(Math.max(lng, c * CELL_DEG - 180), (c + 1) * CELL_DEG - 180);
-      if (haversineMeters({ lat, lng }, { lat: nearLat, lng: nearLng }) <= reach) out.push(r * LNG_STRIDE + c);
+      if (haversineMeters({ lat, lng }, { lat: nearLat, lng: nearLng }) <= reach) out.push(r * LNG_STRIDE + wrapCol(c));
     }
   }
   return out;
@@ -56,7 +60,7 @@ export function cellsForRing(ring: readonly LngLat[], holes: readonly (readonly 
       const [lng1, lat1] = r[i];
       const [lng2, lat2] = r[(i + 1) % r.length];
       const n = Math.max(1, Math.ceil(Math.max(Math.abs(lng2 - lng1), Math.abs(lat2 - lat1)) / step));
-      for (let k = 0; k <= n; k++) cells.add(cellOf(lat1 + ((lat2 - lat1) * k) / n, lng1 + ((lng2 - lng1) * k) / n));
+      for (let k = 0; k <= n; k++) cells.add(Math.floor((lat1 + ((lat2 - lat1) * k) / n + 90) / CELL_DEG) * LNG_STRIDE + wrapCol(Math.floor((lng1 + ((lng2 - lng1) * k) / n + 180) / CELL_DEG)));
     }
   }
   if (ring.length >= 3) {
@@ -77,8 +81,8 @@ export function cellsForRing(ring: readonly LngLat[], holes: readonly (readonly 
       xs.sort((a, b) => a - b);
       for (let k = 0; k + 1 < xs.length; k += 2) {
         const c0 = Math.floor((xs[k] + 180) / CELL_DEG);
-        const c1 = Math.floor((xs[k + 1] + 180) / CELL_DEG);
-        for (let c = c0; c <= c1; c++) cells.add(r * LNG_STRIDE + c);
+        const c1 = Math.min(Math.floor((xs[k + 1] + 180) / CELL_DEG), c0 + COLS - 1);
+        for (let c = c0; c <= c1; c++) cells.add(r * LNG_STRIDE + wrapCol(c));
       }
     }
   }

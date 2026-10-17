@@ -79,8 +79,8 @@ cleaned rather than refused, an older stored value with such a character never b
 
 The server walks each JPEG, PNG or WebP file (`src/server/photo-sanitize.ts`, no image library): the contents must match
 the declared type and have a valid structure, and a side over 12000 px or more than 50 megapixels is refused. Metadata is
-dropped before the file is stored: EXIF (including GPS), XMP, IPTC, comments, PNG text/time chunks and anything after the
-end of the image. Pixels are copied, not re-encoded. A JPEG keeps only its EXIF orientation so a rotated phone photo still
+dropped before the file is stored: EXIF (including GPS), XMP, IPTC, comments (also those between progressive scans), PNG text/time chunks and anything after the
+end of the image (a JPEG is cut at its first end-of-image, so an appended second image or a motion-photo video is gone). Pixels are copied, not re-encoded. A JPEG keeps only its EXIF orientation so a rotated phone photo still
 shows upright.
 
 ### Place search

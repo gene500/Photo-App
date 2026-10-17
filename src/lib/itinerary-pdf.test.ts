@@ -112,12 +112,76 @@ describe("renderItineraryPdf", () => {
   });
 });
 
+describe("edge cases", () => {
+  const noNaN = (s: string) => expect(s).not.toMatch(/NaN|Infinity/);
+
+  it("draws WinAnsi punctuation as its cp1252 byte", async () => {
+    const s = await render(input(1, { notes: "a\u2013b" }));
+    expect(s).toContain("a\x96b");
+  });
+
+  it("handles identical points", async () => {
+    const same = { lat: 10, lng: 20 };
+    const blob = await renderItineraryPdf(input(2), fallback, [[20, 10], [20, 10]], [same, same]);
+    noNaN(Buffer.from(await blob.arrayBuffer()).toString("latin1"));
+  });
+
+  it("handles an antimeridian route", async () => {
+    const blob = await renderItineraryPdf(input(2), fallback, [[179, 0], [-179, 1], [-178, 2]], [{ lat: 0, lng: 179 }, { lat: 2, lng: -178 }]);
+    noNaN(Buffer.from(await blob.arrayBuffer()).toString("latin1"));
+  });
+
+  it("handles empty geometry and stops", async () => {
+    const blob = await renderItineraryPdf(input(0), fallback, [], []);
+    const s = Buffer.from(await blob.arrayBuffer()).toString("latin1");
+    expect(s.startsWith("%PDF")).toBe(true);
+    noNaN(s);
+  });
+
+  it("keeps the map on a page when the title is very long", async () => {
+    const long = { ...input(1), tripName: "Title ".repeat(300) };
+    const s = await render(long);
+    expect(s.startsWith("%PDF")).toBe(true);
+  });
+
+  it("never leaves a stop heading alone at the bottom of a page", async () => {
+    // Sweep stop counts so some heading lands at each position near a page end.
+    for (let k = 1; k <= 12; k++) {
+      const base = input(30);
+      // Vary each stop's height so headings land at many offsets near a page end.
+      base.stops.forEach((st, i) => {
+        st.notes = "word ".repeat(((i * k) % 7) * 20);
+        if (!st.notes) st.notes = null;
+      });
+      const n = k;
+      const s = await render(base);
+      const pages = s.split("\nstream\n").slice(1);
+      expect(pages.length).toBeGreaterThan(0);
+      for (const [i, page] of pages.entries()) {
+        const texts = [...page.matchAll(/\(([^)]*)\) Tj/g)].map((m) => m[1]).filter((t) => !t.startsWith("Page "));
+        // A heading is followed by its arrival time, so an orphan ends with [heading, arrival].
+        const last = texts[texts.length - 2];
+        if (last && /^\d+\. Stopname/.test(last) && page.includes("Tj")) {
+          throw new Error(`heading orphaned on page ${i + 1} in variant ${n}: ${last}`);
+        }
+      }
+    }
+  });
+});
+
 describe("pdfSafe", () => {
   it("replaces characters above U+00FF and strips control characters", () => {
-    const out = pdfSafe("Café – 東京 ☀️\u0007");
+    const out = pdfSafe("Café – ’ 東京 ☀️\u0007");
     expect(out).toContain("Café");
+    expect(out).toContain("–");
+    expect(out).toContain("’");
+    expect(out).not.toMatch(/[東京☀]/);
     expect(out).not.toContain("\u0007");
-    expect([...out].every((c) => c.codePointAt(0)! <= 0xff)).toBe(true);
+    expect([...out].every((c) => c.codePointAt(0)! <= 0xff || "–’".includes(c))).toBe(true);
+  });
+
+  it("maps tab to a space", () => {
+    expect(pdfSafe("a\tb")).toBe("a b");
   });
 
   it("keeps newlines", () => {

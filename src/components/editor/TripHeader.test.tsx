@@ -67,11 +67,16 @@ describe("TripHeader", () => {
     expect(heading.getAttribute("title")).toBe("Sierra loop");
     const row = heading.parentElement!;
     expect(row.className).toMatch(/\bflex-wrap\b/);
-    expect(heading.className).toMatch(/min-w-\[7ch\]/); // scales with the text size
+    expect(heading.style.minWidth).toBe("5.46ch"); // 7 characters (the cap), in ch so it scales with the text size
     const buttons = screen.getByRole("button", { name: "Edit trip" }).parentElement!;
     expect(buttons.parentElement).toBe(row);
     expect(buttons.className).toMatch(/shrink-0/);
     expect(buttons.contains(screen.getByRole("button", { name: "Export" }))).toBe(true);
     expect(buttons.contains(screen.getByRole("button", { name: "Share" }))).toBe(true);
+  });
+
+  it("only asks for as much room as a short name needs", () => {
+    render(<TripHeader trip={{ ...trip, name: "Zion" }} onSave={vi.fn()} onShareChange={vi.fn()} exportData={{ stops: [], route: null }} />);
+    expect(screen.getByRole("heading", { name: "Zion" }).style.minWidth).toBe("3.12ch");
   });
 });

@@ -69,6 +69,8 @@ Known gaps:
 - Share page `no-referrer` vs a URL-restricted Mapbox token.
 - Offline copies are cleared on sign-out and when the login or signup page is shown (session ended); they stay while the device is offline.
 - Rate limits other than login/signup/password/delete are per instance; no monitoring or alerting yet.
+- Login lockout is per email and hashed client address (8 failures / 15 min); a global 50 failures / hour per email only refuses addresses that already failed, so a clean address always gets in. IPv6 is keyed by /64; behind a proxy that does not set `x-real-ip` all clients share one address key.
+- Share links and the share PDF omit stop notes; shot notes and the shot list are shared.
 - `updateTrip` find-then-update is not atomic.
 - Playwright timezone is not pinned for specs other than the hydration one.
 - Skills in `.agents/skills` reference plugin commands that are not installed.

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearMapboxCaches, ExternalServiceError, geocode, getDirections, getDurationMatrix, reverseGeocode } from "./mapbox";
+import { clearMapboxCaches, ExternalServiceError, geocode, getDirections, getDurationMatrix, retrievePlace, reverseGeocode, searchPlaces } from "./mapbox";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const okRoute = {
@@ -204,5 +204,127 @@ describe("mapbox caches and shape guards", () => {
     expect(await geocode("x y", {}, f as unknown as typeof fetch)).toHaveLength(1);
     const d = json({ code: "Ok", routes: [{ geometry: null, legs: null, distance: 1, duration: 1 }] });
     await expect(getDirections([[1, 2], [3, 4]], d as unknown as typeof fetch)).rejects.toBeInstanceOf(ExternalServiceError);
+  });
+});
+
+describe("searchPlaces / retrievePlace (Search Box API)", () => {
+  const SESSION = "11111111-1111-4111-8111-111111111111";
+  beforeEach(() => {
+    process.env.MAPBOX_TOKEN = "test-token";
+    delete process.env.EXTERNAL_APIS_FAKE;
+    clearMapboxCaches();
+  });
+  afterEach(() => {
+    delete process.env.MAPBOX_TOKEN;
+  });
+  const suggestBody = {
+    suggestions: [
+      { name: "Page", mapbox_id: "p1", feature_type: "place", place_formatted: "Arizona, United States" },
+      { name: "Horseshoe Bend", mapbox_id: "h1", feature_type: "poi", poi_category: ["viewpoint", "tourist attraction"], place_formatted: "Page, Arizona 86040, United States" },
+      { name: "100 Main St", mapbox_id: "a1", feature_type: "address", place_formatted: "Page, Arizona" },
+      { name: "Horseshoe Bend Trail", mapbox_id: "h2", feature_type: "poi", place_formatted: "Page, Arizona" },
+    ],
+  };
+  const calls = (f: ReturnType<typeof vi.fn>) => f.mock.calls as unknown as [string][];
+
+  it("asks Search Box suggest with the session, proximity and POI-inclusive types", async () => {
+    const f = vi.fn(async () => json(suggestBody));
+    await searchPlaces("Horseshoe Bend", { proximity: { lat: 36.9, lng: -111.5 }, sessionToken: SESSION }, f as unknown as typeof fetch);
+    const url = new URL(calls(f)[0][0]);
+    expect(url.pathname).toBe("/search/searchbox/v1/suggest");
+    expect(url.searchParams.get("q")).toBe("Horseshoe Bend");
+    expect(url.searchParams.get("session_token")).toBe(SESSION);
+    expect(url.searchParams.get("limit")).toBe("5");
+    expect(url.searchParams.get("proximity")).toBe("-111.500000,36.900000");
+    expect(url.searchParams.get("types")).toBe("poi,address,place,locality,neighborhood");
+    expect(url.searchParams.get("language")).toBe("en");
+    expect(url.searchParams.get("access_token")).toBe("test-token");
+  });
+
+  it("ranks points of interest first (stable) and builds name, subtitle and id", async () => {
+    const f = vi.fn(async () => json(suggestBody));
+    const out = await searchPlaces("horseshoe", { sessionToken: SESSION }, f as unknown as typeof fetch);
+    expect(out.map((s) => s.name)).toEqual(["Horseshoe Bend", "Horseshoe Bend Trail", "Page", "100 Main St"]);
+    expect(out[0]).toEqual({ name: "Horseshoe Bend", subtitle: "viewpoint · Page, Arizona 86040, United States", mapboxId: "h1" });
+    expect(out[1].subtitle).toBe("Page, Arizona");
+    expect(out.every((s) => s.lat === undefined)).toBe(true);
+  });
+
+  it("skips malformed suggestions", async () => {
+    const f = vi.fn(async () => json({ suggestions: [null, { name: "x" }, { mapbox_id: "y" }, { name: "ok", mapbox_id: "z", feature_type: "poi" }] }));
+    expect(await searchPlaces("zz", { sessionToken: SESSION }, f as unknown as typeof fetch)).toEqual([{ name: "ok", mapboxId: "z" }]);
+  });
+
+  it("serves a repeated search from memory", async () => {
+    const f = vi.fn(async () => json(suggestBody));
+    await searchPlaces("Horseshoe", { sessionToken: SESSION }, f as unknown as typeof fetch);
+    await searchPlaces("horseshoe", { sessionToken: "22222222-2222-4222-8222-222222222222" }, f as unknown as typeof fetch);
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to the v6 geocoder, with coordinates, when suggest is not ok", async () => {
+    const f = vi.fn(async (url: string) =>
+      url.includes("/searchbox/") ? json({ message: "nope" }, 500) : json({ features: [{ geometry: { coordinates: [-119.79, 36.74] }, properties: { full_address: "1 Fresno St" } }] }),
+    );
+    const out = await searchPlaces("Fresno", { sessionToken: SESSION }, f as unknown as typeof fetch);
+    expect(out).toEqual([{ name: "1 Fresno St", lat: 36.74, lng: -119.79 }]);
+    expect(calls(f)[1][0]).toContain("/search/geocode/v6/forward");
+  });
+
+  it("falls back when suggest is unreachable or has a bad payload, and fails only if the fallback fails too", async () => {
+    const v6 = json({ features: [{ geometry: { coordinates: [1, 2] }, properties: { name: "A" } }] });
+    const down = vi.fn(async (url: string) => {
+      if (url.includes("/searchbox/")) throw new Error("offline");
+      return v6.clone();
+    });
+    expect(await searchPlaces("aa", { sessionToken: SESSION }, down as unknown as typeof fetch)).toHaveLength(1);
+    clearMapboxCaches();
+    const bad = vi.fn(async (url: string) => (url.includes("/searchbox/") ? json({ suggestions: "x" }) : v6.clone()));
+    expect(await searchPlaces("bb", { sessionToken: SESSION }, bad as unknown as typeof fetch)).toHaveLength(1);
+    clearMapboxCaches();
+    const allDown = vi.fn(async () => json({}, 500));
+    await expect(searchPlaces("cc", { sessionToken: SESSION }, allDown as unknown as typeof fetch)).rejects.toBeInstanceOf(ExternalServiceError);
+  });
+
+  it("returns canned landmarks in fake mode", async () => {
+    process.env.EXTERNAL_APIS_FAKE = "1";
+    const f = vi.fn();
+    const out = await searchPlaces("Horseshoe Bend", { sessionToken: SESSION }, f as unknown as typeof fetch);
+    expect(out[0]).toMatchObject({ name: "Horseshoe Bend", mapboxId: expect.any(String) });
+    expect(out.at(-1)).toMatchObject({ name: "Horseshoe Bend (fake)", lat: expect.any(Number) });
+    expect(f).not.toHaveBeenCalled();
+    const place = await retrievePlace(out[0].mapboxId!, SESSION, f as unknown as typeof fetch);
+    expect(place).toEqual({ name: "Horseshoe Bend, Page, Arizona", lat: 36.8791, lng: -111.51 });
+    expect(await retrievePlace(out[0].mapboxId!, SESSION, f as unknown as typeof fetch)).toEqual(place);
+  });
+
+  it("retrieves coordinates and a full name for a picked suggestion", async () => {
+    const f = vi.fn(async () =>
+      json({ features: [{ geometry: { coordinates: [-111.51, 36.879] }, properties: { name: "Horseshoe Bend", place_formatted: "Page, Arizona 86040, United States", feature_type: "poi" } }] }),
+    );
+    const place = await retrievePlace("h1", SESSION, f as unknown as typeof fetch);
+    expect(place).toEqual({ name: "Horseshoe Bend, Page, Arizona 86040, United States", lat: 36.879, lng: -111.51 });
+    const url = new URL(calls(f)[0][0]);
+    expect(url.pathname).toBe("/search/searchbox/v1/retrieve/h1");
+    expect(url.searchParams.get("session_token")).toBe(SESSION);
+    await retrievePlace("h1", SESSION, f as unknown as typeof fetch);
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+
+  it("clamps long names and turns failures and bad payloads into service errors", async () => {
+    const long = vi.fn(async () => json({ features: [{ geometry: { coordinates: [1, 2] }, properties: { name: "x".repeat(300) } }] }));
+    expect((await retrievePlace("long", SESSION, long as unknown as typeof fetch)).name).toHaveLength(200);
+    for (const [id, res] of [["a", json({}, 404)], ["b", json({ features: [] })], ["c", json({ features: [{ geometry: {}, properties: { name: "n" } }] })]] as const) {
+      const f = vi.fn(async () => res);
+      await expect(retrievePlace(id, SESSION, f as unknown as typeof fetch)).rejects.toBeInstanceOf(ExternalServiceError);
+    }
+    const down = vi.fn(async () => { throw new Error("offline"); });
+    await expect(retrievePlace("d", SESSION, down as unknown as typeof fetch)).rejects.toBeInstanceOf(ExternalServiceError);
+  });
+
+  it("encodes the id into the path", async () => {
+    const f = vi.fn(async () => json({ features: [{ geometry: { coordinates: [1, 2] }, properties: { name: "n" } }] }));
+    await retrievePlace("a/b c", SESSION, f as unknown as typeof fetch);
+    expect(new URL(calls(f)[0][0]).pathname).toBe("/search/searchbox/v1/retrieve/a%2Fb%20c");
   });
 });

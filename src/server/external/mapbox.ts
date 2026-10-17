@@ -1,7 +1,7 @@
-import type { LngLat, Place, RouteResult } from "@/lib/types";
+import type { LngLat, Place, RouteResult, SearchSuggestion } from "@/lib/types";
 import { coordsLabel } from "@/lib/geo";
 import { TtlCache } from "../suggestions/cache";
-import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakeReverseGeocode, isFakeExternal } from "./fake";
+import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakeRetrieve, fakeReverseGeocode, fakeSearch, isFakeExternal } from "./fake";
 
 const MAPBOX_BASE = "https://api.mapbox.com";
 const TIMEOUT_MS = 10_000;
@@ -49,12 +49,16 @@ const directionsCache = new TtlCache<RouteResult>(DIRECTIONS_TTL_MS, 200);
 const LOOKUP_TTL_MS = 10 * 60_000;
 const geocodeCache = new TtlCache<Place[]>(LOOKUP_TTL_MS, 300);
 const reverseCache = new TtlCache<Place>(LOOKUP_TTL_MS, 300);
+const searchCache = new TtlCache<SearchSuggestion[]>(LOOKUP_TTL_MS, 300);
+const retrieveCache = new TtlCache<Place>(LOOKUP_TTL_MS, 300);
 const matrixCache = new TtlCache<number[][]>(LOOKUP_TTL_MS, 100);
 
 export function clearMapboxCaches(): void {
   directionsCache.clear();
   geocodeCache.clear();
   reverseCache.clear();
+  searchCache.clear();
+  retrieveCache.clear();
   matrixCache.clear();
 }
 
@@ -147,6 +151,91 @@ export async function geocode(query: string, options: GeocodeOptions = {}, fetch
     }));
   geocodeCache.set(cacheKey, places);
   return places;
+}
+
+type SearchBoxSuggestion = {
+  name?: string;
+  mapbox_id?: string;
+  feature_type?: string;
+  poi_category?: string[];
+  place_formatted?: string;
+};
+type SuggestResponse = { suggestions?: SearchBoxSuggestion[] };
+type RetrieveResponse = {
+  features?: {
+    geometry?: { coordinates?: unknown };
+    properties?: { name?: string; place_formatted?: string; full_address?: string; feature_type?: string };
+  }[];
+};
+
+export type SearchOptions = GeocodeOptions & {
+  /** One per search session: the suggests and the retrieve that follows them are billed together. */
+  sessionToken: string;
+};
+
+/** Landmarks and viewpoints before towns and addresses; Array.sort is stable, so Mapbox's order holds within each group. */
+
+/**
+ * Search Box suggest finds POIs by name (the v6 geocoder has none) but returns no coordinates;
+ * pick one with retrievePlace. If suggest fails, the v6 geocoder answers instead, with coordinates already in place.
+ */
+export async function searchPlaces(query: string, options: SearchOptions, fetchImpl: typeof fetch = fetch): Promise<SearchSuggestion[]> {
+  if (isFakeExternal()) return fakeSearch(query);
+  const proximity = options.proximity
+    ? `&proximity=${options.proximity.lng.toFixed(6)},${options.proximity.lat.toFixed(6)}`
+    : "";
+  const cacheKey = `${query.toLowerCase()}|${proximity}`;
+  const cached = searchCache.get(cacheKey);
+  if (cached) return cached;
+  const url =
+    `${MAPBOX_BASE}/search/searchbox/v1/suggest?q=${encodeURIComponent(query)}` +
+    `&session_token=${encodeURIComponent(options.sessionToken)}&limit=5${proximity}` +
+    `&types=poi,address,place,locality,neighborhood&language=en&access_token=${encodeURIComponent(token())}`;
+  let raw: SearchBoxSuggestion[] | null = null;
+  try {
+    const { ok, body } = await getJson<SuggestResponse>(url, fetchImpl, "Couldn't reach the place search service");
+    if (ok && Array.isArray(body?.suggestions)) raw = body.suggestions;
+  } catch (e) {
+    if (!(e instanceof ExternalServiceError)) throw e;
+  }
+  if (!raw) {
+    const places = await geocode(query, { proximity: options.proximity }, fetchImpl);
+    const results = places.map((p) => ({ name: p.name, lat: p.lat, lng: p.lng }));
+    searchCache.set(cacheKey, results);
+    return results;
+  }
+  const results = raw
+    .filter((s) => s && typeof s.name === "string" && s.name && typeof s.mapbox_id === "string" && s.mapbox_id)
+    .sort((a, b) => Number(a.feature_type !== "poi") - Number(b.feature_type !== "poi"))
+    .map((s) => {
+      const subtitle = [Array.isArray(s.poi_category) ? s.poi_category[0] : undefined, s.place_formatted].filter(Boolean).join(" · ");
+      return { name: clampName(s.name!), ...(subtitle ? { subtitle } : {}), mapboxId: s.mapbox_id! };
+    });
+  searchCache.set(cacheKey, results);
+  return results;
+}
+
+/** Coordinates for a picked suggestion, named like "Horseshoe Bend, Page, Arizona" so the stop reads well on its own. */
+export async function retrievePlace(id: string, sessionToken: string, fetchImpl: typeof fetch = fetch): Promise<Place> {
+  if (isFakeExternal()) {
+    const fake = fakeRetrieve(id);
+    if (!fake) throw new ExternalServiceError("Place lookup failed. Please try again.");
+    return fake;
+  }
+  const cached = retrieveCache.get(id);
+  if (cached) return cached;
+  const url =
+    `${MAPBOX_BASE}/search/searchbox/v1/retrieve/${encodeURIComponent(id)}` +
+    `?session_token=${encodeURIComponent(sessionToken)}&access_token=${encodeURIComponent(token())}`;
+  const { ok, body } = await getJson<RetrieveResponse>(url, fetchImpl, "Couldn't reach the place lookup service");
+  const f = body?.features?.[0];
+  const coords = f?.geometry?.coordinates;
+  if (!ok || !f || !isLngLat(coords)) throw new ExternalServiceError("Place lookup failed. Please try again.");
+  const { name, place_formatted: region, full_address: address, feature_type: type } = f.properties ?? {};
+  const full = type === "address" && address ? address : [name, region].filter(Boolean).join(", ");
+  const place = { name: clampName(full || coordsLabel({ lng: coords[0], lat: coords[1] })), lng: coords[0], lat: coords[1] };
+  retrieveCache.set(id, place);
+  return place;
 }
 
 /** Names a clicked spot; the returned coordinates are the clicked ones, not the feature's. */

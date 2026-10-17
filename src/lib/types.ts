@@ -4,6 +4,9 @@ export type LngLat = [lng: number, lat: number];
 
 export type Place = { name: string; lat: number; lng: number };
 
+/** One search-box row. Landmark rows carry a `mapboxId` to retrieve coordinates with; fallback address rows already have `lat`/`lng`. */
+export type SearchSuggestion = { name: string; subtitle?: string; mapboxId?: string; lat?: number; lng?: number };
+
 export type StopSource = "manual" | "suggested";
 
 export type LightPref = "any" | "sunrise" | "golden" | "sunset";

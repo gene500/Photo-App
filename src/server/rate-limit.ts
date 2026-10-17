@@ -31,6 +31,7 @@ export const POLICIES = {
   /** Counts failed logins only, so an attacker cannot lock a victim out by merely submitting requests that succeed. */
   "login-email-failures": { limit: 8, windowMs: 15 * MINUTE, message: "Too many login attempts. Try again later." },
   geocode: { limit: 60, windowMs: MINUTE, message: "Too many searches. Slow down a little." },
+  "geocode-retrieve": { limit: 60, windowMs: MINUTE, message: "Too many searches. Slow down a little." },
   "reverse-geocode": { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   "trip-write": { limit: 60, windowMs: MINUTE, message: "Too many changes. Slow down a little." },
   "photo-read": { limit: 300, windowMs: MINUTE, message: "Too many requests. Slow down a little." },

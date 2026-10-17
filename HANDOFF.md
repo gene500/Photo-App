@@ -38,8 +38,8 @@ Last updated 2026-10-16.
 | B1 | Loop routes keep the corridor hole (`corridor.ts`) | completed | `c66e340` on `fix/sweep2-bugs`; Overpass results are post-filtered (the `poly:` filter takes no holes), so a dense loop interior can still use up the 500-element cap: a set difference in the query would be the full fix |
 | B2 | Optimize keeps a saved start time that already works | completed | `116950b`, reviewed and approved |
 | B3 | Trip date change across DST keeps the clock time | completed | `33956a0`, reviewed and approved |
-| B4 | `reorderStops` answers 404/409, not 500, on a race | in progress | |
-| B5 | Date-line wrap in `cellsForCircle`; `saveTripCopy` orphan | pending | |
+| B4 | `reorderStops` answers 404/409, not 500, on a race | completed | `1da4d5f`, reviewed and approved; answers 409 |
+| B5 | Date-line wrap in `cellsForCircle`; `saveTripCopy` orphan | in progress | |
 | U1 | Priority control becomes a tappable pill split into thirds (no dragging) | pending | owner request 2026-10-16 (screenshot of the Stops list); `src/components/editor/StopList.tsx` |
 | S1 | Security L2: record the login attempt before bcrypt so parallel guesses cannot overshoot the per-email limit (`src/server/auth.ts:15-19`) | pending | owner asked 2026-10-16 for the Low security items to come before the final check |
 | S2 | Security L3: deleting a Google-only account needs a fresh Google sign-in, and the prompt stops showing the email (`src/server/users.ts:136`, `SignOutButton.tsx:83`) | pending | |

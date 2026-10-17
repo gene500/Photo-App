@@ -40,7 +40,7 @@ A pure module with no React and no network. For a stop's latitude and longitude 
 - `sunrise` and `sunset`: each a compass bearing in degrees clockwise from north (0 to 360) and the time, or null when the sun does not rise or set that day (polar day or night).
 - `moon`: phase name (new, waxing crescent, first quarter, waxing gibbous, full, waning gibbous, last quarter, waning crescent), illumination as a percentage, and moonrise time or null when the moon does not rise that day.
 
-Bearings convert from `suncalc`'s azimuth (measured from south, westward) to a compass bearing. The day is anchored with the same helpers the rest of the app uses, so the times agree with the stop list. A helper turns a bearing into a short compass word (N, NNE, and so on) for text.
+The installed `suncalc` (2.1.1) returns azimuth in degrees clockwise from north, so bearings are normalised to [0, 360), not converted. The day is anchored with the same helpers the rest of the app uses, so the times agree with the stop list. A helper turns a bearing into a short compass word (N, NNE, and so on) for text.
 
 ### 2. Compass card in the stop drawer
 

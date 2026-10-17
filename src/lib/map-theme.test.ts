@@ -8,7 +8,7 @@ describe("themeLayerPaint", () => {
     expect(themeLayerPaint({ id: "route-line", type: "line" })).toBeNull();
     expect(themeLayerPaint({ id: "route-casing", type: "line" })).toBeNull();
     expect(themeLayerPaint({ id: "sky-sunrise", type: "line" })).toBeNull();
-    expect(themeLayerPaint({ id: "sky-labels", type: "symbol" })).toBeNull();
+    expect(themeLayerPaint({ id: "sky-names", type: "symbol" })).toBeNull();
   });
 
   it("ignores layers it does not recognise", () => {

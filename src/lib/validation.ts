@@ -189,7 +189,7 @@ export const suggestionsRequestSchema = z
   .refine((v) => v.radiusKm === undefined || v.around !== undefined, { path: ["radiusKm"], message: "radiusKm only applies to a single point" });
 
 /** Popularity is looked up for at most this many places per request; the client asks in batches. */
-export const POPULARITY_BATCH_SIZE = 10;
+export const POPULARITY_BATCH_SIZE = 5;
 
 export const popularityRequestSchema = z.object({
   places: z.array(z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), name: z.string().max(200).optional() })).min(1).max(POPULARITY_BATCH_SIZE),

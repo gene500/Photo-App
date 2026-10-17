@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
-vi.mock("@/server/external/flickr", () => ({ flickrKey: () => "test-key", getFlickrPhotoCount: vi.fn(async () => 42) }));
+vi.mock("@/server/external/flickr", () => ({ flickrKey: () => "test-key", flickrBudgetLeft: async () => true, getFlickrPhotoCount: vi.fn(async () => 42) }));
 vi.mock("@/server/external/wikipedia-notability", () => ({ getWikipediaNotable: vi.fn(async () => false) }));
 import { getCurrentUserId } from "@/server/session";
 import { getFlickrPhotoCount } from "@/server/external/flickr";
@@ -45,5 +45,12 @@ describe("POST /api/suggestions/popularity (Flickr quota)", () => {
     // Another user is not affected.
     vi.mocked(getCurrentUserId).mockResolvedValue("u2");
     expect((await POST(post([{ lat: 50, lng: 50 }]))).status).toBe(200);
+  });
+
+  it("allows 10 requests per minute per user and at most 5 places per request", async () => {
+    expect(POLICIES.popularity.limit).toBe(10);
+    const six = Array.from({ length: 6 }, (_, i) => ({ lat: 10 + i, lng: 20 }));
+    expect((await POST(post(six))).status).toBe(400);
+    expect((await POST(post(six.slice(0, 5)))).status).toBe(200);
   });
 });

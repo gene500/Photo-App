@@ -98,4 +98,18 @@ describe("Flickr", () => {
     expect(await getFlickrPhotoCount(obs, ok({ stat: "ok", photos: { total: "abc" } }))).toBeUndefined();
     expect(await getFlickrPhotoCount(obs, vi.fn().mockRejectedValue(new Error("x")))).toBeUndefined();
   });
+
+  it("skips Flickr (no request, no error) once the app-wide hourly budget is spent", async () => {
+    vi.stubEnv("RATE_LIMIT_DISABLED", "0");
+    try {
+      const { prisma } = await import("../db");
+      await prisma.rateLimitCounter.deleteMany();
+      await prisma.rateLimitCounter.create({ data: { key: "flickr-app:all", count: 3000, resetAt: Date.now() + 3_600_000 } });
+      const f = ok(search([photo()]));
+      expect(await getFlickrPhoto(obs, f)).toBeNull();
+      expect(f).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

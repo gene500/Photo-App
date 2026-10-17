@@ -255,7 +255,9 @@ After OpenStreetMap candidates are ranked and capped, the first 40 are enriched
 re-ranked within each kind (viewpoint / peak / attraction) by it. The count is
 the Flickr `photos.total` within 250 m when `FLICKR_API_KEY` is set, otherwise
 the number of geotagged Wikimedia Commons files within 250 m (capped at 50, shown
-as "50+"; a weaker signal than Flickr). It shows as a muted "≈N photos nearby" caption
+as "50+"; a weaker signal than Flickr). The route takes at most 5 places per request and 10 requests per minute per
+user; Flickr calls (counts and place photos) share an app-wide budget of 3000 per hour (`flickr-app`), after which
+counts come from Commons and place photos skip Flickr, without an error. It shows as a muted "≈N photos nearby" caption
 on the suggestion card and popup.
 
 The Mapbox `light-v11` basemap is recoloured to the beige theme at runtime

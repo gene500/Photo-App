@@ -46,6 +46,11 @@ type Pending = LatLng & { name: string; source: StopSource; osmId?: string; ligh
 const NO_SUGGESTIONS: Suggestion[] = [];
 const errorMessage = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
+/** True when both are the same moment (or both absent), whatever their ISO spelling. */
+function sameInstant(a: string | null, b: string | null): boolean {
+  return a === b || (a !== null && b !== null && Date.parse(a) === Date.parse(b));
+}
+
 export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops; /** Signed-in user; enables the offline copy. */ userId?: string }) {
   const { stops: initialStops, ...initialFields } = initialTrip;
   const { settings } = useSettings();
@@ -361,6 +366,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const result = await api.optimizeOrder(before.map((s): LngLat => [s.lng, s.lat]), {
         stops: before.map((s) => ({ lightPref: s.lightPref, priority: s.priority, dwellMinutes: s.dwellMinutes })),
         plannedDate: trip.plannedDate,
+        ...(previousDepartAt ? { departAt: previousDepartAt } : {}),
       });
       if (
         idsKeyRef.current !== startKey ||
@@ -381,7 +387,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       // null means no stop has a light preference: leave the departure alone.
       const nextDepartAt = result.departAt ?? previousDepartAt;
       const orderChanged = ids.join(",") !== startKey;
-      const departChanged = nextDepartAt !== previousDepartAt;
+      const departChanged = !sameInstant(nextDepartAt, previousDepartAt);
       if (!orderChanged && !departChanged) {
         setOptimizeNote({ text: ["Already the fastest order", missNote].filter(Boolean).join(". "), idsKey: startKey });
         return;
@@ -399,7 +405,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       }
       setUndo({ previousIds, appliedIds: ids, previousDepartAt, appliedDepartAt });
       // Say so when the start time moved, so the change in the Start time field is not a surprise.
-      const moveNote = appliedDepartAt !== previousDepartAt && appliedDepartAt ? `Start time moved to ${formatClock(new Date(appliedDepartAt), undefined, settings.timeFormat)} so stops land in their light` : null;
+      const moveNote = !sameInstant(appliedDepartAt, previousDepartAt) && appliedDepartAt ? `Start time moved to ${formatClock(new Date(appliedDepartAt), undefined, settings.timeFormat)} so stops land in their light` : null;
       const note = [moveNote, missNote].filter(Boolean).join(". ");
       if (note) setOptimizeNote({ text: note, idsKey: ids.join(",") });
     } catch (e) {

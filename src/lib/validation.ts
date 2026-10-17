@@ -124,6 +124,8 @@ export const optimizeRequestSchema = z
     /** Per-coordinate light preference and time spent; same length as `coordinates`. */
     stops: z.array(z.object({ lightPref: lightPrefSchema, priority: stopPrioritySchema.optional(), dwellMinutes: dwellMinutesSchema })).optional(),
     plannedDate: dateOnlySchema.optional(),
+    /** The trip's saved start time; it wins ties against equally good departures. */
+    departAt: departAtSchema.optional(),
   })
   .refine((o) => !o.stops || o.stops.length === o.coordinates.length, {
     path: ["stops"],

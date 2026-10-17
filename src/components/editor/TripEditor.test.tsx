@@ -706,6 +706,18 @@ describe("TripEditor", () => {
         expect(await screen.findByRole("button", { name: "Undo" })).toBeTruthy();
       });
 
+      it("sends the saved start time and, when the answer is the same moment, keeps it without a 'moved' note", async () => {
+        echoTrip();
+        vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], departAt: "2026-07-02T00:22:00.000Z", misses: [] });
+        const user = userEvent.setup();
+        render(<TripEditor initialTrip={trip2("2026-07-02T00:22:00Z")} />);
+        await user.click(screen.getByRole("button", { name: "Optimize route" }));
+        await waitFor(() => expect(screen.getByText("Already the fastest order")).toBeTruthy());
+        expect(vi.mocked(api.optimizeOrder).mock.calls[0]![1]!.departAt).toBe("2026-07-02T00:22:00Z");
+        expect(api.updateTrip).not.toHaveBeenCalled();
+        expect(screen.queryByText(/Start time moved/)).toBeNull();
+      });
+
       it("lists the stops that miss their light", async () => {
         reorderEcho();
         echoTrip();

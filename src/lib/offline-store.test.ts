@@ -86,7 +86,6 @@ describe("offline-store", () => {
   });
 
   describe("a full quota", () => {
-    const size = (k: string) => mem.getItem(k)!.length + k.length;
     const fill = () => {
       for (let i = 0; i < 4; i++) saveTripCopy(trip(`t${i}`), at(i + 1));
       return mem.used();

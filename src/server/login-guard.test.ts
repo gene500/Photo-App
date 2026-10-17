@@ -49,7 +49,7 @@ describe("guardAuthPost", () => {
     expect(await guardAuthPost(req)).toBeNull();
   });
 
-  const variants = ["/api/auth/callback/%63redentials", "/api/auth/callback/credentials/", "/api/auth//callback/credentials", "/api/auth/callback/%2e/credentials", "/api/auth/callback/Credentials", "/api/auth/callback%2Fcredentials"];
+  const variants = ["/api/auth/callback/%63redentials", "/api/auth/callback/credentials/", "/api/auth//callback/credentials", "/api/auth/callback/%2e/credentials", "/api/auth/callback/Credentials", "/api/auth/callback%2Fcredentials", "/api/auth/callback/credentials/x", "/api/auth/callback/credentials/x/y"];
   it.each(variants)(
     "throttles %s exactly like the plain path",
     async (path) => {

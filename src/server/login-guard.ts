@@ -6,7 +6,10 @@ import { RATE_LIMITED } from "./auth";
 /** The auth forms are a few short fields; anything bigger is refused before NextAuth buffers it. */
 const MAX_AUTH_BODY_BYTES = 16 * 1024;
 
-/** The path as NextAuth sees it: percent-decoded, lowercased, dot and empty segments resolved. */
+/**
+ * The path as NextAuth sees it: percent-decoded, lowercased, dot and empty segments resolved. Lowercasing and a single
+ * decode are deliberately broader than NextAuth's own matching, so over-matching only throttles more, never less.
+ */
 function decodedSegments(pathname: string): string[] {
   let path = pathname;
   try {
@@ -24,8 +27,10 @@ function decodedSegments(pathname: string): string[] {
 }
 
 const isCredentialsCallback = (pathname: string) => {
+  // NextAuth reads only the first two segments after /api/auth, so anything after `credentials` is ignored too.
   const segs = decodedSegments(pathname);
-  return segs.at(-2) === "callback" && segs.at(-1) === "credentials";
+  const at = segs.findIndex((seg, i) => seg === "api" && segs[i + 1] === "auth");
+  return at >= 0 && segs[at + 2] === "callback" && segs[at + 3] === "credentials";
 };
 
 /**

@@ -19,8 +19,8 @@ Last updated 2026-10-16.
 | P4 | Task 3: jsPDF renderer `src/lib/itinerary-pdf.ts` | completed | `bea92fe`, fix `c42d112` |
 | P5 | Task 4: download logic and hook | completed | `39c1c37` |
 | P6 | Task 5: Export-menu item | completed | `e3360ca` |
-| P7 | Task 6: share-page button | in progress | built `72c0ea0`, review running |
-| P8 | Task 7: e2e `e2e/pdf-itinerary.spec.ts` and full gates | pending | |
+| P7 | Task 6: share-page button | completed | `72c0ea0` |
+| P8 | Task 7: e2e `e2e/pdf-itinerary.spec.ts` and full gates | in progress | |
 | P9 | Final whole-branch review (Opus) | pending | |
 | P10 | Test in the real app with the Mapbox token | pending | editor + share link; force the static-map request to fail to see the fallback; check a URL-restricted token on the share page (`no-referrer`) |
 | P11 | Merge `feat/pdf-itinerary` into `main`, push, check Vercel and CI | pending | push only when the owner says "push" |
@@ -66,7 +66,7 @@ Known gaps:
 - `updateTrip` find-then-update is not atomic.
 - Playwright timezone is not pinned for specs other than the hydration one.
 - Skills in `.agents/skills` reference plugin commands that are not installed.
-- Parked PDF review findings (none blocking): no tests for `saveBlob`, `mapTokenFromEnv`, `createItineraryPdf`; PDF title loop has no page-break check (names are capped at 120 chars); the editor's PDF error alert shows only while the Export menu is open; no TripEditor-level test for the `pdf` prop; antimeridian and long-title tests assert only valid output.
+- Parked PDF review findings (none blocking): no tests for `saveBlob`, `mapTokenFromEnv`, `createItineraryPdf`; PDF title loop has no page-break check (names are capped at 120 chars); the editor's PDF error alert shows only while the Export menu is open; no TripEditor-level test for the `pdf` prop; antimeridian and long-title tests assert only valid output; the share-page PDF prints arrival times without the page's "estimates from straight-line distances" caveat when routing was unavailable.
 
 ## Current work: PDF itinerary (2026-10-16)
 

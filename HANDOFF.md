@@ -8,7 +8,7 @@ and `PROGRESS.md` over memory. The sections after "Current work" are history.
 
 Statuses: pending, in progress, completed, blocked, removed. Exactly one item is in progress at a time.
 Visibility rule (owner, 2026-10-16): the task chart is shown in the terminal at the end of every reply, always.
-Ordering rule (owner, 2026-10-16): anything added goes toward the end of the list, in the order asked; the absolute final row of every list is always a full codebase check (Opus), and nothing goes after it.
+Ordering rule (owner, 2026-10-16): anything added goes toward the end of the list, in the order asked; the absolute final row of every list is always one combined row: a full codebase check (Opus), then merge, push, and confirmation that Vercel and CI succeeded; nothing goes after it.
 Last updated 2026-10-16.
 
 ### PDF itinerary (feature branch `feat/pdf-itinerary`, worktree `/Users/genestone/photo-pdf-itinerary`)
@@ -46,8 +46,7 @@ Last updated 2026-10-16.
 | S3 | Security L4: clear offline trip copies when a page finds there is no session (`src/lib/offline-store.ts`) | pending | |
 | S4 | Security L6: pin GitHub Actions by commit SHA in `.github/workflows/ci.yml`; check whether a Prisma version without the 4 tooling-only audit advisories exists | pending | |
 | S5 | Security L5: Mapbox tokens: use a separate server `MAPBOX_TOKEN`, URL-restrict `NEXT_PUBLIC_MAPBOX_TOKEN`, set a spend cap | blocked | owner action in the Mapbox and Vercel dashboards (cannot be done from code); steps will be given in the reply. L1 (signup 409) is accepted, no work |
-| B6 | Final Opus review of the branch, merge, push, then confirm Vercel and CI succeeded | pending | the owner asked for explicit confirmation that the deploy succeeded |
-| B7 | FINAL: full codebase check (Opus) on the merged result | pending | always the last row; nothing goes after it |
+| B6 | FINAL (always the last row, combined): full codebase check (Opus), handle its findings, then merge, push to `main`, and confirm both Vercel (`photo-app-pi2o`) and CI succeeded | pending | owner 2026-10-16: the final full codebase check always includes merge, push and the Vercel/CI confirmation; nothing goes after it. Replaces the earlier separate B6 (review/merge/push) and B7 (check) rows |
 
 ### Waiting on the owner
 

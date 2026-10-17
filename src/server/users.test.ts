@@ -76,6 +76,13 @@ describe("deleteAccount", () => {
     expect(await prisma.user.count()).toBe(1);
   });
 
+  it("reports an account that is already gone, not a wrong password", async () => {
+    const { deleteAccount, ACCOUNT_GONE } = await import("./users");
+    const user = await createUser("gone@example.com", "correct-horse");
+    await prisma.user.delete({ where: { id: user.id } });
+    expect(await deleteAccount(user.id, { password: "correct-horse" })).toBe(ACCOUNT_GONE);
+  });
+
   it("password accounts do not need a recent sign-in", async () => {
     const { deleteAccount } = await import("./users");
     const user = await createUser("old@example.com", "correct-horse");

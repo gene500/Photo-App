@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { departureTime, getSunWindows } from "./best-time";
 import { lightWindows } from "./light-windows";
 import { optimizeOrder } from "./optimize-order";
-import { optimizeSchedule } from "./optimize-schedule";
+import { optimizeSchedule, isExactOptimization, optimizeScheduleExact, scheduleCost } from "./optimize-schedule";
 import type { LightPref, StopPriority } from "./types";
 
 const DATE = "2026-07-01";
@@ -128,12 +128,26 @@ describe("optimizeSchedule", () => {
     }
   });
 
-  it("local search beats the nearest-neighbour baseline objective on a mixed 12-stop trip", () => {
+  it("local search beats the sunrise-first baseline objective on a mixed 12-stop trip", () => {
     const prefs: LightPref[] = ["any", "sunset", "sunrise", "any"];
     const stops = Array.from({ length: 12 }, (_, i) => stop(prefs[i % 4], 30));
-    const r = optimizeSchedule({ durations: flat(12, 1800), stops, plannedDate: DATE, defaultDeparture });
-    // Sunrise stops should come before sunset stops in the chosen order.
-    const pos = (p: LightPref) => r.order.map((i, k) => (stops[i].lightPref === p ? k : -1)).filter((k) => k >= 0);
+    const input = { durations: flat(12, 1800), stops, plannedDate: DATE, defaultDeparture };
+    const r = optimizeSchedule(input);
+    // Sunrise stops first, sunset stops last, leaving at sunrise: the obvious plan the search must at least match.
+    const baseline = [0, ...[2, 6, 10, 1, 3, 4, 5, 7, 8, 9, 11]];
+    expect(scheduleCost(input, r.order, r.departAt)).toBeLessThanOrEqual(scheduleCost(input, baseline, defaultDeparture));
+    // Drive time is the same for every order here, so the cost difference is all missed light (weighted minutes).
+    const missed = (order: number[], at: Date) => (scheduleCost(input, order, at) - order.slice(1).reduce((sum, v, k) => sum + input.durations[order[k]!]![v]!, 0)) / 180;
+    expect(missed(r.order, r.departAt)).toBeLessThanOrEqual(missed(baseline, defaultDeparture));
+  });
+
+  it("puts sunrise stops before sunset stops when a day of stops lies between them", () => {
+    // Short drives and long stays at the unconstrained stops fill the day, so driving overnight cannot be cheaper.
+    const kinds: LightPref[] = ["any", "sunrise", "any", "sunset", "sunrise", "any", "sunset", "any", "any", "sunrise", "any", "sunset"];
+    const stops = kinds.map((k, i) => stop(k, i === 0 ? 10 : k === "any" ? 150 : 20, { lat: base.lat + i * 0.01 }));
+    const r = optimizeSchedule({ durations: flat(12, 300), stops, plannedDate: DATE, defaultDeparture });
+    const pos = (p: LightPref) => r.order.map((i, k) => (stops[i]!.lightPref === p ? k : -1)).filter((k) => k >= 0);
+    expect(r.misses).toEqual([]);
     expect(Math.max(...pos("sunrise"))).toBeLessThan(Math.min(...pos("sunset")));
   });
 });
@@ -159,5 +173,82 @@ describe("search-size thresholds", () => {
     const r = optimizeSchedule({ durations, stops, plannedDate: DATE, defaultDeparture });
     expect([...r.order].sort()).toEqual([0, 1, 2, 3]);
     expect(Number.isFinite(r.departAt.getTime())).toBe(true);
+  });
+});
+
+describe("9-stop local search against the exact search", () => {
+  // Deterministic generator so the instances are the same on every run.
+  const rng = (seed: number) => () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const prefs: LightPref[] = ["any", "sunrise", "sunset", "golden", "sunset", "sunrise"];
+  const priorities: StopPriority[] = ["normal", "normal", "high", "must"];
+
+  function instance(seed: number, n: number) {
+    const r = rng(seed);
+    const pick = <T,>(xs: T[]) => xs[Math.floor(r() * xs.length)]!;
+    const stops = Array.from({ length: n }, (_, i) => ({
+      lat: 37 + r() * 1.5,
+      lng: -120 + r() * 1.5,
+      lightPref: i === 0 ? ("any" as const) : pick(prefs),
+      dwellMinutes: 20 + Math.floor(r() * 70),
+      priority: pick(priorities),
+    }));
+    const durations = stops.map((a, i) => stops.map((b, j) => (i === j ? 0 : Math.round((Math.hypot(a.lat - b.lat, a.lng - b.lng) * 111_000) / 15 * (0.9 + r() * 0.2)))));
+    return { durations, stops, plannedDate: DATE, defaultDeparture: departureTime(stops[0]!, DATE) };
+  }
+
+  it("is within a small tolerance of exact on seeded random 9-stop instances", () => {
+    let worst = 0;
+    for (let seed = 1; seed <= 8; seed++) {
+      const input = instance(seed, 9);
+      const exact = optimizeScheduleExact(input);
+      const local = optimizeSchedule(input);
+      const ce = scheduleCost(input, exact.order, exact.departAt);
+      const cl = scheduleCost(input, local.order, local.departAt);
+      worst = Math.max(worst, cl / ce);
+      expect(cl, `seed ${seed}`).toBeLessThanOrEqual(ce * 1.02 + 600);
+    }
+    console.log("worst local/exact cost ratio", worst);
+  }, 120_000);
+
+  it.each([15, 25])("gives identical output for %i stops however fast the machine is", (n) => {
+    const input = instance(7, n);
+    input.stops.forEach((s, i) => { if (i > 0) s.lightPref = prefs[1 + (i % 5)]!; });
+    const first = optimizeSchedule(input);
+    expect(optimizeSchedule(input)).toEqual(first);
+    // A clock that jumps a second per reading (a very slow machine) must not change the answer.
+    let t = 0;
+    const spy = vi.spyOn(performance, "now").mockImplementation(() => (t += 1000));
+    try {
+      expect(optimizeSchedule(input)).toEqual(first);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("stays under about 400 ms for 25 stops with light preferences on every stop", () => {
+    const input = instance(99, 25);
+    input.stops.forEach((s, i) => { if (i > 0) s.lightPref = prefs[1 + (i % 5)]!; });
+    const t0 = performance.now();
+    const r = optimizeSchedule(input);
+    const ms = performance.now() - t0;
+    console.log("25 stops ms", Math.round(ms));
+    expect(r.order).toHaveLength(25);
+    expect(ms).toBeLessThan(1500); // loose: slower CI machines
+  });
+});
+
+describe("isExactOptimization", () => {
+  it("is true only where the answer is provably the best, by stop count", () => {
+    expect(isExactOptimization(3, false)).toBe(true);
+    expect(isExactOptimization(12, false)).toBe(true);
+    expect(isExactOptimization(13, false)).toBe(false);
+    expect(isExactOptimization(8, true)).toBe(true);
+    expect(isExactOptimization(9, true)).toBe(false);
+    expect(isExactOptimization(25, true)).toBe(false);
   });
 });

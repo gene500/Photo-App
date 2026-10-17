@@ -26,7 +26,11 @@ type DirectionsResponse = {
 
 function token(): string {
   const t = process.env.MAPBOX_TOKEN;
-  if (!t) throw new ExternalServiceError("Mapbox is not configured (MAPBOX_TOKEN is missing)");
+  if (!t) {
+    // Config state is for the logs, not the client.
+    console.error("Mapbox is not configured (MAPBOX_TOKEN is missing)");
+    throw new ExternalServiceError("Service temporarily unavailable");
+  }
   return t;
 }
 
@@ -58,7 +62,10 @@ export function clearMapboxCaches(): void {
   matrixCache.clear();
 }
 
-const isLngLat = (c: unknown): c is LngLat => Array.isArray(c) && c.length >= 2 && Number.isFinite(c[0]) && Number.isFinite(c[1]);
+const isLngLat = (c: unknown): c is LngLat =>
+  Array.isArray(c) && c.length >= 2 && Number.isFinite(c[0]) && Number.isFinite(c[1]) && Math.abs(c[0]) <= 180 && Math.abs(c[1]) <= 90;
+const isNonNegative = (n: unknown): n is number => typeof n === "number" && Number.isFinite(n) && n >= 0;
+const BAD_ROUTING_RESPONSE = "Unexpected response from the routing service. Please try again.";
 
 export async function getDirections(coords: LngLat[], fetchImpl: typeof fetch = fetch): Promise<RouteResult> {
   if (isFakeExternal()) return fakeDirections(coords);
@@ -75,7 +82,8 @@ export async function getDirections(coords: LngLat[], fetchImpl: typeof fetch = 
       body?.code === "NoRoute" ? "No driving route found between these points" : "Routing failed. Please try again.",
     );
   }
-  if (!Array.isArray(route.geometry?.coordinates) || !Array.isArray(route.legs)) throw new ExternalServiceError("Routing failed. Please try again.");
+  if (!Array.isArray(route.geometry?.coordinates) || !Array.isArray(route.legs) || !isNonNegative(route.distance) || !isNonNegative(route.duration)
+    || !route.legs.every((l) => l && isNonNegative(l.distance) && isNonNegative(l.duration))) throw new ExternalServiceError(BAD_ROUTING_RESPONSE);
   const result: RouteResult = {
     geometry: route.geometry.coordinates,
     legs: route.legs.map((l) => ({ distance: l.distance, duration: l.duration })),
@@ -108,6 +116,8 @@ export async function getDurationMatrix(coords: LngLat[], fetchImpl: typeof fetc
   if (!ok || body?.code !== "Ok" || !square) {
     throw new ExternalServiceError("Couldn't calculate drive times. Please try again.");
   }
+  // null means unreachable; anything else must be a plain non-negative number.
+  if (!rows.every((row) => row.every((v) => v === null || isNonNegative(v)))) throw new ExternalServiceError(BAD_ROUTING_RESPONSE);
   const matrix = rows.map((row) => row.map((v) => (typeof v === "number" ? v : Infinity)));
   matrixCache.set(path, matrix);
   return matrix;
@@ -122,6 +132,9 @@ type GeocodeResponse = {
 
 const MAX_NAME_LENGTH = 200; // matches newStopSchema's name limit
 const clampName = (name: string) => name.slice(0, MAX_NAME_LENGTH);
+/** The first usable name: Mapbox fields of the wrong type are skipped. */
+const pickName = (p: { full_address?: unknown; name?: unknown } | undefined, fallback: string) =>
+  clampName([p?.full_address, p?.name].find((n): n is string => typeof n === "string" && n !== "") ?? fallback);
 
 export type GeocodeOptions = { proximity?: { lat: number; lng: number } };
 
@@ -141,7 +154,7 @@ export async function geocode(query: string, options: GeocodeOptions = {}, fetch
   const places = body.features
     .filter((f) => f && isLngLat(f.geometry?.coordinates))
     .map((f) => ({
-      name: clampName(f.properties?.full_address || f.properties?.name || query),
+      name: pickName(f.properties, query),
       lng: f.geometry.coordinates[0],
       lat: f.geometry.coordinates[1],
     }));
@@ -161,7 +174,7 @@ export async function reverseGeocode(p: { lat: number; lng: number }, fetchImpl:
   const { ok, body } = await getJson<GeocodeResponse>(url, fetchImpl, "Couldn't reach the place lookup service");
   if (!ok || !body) throw new ExternalServiceError("Place lookup failed. Please try again.");
   const f = body.features?.[0];
-  const place = { name: clampName(f?.properties?.full_address || f?.properties?.name || coordsLabel(p)), lat: p.lat, lng: p.lng };
+  const place = { name: pickName(f?.properties, coordsLabel(p)), lat: p.lat, lng: p.lng };
   reverseCache.set(rKey, place);
   return place;
 }

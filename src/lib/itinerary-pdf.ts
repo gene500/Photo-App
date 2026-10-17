@@ -49,8 +49,10 @@ function drawFallbackMap(doc: Doc, x: number, y: number, w: number, h: number, g
   doc.setFillColor(243, 244, 246);
   doc.setDrawColor(200, 200, 200);
   doc.rect(x, y, w, h, "FD");
-  const rawPts: LngLat[] = geometry.length >= 2 ? downsampleRoute(geometry, 1000) : stops.map((s) => [s.lng, s.lat]);
-  const rawStops = stops.map((s): LngLat => [s.lng, s.lat]);
+  const finite = (p: LngLat) => Number.isFinite(p[0]) && Number.isFinite(p[1]);
+  const usable = geometry.filter(finite);
+  const rawStops = stops.map((s): LngLat => [s.lng, s.lat]).filter(finite);
+  const rawPts: LngLat[] = usable.length >= 2 ? downsampleRoute(usable, 1000) : rawStops;
   const pts = unwrapLongitudes(rawPts);
   const refLng = pts.length ? pts.reduce((a, p) => a + p[0], 0) / pts.length : 0;
   const stopPts = rawStops.map((p): LngLat => [p[0] + 360 * Math.round((refLng - p[0]) / 360), p[1]]);
@@ -152,7 +154,12 @@ export async function renderItineraryPdf(
   }
   if (map.kind === "image") {
     const fmt = /^data:image\/jpe?g/i.test(map.dataUrl) ? "JPEG" : "PNG";
-    doc.addImage(map.dataUrl, fmt, MARGIN, y, contentW, mapH);
+    try {
+      doc.addImage(map.dataUrl, fmt, MARGIN, y, contentW, mapH);
+    } catch {
+      // A corrupt image must not lose the whole itinerary: draw the map instead.
+      drawFallbackMap(doc, MARGIN, y, contentW, mapH, geometry, stops);
+    }
   } else {
     drawFallbackMap(doc, MARGIN, y, contentW, mapH, geometry, stops);
   }

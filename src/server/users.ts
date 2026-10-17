@@ -121,18 +121,21 @@ export const REAUTH_WINDOW_MS = 5 * 60 * 1000;
 /** Returned by deleteAccount when a Google-only account's sign-in is too old: sign in again, then retry. */
 export const REAUTH_REQUIRED = "reauth-required";
 
+/** Returned by deleteAccount when the account no longer exists (e.g. a concurrent delete won): nothing left to do. */
+export const ACCOUNT_GONE = "account-gone";
+
 /**
  * Permanently deletes the account after checking the password (or, for a Google-only account, the typed email
  * plus a sign-in within REAUTH_WINDOW_MS; `authTime` is the epoch ms of that sign-in). Trips and stops go with it
  * (cascade); the stops' photo URLs are returned so the caller can remove the files.
- * null = wrong password/email or no such account; REAUTH_REQUIRED = the sign-in is too old.
+ * null = wrong password/email; ACCOUNT_GONE = no such account (already deleted); REAUTH_REQUIRED = the sign-in is too old.
  */
 export async function deleteAccount(
   userId: string,
   proof: { password?: string; confirmEmail?: string; authTime?: number },
-): Promise<{ photoUrls: string[] } | typeof REAUTH_REQUIRED | null> {
+): Promise<{ photoUrls: string[] } | typeof REAUTH_REQUIRED | typeof ACCOUNT_GONE | null> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return null;
+  if (!user) return ACCOUNT_GONE;
   // The email is not a secret to whoever holds the session, so a Google-only account also needs a fresh sign-in.
   // A token without a sign-in time (issued before this check existed) counts as stale.
   if (!user.passwordSet && !(proof.authTime !== undefined && Date.now() - proof.authTime <= REAUTH_WINDOW_MS)) return REAUTH_REQUIRED;
@@ -142,11 +145,18 @@ export async function deleteAccount(
     : proof.confirmEmail !== undefined && normalizeEmail(proof.confirmEmail) === user.email;
   if (!confirmed) return null;
   // One transaction, so a photo attached between the read and the delete cannot be left behind.
-  const stops = await prisma.$transaction(async (tx) => {
-    const rows = await tx.stop.findMany({ where: { trip: { userId } }, select: { photoUrl: true } });
-    await tx.user.delete({ where: { id: userId } });
-    return rows;
-  });
+  let stops: { photoUrl: string | null }[];
+  try {
+    stops = await prisma.$transaction(async (tx) => {
+      const rows = await tx.stop.findMany({ where: { trip: { userId } }, select: { photoUrl: true } });
+      await tx.user.delete({ where: { id: userId } });
+      return rows;
+    });
+  } catch (e) {
+    // A concurrent delete removed the user between the read and ours (Prisma P2025: record not found).
+    if ((e as { code?: string }).code === "P2025") return ACCOUNT_GONE;
+    throw e;
+  }
   versions.delete(userId);
   return { photoUrls: stops.map((s) => s.photoUrl).filter((u): u is string => u !== null) };
 }

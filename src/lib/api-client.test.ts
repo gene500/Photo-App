@@ -21,6 +21,11 @@ describe("api client", () => {
     await expect(api.updateTrip("t1", { name: "x" })).rejects.toEqual(new ApiError(404, "Trip not found"));
   });
 
+  it("turns a network failure into a friendly message", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    await expect(api.deleteStop("s1")).rejects.toThrow("You're offline or the server can't be reached. Try again.");
+  });
+
   it("handles 204 responses", async () => {
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
     await expect(api.deleteStop("s1")).resolves.toBeUndefined();

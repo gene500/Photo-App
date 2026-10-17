@@ -66,6 +66,17 @@ describe("POST /api/optimize", () => {
     expect(Date.parse(body.departAt)).toBeGreaterThan(Date.parse("2026-07-01T18:00:00Z"));
   });
 
+  it("returns a departure on a whole minute, like the Start time field", async () => {
+    const coords = [[-119.6, 37.7], [-119.6, 38.7], [-119.6, 39.7]];
+    for (const lightPref of ["sunrise", "golden", "sunset"] as const) {
+      const body = await (await post(coords, {
+        plannedDate: "2026-07-01",
+        stops: [{ lightPref, dwellMinutes: 30 }, { lightPref: "any", dwellMinutes: 30 }, { lightPref: "any", dwellMinutes: 30 }],
+      })).json();
+      expect(Date.parse(body.departAt) % 60_000, lightPref).toBe(0);
+    }
+  });
+
   describe("with a saved departure", () => {
     const coords = [[-119.6, 37.7], [-119.6, 38.7], [-119.6, 39.7]];
     const lights = (last: string) => [

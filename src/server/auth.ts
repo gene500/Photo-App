@@ -11,6 +11,8 @@ export async function authorizeCredentials(
 ): Promise<{ id: string; email: string } | null> {
   if (!credentials?.email || !credentials.password) return null;
   const key = credentials.email.trim().toLowerCase();
+  // No real address is longer; refuse before the limiter so an unbounded string never becomes a key or reaches bcrypt.
+  if (key.length > 254) return null;
   // Per-email throttle. The attempt is counted before the slow password check, so parallel guesses see each other
   // and cannot all slip past the limit; a successful login clears the count. (The per-IP limit is applied in the
   // route before NextAuth runs.)

@@ -34,16 +34,33 @@ export function SignOutEverywhereButton({ className }: { className?: string }) {
 }
 
 export function SignOutButton({ className }: { className?: string }) {
+  const [error, setError] = useState<string | null>(null);
+  async function run() {
+    setError(null);
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      setError("You're offline: sign-out needs a connection.");
+      return;
+    }
+    let result;
+    try {
+      result = await signOut({ callbackUrl: "/login", redirect: false });
+    } catch {
+      setError("Couldn't sign out. Check your connection and try again.");
+      return;
+    }
+    // Only a completed sign-out may wipe this device's copies. Saving is switched off first so a pending autosave
+    // cannot bring one back before the page leaves.
+    disableOfflineSaving();
+    clearAllCopies();
+    window.location.assign(result?.url ?? "/login");
+  }
   return (
-    <button type="button" onClick={() => {
-        // A shared device must not keep this user's trips. Saving is switched off first so a pending
-        // autosave cannot bring a copy back while the async sign-out is in flight.
-        disableOfflineSaving();
-        clearAllCopies();
-        void signOut({ callbackUrl: "/login" });
-      }} className={className ?? "inline-flex min-h-9 items-center rounded-lg px-3 text-sm text-muted transition hover:bg-hover hover:text-foreground"}>
-      Sign out
-    </button>
+    <>
+      <button type="button" onClick={() => void run()} className={className ?? "inline-flex min-h-9 items-center rounded-lg px-3 text-sm text-muted transition hover:bg-hover hover:text-foreground"}>
+        Sign out
+      </button>
+      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+    </>
   );
 }
 

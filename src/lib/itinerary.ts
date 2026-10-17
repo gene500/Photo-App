@@ -1,7 +1,7 @@
 // The text of the PDF itinerary, built from a trip's stops with the same formatting the screen uses.
 
 import { formatClock } from "./best-time";
-import { fileSlug } from "./export";
+import { exportBaseName } from "./export";
 import { formatDistance, formatDuration } from "./format";
 import { lightLabel } from "./light-windows";
 import type { DistanceUnit, TimeFormat } from "./settings";
@@ -81,7 +81,7 @@ export function buildItinerary(a: {
   };
 }
 
-/** `<slug>-itinerary.pdf`; `trip-itinerary.pdf` when the name has nothing usable. */
-export function itineraryFileName(tripName: string): string {
-  return `${fileSlug(tripName) || "trip"}-itinerary.pdf`;
+/** `<slug>-itinerary.pdf`; falls back to `trip-<date>[-hash]` like the GPX name when the name has nothing usable. */
+export function itineraryFileName(tripName: string, date?: string): string {
+  return `${exportBaseName(tripName, date)}-itinerary.pdf`;
 }

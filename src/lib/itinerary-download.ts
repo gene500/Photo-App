@@ -17,6 +17,16 @@ function readDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+/** Only PNG and JPEG are embedded; the declared type and the first bytes must agree. */
+function imageKind(contentType: string, bytes: Uint8Array): "png" | "jpeg" | null {
+  const isPng = bytes.length >= 8 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((b, i) => bytes[i] === b);
+  const isJpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const type = contentType.split(";")[0].trim().toLowerCase();
+  if (type === "image/png" && isPng) return "png";
+  if ((type === "image/jpeg" || type === "image/jpg") && isJpeg) return "jpeg";
+  return null;
+}
+
 /** The static map as an embeddable image; anything that goes wrong (no URL, timeout, bad response) is the fallback, never an error. */
 export async function loadMapImage(url: string | null, opts: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}): Promise<PdfMap> {
   if (!url) return FALLBACK;
@@ -24,9 +34,13 @@ export async function loadMapImage(url: string | null, opts: { timeoutMs?: numbe
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 8000);
   try {
     const res = await (opts.fetchImpl ?? fetch)(url, { signal: controller.signal });
-    if (!res.ok || !(res.headers.get("content-type") ?? "").startsWith("image/")) return FALLBACK;
-    const dataUrl = await readDataUrl(await res.blob());
-    return dataUrl.startsWith("data:image/") ? { kind: "image", dataUrl } : FALLBACK;
+    if (!res.ok) return FALLBACK;
+    const blob = await res.blob();
+    const kind = imageKind(res.headers.get("content-type") ?? "", new Uint8Array(await blob.slice(0, 8).arrayBuffer()));
+    if (!kind) return FALLBACK;
+    const dataUrl = await readDataUrl(blob);
+    // Re-labelled with the checked type: the data URL's own type comes from the blob, which may be empty.
+    return { kind: "image", dataUrl: dataUrl.replace(/^data:[^;,]*/, `data:image/${kind}`) };
   } catch {
     return FALLBACK;
   } finally {

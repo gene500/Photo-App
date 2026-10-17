@@ -8,6 +8,8 @@ import type { ShotItem, Stop, TripWithStops } from "@/lib/types";
 const PREFIX = "rtpp.offline.";
 const INDEX_KEY = `${PREFIX}index`;
 const OWNER_KEY = `${PREFIX}owner`;
+// Written (and removed again by the clear that follows) on sign-out so other tabs get a storage event telling them to stop saving.
+const SIGNED_OUT_KEY = `${PREFIX}signedout`;
 const tripKey = (id: string) => `${PREFIX}trip.${id}`;
 
 /** Only the most recent trips are kept. */
@@ -24,6 +26,11 @@ const disableListeners = new Set<() => void>();
 export function disableOfflineSaving(): void {
   savingDisabled = true;
   disableListeners.forEach((cb) => cb());
+  try {
+    storage()?.setItem(SIGNED_OUT_KEY, "1");
+  } catch {
+    /* other tabs just keep saving until their next reload */
+  }
 }
 export function enableOfflineSaving(): void {
   savingDisabled = false;
@@ -35,10 +42,14 @@ export function onOfflineSavingDisabled(cb: () => void): () => void {
   return () => void disableListeners.delete(cb);
 }
 
-// Another tab signing out clears the owner key; this tab must then stop saving too (see saveTripCopy).
+// Another tab signing out must stop this tab saving too. Merely clearing the copies (Settings) removes the owner key
+// but is not a sign-out: this tab re-claims the owner on its next save (see useOfflineCopy).
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (e) => {
-    if (e.key === null || (e.key === OWNER_KEY && e.newValue === null)) disableOfflineSaving();
+    if (e.key === null || (e.key === SIGNED_OUT_KEY && e.newValue !== null)) {
+      savingDisabled = true;
+      disableListeners.forEach((cb) => cb());
+    }
   });
 }
 
@@ -76,18 +87,28 @@ export function saveTripCopy(trip: TripWithStops, now: Date = new Date()): boole
   const savedAt = now.toISOString();
   const payload = JSON.stringify({ savedAt, trip: sanitize(trip) } satisfies TripCopy);
   const entry: TripCopySummary = { id: trip.id, name: trip.name, plannedDate: trip.plannedDate, savedAt, stopCount: trip.stops.length };
-  let index = [entry, ...readIndex(s).filter((e) => e.id !== trip.id)].sort((a, b) => b.savedAt.localeCompare(a.savedAt));
-  const hadEntry = readIndex(s).some((e) => e.id === trip.id);
-  const evict = (list: TripCopySummary[]) => {
-    for (const e of list) s.removeItem(tripKey(e.id));
-  };
-  evict(index.slice(MAX_COPIES));
+  const previous = readIndex(s);
+  const hadEntry = previous.some((e) => e.id === trip.id);
+  let index = [entry, ...previous.filter((e) => e.id !== trip.id)].sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+  const overCap = index.slice(MAX_COPIES);
   index = index.slice(0, MAX_COPIES);
-  // A full quota is handled quietly: drop the oldest other copies one by one and retry; give up if even that fails.
+  // A full quota is handled quietly: drop the oldest other copies one by one and retry. The stored index is only
+  // rewritten on success, and the dropped payloads are kept so a save that can never fit puts everything back.
+  const dropped: { id: string; raw: string }[] = [];
+  const restore = () => {
+    for (const d of dropped) {
+      try {
+        s.setItem(tripKey(d.id), d.raw);
+      } catch {
+        /* best effort: loadTripCopy drops an entry whose payload is gone */
+      }
+    }
+  };
   for (;;) {
     try {
       s.setItem(tripKey(trip.id), payload);
       s.setItem(INDEX_KEY, JSON.stringify(index));
+      for (const e of overCap) s.removeItem(tripKey(e.id));
       return true;
     } catch {
       const oldest = index.length > 1 ? index[index.length - 1] : null;
@@ -100,9 +121,16 @@ export function saveTripCopy(trip: TripWithStops, now: Date = new Date()): boole
             /* nothing more can be done */
           }
         }
+        restore();
         return false;
       }
-      s.removeItem(tripKey(oldest.id));
+      try {
+        const raw = s.getItem(tripKey(oldest.id));
+        if (raw !== null) dropped.push({ id: oldest.id, raw });
+        s.removeItem(tripKey(oldest.id));
+      } catch {
+        /* ignore */
+      }
       index = index.slice(0, -1);
     }
   }

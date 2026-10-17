@@ -34,6 +34,22 @@ describe("loadMapImage", () => {
     const fetchImpl = vi.fn().mockResolvedValue(imageResponse("text/html"));
     expect(await loadMapImage("https://x/y", { fetchImpl })).toEqual({ kind: "fallback" });
   });
+  it("is the fallback for image types other than PNG or JPEG", async () => {
+    for (const type of ["image/svg+xml", "image/gif", "image/webp"]) {
+      const fetchImpl = vi.fn().mockResolvedValue(imageResponse(type));
+      expect(await loadMapImage("https://x/y", { fetchImpl })).toEqual({ kind: "fallback" });
+    }
+  });
+  it("is the fallback when the bytes are not the declared PNG/JPEG", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("<svg/>", { status: 200, headers: { "content-type": "image/png" } }));
+    expect(await loadMapImage("https://x/y", { fetchImpl })).toEqual({ kind: "fallback" });
+    const jpegAsPng = vi.fn().mockResolvedValue(new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), { status: 200, headers: { "content-type": "image/png" } }));
+    expect(await loadMapImage("https://x/y", { fetchImpl: jpegAsPng })).toEqual({ kind: "fallback" });
+  });
+  it("accepts a JPEG", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), { status: 200, headers: { "content-type": "image/jpeg" } }));
+    expect((await loadMapImage("https://x/y", { fetchImpl })).kind).toBe("image");
+  });
   it("returns a data URL for an image", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(imageResponse());
     const map = await loadMapImage("https://x/y", { fetchImpl });

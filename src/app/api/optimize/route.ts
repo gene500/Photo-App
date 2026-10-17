@@ -32,9 +32,12 @@ export const POST = handle(async (req: Request) => {
       defaultDeparture: departureTime(stops[0]!, date),
       preferredDeparture: departAt ? new Date(departAt) : undefined,
     });
+    // A kept start time stays as saved; a new one is floored to the minute, as the Start time field shows it (sunrise has seconds).
+    const keptSaved = departAt !== undefined && result.departAt.getTime() === new Date(departAt).getTime();
+    const departMs = keptSaved ? result.departAt.getTime() : Math.floor(result.departAt.getTime() / 60_000) * 60_000;
     return Response.json({
       order: result.order,
-      departAt: usesLight ? result.departAt.toISOString() : null,
+      departAt: usesLight ? new Date(departMs).toISOString() : null,
       misses: result.misses
         .map((m) => ({ stopIndex: m.stopIndex, minutes: Math.round(m.minutes), priority: m.priority }))
         .filter((m) => m.minutes > 0),

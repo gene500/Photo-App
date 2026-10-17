@@ -134,6 +134,20 @@ describe("edge cases", () => {
     expect(s).toContain("a\x96b");
   });
 
+  it("drops non-finite coordinates instead of throwing", async () => {
+    const stops = [{ lat: NaN, lng: 20 }, { lat: 10, lng: Infinity }, { lat: 11, lng: 21 }, { lat: 12, lng: 22 }];
+    const geo: [number, number][] = [[NaN, 1], [20, 10], [Infinity, 3], [21, 11], [22, 12]];
+    const blob = await renderItineraryPdf(input(4), fallback, geo, stops);
+    noNaN(Buffer.from(await blob.arrayBuffer()).toString("latin1"));
+    const blob2 = await renderItineraryPdf(input(2), fallback, [], [{ lat: NaN, lng: NaN }, { lat: Infinity, lng: 1 }]);
+    noNaN(Buffer.from(await blob2.arrayBuffer()).toString("latin1"));
+  });
+
+  it("falls back to the drawn map when the image data is bad", async () => {
+    const blob = await renderItineraryPdf(input(2), { kind: "image", dataUrl: "data:image/png;base64,AAAA" }, [[20, 10], [21, 11]], [{ lat: 10, lng: 20 }, { lat: 11, lng: 21 }]);
+    expect(blob.size).toBeGreaterThan(500);
+  });
+
   it("handles identical points", async () => {
     const same = { lat: 10, lng: 20 };
     const blob = await renderItineraryPdf(input(2), fallback, [[20, 10], [20, 10]], [same, same]);

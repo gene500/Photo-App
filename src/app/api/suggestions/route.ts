@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { enforceLimit } from "@/server/rate-limit";
 import { suggestionsRequestSchema } from "@/lib/validation";
 import { handle, HttpError, readJson, requireUserId } from "@/server/http";
+import { CorridorError } from "@/server/suggestions/corridor";
 import { OverpassError } from "@/server/suggestions/overpass";
 import { findSuggestions, findSuggestionsAround } from "@/server/suggestions/service";
 
@@ -19,6 +20,8 @@ export const POST = handle(async (req: Request) => {
     const found = radiusKm === undefined ? await findSuggestionsAround(around!, { enrich, defer, onResult }) : await findSuggestionsAround(around!, { enrich, defer, onResult }, radiusKm);
     return Response.json({ suggestions: found, degraded });
   } catch (e) {
+    // The route itself can't be searched along: retrying never helps.
+    if (e instanceof CorridorError) throw new HttpError(400, "Route is too complex to search along. Try a shorter or simpler route.");
     if (e instanceof OverpassError) throw new HttpError(502, "Couldn't load suggestions. Please retry.");
     throw e;
   }

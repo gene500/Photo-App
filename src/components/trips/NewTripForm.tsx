@@ -6,8 +6,6 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnPrimary, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { localDateOnly } from "@/lib/dates";
-import { fromTimeValue } from "@/components/editor/StartTimeControl";
-
 
 const noopSubscribe = () => () => {};
 
@@ -16,13 +14,8 @@ function useLocalToday(): string {
   return useSyncExternalStore(noopSubscribe, () => localDateOnly(new Date()), () => "");
 }
 
-/** The current time of day on the trip's date: where a new trip starts unless the traveller picks another time. */
-function nowOnDay(plannedDate: string): string | undefined {
-  const now = new Date();
-  const clock = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  return fromTimeValue(plannedDate, clock) ?? undefined;
-}
-
+// No start time is saved here: the stops (and so the trip's solar day) do not exist yet. The editor then starts the trip
+// now on the first stop's day, and a picked or optimized start time is always anchored to it.
 export function NewTripForm() {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -36,7 +29,7 @@ export function NewTripForm() {
     setPending(true);
     setError(null);
     try {
-      const { trip } = await api.createTrip({ name, plannedDate, departAt: nowOnDay(plannedDate) });
+      const { trip } = await api.createTrip({ name, plannedDate });
       router.push(`/trips/${trip.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't create the trip");

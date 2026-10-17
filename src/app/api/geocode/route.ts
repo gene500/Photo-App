@@ -3,7 +3,7 @@ import { ExternalServiceError, geocode } from "@/server/external/mapbox";
 import { handle, HttpError, requireUserId } from "@/server/http";
 import { enforceLimit } from "@/server/rate-limit";
 
-const querySchema = z.string().trim().min(2, "Type at least 2 characters").max(200);
+const querySchema = z.string().trim().min(2, "Type at least 2 characters").max(200, "Search text must be at most 200 characters");
 const proximitySchema = z
   .string()
   .regex(/^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/, "proximity must be lng,lat")

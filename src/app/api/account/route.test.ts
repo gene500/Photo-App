@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn(), getAuthTime: vi.fn() }));
-vi.mock("@/server/users", () => ({ deleteAccount: vi.fn(), REAUTH_REQUIRED: "reauth-required" }));
+vi.mock("@/server/users", () => ({ deleteAccount: vi.fn(), REAUTH_REQUIRED: "reauth-required", ACCOUNT_GONE: "account-gone" }));
 vi.mock("@/server/photos", () => ({ deletePhotoFile: vi.fn(async () => true) }));
 import { getAuthTime, getCurrentUserId } from "@/server/session";
 import { deleteAccount } from "@/server/users";
@@ -27,6 +27,11 @@ describe("DELETE /api/account", () => {
   it("refuses a wrong password", async () => {
     vi.mocked(deleteAccount).mockResolvedValue(null);
     expect((await DELETE(del({ password: "nope" }))).status).toBe(403);
+    expect(deletePhotoFile).not.toHaveBeenCalled();
+  });
+  it("answers 204, like the first delete, when the account was already deleted by a concurrent request", async () => {
+    vi.mocked(deleteAccount).mockResolvedValue("account-gone" as never);
+    expect((await DELETE(del({ password: "x" }))).status).toBe(204);
     expect(deletePhotoFile).not.toHaveBeenCalled();
   });
   it("tells a stale Google session to sign in again", async () => {

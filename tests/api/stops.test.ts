@@ -134,11 +134,19 @@ describe("stop routes", () => {
     expect((await res.json()).stops.map((s: { id: string }) => s.id)).toEqual([b.id, a.id]);
   });
 
-  it("returns 400 for a reorder that is not a permutation", async () => {
+  it("returns 400 for a reorder with duplicate ids", async () => {
+    const a = (await add("a")).stop;
+    await add("b");
+    const res = await orderPUT(jsonRequest("PUT", `/api/trips/${tripId}/stops/order`, { stopIds: [a.id, a.id] }), idParams(tripId));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("stopIds must list every stop in the trip exactly once");
+  });
+
+  it("returns 409 for a reorder whose stop list is stale", async () => {
     const a = (await add("a")).stop;
     await add("b");
     const res = await orderPUT(jsonRequest("PUT", `/api/trips/${tripId}/stops/order`, { stopIds: [a.id] }), idParams(tripId));
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toBe("stopIds must list every stop in the trip exactly once");
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("The trip's stops changed; reload and try again");
   });
 });

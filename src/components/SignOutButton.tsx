@@ -5,58 +5,93 @@ import { useState } from "react";
 import { api, ApiError } from "@/lib/api-client";
 import { clearAllCopies, disableOfflineSaving } from "@/lib/offline-store";
 
+const SIGN_OUT_FAILED = "Couldn't sign out. Check your connection and try again.";
+
+/**
+ * Ends this device's session: signs out without letting next-auth navigate, so nothing leaves the page until the
+ * answer is known. next-auth does not expose the status, so a 500 shows up as an answer without a redirect url
+ * (its JSON error body) and a CSRF or server failure as a redirect to an error/csrf url; none of those counts as signed out.
+ */
+async function requestSignOut(): Promise<string | null> {
+  let result: { url?: unknown } | undefined;
+  try {
+    result = await signOut({ callbackUrl: "/login", redirect: false });
+  } catch {
+    return null;
+  }
+  const url = result?.url;
+  if (typeof url !== "string" || /\/api\/auth\/error|[?&]error=|[?&]csrf=true/.test(url)) return null;
+  return url;
+}
+
+/**
+ * Awaited, offline-safe sign-out shared by every button that ends the session. `beforeLeaving` runs only once the
+ * sign-out is confirmed (SignOutButton wipes this device's copies there). Failures are shown, never swallowed.
+ */
+function useDeviceSignOut() {
+  const [error, setError] = useState<string | null>(null);
+  async function run(beforeLeaving?: () => void): Promise<boolean> {
+    setError(null);
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      setError("You're offline: sign-out needs a connection.");
+      return false;
+    }
+    const url = await requestSignOut();
+    if (url === null) {
+      setError(SIGN_OUT_FAILED);
+      return false;
+    }
+    beforeLeaving?.();
+    window.location.assign(url);
+    return true;
+  }
+  return { error, run };
+}
+
+const wipeDevice = () => {
+  // Saving is switched off first so a pending autosave cannot bring a copy back before the page leaves.
+  disableOfflineSaving();
+  clearAllCopies();
+};
+
 /** Signing out on a shared device must not leave this user's trips behind (see below). */
 export function SignOutEverywhereButton({ className }: { className?: string }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [revoked, setRevoked] = useState(false);
+  const deviceSignOut = useDeviceSignOut();
   async function run() {
     setPending(true);
     setError(null);
-    try {
-      await api.signOutEverywhere();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't sign out everywhere");
-      setPending(false);
-      return;
+    if (!revoked) {
+      try {
+        await api.signOutEverywhere();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't sign out everywhere");
+        setPending(false);
+        return;
+      }
+      setRevoked(true);
+      wipeDevice();
     }
-    disableOfflineSaving();
-    clearAllCopies();
-    void signOut({ callbackUrl: "/login" });
+    // Every session is already revoked on the server; a failure here only means this tab did not leave, so retrying skips the revoke.
+    if (!(await deviceSignOut.run())) setPending(false);
   }
   return (
     <div className="space-y-2">
       <button type="button" disabled={pending} onClick={() => void run()} className={className}>
-        Sign out on all devices
+        {revoked && deviceSignOut.error ? "Try again" : "Sign out on all devices"}
       </button>
-      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+      {(error ?? deviceSignOut.error) && <p role="alert" className="text-sm text-danger">{error ?? deviceSignOut.error}</p>}
     </div>
   );
 }
 
 export function SignOutButton({ className }: { className?: string }) {
-  const [error, setError] = useState<string | null>(null);
-  async function run() {
-    setError(null);
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      setError("You're offline: sign-out needs a connection.");
-      return;
-    }
-    let result;
-    try {
-      result = await signOut({ callbackUrl: "/login", redirect: false });
-    } catch {
-      setError("Couldn't sign out. Check your connection and try again.");
-      return;
-    }
-    // Only a completed sign-out may wipe this device's copies. Saving is switched off first so a pending autosave
-    // cannot bring one back before the page leaves.
-    disableOfflineSaving();
-    clearAllCopies();
-    window.location.assign(result?.url ?? "/login");
-  }
+  const { error, run } = useDeviceSignOut();
   return (
     <>
-      <button type="button" onClick={() => void run()} className={className ?? "inline-flex min-h-9 items-center rounded-lg px-3 text-sm text-muted transition hover:bg-hover hover:text-foreground"}>
+      <button type="button" onClick={() => void run(wipeDevice)} className={className ?? "inline-flex min-h-9 items-center rounded-lg px-3 text-sm text-muted transition hover:bg-hover hover:text-foreground"}>
         Sign out
       </button>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
@@ -71,21 +106,26 @@ export function DeleteAccountButton({ className, hasPassword = true }: { classNa
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsReauth, setNeedsReauth] = useState(false);
+  const [deleted, setDeleted] = useState(false);
+  const deviceSignOut = useDeviceSignOut();
   async function run() {
     setPending(true);
     setError(null);
     setNeedsReauth(false);
-    try {
-      await api.deleteAccount(hasPassword ? { password } : { confirmEmail: password });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't delete the account");
-      setNeedsReauth(e instanceof ApiError && e.reason === "reauth");
-      setPending(false);
-      return;
+    if (!deleted) {
+      try {
+        await api.deleteAccount(hasPassword ? { password } : { confirmEmail: password });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't delete the account");
+        setNeedsReauth(e instanceof ApiError && e.reason === "reauth");
+        setPending(false);
+        return;
+      }
+      setDeleted(true);
+      wipeDevice();
     }
-    disableOfflineSaving();
-    clearAllCopies();
-    void signOut({ callbackUrl: "/login" });
+    // The account is gone; if this tab cannot sign out, say so and let the user retry without deleting again.
+    if (!(await deviceSignOut.run())) setPending(false);
   }
   if (!open) {
     return (
@@ -103,13 +143,13 @@ export function DeleteAccountButton({ className, hasPassword = true }: { classNa
       </label>
       <div className="flex gap-2">
         <button type="submit" disabled={pending || password === ""} className="inline-flex min-h-9 items-center rounded-lg bg-danger px-3 text-sm text-white disabled:opacity-50">
-          {pending ? "Deleting…" : "Delete my account"}
+          {pending ? "Deleting…" : deleted ? "Try again" : "Delete my account"}
         </button>
         <button type="button" disabled={pending} onClick={() => { setOpen(false); setPassword(""); setError(null); setNeedsReauth(false); }} className={className}>
           Cancel
         </button>
       </div>
-      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+      {(error ?? deviceSignOut.error) && <p role="alert" className="text-sm text-danger">{error ?? deviceSignOut.error}</p>}
       {needsReauth && (
         // Google documents only none, consent and select_account for `prompt` (other values can be refused); the account chooser is a fresh sign-in step that restarts the five-minute window.
         <button type="button" onClick={() => void signIn("google", { callbackUrl: window.location.href }, { prompt: "select_account" })} className={className}>
@@ -127,19 +167,23 @@ export function ChangePasswordButton({ className }: { className?: string }) {
   const [next, setNext] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [changed, setChanged] = useState(false);
+  const deviceSignOut = useDeviceSignOut();
   async function run() {
     setPending(true);
     setError(null);
-    try {
-      await api.changePassword(current, next);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't change the password");
-      setPending(false);
-      return;
+    if (!changed) {
+      try {
+        await api.changePassword(current, next);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't change the password");
+        setPending(false);
+        return;
+      }
+      setChanged(true);
+      wipeDevice();
     }
-    disableOfflineSaving();
-    clearAllCopies();
-    void signOut({ callbackUrl: "/login" });
+    if (!(await deviceSignOut.run())) setPending(false);
   }
   if (!open) {
     return (
@@ -162,13 +206,13 @@ export function ChangePasswordButton({ className }: { className?: string }) {
       <p className="text-xs text-muted">At least 8 characters. You will be signed out everywhere and asked to sign in again.</p>
       <div className="flex gap-2">
         <button type="submit" disabled={pending || current === "" || next.length < 8} className={className}>
-          {pending ? "Changing…" : "Change password"}
+          {pending ? "Changing…" : changed ? "Try again" : "Change password"}
         </button>
         <button type="button" disabled={pending} onClick={() => { setOpen(false); setCurrent(""); setNext(""); setError(null); }} className={className}>
           Cancel
         </button>
       </div>
-      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+      {(error ?? deviceSignOut.error) && <p role="alert" className="text-sm text-danger">{error ?? deviceSignOut.error}</p>}
     </form>
   );
 }

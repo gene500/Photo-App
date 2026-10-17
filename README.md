@@ -69,13 +69,13 @@ back to `/offline`. `src/app/manifest.ts` makes the app installable; the icons i
 Trip names, stop names and shot-list items are one line: control characters (C0, DEL, C1) and bidi overrides/isolates are
 removed (not rejected) on the server, and a name must keep at least one visible character (zero-width characters alone do
 not count). Notes and shot notes keep newlines and tabs but lose other control characters. Names that come from
-OpenStreetMap or Mapbox are cleaned the same way and cut to the limit without splitting an emoji. Because the text is
+OpenStreetMap or Mapbox are cleaned the same way and cut to the limit without splitting a character. Because the text is
 cleaned rather than refused, an older stored value with such a character never blocks an unrelated edit. Helpers live in
 `src/lib/text.ts`.
 
 ### Place search
 
-The search bar finds landmarks, viewpoints and other points of interest by name ("Horseshoe Bend", "Griffith Observatory"), plus towns and addresses. It uses the Mapbox Search Box API: `GET /api/geocode?q&session[&proximity]` calls `suggest` (5 results, `types=poi,address,place,locality,neighborhood`) and answers `{ suggestions: [{ name, subtitle?, mapboxId?, lat?, lng? }] }`, points of interest first (stable, Mapbox's order is kept within a group). Suggestions carry no coordinates, so picking one calls `GET /api/geocode/retrieve?id&session`, which answers `{ place }` named like "Horseshoe Bend, Page, Arizona". The client makes one uuid `session` per search (shared by every suggest and the retrieve, which Mapbox bills as one) and renews it after a pick. If `suggest` fails, the old v6 forward geocoder answers instead and its rows already carry `lat`/`lng`, so no retrieve is needed. Both routes need sign-in, are rate limited (`geocode`, `geocode-retrieve`, 60/min) and cache for 10 minutes. In fake mode `suggest` returns canned landmarks that match the query plus the old fake address.
+The search bar finds landmarks, viewpoints and other points of interest by name ("Horseshoe Bend", "Griffith Observatory"), plus towns and addresses. It uses the Mapbox Search Box API: `GET /api/geocode?q&session[&proximity]` calls `suggest` (5 results, `types=poi,address,place,locality,neighborhood`) and answers `{ suggestions: [{ name, subtitle?, mapboxId?, lat?, lng? }] }`, points of interest first (stable, Mapbox's order is kept within a group). Suggestions carry no coordinates, so picking one calls `GET /api/geocode/retrieve?id&session`, which answers `{ place }` named like "Horseshoe Bend, Page, Arizona". The client makes one uuid `session` per search (shared by every suggest and the retrieve, which Mapbox bills as one) and renews it after a pick or when the search is cleared. If `suggest` fails, the old v6 forward geocoder answers instead and its rows already carry `lat`/`lng`, so no retrieve is needed. Both routes need sign-in, are rate limited (`geocode`, `geocode-retrieve`, 60/min) and cache for 10 minutes. In fake mode `suggest` returns canned landmarks that match the query plus the old fake address.
 
 ## 4. Scripts
 

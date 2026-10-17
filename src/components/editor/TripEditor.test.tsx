@@ -61,6 +61,11 @@ const seed = [
 ];
 const withStops = (stops: Stop[]) => ({ ...trip, stops });
 
+// The optimize result is only announced to screen readers; nothing shows under the button.
+function expectOptimizeNoteHidden() {
+  expect(screen.getByTestId("optimize-status").className).toBe("sr-only");
+}
+
 describe("TripEditor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -704,6 +709,8 @@ describe("TripEditor", () => {
         await waitFor(() => expect(api.updateTrip).toHaveBeenCalledTimes(1));
         expect(api.reorderStops).not.toHaveBeenCalled();
         expect(await screen.findByRole("button", { name: "Undo" })).toBeTruthy();
+        await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toMatch(/^Start time moved to /));
+        expectOptimizeNoteHidden();
       });
 
       it("sends the saved start time and, when the answer is the same moment, keeps it without a 'moved' note", async () => {
@@ -712,7 +719,8 @@ describe("TripEditor", () => {
         const user = userEvent.setup();
         render(<TripEditor initialTrip={trip2("2026-07-02T00:22:00Z")} />);
         await user.click(screen.getByRole("button", { name: "Optimize route" }));
-        await waitFor(() => expect(screen.getByText("Already the fastest order")).toBeTruthy());
+        await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("Already the fastest order"));
+        expectOptimizeNoteHidden();
         expect(vi.mocked(api.optimizeOrder).mock.calls[0]![1]!.departAt).toBe("2026-07-02T00:22:00Z");
         expect(api.updateTrip).not.toHaveBeenCalled();
         expect(screen.queryByText(/Start time moved/)).toBeNull();
@@ -725,7 +733,8 @@ describe("TripEditor", () => {
         const user = userEvent.setup();
         render(<TripEditor initialTrip={trip2(null)} />);
         await user.click(screen.getByRole("button", { name: "Optimize route" }));
-        expect(await screen.findByText("Can't fit 2 stops in their light: C, B.")).toBeTruthy();
+        await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("Can't fit 2 stops in their light: C, B."));
+        expectOptimizeNoteHidden();
         expect(api.updateTrip).not.toHaveBeenCalled(); // null departAt leaves the departure alone
       });
 
@@ -746,7 +755,8 @@ describe("TripEditor", () => {
       const user = userEvent.setup();
       render(<TripEditor initialTrip={withStops(three)} />);
       await user.click(screen.getByRole("button", { name: "Optimize route" }));
-      expect(await screen.findByText("Already the fastest order")).toBeTruthy();
+      await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("Already the fastest order"));
+      expectOptimizeNoteHidden();
       expect(api.reorderStops).not.toHaveBeenCalled();
       expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
     });

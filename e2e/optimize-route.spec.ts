@@ -41,9 +41,11 @@ test("optimize route reorders stops for the shortest drive and can be undone", a
   await expect.poll(names).toEqual(original);
   await expect(page.getByRole("button", { name: "Undo" })).toHaveCount(0);
 
-  // Already optimal now? Optimize, then optimizing again says so.
+  // Already optimal now? Optimize, then optimizing again reports it to assistive tech.
   await optimize.click();
   await expect.poll(names).toEqual([original[0], original[2], original[3], original[1]]);
   await optimize.click();
-  await expect(page.getByText("Already the fastest order")).toBeVisible();
+  // The result is announced to screen readers only; nothing shows under the button.
+  await expect(page.getByTestId("optimize-status")).toHaveText(/Already the fastest order/);
+  await expect(page.getByTestId("optimize-status")).toHaveClass("sr-only");
 });

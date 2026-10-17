@@ -21,8 +21,8 @@ Last updated 2026-10-16.
 | P6 | Task 5: Export-menu item | completed | `e3360ca` |
 | P7 | Task 6: share-page button | completed | `72c0ea0` |
 | P8 | Task 7: e2e `e2e/pdf-itinerary.spec.ts` and full gates | completed | `8e6b10c` |
-| P9 | Final whole-branch review (Opus) | in progress | |
-| P10 | Test in the real app with the Mapbox token | pending | editor + share link; force the static-map request to fail to see the fallback; check a URL-restricted token on the share page (`no-referrer`) |
+| P9 | Final whole-branch review (Opus) | completed | fixes `6af16a0`; parked: per-stop weather requests on cold cache, `plannedDate ?? ""` |
+| P10 | Test in the real app with the Mapbox token | in progress | editor + share link; force the static-map request to fail to see the fallback; check a URL-restricted token on the share page (`no-referrer`) |
 | P11 | Sweep 1: full-codebase check (Opus) | pending | whole repo on the feature branch; read-only report, fixes ruled and applied after |
 | P12 | Sweep 2: bug sweep (Opus) | pending | run after P11, one at a time |
 | P13 | Sweep 3: security sweep (Opus) | pending | run after P12; include auth, share links, CSP, the Mapbox token, PDF/static-map inputs |

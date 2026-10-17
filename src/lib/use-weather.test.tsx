@@ -41,6 +41,26 @@ describe("weatherLine", () => {
   });
 });
 
+describe("weatherLine warning", () => {
+  const cloudy = (date: string): Extract<WeatherForecast, { available: true }> => ({
+    available: true,
+    utcOffsetSeconds: 0,
+    hours: [{ time: `${date}T12:00`, cloudPct: 85, rainPct: 10, tempC: 20 }],
+  });
+  it("warns when the preferred light is poor", () => {
+    const line = weatherLine(cloudy("2026-07-01"), "golden", new Date("2026-07-01T12:10:00Z"));
+    expect(line?.warning).toBe("Golden hour: 85% cloud, likely washed out");
+  });
+  it("words a typical forecast as typical", () => {
+    const line = weatherLine({ ...cloudy("2027-07-01"), typical: true }, "golden", new Date("2027-07-01T12:10:00Z"));
+    expect(line?.warning).toBe("Typically cloudy for golden hour");
+  });
+  it("has no warning when the forecast is unavailable or the light is fine", () => {
+    expect(weatherLine({ available: false, reason: "out_of_range" }, "golden", new Date())).not.toHaveProperty("warning");
+    expect(weatherLine(forecastFor("2026-07-01"), "golden", new Date("2026-07-01T12:10:00Z"))).not.toHaveProperty("warning");
+  });
+});
+
 describe("useWeatherLine", () => {
   beforeEach(() => loadForecast.mockReset());
 
@@ -69,7 +89,7 @@ describe("useWeatherLine", () => {
     const midHour = new Date(Math.round(mid.getTime() / 3600_000) * 3600_000);
     loadForecast.mockResolvedValue({ available: true, utcOffsetSeconds: 0, hours: [hour(arrival, 3), hour(midHour, 95)] });
     const { result } = renderHook(() => useWeatherLine(0, 0, arrival, "sunset"));
-    await waitFor(() => expect(result.current).toEqual({ text: "☁️ 68°F", label: "overcast, 5% rain", quality: "poor" }));
+    await waitFor(() => expect(result.current).toEqual({ text: "☁️ 68°F", label: "overcast, 5% rain", quality: "poor", warning: "Sunset: 95% cloud, likely washed out" }));
     expect(loadForecast).toHaveBeenCalledWith(0, 0, dateOf(mid));
   });
 

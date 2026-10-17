@@ -4,12 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getSunWindows, solarDateAt } from "./best-time";
 import { forecastInstant } from "./light-windows";
 import type { LightPref, WeatherForecast } from "./types";
-import { describeTypical, describeWeather, weatherGlyph, FORECAST_UNAVAILABLE_TEXT, inForecastRange, inTypicalRange, lightQuality, summarizeAt, type LightQuality } from "./weather";
+import { describeTypical, describeWeather, weatherGlyph, FORECAST_UNAVAILABLE_TEXT, inForecastRange, inTypicalRange, lightQuality, lightWarning, summarizeAt, type LightQuality } from "./weather";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { loadForecast, loadForecastBatch } from "./weather-cache";
 
 /** `text` is the short emoji + temperature; `label` is the same in words (tooltip and screen readers). */
-export type WeatherLine = { text: string; label?: string; quality: LightQuality | null };
+export type WeatherLine = { text: string; label?: string; quality: LightQuality | null; warning?: string };
 type Unit = "km" | "mi";
 
 /** The pure part: the hint text for an instant given the day's forecast (null = say nothing). */
@@ -21,9 +21,12 @@ export function weatherLine(forecast: WeatherForecast | null, pref: LightPref, a
   const w = summarizeAt(forecast, at.toISOString());
   if (!w) return null;
   const glyph = weatherGlyph(w, unit);
-  return forecast.typical
+  const typical = forecast.typical === true;
+  const warning = lightWarning(pref, w, typical);
+  const line: WeatherLine = typical
     ? { text: `Typical ${glyph}`, label: describeTypical(w).replace(/^./, (c) => c.toUpperCase()), quality: lightQuality(pref, w) }
     : { text: glyph, label: describeWeather(w), quality: lightQuality(pref, w) };
+  return warning ? { ...line, warning } : line;
 }
 
 /**

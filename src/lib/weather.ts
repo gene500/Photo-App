@@ -120,6 +120,20 @@ export function lightQuality(pref: LightPref, w: Pick<WeatherSummary, "cloudPct"
   return w.cloudPct < 50 ? "good" : "fair";
 }
 
+const LIGHT_NAME: Record<Exclude<LightPref, "any">, string> = { sunrise: "Sunrise", golden: "Golden hour", sunset: "Sunset" };
+
+/**
+ * A plain-words warning when the weather makes the preferred light poor (rain wins over cloud), else null: nothing is
+ * said for good or fair light or the "any" preference. `typical` words it as a climate tendency, not a forecast.
+ */
+export function lightWarning(pref: LightPref, w: Pick<WeatherSummary, "cloudPct" | "rainPct">, typical = false): string | null {
+  if (pref === "any" || lightQuality(pref, w) !== "poor") return null;
+  const name = LIGHT_NAME[pref];
+  const rainy = w.rainPct >= 50;
+  if (typical) return `Typically ${rainy ? "rainy" : "cloudy"} for ${name.toLowerCase()}`;
+  return rainy ? `${name}: rain likely` : `${name}: ${Math.round(w.cloudPct)}% cloud, likely washed out`;
+}
+
 const EMOJI: Record<WeatherLabel, string> = { Clear: "☀️", "Partly cloudy": "⛅", "Mostly cloudy": "🌥️", Overcast: "☁️", "Rain likely": "🌧️" };
 
 /** "18°C" / "64°F" (null when the temperature is unknown). */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  addDays, describeTypical, describeWeather, weatherAriaLabel, forecastSpan, hourInstant, inForecastRange, lightQuality, parseOpenMeteo, summarizeAt, weatherLabel,
+  addDays, describeTypical, describeWeather, weatherAriaLabel, forecastSpan, hourInstant, inForecastRange, lightQuality, lightWarning, parseOpenMeteo, summarizeAt, weatherLabel,
 } from "./weather";
 import type { WeatherForecast } from "./types";
 
@@ -149,5 +149,25 @@ describe("forecastSpan", () => {
     expect(forecastSpan("2026-10-07", "2026-10-07")).toEqual({ start: "2026-10-06", end: "2026-10-08" });
     expect(forecastSpan("2026-10-06", "2026-10-07")).toEqual({ start: "2026-10-06", end: "2026-10-07" });
     expect(forecastSpan("2026-10-21", "2026-10-07")).toEqual({ start: "2026-10-20", end: "2026-10-21" });
+  });
+});
+
+describe("lightWarning", () => {
+  it("names heavy cloud for the preferred light", () => {
+    expect(lightWarning("golden", { cloudPct: 85, rainPct: 10 })).toBe("Golden hour: 85% cloud, likely washed out");
+    expect(lightWarning("sunrise", { cloudPct: 85, rainPct: 10 })).toBe("Sunrise: 85% cloud, likely washed out");
+  });
+  it("names likely rain, which wins over cloud", () => {
+    expect(lightWarning("sunset", { cloudPct: 40, rainPct: 70 })).toBe("Sunset: rain likely");
+    expect(lightWarning("sunset", { cloudPct: 90, rainPct: 60 })).toBe("Sunset: rain likely");
+  });
+  it("words typical weather as a climate tendency", () => {
+    expect(lightWarning("golden", { cloudPct: 85, rainPct: 10 }, true)).toBe("Typically cloudy for golden hour");
+    expect(lightWarning("sunset", { cloudPct: 40, rainPct: 70 }, true)).toBe("Typically rainy for sunset");
+  });
+  it("says nothing unless the light is poor", () => {
+    expect(lightWarning("any", { cloudPct: 95, rainPct: 0 })).toBeNull();
+    expect(lightWarning("golden", { cloudPct: 30, rainPct: 5 })).toBeNull();
+    expect(lightWarning("golden", { cloudPct: 60, rainPct: 5 })).toBeNull();
   });
 });

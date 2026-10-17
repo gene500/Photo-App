@@ -37,19 +37,22 @@ export function optimizeSchedule(input: {
   stops: ScheduleStop[];
   plannedDate: string;
   defaultDeparture: Date;
+  /** A departure to keep when it is as good as any other (e.g. the trip's saved start); the search window still follows `defaultDeparture`. */
+  preferredDeparture?: Date;
 }): Schedule {
-  const { durations, stops, defaultDeparture } = input;
+  const { durations, stops, defaultDeparture, preferredDeparture } = input;
   const n = stops.length;
   if (stops.every((s) => s.lightPref === "any") || n < 2) {
     return { order: optimizeOrder(durations), departAt: defaultDeparture, misses: [] };
   }
 
   const d = durations.map((row) => row.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : PENALTY)));
-  const ctx = new Evaluator(d, stops, defaultDeparture.getTime());
+  const ctx = new Evaluator(d, stops, defaultDeparture.getTime(), preferredDeparture?.getTime());
   const { order, departMs } = n - 1 <= EXACT_MAX_STOPS ? exactSearch(ctx, n) : localSearch(ctx, n);
   return {
     order,
-    departAt: departMs === defaultDeparture.getTime() ? defaultDeparture : new Date(departMs),
+    departAt:
+      departMs === preferredDeparture?.getTime() ? preferredDeparture : departMs === defaultDeparture.getTime() ? defaultDeparture : new Date(departMs),
     misses: ctx.misses(order, departMs),
   };
 }
@@ -65,10 +68,12 @@ class Evaluator {
     readonly d: number[][],
     readonly stops: ScheduleStop[],
     defaultMs: number,
+    preferredMs?: number,
   ) {
-    this.candidates = [defaultMs];
+    // First wins ties: the preferred departure, then the default, then the grid around the default.
+    this.candidates = preferredMs !== undefined && preferredMs !== defaultMs ? [preferredMs, defaultMs] : [defaultMs];
     for (let t = defaultMs - 3_600_000; t <= defaultMs + 14 * 3_600_000; t += STEP_MS) {
-      if (t !== defaultMs) this.candidates.push(t);
+      if (t !== defaultMs && t !== preferredMs) this.candidates.push(t);
     }
     this.windowCache = stops.map(() => new Map());
     this.constrained = stops.map((s) => s.lightPref !== "any");

@@ -69,6 +69,23 @@ describe("optimizeSchedule", () => {
     expect(r.misses).toEqual([]);
   });
 
+  it("keeps a preferred departure that already meets every window", () => {
+    const stops = [stop("any"), stop("any"), stop("sunset", 30)];
+    const preferredDeparture = new Date(defaultDeparture.getTime() + 11 * 3600_000 + 7 * 60_000);
+    const r = optimizeSchedule({ durations: flat(3, 3600), stops, plannedDate: DATE, defaultDeparture, preferredDeparture });
+    expect(r.misses).toEqual([]);
+    expect(r.departAt).toEqual(preferredDeparture);
+  });
+
+  it("still searches from the default when the preferred departure is too late to help", () => {
+    // A trip created in the evening is saved with a late start; earlier departures must stay reachable.
+    const stops = [stop("any"), stop("any"), stop("sunset", 30)];
+    const preferredDeparture = new Date(defaultDeparture.getTime() + 20 * 3600_000);
+    const r = optimizeSchedule({ durations: flat(3, 3600), stops, plannedDate: DATE, defaultDeparture, preferredDeparture });
+    expect(r.misses).toEqual([]);
+    expect(r.departAt.getTime()).toBeLessThan(preferredDeparture.getTime());
+  });
+
   it("reports the stops whose light cannot be met, by original index", () => {
     // An 8 h stay at the first stop means the later sunrise stops cannot all be reached in the morning light.
     const stops = [stop("sunrise", 480), stop("sunrise", 30), stop("sunrise", 30)];

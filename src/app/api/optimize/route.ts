@@ -29,7 +29,8 @@ export const POST = handle(async (req: Request) => {
       durations,
       stops,
       plannedDate: date,
-      defaultDeparture: departAt ? new Date(departAt) : departureTime(stops[0]!, date),
+      defaultDeparture: departureTime(stops[0]!, date),
+      preferredDeparture: departAt ? new Date(departAt) : undefined,
     });
     return Response.json({
       order: result.order,

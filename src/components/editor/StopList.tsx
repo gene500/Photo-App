@@ -160,13 +160,15 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
         <span aria-hidden className="pointer-events-none absolute -inset-1 rounded-full ring-2 ring-accent-strong opacity-0 peer-focus-visible:opacity-100" />
       </span>
       <div className="min-w-0 flex-1">
-        <button type="button" onClick={() => onSelect(stop.id)} className="block min-h-7 w-full truncate text-left text-sm font-medium leading-7 hover:underline">
-          <span className="sr-only">{index + 1}.</span>{" "}{stop.name}
-        </button>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <button type="button" onClick={() => onSelect(stop.id)} className="block min-h-7 min-w-0 truncate text-left text-sm font-medium leading-7 hover:underline">
+            <span className="sr-only">{index + 1}.</span>{" "}{stop.name}
+          </button>
+          {role && <span data-testid="stop-role" className="shrink-0 rounded-md bg-hover px-1.5 py-px text-xs font-medium text-muted">{role}</span>}
+        </div>
         <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
-          {role && <span data-testid="stop-role" className="shrink-0 rounded-md bg-hover px-1.5 py-px text-[11px] font-medium">{role}</span>}
           {hint ? (
-            <span data-testid="best-time" data-light-met={hint.met} className={`flex min-w-0 items-center gap-1 ${hint.met ? "" : "text-danger"}`}>
+            <span data-testid="best-time" data-light-met={hint.met} className={`flex min-w-0 items-center gap-1 ${hint.met ? "" : "text-sand"}`}>
               {hint.met && (
                 <svg aria-hidden viewBox="0 0 16 16" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 8.5l3.2 3.2L13 4.8" />
@@ -183,7 +185,7 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
             <span role="img" aria-label={weatherAriaLabel(weather)}>{weather.text}</span>
           </p>
         )}
-        {weather?.warning && <p data-testid="light-warning" className="text-xs text-danger">{weather.warning}</p>}
+        {weather?.warning && <p data-testid="light-warning" className="text-xs text-sand">{weather.warning}</p>}
         {stop.notes && <p className="truncate text-xs text-muted">{stop.notes}</p>}
         {onPriorityChange && stop.lightPref !== "any" && (
           <div className="mt-1 flex items-center gap-2 text-[11px] text-muted" title="Priority: how hard Optimize route works to land this stop in its light">

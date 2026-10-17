@@ -60,7 +60,8 @@ describe("StopList", () => {
     const badges = screen.getAllByTestId("light-warning");
     expect(badges).toHaveLength(1);
     expect(badges[0].textContent).toBe("Golden hour: 85% cloud, likely washed out");
-    expect(badges[0].className).toContain("text-danger");
+    expect(badges[0].className).toContain("text-sand");
+    expect(badges[0].className).not.toContain("text-danger");
   });
 
   it("disables browser touch panning on the drag handle so touch drags reach dnd-kit", () => {
@@ -84,7 +85,8 @@ describe("StopList", () => {
     expect(met.textContent).toMatch(/^Sunset window .* · arrive /);
     expect(met.getAttribute("data-light-met")).toBe("true");
     expect(missed.textContent).toMatch(/^Misses sunset by /);
-    expect(missed.className).toContain("text-danger");
+    expect(missed.className).toContain("text-sand");
+    expect(missed.className).not.toContain("text-danger");
     expect(plain.textContent).toBe("No daylight"); // any: unchanged best-time line
   });
 
@@ -180,6 +182,22 @@ describe("StopList", () => {
     render(<StopList stops={[stop("a", "A"), stop("b", "B"), stop("c", "C")]} bestTimes={[null, null, null]} {...handlers} />);
     const roles = screen.getAllByTestId("stop-role").map((el) => el.textContent);
     expect(roles).toEqual(["Start", "End"]);
+  });
+
+  it("puts the Start/End badge beside the name, never in the line with the light text, so all lines share one left edge", () => {
+    const sunsetStop = { lightPref: "sunset" as const, lat: 37.7, lng: -119.6 };
+    render(
+      <StopList
+        stops={[stop("a", "A"), stop("b", "B", sunsetStop)]}
+        bestTimes={[null, null]}
+        arrivals={[new Date("2026-07-01T20:00:00Z"), new Date("2026-07-01T23:59:00Z")]}
+        {...handlers}
+      />,
+    );
+    for (const badge of screen.getAllByTestId("stop-role")) {
+      expect(badge.parentElement?.querySelector('[data-testid="best-time"]')).toBeNull();
+      expect(badge.parentElement?.querySelector("button")?.textContent).toMatch(/^\d+\./);
+    }
   });
 
   it("does not label a lone stop", () => {

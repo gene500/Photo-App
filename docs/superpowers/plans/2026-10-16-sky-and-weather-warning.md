@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Bearings are compass degrees clockwise from north, 0 to under 360. `suncalc` azimuth is measured from south, westward; convert it.
+- Bearings are compass degrees clockwise from north, 0 to under 360. The installed `suncalc` (2.1.1) already returns azimuth in degrees clockwise from north; normalize it to [0, 360), do not convert it.
 - The sky card and the fake-map lines need no network.
 - Colours come from the existing theme tokens (the classes used by neighbouring components); nothing hard-coded for light or dark mode. Map line colours are the exception, as `ROUTE_COLOR` is in `MapPanel.tsx`.
 - "Poor" is the existing rating from `lightQuality` in `src/lib/weather.ts` (rain chance 50% or more, or cloud cover 80% or more). Thresholds do not change.
@@ -43,13 +43,11 @@
   - `type MoonPhaseName = "new moon" | "waxing crescent" | "first quarter" | "waxing gibbous" | "full moon" | "waning gibbous" | "last quarter" | "waning crescent"`
   - `type SkyEvent = { bearing: number; at: Date }`
   - `type SkyInfo = { sunrise: SkyEvent | null; sunset: SkyEvent | null; alwaysUp: boolean; alwaysDown: boolean; moon: { phase: MoonPhaseName; illuminationPct: number; rise: Date | null } }`
-  - `azimuthToBearing(azimuthRad: number): number`
   - `compassWord(bearing: number): string` (16-point: N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW)
   - `moonPhaseName(phase: number): MoonPhaseName` (phase 0..1; eight buckets, index `Math.round(phase * 8) % 8`)
   - `getSkyInfo(lat: number, lng: number, plannedDate: string): SkyInfo`
 
 - [ ] **Step 1: Write the failing tests** in `src/lib/sky.test.ts`:
-  - `azimuthToBearing`: `0` gives `180`, `Math.PI / 2` gives `270`, `-Math.PI / 2` gives `90`, `Math.PI` gives `0`.
   - `compassWord`: `0` gives `"N"`, `72` gives `"ENE"`, `90` gives `"E"`, `288` gives `"WNW"`, `348` gives `"NNW"`, `359` gives `"N"`.
   - `moonPhaseName`: `0` gives `"new moon"`, `0.125` `"waxing crescent"`, `0.25` `"first quarter"`, `0.375` `"waxing gibbous"`, `0.5` `"full moon"`, `0.625` `"waning gibbous"`, `0.75` `"last quarter"`, `0.875` `"waning crescent"`, `0.99` `"new moon"`.
   - `getSkyInfo(0, 0, "2026-03-20")`: sunrise bearing within 2 of 90, sunset within 2 of 270 (equinox).
@@ -58,7 +56,7 @@
   - Polar (review focus 1): `getSkyInfo(78, 15, "2026-06-21")` has `alwaysUp: true`, `sunrise: null`, `sunset: null`; on `"2026-12-21"` it has `alwaysDown: true` and both null.
   - Far longitudes (review focus 2): for `lng` in `[-170, 170]` at lat 40 on `"2026-07-01"`, sunrise and sunset `at` fall within 12 hours of `solarDayAnchor("2026-07-01", lng)`, and a non-null `moon.rise` does too.
 - [ ] **Step 2: Run** `npx vitest run src/lib/sky.test.ts`. Expected: FAIL, module not found.
-- [ ] **Step 3: Implement `sky.ts`.** Use `suncalc`'s `getPosition(date, lat, lng).azimuth` at the sunrise and sunset instants from `getSunWindows`; `getMoonIllumination(anchor)` for phase and fraction; `getMoonTimes(new Date(anchor.getTime() - 12 * 3600_000), lat, lng, true)` so the 24-hour window matches the stop's local solar day. Treat a missing `rise` as null.
+- [ ] **Step 3: Implement `sky.ts`.** Use `suncalc`'s `getPosition(date, lat, lng).azimuth` at the sunrise and sunset instants from `getSunWindows`; `getMoonIllumination(anchor)` for phase and fraction; `getMoonTimes(anchor, lat, lng)`, which covers the same local solar day as `getTimes`. Treat a missing `rise` as null.
 - [ ] **Step 4: Run** the same command. Expected: PASS.
 - [ ] **Step 5: Commit** `src/lib/sky.ts src/lib/sky.test.ts` as `feat: sky math (sun bearings, moon phase)`.
 

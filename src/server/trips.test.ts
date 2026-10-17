@@ -43,6 +43,18 @@ describe("trips data access", () => {
     expect(saved?.departAt).toBe(shifted);
   });
 
+  it("with a date change, refuses a start time left on the old day (only the server's own shift or null is taken)", async () => {
+    const user = await createTestUser();
+    const trip = await createTrip(user.id, sampleTripInput);
+    const stored = "2026-07-01T17:00:00.000Z";
+    await prisma.trip.update({ where: { id: trip.id }, data: { departAt: new Date(stored) } });
+    await expect(updateTrip(user.id, trip.id, { plannedDate: "2027-03-10", departAt: stored })).rejects.toBeInstanceOf(DepartAtMismatchError);
+    await expect(updateTrip(user.id, trip.id, { plannedDate: "2027-03-10", departAt: "2026-07-01T09:00:00.000Z" })).rejects.toBeInstanceOf(DepartAtMismatchError);
+    expect((await getTrip(user.id, trip.id))?.plannedDate).toBe("2026-07-01");
+    const shifted = shiftDepartAtLocal(stored, "2026-07-01", "2027-03-10");
+    expect((await updateTrip(user.id, trip.id, { plannedDate: "2027-03-10", departAt: shifted }))?.departAt).toBe(shifted);
+  });
+
   it("saves an Undo to an earlier value on the same legacy off-day as the stored one", async () => {
     const user = await createTestUser();
     const trip = await createTrip(user.id, sampleTripInput);

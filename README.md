@@ -186,7 +186,7 @@ password locks out only their own address; the owner can still sign in from else
 per 15 minutes) still applies, and after 50 failures per hour per email only addresses that already failed for it are
 refused. Guesses against one account are therefore bounded by the per-IP limit plus a hard ceiling: at 200 failures per
 hour an email refuses every address (the owner included) until the window clears. That trade-off lets a determined
-distributed attacker lock the owner out of password login for up to an hour (Google sign-in is unaffected), in return for
+distributed attacker lock the owner out of password login for as long as they keep spending about 200 failures per hour (the window is fixed, so they can renew it every hour; Google sign-in is unaffected), in return for
 a firm bound on guessing. The client address is read from the platform proxy header (`x-real-ip`, else the first
 `x-forwarded-for` entry), so self-hosting needs a trusted reverse proxy that overwrites those headers; otherwise a client
 can pick its own address key and sidestep the per-address and per-IP limits. Counting happens before the bcrypt check; bodies over 16 KB are refused.
@@ -315,7 +315,7 @@ Google again" (Google's account chooser) and the user retries.
 Each stop's best shooting window is derived, not stored. The trip's
 departure time is assumed to be sunrise at the first stop on the
 trip's planned date unless the trip has a chosen departure (`departAt`,
-set by light-aware optimization; the API refuses a changed one that is not on the planned day at the first stop; a value that equals the stored one, is on the stored one's day, or equals the server's shift of it on a date change is accepted so old off-day rows stay editable); estimated arrival at each stop is that
+set by light-aware optimization; the API refuses a changed one that is not on the planned day at the first stop; a value that equals the stored one, is on the stored one's day, or equals the server's shift of it on a date change is accepted so old off-day rows stay editable, except that a PATCH which also changes the planned date takes only the server's own shift of the stored value or a time on the new day); estimated arrival at each stop is that
 departure plus the cumulative Mapbox Directions leg durations and the
 "time here" minutes (default 30) of every earlier stop. The arrival time is then bucketed
 against that stop's own sunrise/golden-hour/sunset times (computed

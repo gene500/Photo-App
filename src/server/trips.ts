@@ -119,7 +119,11 @@ export async function updateTrip(
       const shifted = next && current.plannedDate.getTime() !== next.getTime() ? shiftedDeparture(current.departAt, current.plannedDate, next) : null;
       const unchanged = current.departAt?.getTime() === sent.getTime();
       const sameStoredDay = current.departAt !== null && dayOf(current.departAt) === dayOf(sent);
-      if (!unchanged && !sameStoredDay && shifted?.getTime() !== sent.getTime()) assertOnPlannedDay(sent, planned, lng);
+      // With a date change in the same PATCH only the server's own shift is exempt (stored/same-day values would leave the
+      // trip planned on a new day with a start months away); anything else must be on the new day.
+      const dateChanged = next !== null && current.plannedDate.getTime() !== next.getTime();
+      const exempt = dateChanged ? shifted?.getTime() === sent.getTime() : unchanged || sameStoredDay;
+      if (!exempt) assertOnPlannedDay(sent, planned, lng);
     }
     if (patch.plannedDate) {
       const next = dateOnlyToUtc(patch.plannedDate);

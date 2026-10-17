@@ -89,7 +89,7 @@ gone, trust `git log feat/pdf-itinerary`). Briefs and reports sit next to it as 
 - After every push, check that Vercel deployed: only project `photo-app-pi2o` counts
   (https://photo-app-pi2o.vercel.app); the command is in `CLAUDE.md`. Also watch the GitHub Actions run.
 - Keep the Task board above current and report progress against it.
-- Run subagents one at a time. Implementers and per-task reviews on Sonnet; final reviews on Opus.
+- Run subagents one at a time. Implementers and per-task reviews on Sonnet; final reviews and any full-codebase check (whole-repo audits, security and bug sweeps) on Opus.
 - Commit trailers: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` and a `Claude-Session:` line.
 - Never print or commit the Mapbox `pk.` token; it lives only in gitignored `.env` files.
 

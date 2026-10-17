@@ -1,7 +1,7 @@
 import { enforceLimit } from "@/server/rate-limit";
 import { reorderSchema } from "@/lib/validation";
 import { handle, HttpError, readJson, requireUserId } from "@/server/http";
-import { InvalidReorderError, reorderStops } from "@/server/stops";
+import { InvalidReorderError, reorderStops, StopsChangedError } from "@/server/stops";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -16,6 +16,7 @@ export const PUT = handle(async (req: Request, { params }: Ctx) => {
     return Response.json({ stops });
   } catch (e) {
     if (e instanceof InvalidReorderError) throw new HttpError(400, e.message);
+    if (e instanceof StopsChangedError) throw new HttpError(409, e.message);
     throw e;
   }
 });

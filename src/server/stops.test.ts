@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { prisma } from "./db";
 import { createTrip, getTrip } from "./trips";
 import {
-  addStop, deleteStop, findStopByPhotoUrl, getOwnedStop, InvalidReorderError, reorderStops, updateStop,
+  addStop, deleteStop, findStopByPhotoUrl, getOwnedStop, InvalidReorderError, reorderStops, StopsChangedError, updateStop,
 } from "./stops";
 import { createTestUser, resetDb, sampleTripInput } from "../../tests/helpers/db";
 
@@ -96,6 +97,17 @@ describe("stops data access", () => {
     await expect(reorderStops(user.id, trip.id, [ids[0]])).rejects.toBeInstanceOf(InvalidReorderError);
     await expect(reorderStops(user.id, trip.id, [ids[0], ids[0]])).rejects.toBeInstanceOf(InvalidReorderError);
     await expect(reorderStops(user.id, trip.id, [ids[0], "foreign"])).rejects.toBeInstanceOf(InvalidReorderError);
+  });
+
+  it("raises StopsChangedError when a stop vanishes mid-reorder", async () => {
+    const { user, trip, stops } = await tripWithStops(["a", "b"]);
+    const original = prisma.$transaction.bind(prisma) as (...a: unknown[]) => Promise<unknown>;
+    const spy = vi.spyOn(prisma, "$transaction").mockImplementationOnce((async (...a: unknown[]) => {
+      await prisma.stop.delete({ where: { id: stops[1].id } });
+      return original(...a);
+    }) as never);
+    await expect(reorderStops(user.id, trip.id, [stops[1].id, stops[0].id])).rejects.toBeInstanceOf(StopsChangedError);
+    spy.mockRestore();
   });
 
   it("returns null when reordering another user's trip", async () => {

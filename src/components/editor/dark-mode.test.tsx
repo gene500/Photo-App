@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Stop } from "@/lib/types";
 
-vi.mock("@/lib/api-client", () => ({ api: { geocode: vi.fn() } }));
+vi.mock("@/lib/api-client", () => ({ api: { geocode: vi.fn(), retrievePlace: vi.fn() } }));
 import { PlaceCard } from "./PlaceCard";
 import { SearchBar } from "./SearchBar";
 import { StopCard } from "./StopCard";

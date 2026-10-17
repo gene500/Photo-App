@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { api, ApiError } from "./api-client";
 
+const SESSION = "11111111-1111-4111-8111-111111111111";
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);
 afterEach(() => fetchMock.mockReset());
@@ -36,15 +37,22 @@ describe("api client", () => {
   });
 
   it("encodes geocode queries", async () => {
-    fetchMock.mockResolvedValue(Response.json({ places: [] }));
-    await api.geocode("Lee Vining, CA");
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/geocode?q=Lee%20Vining%2C%20CA");
+    fetchMock.mockResolvedValue(Response.json({ suggestions: [] }));
+    await api.geocode("Lee Vining, CA", SESSION);
+    expect(fetchMock.mock.calls[0][0]).toBe(`/api/geocode?q=Lee%20Vining%2C%20CA&session=${SESSION}`);
   });
 
   it("adds a proximity bias to geocode requests", async () => {
-    fetchMock.mockResolvedValue(Response.json({ places: [] }));
-    await api.geocode("Spring", { lat: 36.74, lng: -119.79 });
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/geocode?q=Spring&proximity=-119.790000,36.740000");
+    fetchMock.mockResolvedValue(Response.json({ suggestions: [] }));
+    await api.geocode("Spring", SESSION, { lat: 36.74, lng: -119.79 });
+    expect(fetchMock.mock.calls[0][0]).toBe(`/api/geocode?q=Spring&session=${SESSION}&proximity=-119.790000,36.740000`);
+  });
+
+  it("retrieves a picked suggestion with its session", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ place: { name: "H", lat: 1, lng: 2 } })));
+    const { place } = await api.retrievePlace("a/b=", SESSION);
+    expect(place.name).toBe("H");
+    expect(fetchMock.mock.calls[0][0]).toBe(`/api/geocode/retrieve?id=a%2Fb%3D&session=${SESSION}`);
   });
 
   it("reverse geocodes a point", async () => {

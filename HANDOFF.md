@@ -7,6 +7,7 @@ and `PROGRESS.md` over memory. The sections after "Current work" are history.
 ## Task board
 
 Statuses: pending, in progress, completed, blocked, removed. Exactly one item is in progress at a time.
+Visibility rule (owner, 2026-10-16): the task chart is shown in the terminal at the end of every reply, always.
 Ordering rule (owner, 2026-10-16): anything added goes toward the end of the list, in the order asked; the absolute final row of every list is always a full codebase check (Opus), and nothing goes after it.
 Last updated 2026-10-16.
 

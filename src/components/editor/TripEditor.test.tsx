@@ -46,7 +46,11 @@ vi.mock("./StopList", async (importOriginal) => {
   }
   return { ...actual, StopList };
 });
+vi.mock("@/lib/itinerary-download", () => ({
+  createItineraryPdf: vi.fn(), loadWeatherLines: vi.fn(), saveBlob: vi.fn(), mapTokenFromEnv: vi.fn(() => null),
+}));
 import { api } from "@/lib/api-client";
+import { createItineraryPdf, loadWeatherLines, saveBlob } from "@/lib/itinerary-download";
 import type { Stop, TripWithStops } from "@/lib/types";
 import { solarDateAt } from "@/lib/best-time";
 import { TripEditor } from "./TripEditor";
@@ -80,6 +84,29 @@ describe("TripEditor", () => {
     expect(screen.getByTestId("empty-hint").textContent).toBe("Search for a place or click the map to add your first stop.");
     expect(screen.getByTestId("route-status").textContent).toBe("Add 2 stops to see the route");
     expect(api.directions).not.toHaveBeenCalled();
+  });
+
+  it("hands the Export menu the editor's stops, route and start time for the PDF", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.mocked(loadWeatherLines).mockResolvedValue([null, null]);
+    const blob = new Blob(["pdf"]);
+    vi.mocked(createItineraryPdf).mockResolvedValue(blob);
+    const departAt = "2026-07-01T15:00:00.000Z";
+    render(<TripEditor initialTrip={{ ...withStops([{ ...seed[0], notes: "Bring water" }, { ...seed[1], lightPref: "sunset" }]), departAt }} />);
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toBe("62 mi · 1 h 0 min"));
+    await userEvent.click(screen.getByRole("button", { name: "Export" }));
+    await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
+    await waitFor(() => expect(saveBlob).toHaveBeenCalledWith(blob, "Sierra-loop-itinerary.pdf"));
+    const arg = vi.mocked(createItineraryPdf).mock.calls[0]![0];
+    expect(arg.input.tripName).toBe("Sierra loop");
+    expect(arg.input.dateLine).toBe("Planned for 2026-07-01");
+    expect(arg.input.startLine).toMatch(/^Starts /);
+    expect(arg.input.routeLine).toBe("62 mi · 1 h 0 min");
+    expect(arg.input.note).toBeNull();
+    expect(arg.input.stops.map((st) => [st.index, st.name, st.notes, st.bestLight])).toEqual([[1, "A", "Bring water", null], [2, "B", null, "Best at sunset"]]);
+    expect(arg.input.stops.every((st) => st.arrival !== "Time not set")).toBe(true);
+    expect(arg.geometry).toEqual(route.geometry);
+    expect(arg.stops).toEqual([{ lat: 36.74, lng: -119.79 }, { lat: 37.96, lng: -119.12 }]);
   });
 
   it("loads the route through the stops in order and shows its summary", async () => {

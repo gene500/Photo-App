@@ -86,6 +86,10 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
       >
         <HeaderButtonLabel icon="export">Export</HeaderButtonLabel>
       </button>
+      {/* The menu may have been closed while the PDF was being made; the failure must still be seen. */}
+      {download.error && !(open && enough) && (
+        <p role="alert" className={`absolute right-0 top-full z-20 mt-1 w-56 max-w-full px-3 py-2 text-sm text-danger ${card}`}>{download.error}</p>
+      )}
       {open && enough && (
         <div ref={panelRef} id={panelId} role="group" aria-label="Export trip" className={`absolute right-0 top-full z-20 mt-1 w-56 max-w-full p-1 ${card}`}>
           <button type="button" onClick={downloadGpx} className={item}>Download GPX</button>

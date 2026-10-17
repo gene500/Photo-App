@@ -13,11 +13,23 @@ export const loginEmailKey = (email: string, ip: string) =>
   `${email}|${createHash("sha256").update(ip).digest("hex").slice(0, 16)}`;
 
 /**
- * Whether a login for this email from this address must be refused without a password check: the address is over its
- * own failure limit, or the email is over its global cap and this address has already failed. An address with no
- * recent failures is never refused by the global cap, so the owner's correct password works while someone else guesses.
+ * Failures per hour (all addresses) after which an email refuses every login attempt until the window clears. Far above
+ * normal use, so guesses against one account are bounded by the per-IP limit plus this ceiling. Trade-off: an attacker
+ * who reaches it can lock the real owner out of password login for up to an hour (Google sign-in is unaffected).
+ */
+export const LOGIN_EMAIL_CEILING = 200;
+
+/**
+ * Whether a login for this email from this address must be refused without a password check: the email is over its hard
+ * ceiling (everyone refused), the address is over its own failure limit, or the email is over its global soft limit and
+ * this address has already failed. Below the ceiling an address with no recent failures is not refused by the soft
+ * limit, so the owner's correct password usually works while someone else guesses.
  */
 export async function loginRefused(email: string, ip: string): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+  if ((await peekShared("login-email-global", email)) >= LOGIN_EMAIL_CEILING) {
+    const over = await isBlockedShared("login-email-global", email);
+    return over.ok ? { ok: false, retryAfter: 3600 } : over;
+  }
   const pair = loginEmailKey(email, ip);
   const own = await isBlockedShared("login-email-failures", pair);
   if (!own.ok) return own;

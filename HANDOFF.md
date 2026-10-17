@@ -72,7 +72,7 @@ Known gaps:
 - Offline copies: a save that does not fit the browser's storage deletes nothing unless a measured shortfall shows the oldest copies free enough room (they are put back if the write still fails); sign-out, delete-account, sign-out-everywhere and change-password share one awaited sign-out, and an answer without a redirect url (next-auth hides the status of a 500) or with an error/csrf url counts as not signed out.
 - Offline copies are cleared on sign-out and when the login or signup page is shown (session ended); they stay while the device is offline.
 - Rate limits other than login/signup/password/delete are per instance; no monitoring or alerting yet.
-- Login lockout is per email and hashed client address (8 failures / 15 min); a global 50 failures / hour per email only refuses addresses that already failed, so a clean address always gets in. IPv6 is keyed by /64; behind a proxy that does not set `x-real-ip` all clients share one address key.
+- Login lockout is per email and hashed client address (8 failures / 15 min); 50 failures / hour per email refuses only addresses that already failed, and a hard ceiling of 200 failures / hour refuses everyone for that email until the window clears (owner can be locked out of password login for up to an hour; accepted trade-off). IPv6 is keyed by /64. The client address comes from `x-real-ip` / `x-forwarded-for`: self-hosting needs a trusted proxy that overwrites them, and without one all clients share one address key.
 - Share links and the share PDF omit stop notes; shot notes and the shot list are shared.
 - `updateTrip` find-then-update is not atomic.
 - Playwright timezone is not pinned for specs other than the hydration one.

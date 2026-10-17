@@ -183,8 +183,13 @@ the fallback when routing is unavailable. Owner-only API:
 
 Failed logins are counted per email and hashed client address (8 per 15 minutes), so someone guessing a victim's
 password locks out only their own address; the owner can still sign in from elsewhere. A per-IP limit (30 attempts
-per 15 minutes) still applies, and a global cap of 50 failures per hour per email refuses further guesses only from
-addresses that already failed for it. Counting happens before the bcrypt check; bodies over 16 KB are refused.
+per 15 minutes) still applies, and after 50 failures per hour per email only addresses that already failed for it are
+refused. Guesses against one account are therefore bounded by the per-IP limit plus a hard ceiling: at 200 failures per
+hour an email refuses every address (the owner included) until the window clears. That trade-off lets a determined
+distributed attacker lock the owner out of password login for up to an hour (Google sign-in is unaffected), in return for
+a firm bound on guessing. The client address is read from the platform proxy header (`x-real-ip`, else the first
+`x-forwarded-for` entry), so self-hosting needs a trusted reverse proxy that overwrites those headers; otherwise a client
+can pick its own address key and sidestep the per-address and per-IP limits. Counting happens before the bcrypt check; bodies over 16 KB are refused.
 
 ### Export and navigation links
 

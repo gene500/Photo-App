@@ -1,7 +1,7 @@
 import type { Session } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { authOptions, authorizeCredentials } from "./auth";
+import { authOptions, authorizeCredentials, LOGIN_EMAIL_CEILING } from "./auth";
 import { clearAllLimits } from "./rate-limit";
 import * as users from "./users";
 import { clearSessionVersionCache, createUser, revokeAllSessions } from "./users";
@@ -148,6 +148,22 @@ describe("auth", () => {
           verify.mockRestore();
         }
       });
+
+      it("a hard ceiling of failures per email refuses every address, clean ones too", async () => {
+        const verify = vi.spyOn(users, "verifyCredentials").mockResolvedValue(null);
+        try {
+          for (let a = 0; a < LOGIN_EMAIL_CEILING; a++) {
+            await attempt("nope-nope", `10.${a >> 8}.${a & 255}.1`).catch(() => null);
+          }
+          verify.mockResolvedValue({ id: "u", email: "ann@example.com" });
+          await expect(attempt("correct-horse", "198.51.100.77")).rejects.toThrow("RateLimited");
+          // Other emails are unaffected.
+          expect(await authorizeCredentials({ email: "bob@example.com", password: "ok" }, new Headers({ "x-real-ip": "198.51.100.77" }))).not.toBeNull();
+        } finally {
+          verify.mockRestore();
+        }
+      });
+
     });
 
     it("never runs the password check for a blocked email, and a success resets the count", async () => {

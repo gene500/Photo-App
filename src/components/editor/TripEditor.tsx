@@ -12,7 +12,7 @@ import { prefetchPlacePhotos } from "@/lib/place-photo-cache";
 import { useSuggestionWeather } from "@/lib/use-weather";
 import { holdWeather } from "@/lib/weather-cache";
 import { loadPopularityInBatches, POPULARITY_BATCH, rankSuggestions } from "@/lib/suggestion-popularity";
-import { computeArrivals, computeBestTimes, formatClock } from "@/lib/best-time";
+import { clampToSolarDay, computeArrivals, computeBestTimes, formatClock } from "@/lib/best-time";
 import { useMounted } from "@/lib/use-mounted";
 import { fromTimeValue, toTimeValue } from "./StartTimeControl";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
@@ -404,7 +404,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
           (mustMisses.length ? ` ${mustMisses.join(", ")} ${mustMisses.length === 1 ? "is a must-have" : "are must-haves"}: try fewer stops or a different order.` : "")
         : null;
       // null means no stop has a light preference: leave the departure alone.
-      const nextDepartAt = result.departAt ?? previousDepartAt;
+      // The optimizer's pick is kept on the planned solar day too: the trips API refuses a start time on a neighbouring day.
+      const nextDepartAt = result.departAt ? clampToSolarDay(new Date(result.departAt), trip.plannedDate, before[0].lng).toISOString() : previousDepartAt;
       const orderChanged = ids.join(",") !== startKey;
       const departChanged = !sameInstant(nextDepartAt, previousDepartAt);
       if (!orderChanged && !departChanged) {

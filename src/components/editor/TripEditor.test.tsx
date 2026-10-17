@@ -48,6 +48,7 @@ vi.mock("./StopList", async (importOriginal) => {
 });
 import { api } from "@/lib/api-client";
 import type { Stop, TripWithStops } from "@/lib/types";
+import { solarDateAt } from "@/lib/best-time";
 import { TripEditor } from "./TripEditor";
 
 const trip: TripWithStops = { id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] };
@@ -717,6 +718,19 @@ describe("TripEditor", () => {
         await waitFor(() => expect(api.reorderStops).toHaveBeenLastCalledWith("t1", ["a", "b", "c"]));
         await waitFor(() => expect(screen.queryByRole("button", { name: "Reset to now" })).toBeNull());
         expect((screen.getByLabelText("Start time") as HTMLInputElement).value).toMatch(/^\d{2}:\d{2}$/); // back to now
+      });
+
+      it("never saves a start time outside the planned day: the optimizer's pick is clamped, and the move is announced", async () => {
+        echoTrip();
+        // 2026-07-02 09:00Z is 01:07 on July 2 at -119 degrees: a neighbouring solar day, which the server would refuse.
+        vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], departAt: "2026-07-02T09:00:00.000Z", misses: [] });
+        const user = userEvent.setup();
+        render(<TripEditor initialTrip={trip2(null)} />);
+        await user.click(screen.getByRole("button", { name: "Optimize route" }));
+        await waitFor(() => expect(api.updateTrip).toHaveBeenCalledTimes(1));
+        const sent = vi.mocked(api.updateTrip).mock.calls[0]![1].departAt as string;
+        expect(solarDateAt(new Date(sent), -119)).toBe("2026-07-01");
+        await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toMatch(/^Start time moved to /));
       });
 
       it("keeps an unchanged order but still applies a new departure", async () => {

@@ -377,4 +377,33 @@ describe("mapbox malformed upstream data", () => {
     expect(err.message).toBe("Service temporarily unavailable");
     expect(err.message).not.toMatch(/MAPBOX/);
   });
+
+  describe("upstream name hygiene and field types", () => {
+    it("strips forbidden characters from geocode, suggest and retrieve names", async () => {
+      const f = (n: string) => ({ geometry: { coordinates: [-119, 37] }, properties: { name: n, full_address: n } });
+      expect((await geocode("x", {}, vi.fn(async () => json({ features: [f("Bad\u202E\tName")] }))))[0].name).toBe("BadName");
+      const suggest = vi.fn(async () => json({ suggestions: [{ name: "Vista\u0000\u2066 Point", mapbox_id: "id1" }] }));
+      expect((await searchPlaces("v", { sessionToken: "s" }, suggest))[0].name).toBe("Vista Point");
+      const retrieve = vi.fn(async () => json({ features: [{ geometry: { coordinates: [-119, 37] }, properties: { name: "Pt\u202E", place_formatted: "CA\n" } }] }));
+      expect((await retrievePlace("id1", "s", retrieve)).name).toBe("Pt, CA");
+    });
+    it("does not leave half a surrogate pair when clamping", async () => {
+      const long = "a".repeat(199) + "😀";
+      const retrieve = vi.fn(async () => json({ features: [{ geometry: { coordinates: [-119, 37] }, properties: { name: long } }] }));
+      expect((await retrievePlace("id2", "s", retrieve)).name).toBe("a".repeat(199));
+    });
+    it("ignores non-string Mapbox fields in retrieve and the suggest subtitle, and limits the subtitle", async () => {
+      const retrieve = vi.fn(async () => json({ features: [{ geometry: { coordinates: [-119, 37] }, properties: { name: { x: 1 }, place_formatted: 5 } }] }));
+      const name = (await retrievePlace("id3", "s", retrieve)).name;
+      expect(name).toBeTruthy();
+      expect(name).not.toContain("object");
+      const suggest = vi.fn(async () => json({ suggestions: [
+        { name: "A", mapbox_id: "1", poi_category: [7], place_formatted: { y: 1 } },
+        { name: "B", mapbox_id: "2", poi_category: ["park"], place_formatted: "z".repeat(500) },
+      ] }));
+      const r = await searchPlaces("q", { sessionToken: "s" }, suggest);
+      expect(r[0].subtitle).toBeUndefined();
+      expect(r[1].subtitle!.length).toBeLessThanOrEqual(120);
+    });
+  });
 });

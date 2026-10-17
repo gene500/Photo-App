@@ -196,22 +196,25 @@ describe("signupSchema limits", () => {
 
 describe("name hygiene", () => {
   const okNames = ["Café 日本 trip", "Road 🚗 trip", "👨\u200D👩\u200D👧 family", "東京タワー", "a\u200Db"];
-  const badNames = ["a\u0000b", "tab\tname", "new\nline", "a\u007Fb", "a\u0085b", "evil\u202Ename", "iso\u2066late\u2069", "\u200B\u200C\u200D", "\u2060\uFEFF", " \u200B ", ""];
-  it.each(okNames)("accepts %j", (name) => {
-    expect(tripInputSchema.safeParse({ ...validTrip, name }).success).toBe(true);
-    expect(newStopSchema.safeParse({ name, lat: 1, lng: 1, source: "manual" }).success).toBe(true);
-  });
-  it.each(badNames)("rejects %j in trip, stop and shot text", (name) => {
+  const emptyNames = ["\u200B\u200C\u200D", "\u2060\uFEFF", " \u200B ", "", "\u0000\u202E", "\t\n"];
+  const dirtyNames: [string, string][] = [["a\u0000b", "ab"], ["tab\tname", "tabname"], ["new\nline", "newline"], ["a\u007Fb", "ab"], ["a\u0085b", "ab"], ["evil\u202Ename", "evilname"], ["iso\u2066late\u2069", "isolate"]];
+  it.each(emptyNames)("rejects %j when nothing visible remains", (name) => {
     expect(tripInputSchema.safeParse({ ...validTrip, name }).success).toBe(false);
     expect(stopPatchSchema.safeParse({ name }).success).toBe(false);
     expect(newStopSchema.safeParse({ name, lat: 1, lng: 1, source: "manual" }).success).toBe(false);
     expect(stopPatchSchema.safeParse({ shotChecklist: [{ text: name, done: false }] }).success).toBe(false);
   });
-  it("lets free-text notes keep newlines and tabs but not NUL or other controls", () => {
-    expect(stopPatchSchema.safeParse({ notes: "a\nb\r\n\tc", shotNotes: "x\ny" }).success).toBe(true);
-    expect(stopPatchSchema.safeParse({ notes: "a\u0000b" }).success).toBe(false);
-    expect(stopPatchSchema.safeParse({ shotNotes: "a\u0007b" }).success).toBe(false);
-    expect(newStopSchema.safeParse({ name: "X", lat: 1, lng: 1, source: "manual", notes: "a\u001Bb" }).success).toBe(false);
+  it.each(dirtyNames)("strips forbidden characters from %j instead of rejecting it", (name, clean) => {
+    expect(tripInputSchema.parse({ ...validTrip, name }).name).toBe(clean);
+    expect(stopPatchSchema.parse({ name }).name).toBe(clean);
+    expect(newStopSchema.parse({ name, lat: 1, lng: 1, source: "manual" }).name).toBe(clean);
+    expect(stopPatchSchema.parse({ shotChecklist: [{ text: name, done: false }] }).shotChecklist![0].text).toBe(clean);
+  });
+  it("strips control characters from free text but keeps newlines and tabs", () => {
+    expect(stopPatchSchema.parse({ notes: "a\nb\r\n\tc", shotNotes: "x\ny" })).toEqual({ notes: "a\nb\r\n\tc", shotNotes: "x\ny" });
+    expect(stopPatchSchema.parse({ notes: "a\u0000b" }).notes).toBe("ab");
+    expect(stopPatchSchema.parse({ shotNotes: "a\u0007b" }).shotNotes).toBe("ab");
+    expect(newStopSchema.parse({ name: "X", lat: 1, lng: 1, source: "manual", notes: "a\u001Bb" }).notes).toBe("ab");
     expect(stopPatchSchema.safeParse({ notes: "😀 日本 👨\u200D👩" }).success).toBe(true);
   });
 });
@@ -224,5 +227,21 @@ describe("formatZodError wording", () => {
     expect(formatZodError(many.error!)).toBe("Name must be at least 3 characters");
     const max = z.object({ name: z.string().max(1) }).safeParse({ name: "ab" });
     expect(formatZodError(max.error!)).toBe("Name must be at most 1 character");
+  });
+});
+
+describe("legacy stored text does not block unrelated edits", () => {
+  const legacy = "Old\u202E trip\tname";
+  it("lets a date change resend a legacy trip name", () => {
+    const r = tripPatchSchema.safeParse({ name: legacy, plannedDate: "2026-07-01" });
+    expect(r.success && r.data.name).toBe("Old tripname");
+  });
+  it("lets a shot be ticked when another checklist item holds a legacy character", () => {
+    const r = stopPatchSchema.safeParse({ shotChecklist: [{ text: "Wide\u0007 shot", done: true }, { text: "Tele", done: false }] });
+    expect(r.success && r.data.shotChecklist).toEqual([{ text: "Wide shot", done: true }, { text: "Tele", done: false }]);
+  });
+  it("lets an undo resend a legacy stop name", () => {
+    const r = stopPatchSchema.safeParse({ name: "Tunnel\u0085 View" });
+    expect(r.success && r.data.name).toBe("Tunnel View");
   });
 });

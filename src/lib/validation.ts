@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isDateOnly } from "./dates";
 import { haversineMeters } from "./geo";
+import { stripNameChars, stripTextChars } from "./text";
 
 // Zod otherwise probes `new Function("")` to JIT its parsers, which a CSP without unsafe-eval reports as a violation
 // in the browser console. In the browser the interpreter path is plenty fast for these small forms.
@@ -12,23 +13,23 @@ export const MAX_DWELL_MINUTES = 480;
 const lat = z.number().min(-90).max(90);
 const lng = z.number().min(-180).max(180);
 
-// Names: no control characters (C0, DEL, C1) and no bidi overrides/isolates, and not made only of zero-width characters.
-const NAME_FORBIDDEN = /[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/;
+// Zero-width characters are legal inside a name (joiners in emoji and some scripts) but do not count as content.
 const ZERO_WIDTH = /[\u200B-\u200D\u2060\uFEFF]/g;
-// Free text may keep \t \n \r but no other control character.
-const TEXT_FORBIDDEN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/;
 
-/** A trimmed one-line name: required (zero-width characters do not count), at most `max` characters, no control characters. */
+/**
+ * A trimmed one-line name: required (zero-width characters do not count) and at most `max` characters.
+ * Control and bidi characters are stripped rather than rejected, so older stored text never blocks an unrelated edit.
+ */
 const nameText = (label: string, max: number) =>
-  z.string().trim()
-    .min(1, `${label} is required`)
-    .refine((v) => v.replace(ZERO_WIDTH, "").trim().length > 0, `${label} is required`)
-    .max(max)
-    .refine((v) => !NAME_FORBIDDEN.test(v), `${label} contains invalid characters`);
+  z.string().transform(stripNameChars).pipe(
+    z.string().trim()
+      .min(1, `${label} is required`)
+      .refine((v) => v.replace(ZERO_WIDTH, "").trim().length > 0, `${label} is required`)
+      .max(max),
+  );
 
-/** Multi-line free text: at most `max` characters, no control characters other than newline, carriage return and tab. */
-const freeText = (label: string, max: number) =>
-  z.string().max(max).refine((v) => !TEXT_FORBIDDEN.test(v), `${label} contains invalid characters`);
+/** Multi-line free text: at most `max` characters; control characters other than newline, carriage return and tab are stripped. */
+const freeText = (_label: string, max: number) => z.string().transform(stripTextChars).pipe(z.string().max(max));
 
 export const inYearRange = (ms: number) => {
   const y = new Date(ms).getUTCFullYear();

@@ -1,5 +1,6 @@
 import type { LngLat, Place, RouteResult, SearchSuggestion } from "@/lib/types";
 import { coordsLabel } from "@/lib/geo";
+import { clampText, stripNameChars } from "@/lib/text";
 import { TtlCache } from "../suggestions/cache";
 import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakeRetrieve, fakeReverseGeocode, fakeSearch, isFakeExternal } from "./fake";
 
@@ -135,10 +136,13 @@ type GeocodeResponse = {
 };
 
 const MAX_NAME_LENGTH = 200; // matches newStopSchema's name limit
-const clampName = (name: string) => name.slice(0, MAX_NAME_LENGTH);
+const MAX_SUBTITLE_LENGTH = 120;
+/** Drops control and bidi characters (the stop schema would otherwise refuse the name) and cuts without splitting a surrogate pair. */
+const clampName = (name: string) => clampText(stripNameChars(name), MAX_NAME_LENGTH).trim();
+const str = (v: unknown): string => (typeof v === "string" ? v : "");
 /** The first usable name: Mapbox fields of the wrong type are skipped. */
 const pickName = (p: { full_address?: unknown; name?: unknown } | undefined, fallback: string) =>
-  clampName([p?.full_address, p?.name].find((n): n is string => typeof n === "string" && n !== "") ?? fallback);
+  [p?.full_address, p?.name].map((n) => (typeof n === "string" ? clampName(n) : "")).find((n) => n !== "") ?? clampName(fallback);
 
 export type GeocodeOptions = { proximity?: { lat: number; lng: number } };
 
@@ -219,9 +223,10 @@ export async function searchPlaces(query: string, options: SearchOptions, fetchI
     .filter((s) => s && typeof s.name === "string" && s.name && typeof s.mapbox_id === "string" && s.mapbox_id)
     .sort((a, b) => Number(a.feature_type !== "poi") - Number(b.feature_type !== "poi"))
     .map((s) => {
-      const subtitle = [Array.isArray(s.poi_category) ? s.poi_category[0] : undefined, s.place_formatted].filter(Boolean).join(" · ");
+      const subtitle = clampText(stripNameChars([Array.isArray(s.poi_category) ? str(s.poi_category[0]) : "", str(s.place_formatted)].filter(Boolean).join(" · ")), MAX_SUBTITLE_LENGTH).trim();
       return { name: clampName(s.name!), ...(subtitle ? { subtitle } : {}), mapboxId: s.mapbox_id! };
-    });
+    })
+    .filter((r) => r.name !== "");
   searchCache.set(cacheKey, results);
   return results;
 }
@@ -242,8 +247,9 @@ export async function retrievePlace(id: string, sessionToken: string, fetchImpl:
   const f = body?.features?.[0];
   const coords = f?.geometry?.coordinates;
   if (!ok || !f || !isLngLat(coords)) throw new ExternalServiceError("Place lookup failed. Please try again.");
-  const { name, place_formatted: region, full_address: address, feature_type: type } = f.properties ?? {};
-  const full = type === "address" && address ? address : [name, region].filter(Boolean).join(", ");
+  const props: Record<string, unknown> = f.properties ?? {};
+  const [name, region, address] = [props.name, props.place_formatted, props.full_address].map((v) => clampName(str(v)));
+  const full = props.feature_type === "address" && address ? address : [name, region].filter(Boolean).join(", ");
   const place = { name: clampName(full || coordsLabel({ lng: coords[0], lat: coords[1] })), lng: coords[0], lat: coords[1] };
   retrieveCache.set(id, place);
   return place;

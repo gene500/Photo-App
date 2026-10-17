@@ -56,7 +56,8 @@ window. There is no map offline (Mapbox terms forbid storing tiles) and no drive
 Copies are cleared on sign-out and whenever a different user signs in on the device. They are stored as plaintext
 in localStorage until then (anyone with access to the browser profile can read them), so sign out on a shared device;
 sign-out also switches saving off so a pending autosave cannot bring a copy back, and the login page wipes any leftovers.
-Sign-out is refused while the device is offline (with a message to reconnect first), because it could not end the session on the server; nothing is cleared in that case.
+Sign-out is refused while the device is offline (with a message to reconnect first), because it could not end the session on the server; nothing is cleared in that case. The same holds when the server does not confirm the sign-out (an error answer): the copies stay and the button can be pressed again. Delete account, sign out on all devices and change password finish with the same awaited sign-out and show an error with a retry if it fails.
+A save that does not fit the browser's storage first measures the free room and only then drops the oldest other copies it needs; if even that cannot make room, nothing is deleted.
 
 `public/sw.js` is a minimal service worker (registered at scope `/` in production builds, or in dev with
 `NEXT_PUBLIC_SW=1`, which the e2e server sets). It caches only the static `/offline` page and `/_next/static` and
@@ -112,7 +113,7 @@ Matrix API allows at most 25 coordinates per request, which matches the app's
 ### Light-aware optimization
 
 Each stop has a **Best light** (Any, Sunrise, Golden hour, Sunset; default Any) and
-a **Time here** in minutes (0-480, default 30), both edited in the stop drawer.
+a **Time here** in minutes (0-480, default 30), both edited in the stop drawer. Escape closes the drawer; with unsaved edits it asks first (Discard edits / Keep editing) instead of throwing them away.
 Stops added from a viewpoint or peak suggestion start as Golden hour; attractions
 and manual stops start as Any. When any stop has a preference, **Optimize route**
 chooses the visiting order *and* the departure time (`src/lib/optimize-schedule.ts`):

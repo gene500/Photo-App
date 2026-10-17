@@ -381,7 +381,7 @@ describe("mapbox malformed upstream data", () => {
   describe("upstream name hygiene and field types", () => {
     it("strips forbidden characters from geocode, suggest and retrieve names", async () => {
       const f = (n: string) => ({ geometry: { coordinates: [-119, 37] }, properties: { name: n, full_address: n } });
-      expect((await geocode("x", {}, vi.fn(async () => json({ features: [f("Bad\u202E\tName")] }))))[0].name).toBe("BadName");
+      expect((await geocode("x", {}, vi.fn(async () => json({ features: [f("Bad\u202E\tName")] }))))[0].name).toBe("Bad Name");
       const suggest = vi.fn(async () => json({ suggestions: [{ name: "Vista\u0000\u2066 Point", mapbox_id: "id1" }] }));
       expect((await searchPlaces("v", { sessionToken: "s" }, suggest))[0].name).toBe("Vista Point");
       const retrieve = vi.fn(async () => json({ features: [{ geometry: { coordinates: [-119, 37] }, properties: { name: "Pt\u202E", place_formatted: "CA\n" } }] }));

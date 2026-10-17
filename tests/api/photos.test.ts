@@ -17,10 +17,11 @@ import { prisma } from "@/server/db";
 import { addStop, deleteStop, getOwnedStop } from "@/server/stops";
 import { createTrip } from "@/server/trips";
 import { MAX_PHOTO_BYTES } from "@/lib/photo-rules";
+import { jpegWithGps, tinyPng } from "../helpers/images";
 import { createTestUser, resetDb, sampleTripInput } from "../helpers/db";
 import { idParams } from "../helpers/requests";
 
-const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+const PNG = tinyPng();
 const signInAs = (id: string | null) => vi.mocked(getCurrentUserId).mockResolvedValue(id);
 const fileOnDisk = (photoUrl: string) => existsSync(path.join(process.env.UPLOAD_DIR!, path.basename(photoUrl)));
 
@@ -75,6 +76,23 @@ describe("photo routes", () => {
     const res = await upload(stopId, new File(["hello"], "notes.txt", { type: "text/plain" }));
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "Photo must be a JPEG, PNG, or WebP image" });
+  });
+
+  it("stores a JPEG without its EXIF/GPS block", async () => {
+    const res = await upload(stopId, new File([jpegWithGps()], "gps.jpg", { type: "image/jpeg" }));
+    expect(res.status).toBe(200);
+    const { stop } = await res.json();
+    const stored = Buffer.from(await uploadGET(new Request(`http://localhost${stop.photoUrl}`), idParams(path.basename(stop.photoUrl), "name")).then((r) => r.arrayBuffer()));
+    expect(stored.includes("GPSLatitude")).toBe(false);
+    expect(stored.includes("Exif")).toBe(false);
+    expect(stored.length).toBeLessThan(jpegWithGps().length);
+  });
+
+  it("rejects a file that has image magic bytes but no valid structure", async () => {
+    const res = await upload(stopId, new File([PNG.slice(0, 8)], "cut.png", { type: "image/png" }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/damaged|valid image/);
+    expect((await getOwnedStop(userId, stopId))!.photoUrl).toBeNull();
   });
 
   it("rejects an oversized image", async () => {

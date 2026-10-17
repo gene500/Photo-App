@@ -4,6 +4,7 @@ import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { checkPhotoFile, type PhotoType } from "@/lib/photo-rules";
 import { prisma } from "./db";
+import { sanitizePhoto } from "./photo-sanitize";
 
 export const PHOTO_URL_PREFIX = "/api/uploads/";
 
@@ -29,16 +30,19 @@ export function sniffImageType(bytes: Uint8Array): PhotoType | null {
   return null;
 }
 
-export type PhotoCheck = { ok: true; type: PhotoType } | { ok: false; error: string };
+/** `bytes` is the cleaned file to store: structure checked, size limits applied, EXIF/GPS and other metadata removed. */
+export type PhotoCheck = { ok: true; type: PhotoType; bytes: Uint8Array } | { ok: false; error: string };
 
 export function validatePhoto(file: { type: string; size: number }, bytes: Uint8Array): PhotoCheck {
-  const error = checkPhotoFile(file);
+  const error = checkPhotoFile({ type: file.type, size: bytes.length });
   if (error) return { ok: false, error };
   const sniffed = sniffImageType(bytes);
   if (!sniffed || sniffed !== file.type) {
     return { ok: false, error: "File contents don't match an allowed image type" };
   }
-  return { ok: true, type: sniffed };
+  const clean = sanitizePhoto(bytes, sniffed);
+  if (!clean.ok) return clean;
+  return { ok: true, type: sniffed, bytes: clean.bytes };
 }
 
 export async function savePhoto(bytes: Uint8Array, type: PhotoType): Promise<string> {

@@ -74,6 +74,14 @@ OpenStreetMap or Mapbox are cleaned the same way and cut to the limit without sp
 cleaned rather than refused, an older stored value with such a character never blocks an unrelated edit. Helpers live in
 `src/lib/text.ts`.
 
+### Reference photo uploads
+
+The server walks each JPEG, PNG or WebP file (`src/server/photo-sanitize.ts`, no image library): the contents must match
+the declared type and have a valid structure, and a side over 12000 px or more than 50 megapixels is refused. Metadata is
+dropped before the file is stored: EXIF (including GPS), XMP, IPTC, comments, PNG text/time chunks and anything after the
+end of the image. Pixels are copied, not re-encoded. A JPEG keeps only its EXIF orientation so a rotated phone photo still
+shows upright.
+
 ### Place search
 
 The search bar finds landmarks, viewpoints and other points of interest by name ("Horseshoe Bend", "Griffith Observatory"), plus towns and addresses. It uses the Mapbox Search Box API: `GET /api/geocode?q&session[&proximity]` calls `suggest` (5 results, `types=poi,address,place,locality,neighborhood`) and answers `{ suggestions: [{ name, subtitle?, mapboxId?, lat?, lng? }] }`, points of interest first (stable, Mapbox's order is kept within a group). Suggestions carry no coordinates, so picking one calls `GET /api/geocode/retrieve?id&session`, which answers `{ place }` named like "Horseshoe Bend, Page, Arizona". The client makes one uuid `session` per search (shared by every suggest and the retrieve, which Mapbox bills as one) and renews it after a pick or when the search is cleared. If `suggest` fails, the old v6 forward geocoder answers instead and its rows already carry `lat`/`lng`, so no retrieve is needed. Both routes need sign-in, are rate limited (`geocode`, `geocode-retrieve`, 60/min) and cache for 10 minutes. In fake mode `suggest` returns canned landmarks that match the query plus the old fake address.

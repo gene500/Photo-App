@@ -18,6 +18,8 @@ export function toTimeValue(iso: string | null): string {
  * The instant for `time` ("HH:MM", read in the viewer's time zone) that falls on the trip's day ("YYYY-MM-DD") where the
  * trip is: with `lng` the day is the solar day at that longitude (as for best times), so a viewer in another time zone
  * cannot move the trip to the neighbouring day. Without `lng` it is the viewer's own calendar day. Null when invalid.
+ * On a daylight-saving change day a clock time that does not exist (the spring-forward gap) moves forward by the jump
+ * (02:30 becomes 03:30) and an ambiguous one (fall back) is the first of the two, as the Date constructor defines.
  */
 export function fromTimeValue(plannedDate: string, time: string, lng?: number): string | null {
   const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(plannedDate);

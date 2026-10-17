@@ -4,6 +4,7 @@ vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
 import { getCurrentUserId } from "@/server/session";
 import { GET as listGET, POST } from "@/app/api/trips/route";
 import { DELETE, GET, PATCH } from "@/app/api/trips/[id]/route";
+import { prisma } from "@/server/db";
 import { createTestUser, resetDb, sampleTripInput } from "../helpers/db";
 import { idParams, jsonRequest } from "../helpers/requests";
 
@@ -63,18 +64,19 @@ describe("trip routes", () => {
 
   it("moves a saved departure with the date, but keeps an explicit one sent together", async () => {
     const trip = await createViaApi();
-    const dep = "2026-08-01T13:00:00.000Z";
+    const dep = "2026-07-01T13:00:00.000Z";
     await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { departAt: dep }), idParams(trip.id));
     const moved = await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { plannedDate: "2026-09-01" }), idParams(trip.id));
     const days = (Date.parse("2026-09-01") - Date.parse(sampleTripInput.plannedDate)) / 86_400_000;
     expect((await moved.json()).trip.departAt).toBe(new Date(Date.parse(dep) + days * 86_400_000).toISOString());
-    const both = await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { plannedDate: "2026-09-02", departAt: dep }), idParams(trip.id));
-    expect((await both.json()).trip.departAt).toBe(dep);
+    const both = await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { plannedDate: "2026-09-02", departAt: "2026-09-02T13:00:00.000Z" }), idParams(trip.id));
+    expect((await both.json()).trip.departAt).toBe("2026-09-02T13:00:00.000Z");
   });
 
   it("drops a start time that the date change would push outside the allowed years", async () => {
-    const created = await POST(jsonRequest("POST", "/api/trips", { ...sampleTripInput, plannedDate: "1970-01-01", departAt: "2200-12-31T23:00:00.000Z" }));
-    const trip = (await created.json()).trip;
+    // An old row whose start time no longer matches its day (the API now refuses to save one) must still be editable.
+    const trip = await createViaApi();
+    await prisma.trip.update({ where: { id: trip.id }, data: { plannedDate: new Date("1970-01-01T00:00:00Z"), departAt: new Date("2200-12-31T23:00:00.000Z") } });
     const res = await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { plannedDate: "2200-12-31" }), idParams(trip.id));
     expect(res.status).toBe(200);
     expect((await res.json()).trip.departAt).toBeNull();
@@ -82,12 +84,22 @@ describe("trip routes", () => {
 
   it("keeps the start time when a rename re-sends the same date", async () => {
     const trip = await createViaApi();
-    const dep = "2026-08-01T13:00:00.000Z";
+    const dep = "2026-07-01T13:00:00.000Z";
     await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { departAt: dep }), idParams(trip.id));
     const res = await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { name: "Renamed", plannedDate: sampleTripInput.plannedDate }), idParams(trip.id));
     const body = (await res.json()).trip;
     expect(body.name).toBe("Renamed");
     expect(body.departAt).toBe(dep);
+  });
+
+  it("answers 400 with a clear message for a start time on another day, on create and update", async () => {
+    const created = await POST(jsonRequest("POST", "/api/trips", { ...sampleTripInput, departAt: "2026-07-09T13:00:00.000Z" }));
+    expect(created.status).toBe(400);
+    expect((await created.json()).error).toMatch(/planned day \(2026-07-01\)/);
+    const trip = await createViaApi();
+    const res = await PATCH(jsonRequest("PATCH", `/api/trips/${trip.id}`, { departAt: "2026-07-09T13:00:00.000Z" }), idParams(trip.id));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/planned day/);
   });
 
   it("deletes a trip (204), after which it is gone", async () => {

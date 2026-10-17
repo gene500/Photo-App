@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakePlacePhoto, fakeSuggestions, isFakeExternal } from "./fake";
+import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakePlacePhoto, fakeRetrieve, fakeSearch, fakeSuggestions, isFakeExternal } from "./fake";
 
 describe("fake externals", () => {
   afterEach(() => {
@@ -60,5 +60,18 @@ describe("fakePlacePhoto", () => {
     expect(a.url.length).toBeLessThan(1200);
     expect(a).toMatchObject({ title: "Fake Peak", credit: "Photo: Wikipedia" });
     expect(fakePlacePhoto({ name: "Other" }).url).not.toBe(a.url);
+  });
+});
+
+describe("fakeSearch / fakeRetrieve", () => {
+  it("matches canned landmarks by name and appends the fake address", () => {
+    const out = fakeSearch("griffith");
+    expect(out.map((s) => s.name)).toEqual(["Griffith Observatory", "griffith (fake)"]);
+    expect(fakeSearch("Alpha Town")).toEqual([expect.objectContaining({ name: "Alpha Town (fake)", lat: expect.any(Number) })]);
+  });
+  it("retrieves deterministic coordinates and rejects unknown ids", () => {
+    const [bend] = fakeSearch("Horseshoe Bend");
+    expect(fakeRetrieve(bend.mapboxId!)).toEqual({ name: "Horseshoe Bend, Page, Arizona", lat: 36.8791, lng: -111.51 });
+    expect(fakeRetrieve("nope")).toBeNull();
   });
 });

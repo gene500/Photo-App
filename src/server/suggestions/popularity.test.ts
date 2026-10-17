@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Suggestion } from "@/lib/types";
-import { cachedCounter, enrichPopularity, POPULARITY_CONCURRENCY, POPULARITY_MAX_CANDIDATES, resetSharedCounter } from "./popularity";
+import { COUNT_CACHE_MAX, cachedCounter, enrichPopularity, POPULARITY_CONCURRENCY, POPULARITY_MAX_CANDIDATES, resetSharedCounter } from "./popularity";
 
 const s = (id: number, kind: Suggestion["kind"] = "viewpoint"): Suggestion => ({ osmId: `node/${id}`, name: `S${id}`, lat: 37, lng: -119, kind });
 const idOf = (x: Suggestion) => x.osmId.replace("node/", "");
@@ -127,6 +127,20 @@ describe("cachedCounter", () => {
     t += 24 * 3600_000 + 1;
     await cached(place, fetch);
     expect(count).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe("cachedCounter size bound", () => {
+  it("remembers at most COUNT_CACHE_MAX places, dropping the oldest first", async () => {
+    const count = vi.fn(async () => 1);
+    const cached = cachedCounter(count);
+    const at = (i: number) => ({ osmId: "", name: "", kind: "viewpoint" as const, lat: 10 + (i % 1000) * 0.01, lng: -100 + Math.floor(i / 1000) * 0.01 });
+    for (let i = 0; i < COUNT_CACHE_MAX + 1; i++) await cached(at(i), fetch);
+    expect(count).toHaveBeenCalledTimes(COUNT_CACHE_MAX + 1);
+    await cached(at(COUNT_CACHE_MAX), fetch); // newest: still cached
+    expect(count).toHaveBeenCalledTimes(COUNT_CACHE_MAX + 1);
+    await cached(at(0), fetch); // oldest: evicted
+    expect(count).toHaveBeenCalledTimes(COUNT_CACHE_MAX + 2);
   });
 });
 

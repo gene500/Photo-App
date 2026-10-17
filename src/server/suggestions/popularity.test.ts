@@ -45,7 +45,7 @@ describe("enrichPopularity", () => {
       active--;
       return 1;
     });
-    const out = await enrichPopularity(Array.from({ length: 45 }, (_, i) => s(i)), { count });
+    const out = await enrichPopularity(Array.from({ length: 45 }, (_, i) => s(i)), { count, notable: async () => undefined });
     expect(count).toHaveBeenCalledTimes(POPULARITY_MAX_CANDIDATES);
     expect(peak).toBe(POPULARITY_CONCURRENCY);
     expect(out).toHaveLength(45);
@@ -58,7 +58,7 @@ describe("enrichPopularity", () => {
       if (x.osmId === "node/2") return NaN;
       return 7;
     });
-    const out = await enrichPopularity([s(1), s(2), s(3)], { count });
+    const out = await enrichPopularity([s(1), s(2), s(3)], { count, notable: async () => undefined });
     expect(out.map((x) => x.popularity)).toEqual([7, undefined, undefined]);
     expect(await enrichPopularity([], { count })).toEqual([]);
   });
@@ -99,7 +99,7 @@ describe("enrichPopularity budget", () => {
     const list = [{ id: "a", kind: "viewpoint", name: "A", lat: 1, lng: 1 }] as never[];
     const slow = () => new Promise<number>((r) => setTimeout(() => r(9), 300));
     const t0 = Date.now();
-    const out = await enrichPopularity(list, { count: slow, budgetMs: 30 });
+    const out = await enrichPopularity(list, { count: slow, notable: async () => undefined, budgetMs: 30 });
     expect(Date.now() - t0).toBeLessThan(250);
     expect((out[0] as { popularity?: number }).popularity).toBeUndefined();
   });

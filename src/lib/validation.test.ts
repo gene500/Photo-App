@@ -196,6 +196,10 @@ describe("signupSchema limits", () => {
 
 describe("name hygiene", () => {
   const okNames = ["Café 日本 trip", "Road 🚗 trip", "👨\u200D👩\u200D👧 family", "東京タワー", "a\u200Db"];
+  it.each(okNames)("accepts %j", (name) => {
+    expect(tripInputSchema.safeParse({ ...validTrip, name }).success).toBe(true);
+    expect(newStopSchema.safeParse({ name, lat: 1, lng: 1, source: "manual" }).success).toBe(true);
+  });
   const emptyNames = ["\u200B\u200C\u200D", "\u2060\uFEFF", " \u200B ", "", "\u0000\u202E", "\t\n"];
   const dirtyNames: [string, string][] = [["a\u0000b", "ab"], ["tab\tname", "tabname"], ["new\nline", "newline"], ["a\u007Fb", "ab"], ["a\u0085b", "ab"], ["evil\u202Ename", "evilname"], ["iso\u2066late\u2069", "isolate"]];
   it.each(emptyNames)("rejects %j when nothing visible remains", (name) => {

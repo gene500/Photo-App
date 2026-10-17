@@ -16,7 +16,7 @@ vi.mock("@/lib/itinerary-download", () => ({
 }));
 
 const stop = (order: number, name: string, extra: Partial<PublicTrip["stops"][number]> = {}): PublicTrip["stops"][number] => ({
-  order, name, lat: 36 + order * 0.3, lng: -120, notes: null, source: "manual", visited: false, lightPref: "any", dwellMinutes: 30,
+  order, name, lat: 36 + order * 0.3, lng: -120, source: "manual", visited: false, lightPref: "any", dwellMinutes: 30,
   shotNotes: null, shotChecklist: [], priority: "normal", ...extra,
 });
 
@@ -25,20 +25,20 @@ const trip: PublicTrip = {
   plannedDate: "2026-07-01",
   departAt: null,
   stops: [
-    stop(0, "First view", { notes: "Park by the gate" }),
+    stop(0, "First view", { ...({ notes: "Park by the gate" } as object) }),
     stop(1, "Second view", { shotNotes: "Use a polarizer", shotChecklist: [{ text: "Wide shot", done: true }, { text: "Detail", done: false }], lightPref: "sunset" }),
   ],
 };
 
 describe("SharedTripView", () => {
-  it("shows the trip read-only: name, numbered stops, notes and shot list, a pin per stop", () => {
+  it("shows the trip read-only: name, numbered stops and shot list but never private notes, a pin per stop", () => {
     render(<SharedTripView trip={trip} />);
     expect(screen.getByRole("heading", { name: "Coast run" })).toBeTruthy();
     expect(screen.getByText(/view only/i)).toBeTruthy();
     const rows = screen.getAllByTestId("shared-stop");
     expect(rows).toHaveLength(2);
     expect(rows[0]!.textContent).toContain("First view");
-    expect(rows[0]!.textContent).toContain("Park by the gate");
+    expect(document.body.textContent).not.toContain("Park by the gate");
     expect(rows[1]!.textContent).toContain("Use a polarizer");
     expect(rows[1]!.textContent).toContain("Wide shot");
     expect(screen.getByRole("button", { name: "Stop 2: Second view" })).toBeTruthy();
@@ -115,6 +115,15 @@ describe("SharedTripView Download PDF", () => {
     expect(arg.input.routeLine).toBeTruthy();
     expect(loadWeatherLines).not.toHaveBeenCalled();
     expect(saveBlob).toHaveBeenCalledWith(blob, "Coast-run-itinerary.pdf");
+  });
+
+  it("keeps private stop notes out of the PDF but includes shot notes", async () => {
+    vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["x"]));
+    render(<SharedTripView trip={trip} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
+    const stops = vi.mocked(createItineraryPdf).mock.calls[0]![0].input.stops;
+    expect(JSON.stringify(stops)).not.toContain("Park by the gate");
+    expect(JSON.stringify(stops)).toContain("Use a polarizer");
   });
 
   it("has no route line when routing was unavailable", async () => {

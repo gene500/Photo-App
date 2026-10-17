@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { HeaderButtonLabel } from "./HeaderButtonLabel";
 import { btnGhost, card } from "@/components/ui/styles";
 import { appleMapsUrls, buildGpx, googleMapsUrl, gpxFileName, type ExportStop } from "@/lib/export";
 import type { LngLat } from "@/lib/types";
@@ -79,11 +80,16 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
         disabled={!enough}
         aria-expanded={open && enough}
         aria-controls={open && enough ? panelId : undefined}
-        title={enough ? undefined : "Add 2 stops to export"}
+        aria-label="Export"
+        title={enough ? "Export" : "Add 2 stops to export"}
         className={`${btnGhost} disabled:opacity-50`}
       >
-        Export
+        <HeaderButtonLabel icon="export">Export</HeaderButtonLabel>
       </button>
+      {/* The menu may have been closed while the PDF was being made; the failure must still be seen. */}
+      {download.error && !(open && enough) && (
+        <p role="alert" className={`absolute right-0 top-full z-20 mt-1 w-56 max-w-full px-3 py-2 text-sm text-danger ${card}`}>{download.error}</p>
+      )}
       {open && enough && (
         <div ref={panelRef} id={panelId} role="group" aria-label="Export trip" className={`absolute right-0 top-full z-20 mt-1 w-56 max-w-full p-1 ${card}`}>
           <button type="button" onClick={downloadGpx} className={item}>Download GPX</button>

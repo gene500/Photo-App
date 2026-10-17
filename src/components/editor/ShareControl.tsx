@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { HeaderButtonLabel } from "./HeaderButtonLabel";
 import { btnGhost, btnPrimary, btnSecondary, card, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { usePopover } from "./use-popover";
@@ -53,12 +54,12 @@ export function ShareControl({ tripId, shareToken, onChange }: Props) {
 
   return (
     <div ref={rootRef} className="shrink-0">
-      <button ref={triggerRef} type="button" onClick={toggle} aria-expanded={open} aria-controls={open ? panelId : undefined} className={btnGhost}>
-        Share
+      <button ref={triggerRef} type="button" onClick={toggle} aria-expanded={open} aria-controls={open ? panelId : undefined} aria-label="Share" title="Share" className={btnGhost}>
+        <HeaderButtonLabel icon="share">Share</HeaderButtonLabel>
       </button>
       {open && (
         <div ref={panelRef} id={panelId} role="group" aria-label="Share trip" className={`absolute right-0 top-full z-20 mt-1 w-72 max-w-full space-y-2 p-3 ${card}`}>
-          <p className="text-sm text-muted">Anyone with the link can view this trip, including stop locations, notes and shot lists (without photos).</p>
+          <p className="text-sm text-muted">Anyone with the link can view this trip, including stop locations and shot lists (without photos or your notes).</p>
           {shareToken ? (
             <>
               <input readOnly aria-label="Share link" value={url} onFocus={(e) => e.currentTarget.select()} className={`${inputClass} !mt-0 text-xs`} />

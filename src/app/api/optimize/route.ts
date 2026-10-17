@@ -1,5 +1,5 @@
 import { enforceLimit } from "@/server/rate-limit";
-import { departureTime } from "@/lib/best-time";
+import { clampToSolarDay, departureTime } from "@/lib/best-time";
 import { optimizeSchedule } from "@/lib/optimize-schedule";
 import { optimizeRequestSchema } from "@/lib/validation";
 import { ExternalServiceError, getDurationMatrix } from "@/server/external/mapbox";
@@ -35,9 +35,11 @@ export const POST = handle(async (req: Request) => {
     // A kept start time stays as saved; a new one is floored to the minute, as the Start time field shows it (sunrise has seconds).
     const keptSaved = departAt !== undefined && result.departAt.getTime() === new Date(departAt).getTime();
     const departMs = keptSaved ? result.departAt.getTime() : Math.floor(result.departAt.getTime() / 60_000) * 60_000;
+    // The trip refuses a start time that is not on its planned (solar) day, so the answer never leaves it (checked at the first stop of the new order).
+    const answerDepartAt = usesLight ? clampToSolarDay(new Date(departMs), date, stops[result.order[0] ?? 0]!.lng).toISOString() : null;
     return Response.json({
       order: result.order,
-      departAt: usesLight ? new Date(departMs).toISOString() : null,
+      departAt: answerDepartAt,
       misses: result.misses
         .map((m) => ({ stopIndex: m.stopIndex, minutes: Math.round(m.minutes), priority: m.priority }))
         .filter((m) => m.minutes > 0),

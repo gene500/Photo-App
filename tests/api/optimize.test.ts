@@ -5,6 +5,7 @@ vi.mock("@/server/external/mapbox", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/external/mapbox")>()),
   getDurationMatrix: vi.fn(),
 }));
+import { solarDateAt } from "@/lib/best-time";
 import { getCurrentUserId } from "@/server/session";
 import { ExternalServiceError, getDurationMatrix } from "@/server/external/mapbox";
 import { POST } from "@/app/api/optimize/route";
@@ -97,6 +98,14 @@ describe("POST /api/optimize", () => {
       const body = await (await post(coords, { plannedDate: "2026-07-01", stops: lights("sunset"), departAt })).json();
       expect(body.misses).toEqual([]);
       expect(body.departAt).not.toBe(departAt);
+    });
+
+    it("never answers with a start time outside the planned solar day", async () => {
+      // A saved start on the next solar day (or one the search could pick there) would be refused when saved to the trip.
+      for (const departAt of ["2026-07-02T09:00:00.000Z", "2026-06-30T12:00:00.000Z"]) {
+        const body = await (await post(coords, { plannedDate: "2026-07-01", stops: lights("sunset"), departAt })).json();
+        expect(solarDateAt(new Date(body.departAt), -119.6)).toBe("2026-07-01");
+      }
     });
 
     it("rejects a malformed departAt", async () => {

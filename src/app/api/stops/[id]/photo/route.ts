@@ -31,7 +31,7 @@ export const POST = handle(async (req: Request, { params }: Ctx) => {
   const check = validatePhoto(file, bytes);
   if (!check.ok) throw new HttpError(400, check.error);
 
-  const photoUrl = await savePhoto(bytes, check.type);
+  const photoUrl = await savePhoto(check.bytes, check.type);
   const swap = await swapStopPhoto(userId, id, stop.photoUrl, photoUrl);
   if (swap.status === "gone") {
     // The stop was deleted while we were saving: don't leave the new file orphaned.

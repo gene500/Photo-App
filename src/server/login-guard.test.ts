@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { loginEmailKey } from "./auth";
 import { guardAuthPost, sanitizeAuthRequest } from "./login-guard";
 import { clearAllLimits, hit } from "./rate-limit";
 
@@ -38,10 +39,19 @@ describe("guardAuthPost", () => {
     expect((await res!.json()).url).toContain("error=RateLimited");
   });
 
-  it("blocks an email with too many failures, whatever the IP", async () => {
-    for (let i = 0; i < 8; i++) hit("login-email-failures", "victim@b.c");
-    expect((await guardAuthPost(login("Victim@B.c", { "x-real-ip": "198.51.100.1" })))?.status).toBe(429);
-    expect(await guardAuthPost(login("other@b.c", { "x-real-ip": "198.51.100.1" }))).toBeNull();
+  it("blocks an email with too many failures from that address only", async () => {
+    const ip = { "x-real-ip": "198.51.100.1" };
+    for (let i = 0; i < 8; i++) hit("login-email-failures", loginEmailKey("victim@b.c", "198.51.100.1"));
+    expect((await guardAuthPost(login("Victim@B.c", ip)))?.status).toBe(429);
+    expect(await guardAuthPost(login("victim@b.c", { "x-real-ip": "198.51.100.2" }))).toBeNull();
+    expect(await guardAuthPost(login("other@b.c", ip))).toBeNull();
+  });
+
+  it("past the global email cap refuses addresses with failures, not clean ones", async () => {
+    for (let i = 0; i < 50; i++) hit("login-email-global", "victim@b.c");
+    hit("login-email-failures", loginEmailKey("victim@b.c", "198.51.100.1"));
+    expect((await guardAuthPost(login("victim@b.c", { "x-real-ip": "198.51.100.1" })))?.status).toBe(429);
+    expect(await guardAuthPost(login("victim@b.c", { "x-real-ip": "198.51.100.2" }))).toBeNull();
   });
 
   it("ignores other auth posts (sign-out, csrf)", async () => {
@@ -61,7 +71,7 @@ describe("guardAuthPost", () => {
   );
 
   it("applies the per-email pre-check on an encoded path", async () => {
-    for (let i = 0; i < 8; i++) hit("login-email-failures", "victim@b.c");
+    for (let i = 0; i < 8; i++) hit("login-email-failures", loginEmailKey("victim@b.c", "unknown"));
     expect((await guardAuthPost(login("victim@b.c", {}, "/api/auth/callback/%63redentials")))?.status).toBe(429);
   });
 

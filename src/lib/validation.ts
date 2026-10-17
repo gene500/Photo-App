@@ -29,7 +29,7 @@ const nameText = (label: string, max: number) =>
   );
 
 /** Multi-line free text: at most `max` characters; control characters other than newline, carriage return and tab are stripped. */
-const freeText = (_label: string, max: number) => z.string().transform(stripTextChars).pipe(z.string().max(max));
+const freeText = (max: number) => z.string().transform(stripTextChars).pipe(z.string().max(max));
 
 export const inYearRange = (ms: number) => {
   const y = new Date(ms).getUTCFullYear();
@@ -59,7 +59,7 @@ export const MAX_SHOT_NOTES = 2000;
 export const shotChecklistSchema = z
   .array(z.object({ text: nameText("Shot text", MAX_SHOT_TEXT), done: z.boolean() }))
   .max(MAX_SHOT_ITEMS);
-export const shotNotesSchema = freeText("Shot notes", MAX_SHOT_NOTES);
+export const shotNotesSchema = freeText(MAX_SHOT_NOTES);
 
 export const lightPrefSchema = z.enum(["any", "sunrise", "golden", "sunset"]);
 export const stopPrioritySchema = z.enum(["normal", "high", "must"]);
@@ -76,7 +76,7 @@ export const newStopSchema = z.object({
   lat,
   lng,
   source: z.enum(["manual", "suggested"]),
-  notes: freeText("Notes", 5000).nullable().optional(),
+  notes: freeText(5000).nullable().optional(),
   lightPref: lightPrefSchema.default("any"),
   priority: stopPrioritySchema.default("normal"),
   dwellMinutes: dwellMinutesSchema.default(30),
@@ -88,7 +88,7 @@ export type NewStopInput = z.input<typeof newStopSchema>;
 export const stopPatchSchema = z
   .object({
     name: nameText("Stop name", 200),
-    notes: freeText("Notes", 5000).nullable(),
+    notes: freeText(5000).nullable(),
     visited: z.boolean(),
     lightPref: lightPrefSchema,
     priority: stopPrioritySchema,
@@ -189,7 +189,7 @@ export const suggestionsRequestSchema = z
   .refine((v) => v.radiusKm === undefined || v.around !== undefined, { path: ["radiusKm"], message: "radiusKm only applies to a single point" });
 
 /** Popularity is looked up for at most this many places per request; the client asks in batches. */
-export const POPULARITY_BATCH_SIZE = 10;
+export const POPULARITY_BATCH_SIZE = 5;
 
 export const popularityRequestSchema = z.object({
   places: z.array(z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), name: z.string().max(200).optional() })).min(1).max(POPULARITY_BATCH_SIZE),

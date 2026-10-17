@@ -1,6 +1,6 @@
 import type { Suggestion } from "@/lib/types";
 import { getCommonsPhotoCount } from "../external/commons";
-import { flickrKey, getFlickrPhotoCount } from "../external/flickr";
+import { flickrBudgetLeft, flickrKey, getFlickrPhotoCount } from "../external/flickr";
 import { TtlCache } from "./cache";
 import { rankByScore } from "@/lib/suggestion-rank";
 import { getWikipediaNotable } from "../external/wikipedia-notability";
@@ -14,10 +14,13 @@ export const POPULARITY_BUDGET_MS = 4000;
 type Counter = (s: Suggestion, fetchImpl: typeof fetch) => Promise<number | undefined>;
 type NotableCheck = (s: Suggestion, fetchImpl: typeof fetch) => Promise<boolean | undefined>;
 
-/** Flickr totals when a key is configured (strong signal), else the number of Commons files nearby (weaker, max 50). */
+/**
+ * Flickr totals when a key is configured (strong signal), else the number of Commons files nearby (weaker, max 50).
+ * When the app-wide hourly Flickr budget is spent, Commons answers instead (no error).
+ */
 export function defaultCounter(): Counter {
   return flickrKey()
-    ? (s, f) => getFlickrPhotoCount(s, f, POPULARITY_TIMEOUT_MS)
+    ? async (s, f) => ((await flickrBudgetLeft()) ? getFlickrPhotoCount(s, f, POPULARITY_TIMEOUT_MS) : getCommonsPhotoCount(s, f, POPULARITY_TIMEOUT_MS))
     : (s, f) => getCommonsPhotoCount(s, f, POPULARITY_TIMEOUT_MS);
 }
 

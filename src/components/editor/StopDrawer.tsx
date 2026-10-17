@@ -49,6 +49,7 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onPhotoChange, 
   const [newShot, setNewShot] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
 
   // Modal behaviour: focus moves into the drawer when it opens and goes back to whatever opened it when it closes.
@@ -60,10 +61,19 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onPhotoChange, 
     };
   }, []);
 
+  function keepEditing() {
+    setConfirmDiscard(false);
+    dialogRef.current?.focus(); // the buttons are about to unmount; keep keyboard focus (and Escape) inside the drawer
+  }
+
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key === "Escape") {
       e.stopPropagation();
-      onClose();
+      // Unsaved edits are never dropped by a stray keypress: ask in the page first (a second Escape goes back to editing).
+      if (dirty && !busy) {
+        if (confirmDiscard) keepEditing();
+        else setConfirmDiscard(true);
+      } else onClose();
       return;
     }
     if (e.key !== "Tab") return;
@@ -163,6 +173,15 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onPhotoChange, 
         <h2 className="text-lg font-semibold">Edit stop</h2>
         <button type="button" onClick={onClose} className={btnGhost}>Close</button>
       </div>
+      {confirmDiscard && dirty && (
+        <div role="alert" className="space-y-2 rounded-lg border border-border bg-hover p-3 text-sm">
+          <p>You have unsaved edits. Discard them and close?</p>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className={btnGhost}>Discard edits</button>
+            <button type="button" autoFocus onClick={keepEditing} className={btnPrimary}>Keep editing</button>
+          </div>
+        </div>
+      )}
       <p className="text-xs text-muted">
         {stop.source === "suggested" ? "Suggested from OpenStreetMap" : "Manual pin"} · {stop.lat.toFixed(4)}, {stop.lng.toFixed(4)}
       </p>

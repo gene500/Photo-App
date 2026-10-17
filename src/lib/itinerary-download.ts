@@ -1,4 +1,5 @@
 import { staticMapUrl } from "./static-map";
+import { loadPdfFonts } from "./pdf-fonts";
 import { renderItineraryPdf, type PdfMap } from "./itinerary-pdf";
 import type { ItineraryInput } from "./itinerary";
 import type { LightPref, LngLat } from "./types";
@@ -84,8 +85,12 @@ export async function createItineraryPdf(a: {
   stops: { lat: number; lng: number }[];
   token: string | null;
 }): Promise<Blob> {
-  const map = await loadMapImage(staticMapUrl({ stops: a.stops, geometry: a.geometry, token: a.token }));
-  return renderItineraryPdf(a.input, map, a.geometry, a.stops);
+  // The Unicode font is fetched only here, on click; null (offline, blocked) keeps the built-in fonts.
+  const [map, fonts] = await Promise.all([
+    loadMapImage(staticMapUrl({ stops: a.stops, geometry: a.geometry, token: a.token })),
+    loadPdfFonts(),
+  ]);
+  return renderItineraryPdf(a.input, map, a.geometry, a.stops, fonts);
 }
 
 export function saveBlob(blob: Blob, fileName: string): void {

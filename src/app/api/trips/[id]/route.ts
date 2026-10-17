@@ -2,7 +2,7 @@ import { enforceLimit } from "@/server/rate-limit";
 import { tripPatchSchema } from "@/lib/validation";
 import { handle, HttpError, readJson, requireUserId } from "@/server/http";
 import { deletePhotoFile } from "@/server/photos";
-import { deleteTrip, getTrip, updateTrip } from "@/server/trips";
+import { deleteTrip, DepartAtMismatchError, getTrip, updateTrip } from "@/server/trips";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -19,7 +19,13 @@ export const PATCH = handle(async (req: Request, { params }: Ctx) => {
   enforceLimit("trip-write", userId);
   const { id } = await params;
   const patch = tripPatchSchema.parse(await readJson(req));
-  const trip = await updateTrip(userId, id, patch);
+  let trip;
+  try {
+    trip = await updateTrip(userId, id, patch);
+  } catch (e) {
+    if (e instanceof DepartAtMismatchError) throw new HttpError(400, e.message);
+    throw e;
+  }
   if (!trip) throw new HttpError(404, "Trip not found");
   return Response.json({ trip });
 });

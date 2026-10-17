@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./weather-cache", () => ({ loadForecast: vi.fn(), loadForecastBatch: vi.fn() }));
 
-import { loadMapImage, loadWeatherLines } from "./itinerary-download";
+import { readFileSync } from "node:fs";
+import { createItineraryPdf, loadMapImage, loadWeatherLines, mapTokenFromEnv, saveBlob } from "./itinerary-download";
 import { loadForecast } from "./weather-cache";
 import type { WeatherForecast } from "./types";
 
@@ -106,5 +107,94 @@ describe("loadWeatherLines", () => {
     vi.mocked(loadForecast).mockResolvedValue(forecast);
     const lines = await loadWeatherLines({ stops: [{ lat: 1, lng: 0, lightPref: "any", arrival: day }], unit: "km", timeoutMs: 50 });
     expect(lines[0]).not.toBeNull();
+  });
+});
+
+describe("saveBlob", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("clicks a temporary download link with the file name, removes it, and frees the URL a moment later", () => {
+    vi.useFakeTimers();
+    URL.createObjectURL = vi.fn(() => "blob:fake");
+    URL.revokeObjectURL = vi.fn();
+    const seen: { download: string; href: string; attached: boolean }[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+      seen.push({ download: this.download, href: this.href, attached: document.body.contains(this) });
+    });
+    const blob = new Blob(["x"]);
+    saveBlob(blob, "trip-itinerary.pdf");
+    expect(URL.createObjectURL).toHaveBeenCalledWith(blob);
+    expect(seen).toEqual([{ download: "trip-itinerary.pdf", href: "blob:fake", attached: true }]);
+    expect(document.querySelector("a[download]")).toBeNull();
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1000);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:fake");
+  });
+});
+
+describe("mapTokenFromEnv", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("is the public Mapbox token, or null when unset or empty", () => {
+    vi.stubEnv("NEXT_PUBLIC_MAP_FAKE", "");
+    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", "pk.test-token");
+    expect(mapTokenFromEnv()).toBe("pk.test-token");
+    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", "");
+    expect(mapTokenFromEnv()).toBeNull();
+  });
+
+  it("is null in fake-map mode even when a token is set", () => {
+    vi.stubEnv("NEXT_PUBLIC_MAP_FAKE", "1");
+    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", "pk.test-token");
+    expect(mapTokenFromEnv()).toBeNull();
+  });
+});
+
+describe("createItineraryPdf", () => {
+  const ONE_PX_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const input = { tripName: "Coastal Tripname", dateLine: "Planned for 2026-10-16", startLine: null, routeLine: null, note: null, stops: [{ index: 1, name: "Stopname1", arrival: "9:00 AM", bestLight: null, weather: null, notes: null }] };
+  const stops = [{ lat: 37.7, lng: -122.4 }, { lat: 37.8, lng: -122.2 }];
+  const geometry: [number, number][] = [[-122.4, 37.7], [-122.2, 37.8]];
+  const font = (name: string) => readFileSync(`public/fonts/${name}`);
+  const text = async (b: Blob) => Buffer.from(await b.arrayBuffer()).toString("latin1");
+  const fetchStub = (mapOk: boolean, fontsOk = true) =>
+    vi.fn(async (url: string | URL | Request) => {
+      const u = String(url);
+      if (fontsOk && u.includes("NotoSans-Bold")) return new Response(font("NotoSans-Bold.ttf"));
+      if (fontsOk && u.includes("NotoSans")) return new Response(font("NotoSans-Regular.ttf"));
+      if (mapOk && u.includes("api.mapbox.com")) return new Response(Buffer.from(ONE_PX_PNG, "base64"), { headers: { "content-type": "image/png" } });
+      return new Response("no", { status: 404 });
+    });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("fetches the Mapbox image with the token and the Unicode fonts, and embeds both in the PDF", async () => {
+    const fetchMock = fetchStub(true);
+    vi.stubGlobal("fetch", fetchMock);
+    const s = await text(await createItineraryPdf({ input, geometry, stops, token: "pk.test-token" }));
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.includes("api.mapbox.com") && u.includes("access_token=pk.test-token"))).toBe(true);
+    expect(s.startsWith("%PDF")).toBe(true);
+    expect(s).toContain("/Subtype /Image");
+    expect(s).toContain("/BaseFont /NotoSans");
+  });
+
+  it("without a token asks Mapbox for nothing and draws the map itself", async () => {
+    const fetchMock = fetchStub(true);
+    vi.stubGlobal("fetch", fetchMock);
+    const s = await text(await createItineraryPdf({ input, geometry, stops, token: null }));
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("mapbox"))).toBe(false);
+    expect(s).not.toContain("/Subtype /Image");
+  });
+
+  it("still makes the PDF with built-in fonts and the drawn map when every download fails", async () => {
+    vi.stubGlobal("fetch", fetchStub(false, false));
+    const s = await text(await createItineraryPdf({ input, geometry, stops, token: "pk.test-token" }));
+    expect(s.startsWith("%PDF")).toBe(true);
+    expect(s).not.toContain("/Subtype /Image");
+    expect(s).not.toContain("/BaseFont /NotoSans");
+    expect(s).toContain("/BaseFont /Helvetica");
   });
 });

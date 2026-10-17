@@ -1,4 +1,5 @@
 import type { PlacePhoto } from "@/lib/types";
+import { hitShared } from "../shared-limit";
 import { nameScore } from "./photo-match";
 import { allowedHttpsUrl, photoHeaders, PHOTO_TIMEOUT_MS, type PlaceQuery } from "./photo-http";
 
@@ -22,6 +23,14 @@ const OWNER_ID = /^[0-9A-Za-z@_-]{1,40}$/;
 const PHOTO_ID = /^\d{1,20}$/;
 
 export const flickrKey = (): string | undefined => process.env.FLICKR_API_KEY?.trim() || undefined;
+
+/**
+ * Spends one of the app-wide Flickr calls (3000 per hour across all users, so a free key's 3600/hour is never exhausted
+ * by one busy user). False once spent: callers then use another source instead of failing.
+ */
+export async function flickrBudgetLeft(): Promise<boolean> {
+  return (await hitShared("flickr-app", "all")).ok;
+}
 
 function searchUrl(key: string, place: PlaceQuery, extra: Record<string, string>): string {
   const params = new URLSearchParams({
@@ -53,7 +62,7 @@ type FlickrPhoto = { id?: unknown; owner?: unknown; ownername?: unknown; license
 /** Flickr provider: the most "interesting" reusable-licence photo within 300 m. Skipped silently without FLICKR_API_KEY. */
 export async function getFlickrPhoto(place: PlaceQuery, fetchImpl: typeof fetch = fetch): Promise<PlacePhoto | null> {
   const key = flickrKey();
-  if (!key) return null;
+  if (!key || !(await flickrBudgetLeft())) return null;
   try {
     const url = searchUrl(key, place, {
       radius: "0.3",

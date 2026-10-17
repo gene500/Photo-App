@@ -105,6 +105,31 @@ describe("ExportControl", () => {
     });
   });
 
+  it("still shows the PDF error when the menu was closed while the PDF was being made", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const two = [stop(0), stop(1)];
+    const pdf = { departAt: null, totalDistanceM: 1000, totalDurationS: 600, stops: two.map((s) => ({ ...s, lightPref: "any" as const, arrival: null })) };
+    vi.mocked(loadWeatherLines).mockReset().mockResolvedValue([null, null]);
+    let reject!: (e: Error) => void;
+    vi.mocked(createItineraryPdf).mockReset().mockReturnValue(new Promise<Blob>((_r, rej) => { reject = rej; }));
+    render(<ExportControl tripName="T" stops={two} route={null} pdf={pdf} />);
+    await userEvent.click(screen.getByRole("button", { name: "Export" }));
+    await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("group", { name: "Export trip" })).toBeNull();
+    await act(async () => reject(new Error("boom")));
+    expect(screen.getByRole("alert").textContent).toBe("Could not create the PDF. Try again.");
+  });
+
+  it("has a tooltip (title) on the icon-only button, with a hint when disabled", () => {
+    const two = [stop(1), stop(2)];
+    const { unmount } = render(<ExportControl tripName="T" stops={two} route={null} />);
+    expect(screen.getByRole("button", { name: "Export" }).getAttribute("title")).toBe("Export");
+    unmount();
+    render(<ExportControl tripName="T" stops={[stop(1)]} route={null} />);
+    expect(screen.getByRole("button", { name: "Export" }).getAttribute("title")).toBe("Add 2 stops to export");
+  });
+
   it("is disabled with fewer than 2 stops", () => {
     render(<ExportControl tripName="T" stops={[stop(0)]} route={null} />);
     expect((screen.getByRole("button", { name: "Export" }) as HTMLButtonElement).disabled).toBe(true);

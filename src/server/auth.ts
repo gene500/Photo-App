@@ -1,24 +1,66 @@
 import type { NextAuthOptions, Session } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
-import { hitShared, resetShared } from "./shared-limit";
+import { createHash } from "node:crypto";
+import { clientIp } from "./rate-limit";
+import { hitShared, isBlockedShared, peekShared, resetShared } from "./shared-limit";
 import { EMAIL_IN_USE, findOrCreateGoogleUser, getSessionVersion, verifyCredentials } from "./users";
 
 export const RATE_LIMITED = "RateLimited";
 
+/** Failure-counter key: the email plus a hash of the client address, so one address's failures stay with that address. */
+export const loginEmailKey = (email: string, ip: string) =>
+  `${email}|${createHash("sha256").update(ip).digest("hex").slice(0, 16)}`;
+
+/**
+ * Failures per hour (all addresses) after which an email refuses every login attempt until the window clears. Far above
+ * normal use, so guesses against one account are bounded by the per-IP limit plus this ceiling. Trade-off: an attacker
+ * who reaches it can lock the real owner out of password login for up to an hour (Google sign-in is unaffected).
+ */
+export const LOGIN_EMAIL_CEILING = 200;
+
+/**
+ * Whether a login for this email from this address must be refused without a password check: the email is over its hard
+ * ceiling (everyone refused), the address is over its own failure limit, or the email is over its global soft limit and
+ * this address has already failed. Below the ceiling an address with no recent failures is not refused by the soft
+ * limit, so the owner's correct password usually works while someone else guesses.
+ */
+export async function loginRefused(email: string, ip: string): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+  if ((await peekShared("login-email-global", email)) >= LOGIN_EMAIL_CEILING) {
+    const over = await isBlockedShared("login-email-global", email);
+    return over.ok ? { ok: false, retryAfter: 3600 } : over;
+  }
+  const pair = loginEmailKey(email, ip);
+  const own = await isBlockedShared("login-email-failures", pair);
+  if (!own.ok) return own;
+  if ((await peekShared("login-email-failures", pair)) === 0) return { ok: true };
+  return isBlockedShared("login-email-global", email);
+}
+
+const headerIp = (headers: Headers | Record<string, unknown> | undefined): string => {
+  if (headers instanceof Headers) return clientIp(headers);
+  const h = new Headers();
+  for (const [k, v] of Object.entries(headers ?? {})) if (typeof v === "string") h.set(k, v);
+  return clientIp(h);
+};
+
 export async function authorizeCredentials(
   credentials: Record<string, string> | undefined,
+  headers?: Headers | Record<string, unknown>,
 ): Promise<{ id: string; email: string } | null> {
   if (!credentials?.email || !credentials.password) return null;
   const key = credentials.email.trim().toLowerCase();
   // No real address is longer; refuse before the limiter so an unbounded string never becomes a key or reaches bcrypt.
   if (key.length > 254) return null;
-  // Per-email throttle. The attempt is counted before the slow password check, so parallel guesses see each other
-  // and cannot all slip past the limit; a successful login clears the count. (The per-IP limit is applied in the
-  // route before NextAuth runs.)
-  if (!(await hitShared("login-email-failures", key)).ok) throw new Error(RATE_LIMITED);
+  const pair = loginEmailKey(key, headerIp(headers));
+  // Per-email-and-address throttle. The attempt is counted before the slow password check, so parallel guesses see
+  // each other and cannot all slip past the limit; a successful login clears the count. (The per-IP limit is applied
+  // in the route before NextAuth runs.) Keying by address means an attacker's failures cannot lock out the real owner.
+  if (!(await loginRefused(key, headerIp(headers))).ok) throw new Error(RATE_LIMITED);
+  if (!(await hitShared("login-email-failures", pair)).ok) throw new Error(RATE_LIMITED);
   const user = await verifyCredentials(credentials.email, credentials.password);
-  if (user) await resetShared("login-email-failures", key);
+  if (user) await resetShared("login-email-failures", pair);
+  else await hitShared("login-email-global", key);
   return user;
 }
 
@@ -54,7 +96,7 @@ export const authOptions: NextAuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      authorize: (credentials) => authorizeCredentials(credentials),
+      authorize: (credentials, req) => authorizeCredentials(credentials, req?.headers),
     }),
     ...(googleConfigured()
       ? [GoogleProvider({ clientId: process.env.GOOGLE_CLIENT_ID!, clientSecret: process.env.GOOGLE_CLIENT_SECRET! })]

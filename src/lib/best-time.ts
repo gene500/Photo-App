@@ -34,6 +34,19 @@ export function solarDateAt(at: Date, lng: number): string {
   return new Date(at.getTime() + lng * 4 * 60_000).toISOString().slice(0, 10);
 }
 
+/**
+ * `at`, or the nearest whole-minute instant on the solar day of `plannedDate` at `lng` when it falls on a neighbouring
+ * day. The trips API refuses a start time that is not on its planned day, and a search (or a stale saved value) can land
+ * just across midnight at high latitude.
+ */
+export function clampToSolarDay(at: Date, plannedDate: string, lng: number): Date {
+  const noon = solarDayAnchor(plannedDate, lng).getTime();
+  const first = Math.ceil((noon - 12 * 3_600_000) / 60_000) * 60_000;
+  const last = Math.floor((noon + 12 * 3_600_000 - 1) / 60_000) * 60_000;
+  const t = at.getTime();
+  return t >= first && t <= last && solarDateAt(at, lng) === plannedDate ? at : new Date(Math.min(Math.max(t, first), last));
+}
+
 export function getSunWindows(lat: number, lng: number, plannedDate: string): SunWindows {
   const t = getTimes(solarDayAnchor(plannedDate, lng), lat, lng);
   return {

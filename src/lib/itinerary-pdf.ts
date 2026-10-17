@@ -1,6 +1,7 @@
 // Draws the itinerary as an A4 PDF with jsPDF (loaded on demand, never at module load).
 
 import { downsampleRoute } from "./downsample";
+import { parseCmap, pdfText, type PdfFonts } from "./pdf-fonts";
 import type { ItineraryInput } from "./itinerary";
 import { STATIC_MAP_HEIGHT, STATIC_MAP_WIDTH } from "./static-map";
 import type { LngLat } from "./types";
@@ -10,18 +11,18 @@ export type PdfMap = { kind: "image"; dataUrl: string } | { kind: "fallback" };
 // Windows-1252 punctuation above U+00FF; jsPDF encodes these to their WinAnsi bytes, so the standard fonts draw them.
 const WIN_ANSI_EXTRA = new Set([..."\u2013\u2014\u2018\u2019\u201c\u201d\u2022\u2026\u20ac\u2122"]);
 
-/** Standard PDF fonts draw Latin-1 plus a few Windows-1252 marks: other characters become `?`, tabs a space, other control characters (except newline) go. */
+/** Standard PDF fonts draw Latin-1 plus a few Windows-1252 marks: each run of other characters becomes one `?`, tabs a space, other control characters (except newline) go. */
 export function pdfSafe(text: string): string {
-  let out = "";
-  for (const ch of text.normalize("NFC")) {
-    const code = ch.codePointAt(0)!;
-    if (ch === "\n") out += ch;
-    else if (ch === "\t") out += " ";
-    else if (WIN_ANSI_EXTRA.has(ch)) out += ch;
-    else if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) continue;
-    else out += code > 0xff ? "?" : ch;
-  }
-  return out;
+  return pdfText(text, (code) => code <= 0xff || WIN_ANSI_EXTRA.has(String.fromCodePoint(code)));
+}
+
+const UNICODE_FAMILY = "NotoSans";
+
+function toBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
 }
 
 const MARGIN = 40;
@@ -45,7 +46,7 @@ function unwrapLongitudes(points: LngLat[]): LngLat[] {
   });
 }
 
-function drawFallbackMap(doc: Doc, x: number, y: number, w: number, h: number, geometry: LngLat[], stops: { lat: number; lng: number }[]) {
+function drawFallbackMap(doc: Doc, family: string, x: number, y: number, w: number, h: number, geometry: LngLat[], stops: { lat: number; lng: number }[]) {
   doc.setFillColor(243, 244, 246);
   doc.setDrawColor(200, 200, 200);
   doc.rect(x, y, w, h, "FD");
@@ -94,7 +95,7 @@ function drawFallbackMap(doc: Doc, x: number, y: number, w: number, h: number, g
     doc.setFillColor(225, 29, 72);
     doc.circle(cx, cy, 8, "F");
     doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(family, "bold");
     doc.text(String(i + 1), cx, cy + 2.8, { align: "center" });
   });
   doc.setTextColor(0, 0, 0);
@@ -106,6 +107,7 @@ export async function renderItineraryPdf(
   map: PdfMap,
   geometry: LngLat[],
   stops: { lat: number; lng: number }[],
+  fonts: PdfFonts | null = null,
 ): Promise<Blob> {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
@@ -115,31 +117,67 @@ export async function renderItineraryPdf(
   const limit = pageH - MARGIN - FOOTER_SPACE;
   let y = MARGIN;
 
-  const wrap = (text: string, width: number): string[] => doc.splitTextToSize(pdfSafe(text), width) as string[];
+  // With the Unicode font only its own gaps become "?"; without it (offline, failed fetch) the WinAnsi rule applies.
+  let family = "helvetica";
+  let safe = pdfSafe;
+  if (fonts) {
+    try {
+      const supported = parseCmap(fonts.regular);
+      const boldSupported = parseCmap(fonts.bold);
+      doc.addFileToVFS("NotoSans-Regular.ttf", toBase64(fonts.regular));
+      doc.addFont("NotoSans-Regular.ttf", UNICODE_FAMILY, "normal");
+      doc.addFileToVFS("NotoSans-Bold.ttf", toBase64(fonts.bold));
+      doc.addFont("NotoSans-Bold.ttf", UNICODE_FAMILY, "bold");
+      if (supported.size === 0 || boldSupported.size === 0) throw new Error("unreadable font");
+      family = UNICODE_FAMILY;
+      safe = (t) => pdfText(t, (c) => supported.has(c) && boldSupported.has(c));
+    } catch {
+      family = "helvetica";
+      safe = pdfSafe;
+    }
+  }
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(24);
+  const wrap = (text: string, width: number): string[] => doc.splitTextToSize(safe(text), width) as string[];
+
+  // A line drawn with its baseline at y needs a little room below it; otherwise it starts the next page.
+  const startFresh = (ascent: number, restore: () => void) => {
+    doc.addPage();
+    y = MARGIN + ascent;
+    restore();
+  };
+  const setTitleFont = () => {
+    doc.setFont(family, "bold");
+    doc.setFontSize(24);
+  };
+  const setInfoFont = (size: number) => () => {
+    doc.setFont(family, "normal");
+    doc.setFontSize(size);
+    doc.setTextColor(GREY);
+  };
+
+  setTitleFont();
   const title = wrap(input.tripName, contentW);
   y += 20;
   for (const line of title) {
+    if (y + 8 > limit) startFresh(20, setTitleFont);
     doc.text(line, MARGIN, y);
     y += 28;
   }
   y -= 8;
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.setTextColor(GREY);
+  setInfoFont(11)();
   for (const line of [input.dateLine, input.startLine, input.routeLine]) {
     if (!line) continue;
     for (const l of wrap(line, contentW)) {
+      if (y + 4 > limit) startFresh(11, setInfoFont(11));
       doc.text(l, MARGIN, y);
       y += 15;
     }
   }
   if (input.note) {
-    doc.setFontSize(10);
+    setInfoFont(10)();
     for (const l of wrap(input.note, contentW)) {
+      if (y + 4 > limit) startFresh(10, setInfoFont(10));
       doc.text(l, MARGIN, y);
       y += 13;
     }
@@ -158,10 +196,10 @@ export async function renderItineraryPdf(
       doc.addImage(map.dataUrl, fmt, MARGIN, y, contentW, mapH);
     } catch {
       // A corrupt image must not lose the whole itinerary: draw the map instead.
-      drawFallbackMap(doc, MARGIN, y, contentW, mapH, geometry, stops);
+      drawFallbackMap(doc, family, MARGIN, y, contentW, mapH, geometry, stops);
     }
   } else {
-    drawFallbackMap(doc, MARGIN, y, contentW, mapH, geometry, stops);
+    drawFallbackMap(doc, family, MARGIN, y, contentW, mapH, geometry, stops);
   }
   y += mapH + 24;
 
@@ -172,13 +210,13 @@ export async function renderItineraryPdf(
 
   for (const s of input.stops) {
     doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    const arrival = pdfSafe(s.arrival);
+    doc.setFont(family, "bold");
+    const arrival = safe(s.arrival);
     const arrivalW = doc.getTextWidth(arrival);
     const heading = wrap(`${s.index}. ${s.name}`, contentW - arrivalW - 12);
 
     doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(family, "normal");
     const details = [s.bestLight, s.weather, s.notes]
       .filter((t): t is string => !!t && t.trim() !== "")
       .map((t) => wrap(t.trim(), contentW - INDENT));
@@ -187,7 +225,7 @@ export async function renderItineraryPdf(
     if (y + headingH + firstDetail > limit) newPage();
 
     doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
+    doc.setFont(family, "bold");
     heading.forEach((l, i) => {
       doc.text(l, MARGIN, y + 11 + i * 15);
     });
@@ -195,14 +233,14 @@ export async function renderItineraryPdf(
     y += headingH + 2;
 
     doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(family, "normal");
     doc.setTextColor(GREY);
     for (const block of details) {
       for (const l of block) {
         if (y + 13 > limit) {
           newPage();
           doc.setFontSize(10);
-          doc.setFont("helvetica", "normal");
+          doc.setFont(family, "normal");
           doc.setTextColor(GREY);
         }
         doc.text(l, MARGIN + INDENT, y + 9);
@@ -217,7 +255,7 @@ export async function renderItineraryPdf(
   const total = doc.getNumberOfPages();
   for (let p = 1; p <= total; p++) {
     doc.setPage(p);
-    doc.setFont("helvetica", "normal");
+    doc.setFont(family, "normal");
     doc.setFontSize(9);
     doc.setTextColor(GREY);
     doc.text(`Page ${p} of ${total}`, pageW / 2, pageH - MARGIN + 6, { align: "center" });

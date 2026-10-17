@@ -112,3 +112,17 @@ describe("antimeridian wrapping", () => {
     expect(cells.has(cellOf(50.05, -179.85))).toBe(true);
   });
 });
+
+describe("a place at exactly longitude 180", () => {
+  it("lands in the same cell as -180 (the grid wraps), so a search across the date line finds it", () => {
+    expect(cellOf(10.05, 180)).toBe(cellOf(10.05, -180));
+    expect(cellOf(10.05, 179.99999999999999)).toBe(cellOf(10.05, -180));
+    expect(cellsForCircle(10.05, 179.98, 5)).toContain(cellOf(10.05, 180));
+    expect(cellsForRing([[179.8, 10], [180.2, 10], [180.2, 10.1], [179.8, 10.1]])).toContain(cellOf(10.05, 180));
+  });
+  it("is computed the same way by the import script", async () => {
+    const { cellOf: scriptCellOf } = await import("../../../scripts/places-cell.mjs");
+    expect(scriptCellOf(10.05, 180)).toBe(cellOf(10.05, 180));
+    expect(scriptCellOf(-17.7, 179.99999999999999)).toBe(cellOf(-17.7, 179.99999999999999));
+  });
+});

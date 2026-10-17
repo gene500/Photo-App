@@ -28,14 +28,21 @@ async function expectPdf(download: Download) {
   const path = await download.path();
   const bytes = readFileSync(path);
   expect(bytes.subarray(0, 4).toString("latin1")).toBe("%PDF");
-  expect(bytes.toString("latin1")).toContain("PDF coast");
+  // The Unicode font is embedded, so the text is glyph ids rather than literal strings.
+  expect(bytes.toString("latin1")).toContain("/BaseFont /NotoSans");
 }
 
 test("editor Export menu downloads the PDF itinerary", async ({ page }) => {
   await signupAndAddStops(page, "e2e-pdf");
+  const fontRequests: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().includes("/fonts/NotoSans")) fontRequests.push(r.url());
+  });
   await page.getByRole("button", { name: "Export", exact: true }).click();
+  expect(fontRequests).toEqual([]); // fetched only on click
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download PDF" }).click()]);
   await expectPdf(download);
+  expect(fontRequests).toHaveLength(2);
 });
 
 test("a stranger downloads the PDF from the share page", async ({ page, browser }) => {

@@ -1,11 +1,12 @@
 import { existsSync, rmSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { tinyPng } from "../../tests/helpers/images";
 import {
   deletePhotoFile, isValidPhotoName, PHOTO_URL_PREFIX, readPhoto, savePhoto, sniffImageType, validatePhoto,
 } from "./photos";
 
-const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+const PNG_BYTES = tinyPng();
 const JPEG_BYTES = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0]);
 const WEBP_BYTES = new TextEncoder().encode("RIFF\0\0\0\0WEBPVP8 ");
 
@@ -24,7 +25,8 @@ describe("photos", () => {
       ok: false,
       error: "File contents don't match an allowed image type",
     });
-    expect(validatePhoto({ type: "image/png", size: 12 }, PNG_BYTES)).toEqual({ ok: true, type: "image/png" });
+    expect(validatePhoto({ type: "image/png", size: PNG_BYTES.length }, PNG_BYTES)).toEqual({ ok: true, type: "image/png", bytes: PNG_BYTES });
+    expect(validatePhoto({ type: "image/png", size: 8 }, PNG_BYTES.slice(0, 8))).toMatchObject({ ok: false });
   });
 
   it("saves, reads back, and deletes a photo", async () => {

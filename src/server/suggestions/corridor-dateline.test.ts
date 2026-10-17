@@ -62,3 +62,17 @@ describe("corridor failures that can never succeed", () => {
     expect(fetchOverpass).not.toHaveBeenCalled();
   });
 });
+
+describe("a route winding around a pole", () => {
+  const ring = (turns: number): LngLat[] =>
+    Array.from({ length: Math.round(turns * 36) + 1 }, (_, i) => {
+      const l = (i * 10) % 360;
+      return [l > 180 ? l - 360 : l, 88] as LngLat;
+    });
+  it("is refused with a CorridorError once it winds past 360 degrees, instead of returning a wrong corridor", () => {
+    for (const turns of [1.2, 2.5]) expect(() => buildCorridorShapes(ring(turns))).toThrow(CorridorError);
+  });
+  it("still builds a corridor for less than a full turn", () => {
+    expect(buildCorridorShapes(ring(0.9)).length).toBeGreaterThan(0);
+  });
+});

@@ -68,7 +68,6 @@ export function toPublicTripDto(row: TripRow & { stops: StopRow[] }): PublicTrip
       name: s.name,
       lat: s.lat,
       lng: s.lng,
-      notes: s.notes,
       source: s.source as StopSource,
       visited: s.visited,
       lightPref: s.lightPref as LightPref,

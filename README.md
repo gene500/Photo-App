@@ -56,7 +56,8 @@ window. There is no map offline (Mapbox terms forbid storing tiles) and no drive
 Copies are cleared on sign-out and whenever a different user signs in on the device. They are stored as plaintext
 in localStorage until then (anyone with access to the browser profile can read them), so sign out on a shared device;
 sign-out also switches saving off so a pending autosave cannot bring a copy back, and the login page wipes any leftovers.
-Sign-out is refused while the device is offline (with a message to reconnect first), because it could not end the session on the server; nothing is cleared in that case.
+Sign-out is refused while the device is offline (with a message to reconnect first), because it could not end the session on the server; nothing is cleared in that case. The same holds when the server does not confirm the sign-out (an error answer): the copies stay and the button can be pressed again. Delete account, sign out on all devices and change password finish with the same awaited sign-out and show an error with a retry if it fails.
+A save that does not fit the browser's storage first measures the free room and only then drops the oldest other copies it needs; if even that cannot make room, nothing is deleted.
 
 `public/sw.js` is a minimal service worker (registered at scope `/` in production builds, or in dev with
 `NEXT_PUBLIC_SW=1`, which the e2e server sets). It caches only the static `/offline` page and `/_next/static` and
@@ -66,12 +67,21 @@ back to `/offline`. `src/app/manifest.ts` makes the app installable; the icons i
 
 ### Name and notes characters
 
-Trip names, stop names and shot-list items are one line: control characters (C0, DEL, C1) and bidi overrides/isolates are
-removed (not rejected) on the server, and a name must keep at least one visible character (zero-width characters alone do
+Trip names, stop names and shot-list items are one line: a tab or newline becomes a single space, and other control
+characters (C0, DEL, C1), bidi marks/overrides/isolates (LRM, RLM, ALM, ...) and U+2028/U+2029 are removed (not
+rejected) on the server, and a name must keep at least one visible character (zero-width characters alone do
 not count). Notes and shot notes keep newlines and tabs but lose other control characters. Names that come from
-OpenStreetMap or Mapbox are cleaned the same way and cut to the limit without splitting a character. Because the text is
+OpenStreetMap or Mapbox are cleaned the same way and cut to the limit without splitting a surrogate pair (an emoji ZWJ sequence can still be cut between its parts). Because the text is
 cleaned rather than refused, an older stored value with such a character never blocks an unrelated edit. Helpers live in
 `src/lib/text.ts`.
+
+### Reference photo uploads
+
+The server walks each JPEG, PNG or WebP file (`src/server/photo-sanitize.ts`, no image library): the contents must match
+the declared type and have a valid structure, and a side over 30000 px or more than 50 megapixels is refused. Metadata is
+dropped before the file is stored: EXIF (including GPS), XMP, IPTC, comments (also those between progressive scans), PNG text/time chunks, unknown WebP chunks (only VP8/VP8L/VP8X/ALPH/ANIM/ANMF/ICCP are kept) and anything after the
+end of the image (a JPEG is cut at its first end-of-image, so an appended second image or a motion-photo video is gone). Pixels are copied, not re-encoded. A JPEG keeps only its EXIF orientation so a rotated phone photo still
+shows upright.
 
 ### Place search
 
@@ -103,7 +113,7 @@ Matrix API allows at most 25 coordinates per request, which matches the app's
 ### Light-aware optimization
 
 Each stop has a **Best light** (Any, Sunrise, Golden hour, Sunset; default Any) and
-a **Time here** in minutes (0-480, default 30), both edited in the stop drawer.
+a **Time here** in minutes (0-480, default 30), both edited in the stop drawer. Escape closes the drawer; with unsaved edits it asks first (Discard edits / Keep editing) instead of throwing them away.
 Stops added from a viewpoint or peak suggestion start as Golden hour; attractions
 and manual stops start as Any. When any stop has a preference, **Optimize route**
 chooses the visiting order *and* the departure time (`src/lib/optimize-schedule.ts`):
@@ -158,16 +168,28 @@ source and visited flag (not the deleted photo) and is forgotten on reload or wh
 
 The **Share** button in the trip header creates a link (`/s/<token>`) anyone can open
 without an account: the map with numbered pins and a straight route line, and the stops
-with notes, shot lists and estimated arrival/light hints. **Revoke link** kills it at
+with shot lists (not the stop notes, which stay private) and estimated arrival/light hints. **Revoke link** kills it at
 once (the URL then 404s); sharing again issues a new token. The token is 32 random
 bytes (43 base64url chars) stored in `Trip.shareToken` (nullable, unique; additive
 migration `20261010120000_share_token`). The public page reads a dedicated sanitized
-DTO (`toPublicTripDto`): no email, user id, database ids or uploaded photos, and it is
+DTO (`toPublicTripDto`): no email, user id, database ids, uploaded photos or stop notes (shot notes and the shot list are shared; the page and its PDF omit `notes`), and it is
 `noindex, nofollow` with `referrer: no-referrer`. `/api/directions` stays login-only, but
 the share page fetches the real driving route on the server (`routeFor` in
 `src/app/s/[token]/page.tsx`); straight lines and distance-based time estimates are only
 the fallback when routing is unavailable. Owner-only API:
 `POST /api/trips/[id]/share` (create or return the existing token) and `DELETE` (revoke).
+
+### Login lockout
+
+Failed logins are counted per email and hashed client address (8 per 15 minutes), so someone guessing a victim's
+password locks out only their own address; the owner can still sign in from elsewhere. A per-IP limit (30 attempts
+per 15 minutes) still applies, and after 50 failures per hour per email only addresses that already failed for it are
+refused. Guesses against one account are therefore bounded by the per-IP limit plus a hard ceiling: at 200 failures per
+hour an email refuses every address (the owner included) until the window clears. That trade-off lets a determined
+distributed attacker lock the owner out of password login for as long as they keep spending about 200 failures per hour (the window is fixed, so they can renew it every hour; Google sign-in is unaffected), in return for
+a firm bound on guessing. The client address is read from the platform proxy header (`x-real-ip`, else the first
+`x-forwarded-for` entry), so self-hosting needs a trusted reverse proxy that overwrites those headers; otherwise a client
+can pick its own address key and sidestep the per-address and per-IP limits. Counting happens before the bcrypt check; bodies over 16 KB are refused.
 
 ### Export and navigation links
 
@@ -185,7 +207,10 @@ trip summary, a Mapbox Static Images map (route and numbered pins; it uses the p
 `NEXT_PUBLIC_MAPBOX_TOKEN`, one request per download, so it counts toward your Mapbox
 usage) and a stop schedule with arrival time, best light, weather (editor only) and notes.
 With no token, in fake-map mode, or when the map request fails (8 s timeout), a drawn
-fallback map is used instead. Characters outside Western European alphabets print as "?".
+fallback map is used instead. The PDF embeds Noto Sans (SIL OFL, `public/fonts/OFL.txt`; about 0.6 MB transferred, fetched only when you click Download PDF), so Latin
+(including Latin Extended and Vietnamese), Cyrillic and Greek names and notes print correctly. Other scripts (Chinese, Japanese, Korean,
+Arabic, Hebrew, Devanagari, Thai, emoji and so on) are not in the font: each run of such characters prints as a single "?". If the font cannot
+be fetched (offline), the PDF is still produced with the built-in fonts, where anything outside Western European alphabets is "?".
 A URL-restricted public token may make the share page's static-map request fail (the page
 sends no Referer); the PDF then falls back to the drawn map. The static map was verified
 against real Mapbox on 2026-10-16 from the editor and the share page with an unrestricted
@@ -230,7 +255,9 @@ After OpenStreetMap candidates are ranked and capped, the first 40 are enriched
 re-ranked within each kind (viewpoint / peak / attraction) by it. The count is
 the Flickr `photos.total` within 250 m when `FLICKR_API_KEY` is set, otherwise
 the number of geotagged Wikimedia Commons files within 250 m (capped at 50, shown
-as "50+"; a weaker signal than Flickr). It shows as a muted "≈N photos nearby" caption
+as "50+"; a weaker signal than Flickr). The route takes at most 5 places per request and 10 requests per minute per
+user; Flickr calls (counts and place photos) share an app-wide budget of 3000 per hour (`flickr-app`), after which
+counts come from Commons and place photos skip Flickr, without an error. It shows as a muted "≈N photos nearby" caption
 on the suggestion card and popup.
 
 The Mapbox `light-v11` basemap is recoloured to the beige theme at runtime
@@ -288,7 +315,7 @@ Google again" (Google's account chooser) and the user retries.
 Each stop's best shooting window is derived, not stored. The trip's
 departure time is assumed to be sunrise at the first stop on the
 trip's planned date unless the trip has a chosen departure (`departAt`,
-set by light-aware optimization); estimated arrival at each stop is that
+set by light-aware optimization; the API refuses a changed one that is not on the planned day at the first stop; a value that equals the stored one, is on the stored one's day, or equals the server's shift of it on a date change is accepted so old off-day rows stay editable, except that a PATCH which also changes the planned date takes only the server's own shift of the stored value or a time on the new day); estimated arrival at each stop is that
 departure plus the cumulative Mapbox Directions leg durations and the
 "time here" minutes (default 30) of every earlier stop. The arrival time is then bucketed
 against that stop's own sunrise/golden-hour/sunset times (computed

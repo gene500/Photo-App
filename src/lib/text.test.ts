@@ -3,8 +3,12 @@ import { clampText, stripNameChars, stripTextChars } from "./text";
 
 describe("text hygiene", () => {
   it("strips control and bidi characters from names but keeps zero-width joiners and emoji", () => {
-    expect(stripNameChars("a\u0000b\tc\nd\u007Fe\u0085f‮g⁦h⁩")).toBe("abcdefgh");
+    expect(stripNameChars("a\u0000b\u007Fe\u0085f‮g⁦h⁩")).toBe("abefgh");
     expect(stripNameChars("👨‍👩 Café 日本")).toBe("👨‍👩 Café 日本");
+  });
+  it("turns tab and newline in names into one space and strips LRM, RLM, ALM and line/paragraph separators", () => {
+    expect(stripNameChars("a\tb\nc\r\nd")).toBe("a b c d");
+    expect(stripNameChars("a\u200Eb\u200Fc\u061Cd\u2028e\u2029f")).toBe("abcdef");
   });
   it("keeps tab, newline and return in free text", () => {
     expect(stripTextChars("a\tb\nc\r\nd\u0007e\u0000")).toBe("a\tb\nc\r\nde");

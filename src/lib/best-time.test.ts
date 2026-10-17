@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  classifyBestTime, computeArrivals, computeBestTimes, describeBestTime, estimateArrivals, formatClock, getSunWindows, solarDayAnchor,
+  classifyBestTime, computeArrivals, computeBestTimes, describeBestTime, estimateArrivals, clampToSolarDay, formatClock, solarDateAt, getSunWindows, solarDayAnchor,
   type SunWindows,
 } from "./best-time";
 
@@ -177,5 +177,27 @@ describe("formatClock time formats", () => {
     expect(formatClock(d, "UTC", "24h")).toBe("19:05");
     expect(formatClock(new Date("2026-07-01T00:07:00Z"), "UTC", "24h")).toBe("00:07");
     expect(describeBestTime({ window: "sunset", at: d }, "UTC", "24h")).toBe("Sunset · 19:05");
+  });
+});
+
+describe("clampToSolarDay", () => {
+  const lng = -119;
+  it("leaves an instant on the planned solar day alone", () => {
+    const t = new Date("2026-07-01T23:15:00Z"); // 15:15 solar
+    expect(clampToSolarDay(t, "2026-07-01", lng)).toBe(t);
+  });
+  it("pulls an instant on a neighbouring solar day to the nearest edge of the planned day, on a whole minute", () => {
+    for (const [iso, side] of [["2026-07-02T09:00:00Z", "end"], ["2026-07-01T05:00:00Z", "start"]] as const) {
+      const c = clampToSolarDay(new Date(iso), "2026-07-01", lng);
+      expect(solarDateAt(c, lng)).toBe("2026-07-01");
+      expect(c.getTime() % 60_000).toBe(0);
+      const solarMinutes = ((c.getTime() + lng * 4 * 60_000) % 86_400_000) / 60_000;
+      if (side === "start") expect(solarMinutes).toBeLessThan(1.5);
+      else expect(solarMinutes).toBeGreaterThan(24 * 60 - 1.5);
+    }
+  });
+  it("works at a longitude whose offset is not a whole number of minutes", () => {
+    const c = clampToSolarDay(new Date("2026-07-05T00:00:00Z"), "2026-07-01", 12.3456);
+    expect(solarDateAt(c, 12.3456)).toBe("2026-07-01");
   });
 });

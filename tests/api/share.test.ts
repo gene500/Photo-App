@@ -123,10 +123,17 @@ describe("public share data", () => {
       plannedDate: "2026-07-01",
       departAt: null,
       stops: [
-        { order: 0, name: "First view", lat: 36, lng: -120.2, notes: "Park by the gate", source: "manual", visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [] },
-        { order: 1, name: "Second view", lat: 36.5, lng: -120, notes: null, source: "suggested", visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: "Use a polarizer", shotChecklist: [{ text: "Wide shot", done: true }] },
+        { order: 0, name: "First view", lat: 36, lng: -120.2, source: "manual", visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [] },
+        { order: 1, name: "Second view", lat: 36.5, lng: -120, source: "suggested", visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: "Use a polarizer", shotChecklist: [{ text: "Wide shot", done: true }] },
       ],
     });
+  });
+
+  it("leaves private stop notes out of the DTO, keeping shot notes", async () => {
+    const { token } = await sharedToken();
+    const dto = await getSharedTrip(token);
+    expect(JSON.stringify(dto)).not.toContain("Park by the gate");
+    expect(JSON.stringify(dto)).toContain("Use a polarizer");
   });
 
   it("the DTO never contains email, userId, photoUrl, ids or the token", async () => {
@@ -140,7 +147,7 @@ describe("public share data", () => {
     expect(Object.keys(dto!).sort()).toEqual(["departAt", "name", "plannedDate", "stops"]);
     for (const s of dto!.stops) {
       expect(Object.keys(s).sort()).toEqual(
-        ["dwellMinutes", "lat", "lightPref", "lng", "name", "notes", "order", "priority", "shotChecklist", "shotNotes", "source", "visited"],
+        ["dwellMinutes", "lat", "lightPref", "lng", "name", "order", "priority", "shotChecklist", "shotNotes", "source", "visited"],
       );
     }
   });
@@ -151,6 +158,7 @@ describe("public share data", () => {
     expect(html).toContain("First view");
     expect(html).toContain("Use a polarizer");
     expect(html).toContain("Wide shot");
+    expect(html).not.toContain("Park by the gate"); // private stop notes are never shared
     for (const secret of [EMAIL, owner.id, trip.id, ...trip.stops.map((s) => s.id), PHOTO, "private-upload", token, "photoUrl", "userId", "<img"]) {
       expect(html).not.toContain(secret);
     }

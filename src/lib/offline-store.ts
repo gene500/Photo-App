@@ -88,50 +88,125 @@ export function saveTripCopy(trip: TripWithStops, now: Date = new Date()): boole
   const payload = JSON.stringify({ savedAt, trip: sanitize(trip) } satisfies TripCopy);
   const entry: TripCopySummary = { id: trip.id, name: trip.name, plannedDate: trip.plannedDate, savedAt, stopCount: trip.stops.length };
   const previous = readIndex(s);
-  const hadEntry = previous.some((e) => e.id === trip.id);
   let index = [entry, ...previous.filter((e) => e.id !== trip.id)].sort((a, b) => b.savedAt.localeCompare(a.savedAt));
   const overCap = index.slice(MAX_COPIES);
   index = index.slice(0, MAX_COPIES);
-  // A full quota is handled quietly: drop the oldest other copies one by one and retry. The stored index is only
-  // rewritten on success, and the dropped payloads are kept so a save that can never fit puts everything back.
-  const dropped: { id: string; raw: string }[] = [];
-  const restore = () => {
-    for (const d of dropped) {
+  const write = (idx: TripCopySummary[]) => {
+    s.setItem(tripKey(trip.id), payload);
+    s.setItem(INDEX_KEY, JSON.stringify(idx));
+  };
+  const ownBefore = safeGet(s, tripKey(trip.id));
+  const indexBefore = safeGet(s, INDEX_KEY);
+  const rollback = () => {
+    // A failed attempt may have written the payload without its index entry: put this trip's slot back as it was (best effort).
+    try {
+      if (ownBefore === null) s.removeItem(tripKey(trip.id));
+      else s.setItem(tripKey(trip.id), ownBefore);
+    } catch {
+      /* nothing more can be done */
+    }
+  };
+  const removeOverCap = () => {
+    for (const e of overCap) {
       try {
-        s.setItem(tripKey(d.id), d.raw);
+        s.removeItem(tripKey(e.id));
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+  // Write first, evict only if that failed: a save that fits never touches the other copies.
+  try {
+    write(index);
+    removeOverCap();
+    return true;
+  } catch {
+    /* quota: see below */
+  }
+  // A full quota is handled quietly, but nothing is deleted unless the new copy is known to fit afterwards. The free
+  // space is measured (a probe write is never a deletion), the oldest other copies are chosen to cover exactly the
+  // shortfall, and if even all of them would not cover it the other copies stay untouched.
+  rollback();
+  const need = tripKey(trip.id).length + payload.length + JSON.stringify(index).length - (ownBefore === null ? 0 : tripKey(trip.id).length + ownBefore.length) - (indexBefore?.length ?? 0) + QUOTA_MARGIN;
+  const free = freeSpace(s, need);
+  if (free === null) return false;
+  const shortfall = need - free;
+  const victims: { id: string; raw: string | null }[] = [];
+  let freed = 0;
+  for (let i = index.length - 1; i >= 0 && freed < shortfall; i--) {
+    const e = index[i];
+    if (e.id === trip.id) continue;
+    const raw = safeGet(s, tripKey(e.id));
+    victims.push({ id: e.id, raw });
+    freed += (raw === null ? 0 : tripKey(e.id).length + raw.length) + JSON.stringify(e).length + 1; // payload plus its index entry
+  }
+  if (freed < shortfall) {
+    rollback();
+    return false;
+  }
+  // Short window between these removals and the write; if the write still fails the removed copies are put back.
+  for (const v of victims) {
+    try {
+      s.removeItem(tripKey(v.id));
+    } catch {
+      /* ignore */
+    }
+  }
+  const gone = new Set(victims.map((v) => v.id));
+  try {
+    write(index.filter((e) => !gone.has(e.id)));
+    removeOverCap();
+    return true;
+  } catch {
+    rollback();
+    for (const v of victims) {
+      if (v.raw === null) continue;
+      try {
+        s.setItem(tripKey(v.id), v.raw);
       } catch {
         /* best effort: loadTripCopy drops an entry whose payload is gone */
       }
     }
-  };
-  for (;;) {
-    try {
-      s.setItem(tripKey(trip.id), payload);
-      s.setItem(INDEX_KEY, JSON.stringify(index));
-      for (const e of overCap) s.removeItem(tripKey(e.id));
-      return true;
-    } catch {
-      const oldest = index.length > 1 ? index[index.length - 1] : null;
-      if (!oldest || oldest.id === trip.id) {
-        // The payload may have been written without its index entry: do not leave it orphaned (best effort).
-        if (!hadEntry) {
-          try {
-            s.removeItem(tripKey(trip.id));
-          } catch {
-            /* nothing more can be done */
-          }
-        }
-        restore();
-        return false;
-      }
+    return false;
+  }
+}
+
+const QUOTA_MARGIN = 8;
+const PROBE_KEY = `${PREFIX}probe`;
+
+const safeGet = (s: Storage, key: string): string | null => {
+  try {
+    return s.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+/** How many characters (key included) still fit, up to `limit`, found by probe writes that are removed again; null when nothing can be written at all. */
+function freeSpace(s: Storage, limit: number): number | null {
+  try {
+    s.setItem(PROBE_KEY, "");
+  } catch {
+    return null; // storage refuses even an empty value: not a size problem we can fix by evicting
+  }
+  let lo = 0; // known to fit
+  let hi = Math.max(0, limit - PROBE_KEY.length); // not yet known
+  try {
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
       try {
-        const raw = s.getItem(tripKey(oldest.id));
-        if (raw !== null) dropped.push({ id: oldest.id, raw });
-        s.removeItem(tripKey(oldest.id));
+        s.setItem(PROBE_KEY, "x".repeat(mid));
+        lo = mid;
       } catch {
-        /* ignore */
+        hi = mid - 1;
       }
-      index = index.slice(0, -1);
+    }
+    return lo + PROBE_KEY.length;
+  } finally {
+    try {
+      s.removeItem(PROBE_KEY);
+    } catch {
+      /* ignore */
     }
   }
 }

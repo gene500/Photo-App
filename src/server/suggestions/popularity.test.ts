@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Suggestion } from "@/lib/types";
-import { cachedCounter, enrichPopularity, POPULARITY_CONCURRENCY, POPULARITY_MAX_CANDIDATES, resetSharedCounter } from "./popularity";
+import { prisma } from "../db";
+import { COUNT_CACHE_MAX, defaultCounter, cachedCounter, enrichPopularity, POPULARITY_CONCURRENCY, POPULARITY_MAX_CANDIDATES, resetSharedCounter } from "./popularity";
 
 const s = (id: number, kind: Suggestion["kind"] = "viewpoint"): Suggestion => ({ osmId: `node/${id}`, name: `S${id}`, lat: 37, lng: -119, kind });
 const idOf = (x: Suggestion) => x.osmId.replace("node/", "");
@@ -130,6 +131,20 @@ describe("cachedCounter", () => {
   });
 });
 
+describe("cachedCounter size bound", () => {
+  it("remembers at most COUNT_CACHE_MAX places, dropping the oldest first", async () => {
+    const count = vi.fn(async () => 1);
+    const cached = cachedCounter(count);
+    const at = (i: number) => ({ osmId: "", name: "", kind: "viewpoint" as const, lat: 10 + (i % 1000) * 0.01, lng: -100 + Math.floor(i / 1000) * 0.01 });
+    for (let i = 0; i < COUNT_CACHE_MAX + 1; i++) await cached(at(i), fetch);
+    expect(count).toHaveBeenCalledTimes(COUNT_CACHE_MAX + 1);
+    await cached(at(COUNT_CACHE_MAX), fetch); // newest: still cached
+    expect(count).toHaveBeenCalledTimes(COUNT_CACHE_MAX + 1);
+    await cached(at(0), fetch); // oldest: evicted
+    expect(count).toHaveBeenCalledTimes(COUNT_CACHE_MAX + 2);
+  });
+});
+
 describe("cachedNotable", () => {
   it("asks once per place and name, joins in-flight lookups, and does not remember failures", async () => {
     const { cachedNotable } = await import("./popularity");
@@ -146,5 +161,34 @@ describe("cachedNotable", () => {
     await c2(a, fetch);
     await c2(a, fetch);
     expect(flaky).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("defaultCounter Flickr budget", () => {
+  beforeEach(async () => {
+    vi.stubEnv("RATE_LIMIT_DISABLED", "0");
+    process.env.FLICKR_API_KEY = "test-key";
+    await prisma.rateLimitCounter.deleteMany();
+  });
+  afterEach(() => {
+    delete process.env.FLICKR_API_KEY;
+    vi.unstubAllEnvs();
+  });
+
+  it("uses Flickr until the app-wide hourly budget (3000) is spent, then falls back to Commons without error", async () => {
+    const urls: string[] = [];
+    const f = vi.fn(async (url: string | URL | Request) => {
+      urls.push(String(url));
+      return new Response(JSON.stringify(String(url).includes("flickr") ? { stat: "ok", photos: { total: "123" } } : { query: { geosearch: [{ pageid: 1 }, { pageid: 2 }] } }));
+    }) as unknown as typeof fetch;
+    const count = defaultCounter();
+    const place = { osmId: "", name: "x", lat: 1, lng: 2, kind: "viewpoint" as const };
+    await prisma.rateLimitCounter.create({ data: { key: "flickr-app:all", count: 2999, resetAt: Date.now() + 3_600_000 } });
+    expect(await count(place, f)).toBe(123);
+    const fallback = await count(place, f);
+    expect(typeof fallback).toBe("number");
+    expect(fallback).not.toBe(123);
+    expect(urls.filter((u) => u.includes("flickr"))).toHaveLength(1);
+    expect(urls.some((u) => u.includes("commons.wikimedia"))).toBe(true);
   });
 });

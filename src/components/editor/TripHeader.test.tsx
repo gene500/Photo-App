@@ -67,12 +67,19 @@ describe("TripHeader", () => {
     expect(heading.getAttribute("title")).toBe("Sierra loop");
     const row = heading.parentElement!;
     expect(row.className).toMatch(/\bflex-wrap\b/);
-    expect(heading.style.minWidth).toBe("5.46ch"); // 7 characters (the cap), in ch so it scales with the text size
+    expect(heading.style.minWidth).toBe("4.68ch"); // 6 characters (the cap), in ch so it scales with the text size
     const buttons = screen.getByRole("button", { name: "Edit trip" }).parentElement!;
     expect(buttons.parentElement).toBe(row);
     expect(buttons.className).toMatch(/shrink-0/);
     expect(buttons.contains(screen.getByRole("button", { name: "Export" }))).toBe(true);
     expect(buttons.contains(screen.getByRole("button", { name: "Share" }))).toBe(true);
+  });
+
+  it("labels the edit button with the short visible text Edit, keeping the full accessible name", () => {
+    render(<TripHeader trip={trip} onSave={vi.fn()} />);
+    const edit = screen.getByRole("button", { name: "Edit trip" });
+    expect(edit.textContent).toBe("Edit");
+    expect(edit.getAttribute("aria-label")).toBe("Edit trip");
   });
 
   it("only asks for as much room as a short name needs", () => {

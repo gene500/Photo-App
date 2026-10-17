@@ -4,7 +4,7 @@ import { handle, readJson, requireUserId } from "@/server/http";
 import { isFakeExternal } from "@/server/external/fake";
 import { POPULARITY_TIMEOUT_MS, sharedCounter, sharedNotable } from "@/server/suggestions/popularity";
 
-/** Photo-count popularity for one batch of (at most 10) places; the client ranks suggestions as batches arrive. */
+/** Photo-count popularity for one batch of (at most 5) places; the client ranks suggestions as batches arrive. */
 export const POST = handle(async (req: Request) => {
   const userId = await requireUserId();
   enforceLimit("popularity", userId);

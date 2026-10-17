@@ -82,7 +82,8 @@ describe("photo routes", () => {
     const res = await upload(stopId, new File([jpegWithGps()], "gps.jpg", { type: "image/jpeg" }));
     expect(res.status).toBe(200);
     const { stop } = await res.json();
-    const stored = Buffer.from(await uploadGET(new Request(`http://localhost${stop.photoUrl}`), idParams(path.basename(stop.photoUrl), "name")).then((r) => r.arrayBuffer()));
+    const served = await uploadGET(new Request(`http://localhost${stop.photoUrl}`), idParams(path.basename(stop.photoUrl), "name"));
+    const stored = Buffer.from(new Uint8Array(await served.arrayBuffer()));
     expect(stored.includes("GPSLatitude")).toBe(false);
     expect(stored.includes("Exif")).toBe(false);
     expect(stored.length).toBeLessThan(jpegWithGps().length);

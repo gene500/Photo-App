@@ -73,15 +73,54 @@ describe("offline-store", () => {
     expect(localStorage.getItem("rtpp.offline.trip.t0")).toBeNull();
   });
 
-  it("handles a full quota silently by dropping older copies, and gives up quietly when nothing fits", () => {
+  it("handles a full quota silently by dropping an older copy, and gives up quietly when storage refuses everything", () => {
     saveTripCopy(trip("old"), at(1));
-    mem.failWrites = (k) => k === "rtpp.offline.trip.new" && mem.getItem("rtpp.offline.trip.old") !== null;
+    mem.quota = mem.used() + 40; // the new copy only fits once "old" is gone
     expect(saveTripCopy(trip("new"), at(2))).toBe(true);
     expect(loadTripCopy("new")).not.toBeNull();
     expect(loadTripCopy("old")).toBeNull();
     mem.failWrites = () => true;
     expect(() => saveTripCopy(trip("x"), at(3))).not.toThrow();
     expect(saveTripCopy(trip("x"), at(3))).toBe(false);
+    expect(loadTripCopy("new")).not.toBeNull();
+  });
+
+  describe("a full quota", () => {
+    const size = (k: string) => mem.getItem(k)!.length + k.length;
+    const fill = () => {
+      for (let i = 0; i < 4; i++) saveTripCopy(trip(`t${i}`), at(i + 1));
+      return mem.used();
+    };
+
+    it("deletes nothing when the new copy could not fit even after evicting every other copy", () => {
+      mem.quota = fill() + 100;
+      const removed: string[] = [];
+      const remove = mem.removeItem.bind(mem);
+      mem.removeItem = (k: string) => { removed.push(k); remove(k); };
+      const indexBefore = mem.getItem("rtpp.offline.index");
+      expect(saveTripCopy(trip("huge", { name: "x".repeat(mem.used() * 2) }), at(10))).toBe(false);
+      expect(removed.filter((k) => /trip\.t\d/.test(k))).toEqual([]);
+      expect(mem.getItem("rtpp.offline.index")).toBe(indexBefore);
+      for (let i = 0; i < 4; i++) expect(loadTripCopy(`t${i}`)).not.toBeNull();
+    });
+
+    it("evicts only as many of the oldest copies as the new one needs, and none of the others", () => {
+      mem.quota = fill() + 400; // room for roughly one more byte-for-byte small trip
+      expect(saveTripCopy(trip("t4", { name: "y".repeat(150) }), at(10))).toBe(true);
+      expect(listTripCopies().map((e) => e.id)).toEqual(["t4", "t3", "t2", "t1"]);
+      expect(loadTripCopy("t0")).toBeNull();
+      expect(loadTripCopy("t1")).not.toBeNull();
+      expect(loadTripCopy("t4")).not.toBeNull();
+      for (const e of listTripCopies()) expect(loadTripCopy(e.id)).not.toBeNull();
+    });
+
+    it("puts the evicted copies back when the write still fails", () => {
+      mem.quota = fill() + 400;
+      mem.failWrites = (k) => k === "rtpp.offline.trip.t4";
+      expect(saveTripCopy(trip("t4", { name: "y".repeat(150) }), at(10))).toBe(false);
+      for (let i = 0; i < 4; i++) expect(loadTripCopy(`t${i}`)).not.toBeNull();
+      expect(listTripCopies()).toHaveLength(4);
+    });
   });
 
   it("returns null for corrupt data", () => {
@@ -150,7 +189,7 @@ describe("offline-store", () => {
 
   it("keeps the index consistent with the payloads after evicting to make room", () => {
     for (let i = 0; i < 3; i++) saveTripCopy(trip(`t${i}`), at(i + 1));
-    mem.failWrites = (k) => k === "rtpp.offline.trip.big" && mem.getItem("rtpp.offline.trip.t0") !== null;
+    mem.quota = mem.used() + 40;
     expect(saveTripCopy(trip("big"), at(10))).toBe(true);
     expect(listTripCopies().map((e) => e.id)).toEqual(["big", "t2", "t1"]);
     for (const e of listTripCopies()) expect(loadTripCopy(e.id)).not.toBeNull();

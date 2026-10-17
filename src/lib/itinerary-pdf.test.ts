@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import type { ItineraryInput, ItineraryStop } from "./itinerary";
@@ -217,5 +218,49 @@ describe("pdfSafe", () => {
 
   it("keeps newlines", () => {
     expect(pdfSafe("a\nb")).toBe("a\nb");
+  });
+});
+
+describe("Unicode font", () => {
+  const font = (name: string) => {
+    const b = readFileSync(`public/fonts/${name}`);
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+  };
+  const fonts = { regular: font("NotoSans-Regular.ttf"), bold: font("NotoSans-Bold.ttf") };
+  const renderWith = async (i: ItineraryInput, f: typeof fonts | null) =>
+    Buffer.from(await (await renderItineraryPdf(i, fallback, geometry, latLng, f)).arrayBuffer()).toString("latin1");
+  // jsPDF writes a ToUnicode CMap per embedded font: lines of <glyph id><code point>.
+  const mapped = (s: string) => new Set([...s.matchAll(/<[0-9a-f]{4}><([0-9a-f]{4})>/gi)].map((m) => parseInt(m[1], 16)));
+
+  it("embeds Noto Sans and every Cyrillic, Greek and Vietnamese letter of the trip name", async () => {
+    const name = "Москва Ελλάδα Hà Nội";
+    const s = await renderWith({ ...input(1), tripName: name }, fonts);
+    expect(s).toContain("/BaseFont /NotoSans");
+    expect(s).toContain("/Identity-H");
+    const codes = mapped(s);
+    for (const ch of new Set(name.normalize("NFC").replace(/ /g, ""))) expect(codes.has(ch.codePointAt(0)!), ch).toBe(true);
+    expect(s).not.toContain("Москва");
+  });
+
+  it("shows a ? for scripts the font lacks instead of garbage, in stop names and notes", async () => {
+    const s = await renderWith(input(1, { name: "東京タワー", notes: "Ελλάδα 😀" }), fonts);
+    const codes = mapped(s);
+    expect(codes.has("?".codePointAt(0)!)).toBe(true);
+    expect(codes.has("東".codePointAt(0)!)).toBe(false);
+    expect(codes.has("😀".codePointAt(0)!)).toBe(false);
+  });
+
+  it("without the font keeps the built-in fonts and the same placeholder rule", async () => {
+    const s = await renderWith({ ...input(1), tripName: "Москва" }, null);
+    expect(s).not.toContain("/BaseFont /NotoSans");
+    expect(s).toContain("/BaseFont /Helvetica-Bold");
+    expect(s).toContain("(?)");
+  });
+
+  it("falls back instead of failing when the font data is unreadable", async () => {
+    const bad = { regular: new ArrayBuffer(100), bold: new ArrayBuffer(100) };
+    const s = await renderWith({ ...input(1), tripName: "Москва" }, bad);
+    expect(s.startsWith("%PDF")).toBe(true);
+    expect(s).toContain("(?)");
   });
 });

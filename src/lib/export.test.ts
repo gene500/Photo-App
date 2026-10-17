@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { APPLE_MAX_STOPS_PER_LINK, appleMapsUrl, appleMapsUrls, buildGpx, googleMapsUrl, gpxFileName } from "./export";
+import { itineraryFileName } from "./itinerary";
 
 const mk = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `S${i}`, lat: 40 + i / 10, lng: -120 - i / 10, notes: null as string | null }));
 
@@ -79,10 +80,33 @@ describe("gpxFileName", () => {
     expect(gpxFileName("Big Sur / 2026: \"best\"?")).toBe("Big-Sur-2026-best.gpx");
     expect(gpxFileName("../../etc/passwd")).toBe("etc-passwd.gpx");
     expect(gpxFileName("   ", "2026-07-01")).toBe("trip-2026-07-01.gpx");
-    expect(gpxFileName("日本\u0000", "2026-07-01")).toBe("trip-2026-07-01.gpx");
-    expect(gpxFileName("日本")).toMatch(/^trip-\d{4}-\d{2}-\d{2}\.gpx$/);
+    expect(gpxFileName("日本")).toMatch(/^trip-\d{4}-\d{2}-\d{2}-[0-9a-f]{6}\.gpx$/);
     expect(gpxFileName("日本 Alps", "2026-07-01")).toBe("Alps.gpx");
     expect(gpxFileName("a".repeat(200)).length).toBeLessThanOrEqual(64);
+  });
+});
+
+describe("file names without ASCII letters or digits", () => {
+  it("keeps different non-ASCII names apart with a stable hash, and includes the date", () => {
+    const a = gpxFileName("日本の旅", "2026-07-01");
+    const b = gpxFileName("東京の旅", "2026-07-01");
+    expect(a).toMatch(/^trip-2026-07-01-[0-9a-f]{6}\.gpx$/);
+    expect(a).not.toBe(b);
+    expect(gpxFileName("日本の旅", "2026-07-01")).toBe(a);
+    expect(gpxFileName("🚗🚗", "2026-07-01")).toMatch(/^trip-2026-07-01-[0-9a-f]{6}\.gpx$/);
+    expect(itineraryFileName("رحلة", "2026-07-01")).toMatch(/^trip-2026-07-01-[0-9a-f]{6}-itinerary\.pdf$/);
+  });
+  it("has no hash when the name is just blank or punctuation", () => {
+    expect(gpxFileName("???", "2026-07-01")).toBe("trip-2026-07-01.gpx");
+    expect(itineraryFileName("???", "2026-07-01")).toBe("trip-2026-07-01-itinerary.pdf");
+  });
+  it("prefixes Windows reserved names", () => {
+    for (const n of ["CON", "con", "PRN", "Aux", "NUL", "COM1", "com9", "LPT3"]) {
+      expect(gpxFileName(n, "2026-07-01")).toBe(`trip-${n}.gpx`);
+      expect(itineraryFileName(n, "2026-07-01")).toBe(`trip-${n}-itinerary.pdf`);
+    }
+    expect(gpxFileName("COM10", "2026-07-01")).toBe("COM10.gpx");
+    expect(gpxFileName("Console", "2026-07-01")).toBe("Console.gpx");
   });
 });
 

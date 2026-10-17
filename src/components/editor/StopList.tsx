@@ -1,13 +1,14 @@
 "use client";
 
-import { useRef, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import {
   closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from "@dnd-kit/core";
 import {
-  arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy,
+  arrayMove, SortableContext, useSortable, verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { centreAlignedKeyboardCoordinates } from "./keyboard-coordinates";
 import { describeBestTime, type BestTime } from "@/lib/best-time";
 import { describeLightHint } from "@/lib/light-windows";
 import { useMounted } from "@/lib/use-mounted";
@@ -22,7 +23,8 @@ type Handlers = {
   onDelete: (stopId: string) => void;
   onSelect: (stopId: string) => void;
   /** When given, stops with a best light show a small three-part priority pill. */
-  onPriorityChange?: (stopId: string, priority: StopPriority) => void;
+  /** May return a promise; the pill shows the new value meanwhile and reverts if it rejects. */
+  onPriorityChange?: (stopId: string, priority: StopPriority) => void | Promise<unknown>;
 };
 
 type Props = Handlers & { stops: Stop[]; bestTimes: BestTime[]; arrivals?: (Date | null)[]; onReorder: (stopIds: string[]) => void };
@@ -36,14 +38,27 @@ export function reorderIds(ids: string[], activeId: string, overId: string): str
 
 const PRIORITY_SHORT: Record<StopPriority, string> = { normal: "Normal", high: "High", must: "Must" };
 
-function PriorityPill({ stopId, name, value, onChange }: { stopId: string; name: string; value: StopPriority; onChange: (stopId: string, priority: StopPriority) => void }) {
+function PriorityPill({ stopId, name, value: saved, onChange }: { stopId: string; name: string; value: StopPriority; onChange: (stopId: string, priority: StopPriority) => void | Promise<unknown> }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  // The value just chosen, shown until the parent catches up, so rapid key presses build on each other.
+  const [pending, setPending] = useState<{ value: StopPriority; for: StopPriority } | null>(null);
+  const seq = useRef(0);
+  const value = pending && pending.for === saved ? pending.value : saved;
   const index = PRIORITIES.indexOf(value);
   const select = (next: number, focus = false) => {
     const target = PRIORITIES[next];
     if (!target) return;
     if (focus) refs.current[next]?.focus();
-    if (target !== value) onChange(stopId, target);
+    if (target === value) return;
+    const mine = ++seq.current;
+    setPending({ value: target, for: saved });
+    // Without a promise the choice stays until the saved value changes. With one, only the latest request
+    // clears it when it settles, so a failed save shows the saved value again.
+    const result = onChange(stopId, target);
+    if (result) {
+      const done = () => { if (mine === seq.current) setPending(null); };
+      void result.then(done, done);
+    }
   };
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
     const last = PRIORITIES.length - 1;
@@ -57,7 +72,7 @@ function PriorityPill({ stopId, name, value, onChange }: { stopId: string; name:
     select(next, true);
   };
   return (
-    <div role="radiogroup" aria-label={`Priority for ${name}`} className="relative grid w-48 max-w-full min-w-0 grid-cols-3 rounded-full bg-hover p-0.5 ring-1 ring-border">
+    <div role="radiogroup" aria-label={`Priority for ${name}`} className="relative grid w-48 min-w-[8.5rem] max-w-full grid-cols-3 rounded-full bg-hover p-0.5 ring-1 ring-border">
       <span
         aria-hidden
         data-testid="priority-thumb"
@@ -76,7 +91,7 @@ function PriorityPill({ stopId, name, value, onChange }: { stopId: string; name:
           tabIndex={p === value ? 0 : -1}
           onClick={() => select(i)}
           onKeyDown={onKeyDown}
-          className={`relative min-h-7 min-w-0 truncate rounded-full px-0.5 text-[11px] font-medium focus-visible:outline-2 focus-visible:outline-accent-strong ${p === value ? "text-accent-foreground" : "text-muted hover:text-foreground"}`}
+          className={`relative min-h-7 min-w-[2.75rem] truncate rounded-full px-0.5 text-[11px] font-medium focus-visible:outline-2 focus-visible:outline-accent-strong ${p === value ? "text-accent-foreground" : "text-muted hover:text-foreground"}`}
         >
           {PRIORITY_SHORT[p]}
         </button>
@@ -88,7 +103,7 @@ function PriorityPill({ stopId, name, value, onChange }: { stopId: string; name:
 export function StopList({ stops, bestTimes, arrivals, onReorder, ...handlers }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, { coordinateGetter: centreAlignedKeyboardCoordinates }),
   );
 
   if (stops.length === 0) return <p className="text-sm text-muted">No stops yet.</p>;
@@ -188,7 +203,7 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
         {weather?.warning && <p data-testid="light-warning" className="text-xs text-sand">{weather.warning}</p>}
         {stop.notes && <p className="truncate text-xs text-muted">{stop.notes}</p>}
         {onPriorityChange && stop.lightPref !== "any" && (
-          <div className="mt-1 flex items-center gap-2 text-[11px] text-muted" title="Priority: how hard Optimize route works to land this stop in its light">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted" title="Priority: how hard Optimize route works to land this stop in its light">
             <span className="shrink-0">Priority</span>
             <PriorityPill stopId={stop.id} name={stop.name} value={stop.priority} onChange={onPriorityChange} />
           </div>

@@ -9,20 +9,24 @@ and `PROGRESS.md` over memory. The sections after "Current work" are history.
 Statuses: pending, in progress, completed, blocked, removed. Exactly one item is in progress at a time.
 Visibility rule (owner, 2026-10-16): the task chart is shown in the terminal at the end of every reply, always.
 Ordering rule (owner, 2026-10-16): anything added goes toward the end of the list, in the order asked; the absolute final row of every list is always one combined row: a full codebase check (Opus), then merge, push, and confirmation that Vercel and CI succeeded; nothing goes after it.
-Last updated 2026-10-16.
+Last updated 2026-10-17.
 
-### PDF itinerary (feature branch `feat/pdf-itinerary`, worktree `/Users/genestone/photo-pdf-itinerary`)
-
-| # | Task | Status | Notes |
-|---|---|---|---|
-
-### Bug fixes from Sweep 2 (branch `fix/sweep2-bugs`, worktree `/Users/genestone/photo-bugfix`, owner said "fix all bugs")
+### Open tasks
 
 | # | Task | Status | Notes |
 |---|---|---|---|
 | S5 | Security L5: Mapbox tokens: use a separate server `MAPBOX_TOKEN`, URL-restrict `NEXT_PUBLIC_MAPBOX_TOKEN`, set a spend cap | blocked | owner action in the Mapbox and Vercel dashboards (cannot be done from code); steps will be given in the reply. L1 (signup 409) is accepted, no work |
-| P1 | Search revamp: search bar finds landmarks, viewpoints and any point of interest by name (no address needed). Cause: Mapbox Geocoding v6 `forward` has no POI data. Plan: Search Box API `suggest` + `retrieve`, landmark-first ranking, subtitle with region | in progress | waiting for the owner to approve the short design in chat before any code; B6 (Opus check on `fix/break-test`) is still queued behind it only by list order, the Opus limit resets 3:40am PT |
+| P1 | Search revamp: search bar finds landmarks, viewpoints and any point of interest by name (no address needed). Cause: Mapbox Geocoding v6 `forward` has no POI data. Plan: Search Box API `suggest` + `retrieve`, landmark-first ranking, subtitle with region | completed | implemented, reviewed and merged into `release/combined` (together with the break-test fixes F1-F6); reaches `main` with the final row below |
 | B6 | FINAL (always the last row, combined): full codebase check (Opus), handle its findings, then merge, push to `main`, and confirm both Vercel (`photo-app-pi2o`) and CI succeeded | in progress | pushed `6e803a7`: Opus check found 1 blocker (Google prompt=login), fixed in `38aa09a`; Vercel photo-app-pi2o success and CI success. owner 2026-10-16: the final full codebase check always includes merge, push and the Vercel/CI confirmation; nothing goes after it. Replaces the earlier separate B6 (review/merge/push) and B7 (check) rows |
+
+### Place search (P1)
+
+- Search bar uses the Mapbox Search Box API: `/api/geocode` (suggest, `{suggestions}`) then `/api/geocode/retrieve` (coordinates, `{place}`). POIs rank first. Details in the README "Place search" section.
+- One uuid session per search, made in `SearchBar` by `newSessionId()` (`src/lib/session-id.ts`, falls back where `crypto.randomUUID` is missing) and renewed after every pick (including fallback picks) and whenever the search is cleared (Escape or deleting the text).
+- If suggest fails, the v6 forward geocoder answers with coordinates already set. Fallback results are not cached, so landmarks come back as soon as suggest recovers. Suggest and retrieve results are cached 10 min in memory.
+- Retrieve ids must be URL-safe, at most 300 characters, and contain a letter or digit (so `..` is rejected).
+- Fake mode (`EXTERNAL_APIS_FAKE=1`): canned landmarks (Horseshoe Bend, Griffith Observatory, Yosemite Valley Viewpoint) plus the old fake address.
+- Still owed: one smoke test against real Mapbox (confirms Search Box is enabled for the token and the real subtitle/category text).
 
 ### Waiting on the owner
 
@@ -55,7 +59,7 @@ Known gaps:
 - Optimize keeps a saved start time when it costs nothing; otherwise it searches from sunrise (the result is announced to screen readers only).
 - CSP still allows `'unsafe-inline'`.
 - Google-only account deletion re-confirms through Google's account chooser (`prompt=select_account`; `login` is not a documented Google value); existing sessions must sign in once first.
-- Header buttons no longer wrap: at 320 px with extra-large text a long trip name may shrink to almost nothing (unchecked).
+- Header buttons wrap to a second line on narrow screens (e15f559, c69544e); the layout at 320 px with extra-large text has not been re-checked by eye.
 - Share page `no-referrer` vs a URL-restricted Mapbox token.
 - Offline copies are cleared on sign-out and when the login or signup page is shown (session ended); they stay while the device is offline.
 - Rate limits other than login/signup/password/delete are per instance; no monitoring or alerting yet.

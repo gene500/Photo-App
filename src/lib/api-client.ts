@@ -1,4 +1,4 @@
-import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, Stop, StopPriority, Suggestion, Trip, TripSummary, WeatherForecast } from "./types";
+import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, SearchSuggestion, Stop, StopPriority, Suggestion, Trip, TripSummary, WeatherForecast } from "./types";
 import type { NewStopInput, StopPatch, TripCreateInput, TripPatch } from "./validation";
 
 export class ApiError extends Error {
@@ -15,10 +15,17 @@ export class ApiError extends Error {
 
 async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
   const isForm = init.body instanceof FormData;
-  const res = await fetch(url, {
-    ...init,
-    headers: isForm || init.body === undefined ? init.headers : { "Content-Type": "application/json" },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: isForm || init.body === undefined ? init.headers : { "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    // fetch rejects with a bare TypeError ("Failed to fetch") when offline or the server is unreachable.
+    if (e instanceof TypeError) throw new ApiError(0, "You're offline or the server can't be reached. Try again.");
+    throw e;
+  }
   if (res.status === 204) return undefined as T;
   const body = (await res.json().catch(() => null)) as { error?: string; reason?: string } | null;
   if (!res.ok) throw new ApiError(res.status, body?.error ?? `Request failed (${res.status})`, body?.reason);
@@ -68,10 +75,13 @@ export const api = {
   /** Photo-count popularity for up to 10 places; a null count means unknown. */
   suggestionPopularity: (places: { lat: number; lng: number; name?: string }[]) =>
     request<{ counts: (number | null)[]; notable?: (boolean | null)[] }>("/api/suggestions/popularity", send("POST", { places })),
-  geocode: (q: string, proximity?: { lat: number; lng: number }) =>
-    request<{ places: Place[] }>(
-      `/api/geocode?q=${encodeURIComponent(q)}${proximity ? `&proximity=${proximity.lng.toFixed(6)},${proximity.lat.toFixed(6)}` : ""}`,
+  /** `session` groups the suggests and the retrieve of one search (Mapbox bills them together). */
+  geocode: (q: string, session: string, proximity?: { lat: number; lng: number }) =>
+    request<{ suggestions: SearchSuggestion[] }>(
+      `/api/geocode?q=${encodeURIComponent(q)}&session=${session}${proximity ? `&proximity=${proximity.lng.toFixed(6)},${proximity.lat.toFixed(6)}` : ""}`,
     ),
+  retrievePlace: (id: string, session: string) =>
+    request<{ place: Place }>(`/api/geocode/retrieve?id=${encodeURIComponent(id)}&session=${session}`),
   reverseGeocode: (lat: number, lng: number) =>
     request<{ place: Place }>(`/api/reverse-geocode?lat=${lat.toFixed(6)}&lng=${lng.toFixed(6)}`),
   placePhoto: (p: { name: string; lat: number; lng: number }) =>

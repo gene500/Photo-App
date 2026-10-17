@@ -124,11 +124,36 @@ describe("offline-store", () => {
     expect(listTripCopies()).toEqual([]);
   });
 
-  it("stops saving in this tab when another tab clears the owner key", () => {
-    window.dispatchEvent(new StorageEvent("storage", { key: "rtpp.offline.owner", newValue: null }));
+  it("stops saving in this tab when another tab signs out", () => {
+    window.dispatchEvent(new StorageEvent("storage", { key: "rtpp.offline.signedout", newValue: "1" }));
     expect(saveTripCopy(trip("a"))).toBe(false);
     enableOfflineSaving();
     expect(saveTripCopy(trip("a"))).toBe(true);
+  });
+
+  it("keeps saving here when another tab only clears the copies (owner removed)", () => {
+    window.dispatchEvent(new StorageEvent("storage", { key: "rtpp.offline.owner", newValue: null }));
+    mem.removeItem("rtpp.offline.owner");
+    claimOwner("u1");
+    expect(saveTripCopy(trip("a"))).toBe(true);
+  });
+
+  it("a save that can never fit leaves the other copies and the index intact", () => {
+    for (let i = 0; i < 5; i++) saveTripCopy(trip(`t${i}`), at(i + 1));
+    const indexBefore = mem.getItem("rtpp.offline.index");
+    mem.failWrites = (k) => k === "rtpp.offline.trip.huge";
+    expect(saveTripCopy(trip("huge"), at(10))).toBe(false);
+    expect(mem.getItem("rtpp.offline.index")).toBe(indexBefore);
+    for (let i = 0; i < 5; i++) expect(loadTripCopy(`t${i}`)).not.toBeNull();
+    expect(listTripCopies()).toHaveLength(5);
+  });
+
+  it("keeps the index consistent with the payloads after evicting to make room", () => {
+    for (let i = 0; i < 3; i++) saveTripCopy(trip(`t${i}`), at(i + 1));
+    mem.failWrites = (k) => k === "rtpp.offline.trip.big" && mem.getItem("rtpp.offline.trip.t0") !== null;
+    expect(saveTripCopy(trip("big"), at(10))).toBe(true);
+    expect(listTripCopies().map((e) => e.id)).toEqual(["big", "t2", "t1"]);
+    for (const e of listTripCopies()) expect(loadTripCopy(e.id)).not.toBeNull();
   });
 
   it("removes one copy, and prunes copies of trips the server no longer has", () => {

@@ -6,6 +6,8 @@ import { POST as optimize } from "@/app/api/optimize/route";
 import { POST as directions } from "@/app/api/directions/route";
 import { POST as suggestions } from "@/app/api/suggestions/route";
 import { POST as popularity } from "@/app/api/suggestions/popularity/route";
+import { GET as geocodeGET } from "@/app/api/geocode/route";
+import { GET as retrieveGET } from "@/app/api/geocode/retrieve/route";
 import { GET as placePhoto } from "@/app/api/place-photo/route";
 import { POST as photoPOST } from "@/app/api/stops/[id]/photo/route";
 import { clearAllLimits, POLICIES } from "@/server/rate-limit";
@@ -17,6 +19,8 @@ const cases: [string, keyof typeof POLICIES, (n: number) => Promise<Response>][]
   ["directions", "directions", () => directions(jsonRequest("POST", "/api/directions", {}))],
   ["suggestions", "suggestions", () => suggestions(jsonRequest("POST", "/api/suggestions", {}))],
   ["popularity", "popularity", () => popularity(jsonRequest("POST", "/api/suggestions/popularity", {}))],
+  ["geocode", "geocode", () => geocodeGET(new Request("http://localhost/api/geocode"))],
+  ["geocode retrieve", "geocode-retrieve", () => retrieveGET(new Request("http://localhost/api/geocode/retrieve"))],
   ["place-photo", "place-photo", () => placePhoto(new Request("http://localhost/api/place-photo"))],
   ["photo upload", "photo-upload", () => photoPOST(new Request("http://localhost/api/stops/x/photo", { method: "POST" }), idParams("x"))],
 ];

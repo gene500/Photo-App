@@ -31,8 +31,93 @@ export type CorridorShape = { outer: LngLat[]; holes: LngLat[][] };
 
 const toLngLats = (ring: number[][]): LngLat[] => ring.map(([lng, lat]) => [lng, lat] as LngLat);
 
-export function buildCorridorShape(route: LngLat[], radiusKm: number = CORRIDOR_KM): CorridorShape {
-  if (route.length < 2) throw new Error("Route needs at least 2 coordinates");
+/** The route cannot be turned into a corridor (too complex, or no valid polygon around it): retrying never helps. */
+export class CorridorError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CorridorError";
+  }
+}
+
+/** Longitudes made continuous: a step of more than 180 degrees is the short way across the date line, so 360 is added or removed. */
+function unwrapRoute(route: LngLat[]): LngLat[] {
+  let shift = 0;
+  return route.map(([lng, lat], i) => {
+    if (i > 0) {
+      const step = lng - route[i - 1][0];
+      if (step > 180) shift -= 360;
+      else if (step < -180) shift += 360;
+    }
+    return [lng + shift, lat] as LngLat;
+  });
+}
+
+/** Sutherland-Hodgman against one vertical line: keeps the part of an (open) ring on the `keepAbove` side of x = edge. */
+function clipRing(ring: LngLat[], edge: number, keepAbove: boolean): LngLat[] {
+  const inside = (p: LngLat) => (keepAbove ? p[0] >= edge : p[0] <= edge);
+  const out: LngLat[] = [];
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i];
+    const b = ring[(i + 1) % ring.length];
+    if (inside(a)) out.push(a);
+    if (inside(a) !== inside(b)) out.push([edge, a[1] + ((b[1] - a[1]) * (edge - a[0])) / (b[0] - a[0])] as LngLat);
+  }
+  return out;
+}
+
+/** The part of a closed ring inside the 360 degree band `index` (0 is -180..180), shifted into -180..180; null when nothing is left. */
+function bandOfRing(ring: LngLat[], index: number): LngLat[] | null {
+  const open = ring.slice(0, -1);
+  const lo = 180 * (2 * index - 1);
+  const clipped = clipRing(clipRing(open, lo, true), lo + 360, false);
+  if (clipped.length < 3) return null;
+  const shifted = clipped.map(([lng, lat]) => [lng - 360 * index, lat] as LngLat);
+  return [...shifted, shifted[0]];
+}
+
+/** A shape whose longitudes may run past +-180 (an unwrapped route), cut into one shape per 360 degree band, each inside -180..180. */
+function splitAtDateLine(shape: CorridorShape): CorridorShape[] {
+  const xs = shape.outer.map((p) => p[0]);
+  if (Math.min(...xs) >= -180 && Math.max(...xs) <= 180) return [shape];
+  const first = Math.floor((Math.min(...xs) + 180) / 360);
+  const last = Math.floor((Math.max(...xs) + 180) / 360);
+  const parts: CorridorShape[] = [];
+  for (let band = first; band <= last; band++) {
+    const outer = bandOfRing(shape.outer, band);
+    if (!outer) continue;
+    const holes = shape.holes.map((h) => bandOfRing(h, band)).filter((h): h is LngLat[] => h !== null);
+    parts.push({ outer, holes });
+  }
+  return parts;
+}
+
+/**
+ * The corridor around a route, as one shape, or two when it crosses the date line (each inside -180..180, which is what
+ * the `poly:` filter and the grid cells need). The route is unwrapped first so the corridor follows the short way across.
+ * Throws CorridorError when no corridor can be built.
+ */
+export function buildCorridorShapes(route: LngLat[], radiusKm: number = CORRIDOR_KM): CorridorShape[] {
+  if (route.length < 2) throw new CorridorError("Route needs at least 2 coordinates");
+  try {
+    return splitAtDateLine(buildShapeNear(unwrapRoute(route), radiusKm));
+  } catch (e) {
+    throw e instanceof CorridorError ? e : new CorridorError(e instanceof Error ? e.message : "Could not build a route corridor");
+  }
+}
+
+/** turf wraps its output back into -180..180, so a route near the date line is built centred on 0 and moved back afterwards. */
+function buildShapeNear(route: LngLat[], radiusKm: number): CorridorShape {
+  const xs = route.map((p) => p[0]);
+  const lo = Math.min(...xs);
+  const hi = Math.max(...xs);
+  if (lo >= -170 && hi <= 170) return buildShape(route, radiusKm);
+  const mid = (lo + hi) / 2;
+  const back = (ring: LngLat[]) => ring.map(([lng, lat]) => [lng + mid, lat] as LngLat);
+  const { outer, holes } = buildShape(route.map(([lng, lat]) => [lng - mid, lat] as LngLat), radiusKm);
+  return { outer: back(outer), holes: holes.map(back) };
+}
+
+function buildShape(route: LngLat[], radiusKm: number): CorridorShape {
   const input = lineString(route);
   let used = ROUTE_SIMPLIFY_STEPS_DEG[0];
   let line = simplify(input, { tolerance: used, highQuality: false });
@@ -42,17 +127,22 @@ export function buildCorridorShape(route: LngLat[], radiusKm: number = CORRIDOR_
     line = simplify(input, { tolerance, highQuality: false });
   }
   if (line.geometry.coordinates.length > MAX_SIMPLIFIED_ROUTE_POINTS) {
-    throw new Error("Route is too complex to build a corridor for");
+    throw new CorridorError("Route is too complex to build a corridor for");
   }
   const extraKm = (used - ROUTE_SIMPLIFY_STEPS_DEG[0]) * KM_PER_DEG;
   const corridor = buffer(line, radiusKm + extraKm, { units: "kilometers" });
-  if (!corridor) throw new Error("Could not build a corridor around the route");
+  if (!corridor) throw new CorridorError("Could not build a corridor around the route");
   const simple = simplify(corridor, { tolerance: POLYGON_SIMPLIFY_DEG, highQuality: false });
   const g = simple.geometry;
   // A MultiPolygon (rare) keeps only its largest polygon, as before, with that polygon's holes.
   const polygons = g.type === "Polygon" ? [g.coordinates] : g.coordinates;
   const biggest = polygons.reduce((a, b) => (b[0].length > a[0].length ? b : a));
   return { outer: toLngLats(biggest[0]), holes: biggest.slice(1).map(toLngLats) };
+}
+
+/** The first (and, unless the route crosses the date line, only) part of the corridor; see `buildCorridorShapes`. */
+export function buildCorridorShape(route: LngLat[], radiusKm: number = CORRIDOR_KM): CorridorShape {
+  return buildCorridorShapes(route, radiusKm)[0];
 }
 
 /** The outer ring of the corridor (see `buildCorridorShape` for its holes). */
@@ -67,14 +157,21 @@ export function toOverpassPoly(ring: LngLat[]): string {
   return ring.map(([lng, lat]) => `${lat.toFixed(5)} ${lng.toFixed(5)}`).join(" ");
 }
 
-export function buildOverpassQuery(poly: string, timeoutSec = 25): string {
+/** The Overpass `out` cap on a corridor query; a response this long may have been cut short. */
+export const OVERPASS_OUT_CAP = 500;
+
+/** One `poly:` ring, or several (a corridor across the date line is two). */
+export function buildOverpassQuery(poly: string | string[], timeoutSec = 25): string {
+  const polys = Array.isArray(poly) ? poly : [poly];
   return [
     `[out:json][timeout:${timeoutSec}];`,
     "(",
-    `  nwr["tourism"~"^(viewpoint|attraction)$"](poly:"${poly}");`,
-    `  node["natural"="peak"]["name"](poly:"${poly}");`,
+    ...polys.flatMap((p) => [
+      `  nwr["tourism"~"^(viewpoint|attraction)$"](poly:"${p}");`,
+      `  node["natural"="peak"]["name"](poly:"${p}");`,
+    ]),
     ");",
-    "out center 500;",
+    `out center ${OVERPASS_OUT_CAP};`,
   ].join("\n");
 }
 

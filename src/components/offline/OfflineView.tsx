@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { btnGhost, card } from "@/components/ui/styles";
 import { computeBestTimes, describeBestTime, formatClock, tripDeparture } from "@/lib/best-time";
 import { formatSavedAt } from "@/lib/format";
 import { lightLabel } from "@/lib/light-windows";
 import { listTripCopies, loadTripCopy } from "@/lib/offline-store";
+import { reloadPage } from "@/lib/reload";
 import { stopColor } from "@/lib/stop-style";
 
 const noop = () => {};
@@ -25,6 +26,13 @@ export function OfflineView() {
   const rawIndex = useSyncExternalStore(subscribeStorage, indexSnapshot, () => "[]");
   const summaries = useMemo(() => JSON.parse(rawIndex) as ReturnType<typeof listTripCopies>, [rawIndex]);
   const [openId, setOpenId] = useState<string | null>(null);
+  // The worker serves this shell at /trips, /login etc. while offline, so it must offer a way back once the network returns.
+  const [backOnline, setBackOnline] = useState(false);
+  useEffect(() => {
+    const on = () => setBackOnline(true);
+    window.addEventListener("online", on);
+    return () => window.removeEventListener("online", on);
+  }, []);
   const copy = useMemo(() => (openId ? loadTripCopy(openId) : null), [openId]);
 
   return (
@@ -32,6 +40,11 @@ export function OfflineView() {
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">{copy ? copy.trip.name : "Saved trips"}</h1>
       </header>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" onClick={reloadPage} className={btnGhost}>Try again</button>
+        <p aria-live="polite" className="text-sm text-muted">{backOnline ? "You're back online. Reload to continue." : ""}</p>
+      </div>
 
       {!mounted ? null : copy ? (
         <TripCopyView copy={copy} onBack={() => setOpenId(null)} />

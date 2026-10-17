@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { securityHeaders } from "./src/lib/security-headers";
 
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   // Lets the e2e server use its own build dir alongside a normal `next dev`.
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
   // Native module; must not be bundled.

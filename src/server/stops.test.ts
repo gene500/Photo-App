@@ -55,6 +55,13 @@ describe("stops data access", () => {
     expect(await addStop(user.id, trip.id, { ...pin("b"), shotNotes: "  " })).toMatchObject({ shotNotes: null });
   });
 
+  it("stores null for whitespace-only notes and leaves other notes as typed", async () => {
+    const { user, trip, stops } = await tripWithStops(["a"]);
+    expect(await updateStop(user.id, stops[0].id, { notes: "  \n " })).toMatchObject({ notes: null });
+    expect(await updateStop(user.id, stops[0].id, { notes: " keep " })).toMatchObject({ notes: " keep " });
+    expect(await addStop(user.id, trip.id, { ...pin("b"), notes: "   " })).toMatchObject({ notes: null });
+  });
+
   it("does not let another user patch a stop's shot list", async () => {
     const { stops } = await tripWithStops(["a"]);
     const intruder = await createTestUser();
@@ -94,9 +101,15 @@ describe("stops data access", () => {
   it("rejects reorders that are not a permutation of the trip's stops", async () => {
     const { user, trip, stops } = await tripWithStops(["a", "b"]);
     const ids = stops.map((s) => s.id);
-    await expect(reorderStops(user.id, trip.id, [ids[0]])).rejects.toBeInstanceOf(InvalidReorderError);
     await expect(reorderStops(user.id, trip.id, [ids[0], ids[0]])).rejects.toBeInstanceOf(InvalidReorderError);
-    await expect(reorderStops(user.id, trip.id, [ids[0], "foreign"])).rejects.toBeInstanceOf(InvalidReorderError);
+  });
+
+  it("raises StopsChangedError when the list is well-formed but no longer matches the trip's stops", async () => {
+    const { user, trip, stops } = await tripWithStops(["a", "b"]);
+    const ids = stops.map((s) => s.id);
+    await expect(reorderStops(user.id, trip.id, [ids[0]])).rejects.toBeInstanceOf(StopsChangedError);
+    await expect(reorderStops(user.id, trip.id, [ids[0], "foreign"])).rejects.toBeInstanceOf(StopsChangedError);
+    await expect(reorderStops(user.id, trip.id, [...ids, "extra"])).rejects.toBeInstanceOf(StopsChangedError);
   });
 
   it("raises StopsChangedError when a stop vanishes mid-reorder", async () => {

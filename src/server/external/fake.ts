@@ -1,6 +1,6 @@
 import { coordsLabel, haversineMeters } from "@/lib/geo";
 import { addDays } from "@/lib/weather";
-import type { LngLat, Place, PlacePhoto, RouteResult, Suggestion, WeatherForecast, WeatherHour } from "@/lib/types";
+import type { LngLat, Place, PlacePhoto, RouteResult, SearchSuggestion, Suggestion, WeatherForecast, WeatherHour } from "@/lib/types";
 
 /** EXTERNAL_APIS_FAKE=1 swaps Mapbox/Overpass for canned data (e2e tests, offline dev). */
 export function isFakeExternal(): boolean {
@@ -43,6 +43,24 @@ export function fakeSuggestions(route: LngLat[]): Suggestion[] {
 export function fakeGeocode(query: string): Place[] {
   const h = [...query].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) % 100_000, 7);
   return [{ name: `${query.trim()} (fake)`, lat: 36 + (h % 200) / 100, lng: -121 + (Math.floor(h / 200) % 300) / 100 }];
+}
+
+const FAKE_LANDMARKS = [
+  { id: "fake-horseshoe-bend", name: "Horseshoe Bend", subtitle: "viewpoint · Page, Arizona", place: "Page, Arizona", lat: 36.8791, lng: -111.51 },
+  { id: "fake-griffith-observatory", name: "Griffith Observatory", subtitle: "landmark · Los Angeles, California", place: "Los Angeles, California", lat: 34.1184, lng: -118.3004 },
+  { id: "fake-yosemite-valley-viewpoint", name: "Yosemite Valley Viewpoint", subtitle: "viewpoint · Yosemite Valley, California", place: "Yosemite Valley, California", lat: 37.7159, lng: -119.6775 },
+];
+
+/** Landmarks whose name contains the query, then the old fake address (which already has coordinates). */
+export function fakeSearch(query: string): SearchSuggestion[] {
+  const q = query.trim().toLowerCase();
+  const landmarks = FAKE_LANDMARKS.filter((l) => l.name.toLowerCase().includes(q)).map((l) => ({ name: l.name, subtitle: l.subtitle, mapboxId: l.id }));
+  return [...landmarks, ...fakeGeocode(query)];
+}
+
+export function fakeRetrieve(id: string): Place | null {
+  const l = FAKE_LANDMARKS.find((x) => x.id === id);
+  return l ? { name: `${l.name}, ${l.place}`, lat: l.lat, lng: l.lng } : null;
 }
 
 export function fakeReverseGeocode(p: { lat: number; lng: number }): Place {

@@ -1,5 +1,5 @@
-/** Largest instance solved exactly (Held-Karp is O(n² · 2ⁿ)); above this we use a heuristic. */
-const EXACT_MAX = 9;
+/** Largest instance solved exactly (Held-Karp is O(n² · 2ⁿ), about 0.3M steps at 12); above this we use a heuristic. */
+export const EXACT_MAX = 12;
 const PENALTY = 1e9; // stands in for unreachable / missing durations
 
 /**

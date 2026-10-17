@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getSunWindows } from "@/lib/best-time";
@@ -131,6 +131,24 @@ describe("StopList", () => {
       expect([n, h, m].map((r) => r.getAttribute("tabindex"))).toEqual(["-1", "0", "-1"]);
     });
 
+    it("advances on rapid key presses before the parent has caught up", async () => {
+      const { onPriorityChange } = setup();
+      screen.getByRole("radio", { name: "Normal" }).focus();
+      await userEvent.keyboard("{ArrowRight}{ArrowRight}");
+      expect(onPriorityChange.mock.calls).toEqual([["a", "high"], ["a", "must"]]);
+      expect(screen.getByRole("radio", { name: "Must-have" }).getAttribute("aria-checked")).toBe("true");
+    });
+
+    it("shows the new value at once and reverts when the save fails", async () => {
+      let reject!: (e: Error) => void;
+      const onPriorityChange = vi.fn(() => new Promise<void>((_r, rej) => { reject = rej; }));
+      render(<StopList stops={[stop("a", "Tunnel View", { lightPref: "golden" })]} bestTimes={[null]} {...handlers} onPriorityChange={onPriorityChange} />);
+      await userEvent.click(screen.getByRole("radio", { name: "High" }));
+      expect(screen.getByRole("radio", { name: "High" }).getAttribute("aria-checked")).toBe("true");
+      await act(async () => { reject(new Error("nope")); });
+      expect(screen.getByRole("radio", { name: "Normal" }).getAttribute("aria-checked")).toBe("true");
+    });
+
     it("selects a third on click", async () => {
       const { onPriorityChange } = setup();
       await userEvent.click(screen.getByRole("radio", { name: "High" }));
@@ -145,7 +163,7 @@ describe("StopList", () => {
       await userEvent.keyboard("{ArrowRight}");
       expect(onPriorityChange).toHaveBeenLastCalledWith("a", "must");
       await userEvent.keyboard("{ArrowLeft}");
-      expect(onPriorityChange).toHaveBeenLastCalledWith("a", "normal");
+      expect(onPriorityChange).toHaveBeenLastCalledWith("a", "high");
       await userEvent.keyboard("{End}");
       expect(onPriorityChange).toHaveBeenLastCalledWith("a", "must");
       await userEvent.keyboard("{Home}");
@@ -158,7 +176,7 @@ describe("StopList", () => {
       await userEvent.keyboard("{ArrowDown}");
       expect(onPriorityChange).toHaveBeenLastCalledWith("a", "must");
       await userEvent.keyboard("{ArrowUp}");
-      expect(onPriorityChange).toHaveBeenLastCalledWith("a", "normal");
+      expect(onPriorityChange).toHaveBeenLastCalledWith("a", "high");
     });
 
     it("does nothing when the selected third is chosen again", async () => {

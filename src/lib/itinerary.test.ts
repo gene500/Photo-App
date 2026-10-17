@@ -89,6 +89,6 @@ describe("buildItinerary", () => {
 describe("itineraryFileName", () => {
   it("slugs the trip name", () => {
     expect(itineraryFileName("Big Sur / 2026")).toBe("Big-Sur-2026-itinerary.pdf");
-    expect(itineraryFileName("???")).toBe("trip-itinerary.pdf");
+    expect(itineraryFileName("???", "2026-07-01")).toBe("trip-2026-07-01-itinerary.pdf");
   });
 });

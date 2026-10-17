@@ -86,6 +86,15 @@ describe("auth", () => {
       process.env.RATE_LIMIT_DISABLED = "1";
     });
 
+    it("rejects an over-long email before touching the limiter or bcrypt", async () => {
+      const verify = vi.spyOn(users, "verifyCredentials");
+      const email = `${"a".repeat(300)}@example.com`;
+      expect(await authorizeCredentials({ email: ` ${email} `, password: "whatever-1" })).toBeNull();
+      expect(verify).not.toHaveBeenCalled();
+      expect(await prisma.rateLimitCounter.count()).toBe(0);
+      verify.mockRestore();
+    });
+
     it("blocks after repeated failures, even with the right password, and a success clears the count", async () => {
       await createUser("ann@example.com", "correct-horse");
       for (let i = 0; i < 3; i++) await authorizeCredentials({ email: "ann@example.com", password: "nope-nope" });

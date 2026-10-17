@@ -3,7 +3,7 @@ import { handle, HttpError, readJson, requireUserId } from "@/server/http";
 import { deletePhotoFile } from "@/server/photos";
 import { enforceSharedLimit } from "@/server/shared-limit";
 import { getAuthTime } from "@/server/session";
-import { deleteAccount, REAUTH_REQUIRED } from "@/server/users";
+import { ACCOUNT_GONE, deleteAccount, REAUTH_REQUIRED } from "@/server/users";
 
 /** Permanently deletes the account, its trips, stops and uploaded photos. The password must be confirmed. */
 export const DELETE = handle(async (req: Request) => {
@@ -11,6 +11,8 @@ export const DELETE = handle(async (req: Request) => {
   await enforceSharedLimit("account-delete", userId);
   const proof = deleteAccountSchema.parse(await readJson(req));
   const result = await deleteAccount(userId, { ...proof, authTime: await getAuthTime() });
+  // A concurrent request already deleted it: same outcome as the first delete.
+  if (result === ACCOUNT_GONE) return new Response(null, { status: 204 });
   if (result === REAUTH_REQUIRED) return Response.json({ error: "Please sign in again to delete your account", reason: "reauth" }, { status: 403 });
   if (!result) throw new HttpError(403, proof.password === undefined ? "That email address does not match" : "That password is not correct");
   const removed = await Promise.all(result.photoUrls.map((url) => deletePhotoFile(url)));

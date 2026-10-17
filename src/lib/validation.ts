@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isDateOnly } from "./dates";
 import { haversineMeters } from "./geo";
+import { stripNameChars, stripTextChars } from "./text";
 
 // Zod otherwise probes `new Function("")` to JIT its parsers, which a CSP without unsafe-eval reports as a violation
 // in the browser console. In the browser the interpreter path is plenty fast for these small forms.
@@ -11,6 +12,24 @@ export const MAX_DWELL_MINUTES = 480;
 
 const lat = z.number().min(-90).max(90);
 const lng = z.number().min(-180).max(180);
+
+// Zero-width characters are legal inside a name (joiners in emoji and some scripts) but do not count as content.
+const ZERO_WIDTH = /[\u200B-\u200D\u2060\uFEFF]/g;
+
+/**
+ * A trimmed one-line name: required (zero-width characters do not count) and at most `max` characters.
+ * Control and bidi characters are stripped rather than rejected, so older stored text never blocks an unrelated edit.
+ */
+const nameText = (label: string, max: number) =>
+  z.string().transform(stripNameChars).pipe(
+    z.string().trim()
+      .min(1, `${label} is required`)
+      .refine((v) => v.replace(ZERO_WIDTH, "").trim().length > 0, `${label} is required`)
+      .max(max),
+  );
+
+/** Multi-line free text: at most `max` characters; control characters other than newline, carriage return and tab are stripped. */
+const freeText = (_label: string, max: number) => z.string().transform(stripTextChars).pipe(z.string().max(max));
 
 export const inYearRange = (ms: number) => {
   const y = new Date(ms).getUTCFullYear();
@@ -23,7 +42,7 @@ export const dateOnlySchema = z
   .refine((v) => inYearRange(Date.parse(`${v}T00:00:00Z`)), "Date must be between 1970 and 2200");
 
 export const tripInputSchema = z.object({
-  name: z.string().trim().min(1, "Trip name is required").max(120),
+  name: nameText("Trip name", 120),
   plannedDate: dateOnlySchema,
 });
 export type TripInput = z.infer<typeof tripInputSchema>;
@@ -38,9 +57,9 @@ export const MAX_SHOT_ITEMS = 20;
 export const MAX_SHOT_TEXT = 120;
 export const MAX_SHOT_NOTES = 2000;
 export const shotChecklistSchema = z
-  .array(z.object({ text: z.string().trim().min(1, "Shot text is required").max(MAX_SHOT_TEXT), done: z.boolean() }))
+  .array(z.object({ text: nameText("Shot text", MAX_SHOT_TEXT), done: z.boolean() }))
   .max(MAX_SHOT_ITEMS);
-export const shotNotesSchema = z.string().max(MAX_SHOT_NOTES);
+export const shotNotesSchema = freeText("Shot notes", MAX_SHOT_NOTES);
 
 export const lightPrefSchema = z.enum(["any", "sunrise", "golden", "sunset"]);
 export const stopPrioritySchema = z.enum(["normal", "high", "must"]);
@@ -53,11 +72,11 @@ export const tripPatchSchema = tripInputSchema
 export type TripPatch = z.infer<typeof tripPatchSchema>;
 
 export const newStopSchema = z.object({
-  name: z.string().trim().min(1, "Stop name is required").max(200),
+  name: nameText("Stop name", 200),
   lat,
   lng,
   source: z.enum(["manual", "suggested"]),
-  notes: z.string().max(5000).nullable().optional(),
+  notes: freeText("Notes", 5000).nullable().optional(),
   lightPref: lightPrefSchema.default("any"),
   priority: stopPrioritySchema.default("normal"),
   dwellMinutes: dwellMinutesSchema.default(30),
@@ -68,8 +87,8 @@ export type NewStopInput = z.input<typeof newStopSchema>;
 
 export const stopPatchSchema = z
   .object({
-    name: z.string().trim().min(1, "Stop name is required").max(200),
-    notes: z.string().max(5000).nullable(),
+    name: nameText("Stop name", 200),
+    notes: freeText("Notes", 5000).nullable(),
     visited: z.boolean(),
     lightPref: lightPrefSchema,
     priority: stopPrioritySchema,
@@ -94,6 +113,7 @@ const newPasswordSchema = z
   .string()
   .min(8, "Password must be at least 8 characters")
   .max(200, "Password is too long")
+  .refine((p) => p.trim().length > 0, "Password cannot be only spaces")
   // bcrypt only reads the first 72 bytes, so anything longer would silently not count.
   .refine((p) => new TextEncoder().encode(p).length <= 72, "Password must be at most 72 bytes");
 
@@ -191,8 +211,9 @@ export function formatZodError(error: z.ZodError): string {
   if (!issue) return "Invalid request";
   if (!/^(Too (big|small)|Invalid )/.test(issue.message)) return issue.message;
   const label = fieldLabel(issue.path);
-  if (issue.code === "too_big" && issue.origin === "string") return `${label} must be at most ${issue.maximum} characters`;
-  if (issue.code === "too_small" && issue.origin === "string") return `${label} must be at least ${issue.minimum} characters`;
+  const chars = (n: unknown) => `${n} character${n === 1 ? "" : "s"}`;
+  if (issue.code === "too_big" && issue.origin === "string") return `${label} must be at most ${chars(issue.maximum)}`;
+  if (issue.code === "too_small" && issue.origin === "string") return `${label} must be at least ${chars(issue.minimum)}`;
   return `${label} is not valid`;
 }
 

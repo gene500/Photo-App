@@ -128,3 +128,19 @@ describe("dedication names", () => {
     expect(out.map((x) => x.name)).toEqual(["Glacier Point"]);
   });
 });
+
+describe("upstream name hygiene", () => {
+  const el = (name: string) => ({ type: "node", id: 1, lat: 37, lon: -119, tags: { tourism: "viewpoint", name } });
+  it("strips control and bidi characters so Add stop is never rejected", () => {
+    const [s] = parseOverpassResponse({ elements: [el("Tunnel\u202E View\t\u0000")] } as never);
+    expect(s.name).toBe("Tunnel View");
+  });
+  it("does not split a surrogate pair when cutting a long name", () => {
+    const [s] = parseOverpassResponse({ elements: [el("a".repeat(199) + "😀😀")] } as never);
+    expect(s.name).toBe("a".repeat(199));
+  });
+  it("falls back to the kind label when nothing visible remains", () => {
+    const [s] = parseOverpassResponse({ elements: [el("\u202E\u0000")] } as never);
+    expect(s.name).toBe("Viewpoint");
+  });
+});

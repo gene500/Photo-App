@@ -1,6 +1,6 @@
 import { getSunWindows } from "./best-time";
 import { lightWindows } from "./light-windows";
-import { optimizeOrder } from "./optimize-order";
+import { EXACT_MAX, optimizeOrder } from "./optimize-order";
 import type { LightPref, StopPriority } from "./types";
 
 export type ScheduleStop = { lat: number; lng: number; lightPref: LightPref; dwellMinutes: number; priority?: StopPriority };
@@ -25,6 +25,11 @@ const DAY_MS = 86_400_000;
 const PENALTY = 1e9; // unreachable / missing durations, as in optimizeOrder
 const EPS = 1e-9;
 
+/** Whether the order for `stopCount` stops is provably the best one (exact search), rather than the best a heuristic found. */
+export function isExactOptimization(stopCount: number, usesLight: boolean): boolean {
+  return usesLight ? stopCount - 1 <= EXACT_MAX_STOPS : stopCount <= EXACT_MAX;
+}
+
 type Interval = [number, number];
 
 /**
@@ -46,7 +51,7 @@ export function optimizeSchedule(input: {
     return { order: optimizeOrder(durations), departAt: defaultDeparture, misses: [] };
   }
 
-  const d = durations.map((row) => row.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : PENALTY)));
+  const d = sanitised(durations);
   const ctx = new Evaluator(d, stops, defaultDeparture.getTime(), preferredDeparture?.getTime());
   const { order, departMs } = n - 1 <= EXACT_MAX_STOPS ? exactSearch(ctx, n) : localSearch(ctx, n);
   return {
@@ -55,6 +60,23 @@ export function optimizeSchedule(input: {
       departMs === preferredDeparture?.getTime() ? preferredDeparture : departMs === defaultDeparture.getTime() ? defaultDeparture : new Date(departMs),
     misses: ctx.misses(order, departMs),
   };
+}
+
+type ScheduleInput = Parameters<typeof optimizeSchedule>[0];
+
+const sanitised = (durations: number[][]) => durations.map((row) => row.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : PENALTY)));
+
+/** The objective optimizeSchedule minimises, for a given order and departure (for comparing searches). */
+export function scheduleCost(input: ScheduleInput, order: number[], departAt: Date): number {
+  const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime());
+  return ctx.cost(order, departAt.getTime());
+}
+
+/** Reference search over every order: slow beyond 8 stops (n! x departures), meant for checking the heuristic in tests. */
+export function optimizeScheduleExact(input: ScheduleInput): Schedule {
+  const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime());
+  const { order, departMs } = exactSearch(ctx, input.stops.length);
+  return { order, departAt: new Date(departMs), misses: ctx.misses(order, departMs) };
 }
 
 class Evaluator {
@@ -196,13 +218,40 @@ function exactSearch(ctx: Evaluator, n: number): Solution {
 
 const MAX_ROUNDS = 25;
 
-/** Local search seeded from nearest-neighbour and window-sorted orders. */
+/**
+ * Extra perturbed restarts after the seeded descents. A fixed count per size (never a clock) so the answer is the same on
+ * every machine; each restart costs more as stops are added, so large trips get fewer (25 stops take ~250 ms).
+ */
+const restartsFor = (n: number) => (n <= 12 ? 200 : Math.max(4, Math.floor(300 / n)));
+
+/**
+ * Local search: descents from several seeds (nearest-neighbour, window-sorted, must-stops-first, shortest drive), then
+ * iterated local search that perturbs the best order with a fixed-seed generator, so the same input gives the same answer.
+ */
 function localSearch(ctx: Evaluator, n: number): Solution {
-  const seeds = [nearestNeighbour(ctx.d, n), windowSorted(ctx.stops, n), optimizeOrder(ctx.d)];
+  const seeds = [nearestNeighbour(ctx.d, n), windowSorted(ctx.stops, n), mustFirst(ctx.stops, n), optimizeOrder(ctx.d)];
   let best: Solution | null = null;
   for (const seed of seeds) {
     const sol = improve(ctx, seed);
     if (!best || sol.cost < best.cost - EPS) best = sol;
+  }
+  let state = 0x9e3779b9;
+  const rand = (max: number) => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return Math.floor((state / 4294967296) * max);
+  };
+  for (let r = 0, restarts = restartsFor(n); r < restarts; r++) {
+    const order = best!.order.slice();
+    // Alternate a few random swaps with a reversed random segment; stop 0 never moves.
+    for (let k = 0; k < 2 + (r % 3); k++) {
+      const i = 1 + rand(n - 1);
+      const j = 1 + rand(n - 1);
+      if (r % 2 === 0) [order[i], order[j]] = [order[j]!, order[i]!];
+      else order.splice(Math.min(i, j), Math.abs(i - j) + 1, ...order.slice(Math.min(i, j), Math.max(i, j) + 1).reverse());
+    }
+    // Every other restart also jumps to another departure: the best order depends on it and the landscape is rugged.
+    const sol = improve(ctx, order, r % 4 < 2 ? undefined : ctx.candidates[rand(ctx.candidates.length)]);
+    if (sol.cost < best!.cost - EPS) best = sol;
   }
   return best!;
 }
@@ -211,9 +260,9 @@ function localSearch(ctx: Evaluator, n: number): Solution {
  * Alternate: move stops around at the current departure (swap / 2-opt / or-opt, first
  * improvement), then re-pick the best departure for the new order, until nothing improves.
  */
-function improve(ctx: Evaluator, start: number[]): Solution {
+function improve(ctx: Evaluator, start: number[], from?: number): Solution {
   let order = start;
-  let { departMs, cost } = ctx.bestDeparture(order);
+  let { departMs, cost } = from === undefined ? ctx.bestDeparture(order) : { departMs: from, cost: ctx.cost(start, from) };
   for (let round = 0; round < MAX_ROUNDS; round++) {
     let moved = false;
     let again = true;
@@ -283,5 +332,14 @@ function windowSorted(stops: ScheduleStop[], n: number): number[] {
   const rank = (p: LightPref) => (p === "sunrise" ? 0 : p === "sunset" ? 2 : 1);
   const rest = Array.from({ length: n - 1 }, (_, i) => i + 1);
   rest.sort((a, b) => rank(stops[a]!.lightPref) - rank(stops[b]!.lightPref) || a - b);
+  return [0, ...rest];
+}
+
+/** Must stops first, then high, then the rest, each group sunrise to sunset. */
+function mustFirst(stops: ScheduleStop[], n: number): number[] {
+  const rank = (p: LightPref) => (p === "sunrise" ? 0 : p === "sunset" ? 2 : 1);
+  const weight = (s: ScheduleStop) => ({ must: 0, high: 1, normal: 2 })[s.priority ?? "normal"];
+  const rest = Array.from({ length: n - 1 }, (_, i) => i + 1);
+  rest.sort((a, b) => weight(stops[a]!) - weight(stops[b]!) || rank(stops[a]!.lightPref) - rank(stops[b]!.lightPref) || a - b);
   return [0, ...rest];
 }

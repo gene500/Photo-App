@@ -30,10 +30,14 @@ export type StopUpdate = Omit<StopPatch, "photoUrl"> & { photoUrl?: string | nul
 /** Shot notes are stored trimmed; whitespace-only becomes null. */
 const cleanShotNotes = (v: string | null): string | null => (v === null || v.trim() === "" ? null : v.trim());
 
+/** Notes keep their text as typed; whitespace-only becomes null. */
+const cleanNotes = (v: string | null): string | null => (v === null || v.trim() === "" ? null : v);
+
 /** The checklist column holds JSON text; shot notes are trimmed; everything else in a patch maps straight to columns. */
-function toStopData({ shotChecklist, shotNotes, ...rest }: StopUpdate) {
+function toStopData({ shotChecklist, shotNotes, notes, ...rest }: StopUpdate) {
   return {
     ...rest,
+    ...(notes === undefined ? {} : { notes: cleanNotes(notes) }),
     ...(shotNotes === undefined ? {} : { shotNotes: cleanShotNotes(shotNotes) }),
     ...(shotChecklist === undefined ? {} : { shotChecklist: JSON.stringify(shotChecklist) }),
   };
@@ -57,7 +61,7 @@ export async function addStop(
         lat: input.lat,
         lng: input.lng,
         source: input.source,
-        notes: input.notes ?? null,
+        notes: cleanNotes(input.notes ?? null),
         lightPref: input.lightPref,
         priority: input.priority,
         dwellMinutes: input.dwellMinutes,
@@ -145,13 +149,9 @@ export async function reorderStops(
   if (!trip) return null;
   const existing = new Set(trip.stops.map((s) => s.id));
   const given = new Set(stopIds);
-  if (
-    given.size !== stopIds.length ||
-    given.size !== existing.size ||
-    stopIds.some((id) => !existing.has(id))
-  ) {
-    throw new InvalidReorderError();
-  }
+  if (given.size !== stopIds.length) throw new InvalidReorderError();
+  // Well-formed but not this trip's stops any more: one was added or deleted elsewhere.
+  if (given.size !== existing.size || stopIds.some((id) => !existing.has(id))) throw new StopsChangedError();
   try {
     await prisma.$transaction(
       stopIds.map((id, order) => prisma.stop.update({ where: { id }, data: { order } })),

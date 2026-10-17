@@ -59,10 +59,28 @@ export function fileSlug(name: string): string {
     .replace(/-+$/, "");
 }
 
-/** A safe download name: ASCII letters, digits, dashes and underscores only; `trip-<date>.gpx` when nothing usable is left. */
-export function gpxFileName(tripName: string, date: string = new Date().toISOString().slice(0, 10)): string {
+const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+
+/** Short stable hash (FNV-1a, 6 hex digits) so different non-ASCII names do not share a file name. */
+function shortHash(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return (h >>> 0).toString(16).padStart(8, "0").slice(0, 6);
+}
+
+/**
+ * The base of a download name: the slug; `trip-<date>` when nothing usable is left, plus a hash of the name when it had
+ * non-ASCII text (CJK, emoji, Arabic); a `trip-` prefix on names Windows reserves (CON, NUL, COM1...).
+ */
+export function exportBaseName(tripName: string, date: string = new Date().toISOString().slice(0, 10)): string {
   const slug = fileSlug(tripName);
-  return `${slug || `trip-${date.replace(/[^0-9-]/g, "")}`}.gpx`;
+  if (!slug) return `trip-${date.replace(/[^0-9-]/g, "")}${/[^\x00-\x7F\s]/.test(tripName) ? `-${shortHash(tripName)}` : ""}`;
+  return WINDOWS_RESERVED.test(slug) ? `trip-${slug}` : slug;
+}
+
+/** A safe download name: ASCII letters, digits, dashes and underscores only (see `exportBaseName`). */
+export function gpxFileName(tripName: string, date?: string): string {
+  return `${exportBaseName(tripName, date)}.gpx`;
 }
 
 const point = (s: ExportStop) => `${num(s.lat) ?? 0},${num(s.lng) ?? 0}`;

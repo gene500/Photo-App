@@ -513,7 +513,12 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   async function removeStop(id: string) {
     if (!window.confirm("Delete this stop?")) return;
     try {
-      await api.deleteStop(id);
+      try {
+        await api.deleteStop(id);
+      } catch (e) {
+        // Already deleted elsewhere (another tab, or a repeated request): the stop is gone, which is what was asked for.
+        if ((e as { status?: unknown }).status !== 404) throw e;
+      }
       setStops((prev) => prev.filter((s) => s.id !== id).map((s, order) => ({ ...s, order })));
       // The user may have opened something else while the delete was in flight.
       setCardId((cur) => (cur === id ? null : cur));
@@ -803,7 +808,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
               arrivals={arrivals}
               onReorder={(ids) => void reorder(ids)}
               onToggleVisited={(id, visited) => void patchStop(id, { visited })}
-              onPriorityChange={(id, priority) => void patchStop(id, { priority })}
+              onPriorityChange={(id, priority) => patchStop(id, { priority })}
               onDelete={(id) => void removeStop(id)}
               onSelect={openFromList}
             />

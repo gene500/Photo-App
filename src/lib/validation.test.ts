@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   directionsRequestSchema,
   formatZodError,
@@ -190,5 +191,38 @@ describe("signupSchema limits", () => {
     expect(signupSchema.safeParse({ email: "a@example.com", password: multibyte }).success).toBe(false);
     expect(signupSchema.safeParse({ email: "a@example.com", password: "x".repeat(73) }).success).toBe(false);
     expect(signupSchema.safeParse({ email: "a@example.com", password: "x".repeat(72) }).success).toBe(true);
+  });
+});
+
+describe("name hygiene", () => {
+  const okNames = ["Café 日本 trip", "Road 🚗 trip", "👨\u200D👩\u200D👧 family", "東京タワー", "a\u200Db"];
+  const badNames = ["a\u0000b", "tab\tname", "new\nline", "a\u007Fb", "a\u0085b", "evil\u202Ename", "iso\u2066late\u2069", "\u200B\u200C\u200D", "\u2060\uFEFF", " \u200B ", ""];
+  it.each(okNames)("accepts %j", (name) => {
+    expect(tripInputSchema.safeParse({ ...validTrip, name }).success).toBe(true);
+    expect(newStopSchema.safeParse({ name, lat: 1, lng: 1, source: "manual" }).success).toBe(true);
+  });
+  it.each(badNames)("rejects %j in trip, stop and shot text", (name) => {
+    expect(tripInputSchema.safeParse({ ...validTrip, name }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ name }).success).toBe(false);
+    expect(newStopSchema.safeParse({ name, lat: 1, lng: 1, source: "manual" }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ shotChecklist: [{ text: name, done: false }] }).success).toBe(false);
+  });
+  it("lets free-text notes keep newlines and tabs but not NUL or other controls", () => {
+    expect(stopPatchSchema.safeParse({ notes: "a\nb\r\n\tc", shotNotes: "x\ny" }).success).toBe(true);
+    expect(stopPatchSchema.safeParse({ notes: "a\u0000b" }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ shotNotes: "a\u0007b" }).success).toBe(false);
+    expect(newStopSchema.safeParse({ name: "X", lat: 1, lng: 1, source: "manual", notes: "a\u001Bb" }).success).toBe(false);
+    expect(stopPatchSchema.safeParse({ notes: "😀 日本 👨\u200D👩" }).success).toBe(true);
+  });
+});
+
+describe("formatZodError wording", () => {
+  it("pluralises and names the field", () => {
+    const one = z.object({ name: z.string().min(1) }).safeParse({ name: "" });
+    expect(formatZodError(one.error!)).toBe("Name must be at least 1 character");
+    const many = z.object({ name: z.string().min(3) }).safeParse({ name: "a" });
+    expect(formatZodError(many.error!)).toBe("Name must be at least 3 characters");
+    const max = z.object({ name: z.string().max(1) }).safeParse({ name: "ab" });
+    expect(formatZodError(max.error!)).toBe("Name must be at most 1 character");
   });
 });

@@ -62,7 +62,7 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
       });
       const blob = await createItineraryPdf({ input, geometry: route ?? [], stops: stops.map((s) => ({ lat: s.lat, lng: s.lng })), token: mapTokenFromEnv() });
       made = true;
-      return { blob, fileName: itineraryFileName(tripName) };
+      return { blob, fileName: itineraryFileName(tripName, plannedDate) };
     });
     if (made && openRef.current) close();
   }

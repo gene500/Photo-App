@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import {
   closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from "@dnd-kit/core";
@@ -22,7 +22,8 @@ type Handlers = {
   onDelete: (stopId: string) => void;
   onSelect: (stopId: string) => void;
   /** When given, stops with a best light show a small three-part priority pill. */
-  onPriorityChange?: (stopId: string, priority: StopPriority) => void;
+  /** May return a promise; the pill shows the new value meanwhile and reverts if it rejects. */
+  onPriorityChange?: (stopId: string, priority: StopPriority) => void | Promise<unknown>;
 };
 
 type Props = Handlers & { stops: Stop[]; bestTimes: BestTime[]; arrivals?: (Date | null)[]; onReorder: (stopIds: string[]) => void };
@@ -36,14 +37,27 @@ export function reorderIds(ids: string[], activeId: string, overId: string): str
 
 const PRIORITY_SHORT: Record<StopPriority, string> = { normal: "Normal", high: "High", must: "Must" };
 
-function PriorityPill({ stopId, name, value, onChange }: { stopId: string; name: string; value: StopPriority; onChange: (stopId: string, priority: StopPriority) => void }) {
+function PriorityPill({ stopId, name, value: saved, onChange }: { stopId: string; name: string; value: StopPriority; onChange: (stopId: string, priority: StopPriority) => void | Promise<unknown> }) {
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  // The value just chosen, shown until the parent catches up, so rapid key presses build on each other.
+  const [pending, setPending] = useState<{ value: StopPriority; for: StopPriority } | null>(null);
+  const seq = useRef(0);
+  const value = pending && pending.for === saved ? pending.value : saved;
   const index = PRIORITIES.indexOf(value);
   const select = (next: number, focus = false) => {
     const target = PRIORITIES[next];
     if (!target) return;
     if (focus) refs.current[next]?.focus();
-    if (target !== value) onChange(stopId, target);
+    if (target === value) return;
+    const mine = ++seq.current;
+    setPending({ value: target, for: saved });
+    // Without a promise the choice stays until the saved value changes. With one, only the latest request
+    // clears it when it settles, so a failed save shows the saved value again.
+    const result = onChange(stopId, target);
+    if (result) {
+      const done = () => { if (mine === seq.current) setPending(null); };
+      void result.then(done, done);
+    }
   };
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
     const last = PRIORITIES.length - 1;

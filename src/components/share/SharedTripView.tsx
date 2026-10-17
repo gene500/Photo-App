@@ -63,7 +63,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
         distanceUnit: settings.distanceUnit,
       });
       const blob = await createItineraryPdf({ input, geometry: line, stops: trip.stops.map((s) => ({ lat: s.lat, lng: s.lng })), token: mapTokenFromEnv() });
-      return { blob, fileName: itineraryFileName(trip.name) };
+      return { blob, fileName: itineraryFileName(trip.name, trip.plannedDate) };
     });
   }
 

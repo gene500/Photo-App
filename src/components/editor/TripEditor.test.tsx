@@ -622,6 +622,25 @@ describe("TripEditor", () => {
     expect(screen.getByRole("dialog", { name: "Edit A" })).toBeTruthy();
   });
 
+  it("treats deleting a stop that is already gone (404) as success", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(api.deleteStop).mockRejectedValue(Object.assign(new Error("Stop not found"), { status: 404 }));
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await userEvent.click(screen.getByRole("button", { name: "Delete B" }));
+    await waitFor(() => expect(screen.getAllByTestId("stop-row")).toHaveLength(1));
+    expect(screen.queryByText("Stop not found")).toBeNull();
+  });
+
+  it("shows the reload message when a reorder is rejected as stale (409)", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.mocked(api.reorderStops).mockRejectedValue(Object.assign(new Error("The trip's stops changed; reload and try again"), { status: 409 }));
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await userEvent.click(screen.getByRole("button", { name: "reorder" }));
+    expect(await screen.findByText(/reload and try again/)).toBeTruthy();
+    expect(screen.getAllByTestId("stop-row").map((r) => r.textContent)).toEqual(expect.arrayContaining([expect.stringContaining("A")]));
+  });
+
   it("keeps the other suggestions after accepting one", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [

@@ -12,6 +12,24 @@ export const MAX_DWELL_MINUTES = 480;
 const lat = z.number().min(-90).max(90);
 const lng = z.number().min(-180).max(180);
 
+// Names: no control characters (C0, DEL, C1) and no bidi overrides/isolates, and not made only of zero-width characters.
+const NAME_FORBIDDEN = /[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069]/;
+const ZERO_WIDTH = /[\u200B-\u200D\u2060\uFEFF]/g;
+// Free text may keep \t \n \r but no other control character.
+const TEXT_FORBIDDEN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/;
+
+/** A trimmed one-line name: required (zero-width characters do not count), at most `max` characters, no control characters. */
+const nameText = (label: string, max: number) =>
+  z.string().trim()
+    .min(1, `${label} is required`)
+    .refine((v) => v.replace(ZERO_WIDTH, "").trim().length > 0, `${label} is required`)
+    .max(max)
+    .refine((v) => !NAME_FORBIDDEN.test(v), `${label} contains invalid characters`);
+
+/** Multi-line free text: at most `max` characters, no control characters other than newline, carriage return and tab. */
+const freeText = (label: string, max: number) =>
+  z.string().max(max).refine((v) => !TEXT_FORBIDDEN.test(v), `${label} contains invalid characters`);
+
 export const inYearRange = (ms: number) => {
   const y = new Date(ms).getUTCFullYear();
   return y >= 1970 && y <= 2200;
@@ -23,7 +41,7 @@ export const dateOnlySchema = z
   .refine((v) => inYearRange(Date.parse(`${v}T00:00:00Z`)), "Date must be between 1970 and 2200");
 
 export const tripInputSchema = z.object({
-  name: z.string().trim().min(1, "Trip name is required").max(120),
+  name: nameText("Trip name", 120),
   plannedDate: dateOnlySchema,
 });
 export type TripInput = z.infer<typeof tripInputSchema>;
@@ -38,9 +56,9 @@ export const MAX_SHOT_ITEMS = 20;
 export const MAX_SHOT_TEXT = 120;
 export const MAX_SHOT_NOTES = 2000;
 export const shotChecklistSchema = z
-  .array(z.object({ text: z.string().trim().min(1, "Shot text is required").max(MAX_SHOT_TEXT), done: z.boolean() }))
+  .array(z.object({ text: nameText("Shot text", MAX_SHOT_TEXT), done: z.boolean() }))
   .max(MAX_SHOT_ITEMS);
-export const shotNotesSchema = z.string().max(MAX_SHOT_NOTES);
+export const shotNotesSchema = freeText("Shot notes", MAX_SHOT_NOTES);
 
 export const lightPrefSchema = z.enum(["any", "sunrise", "golden", "sunset"]);
 export const stopPrioritySchema = z.enum(["normal", "high", "must"]);
@@ -53,11 +71,11 @@ export const tripPatchSchema = tripInputSchema
 export type TripPatch = z.infer<typeof tripPatchSchema>;
 
 export const newStopSchema = z.object({
-  name: z.string().trim().min(1, "Stop name is required").max(200),
+  name: nameText("Stop name", 200),
   lat,
   lng,
   source: z.enum(["manual", "suggested"]),
-  notes: z.string().max(5000).nullable().optional(),
+  notes: freeText("Notes", 5000).nullable().optional(),
   lightPref: lightPrefSchema.default("any"),
   priority: stopPrioritySchema.default("normal"),
   dwellMinutes: dwellMinutesSchema.default(30),
@@ -68,8 +86,8 @@ export type NewStopInput = z.input<typeof newStopSchema>;
 
 export const stopPatchSchema = z
   .object({
-    name: z.string().trim().min(1, "Stop name is required").max(200),
-    notes: z.string().max(5000).nullable(),
+    name: nameText("Stop name", 200),
+    notes: freeText("Notes", 5000).nullable(),
     visited: z.boolean(),
     lightPref: lightPrefSchema,
     priority: stopPrioritySchema,
@@ -192,8 +210,9 @@ export function formatZodError(error: z.ZodError): string {
   if (!issue) return "Invalid request";
   if (!/^(Too (big|small)|Invalid )/.test(issue.message)) return issue.message;
   const label = fieldLabel(issue.path);
-  if (issue.code === "too_big" && issue.origin === "string") return `${label} must be at most ${issue.maximum} characters`;
-  if (issue.code === "too_small" && issue.origin === "string") return `${label} must be at least ${issue.minimum} characters`;
+  const chars = (n: unknown) => `${n} character${n === 1 ? "" : "s"}`;
+  if (issue.code === "too_big" && issue.origin === "string") return `${label} must be at most ${chars(issue.maximum)}`;
+  if (issue.code === "too_small" && issue.origin === "string") return `${label} must be at least ${chars(issue.minimum)}`;
   return `${label} is not valid`;
 }
 

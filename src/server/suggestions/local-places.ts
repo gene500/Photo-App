@@ -127,9 +127,9 @@ export async function localPlacesAround(lat: number, lng: number, radiusKm: numb
 }
 
 /** Places inside a corridor polygon; null when any part of it lies outside the covered area. */
-export async function localPlacesInRing(ring: LngLat[], read: CellReader = readCells): Promise<unknown[] | null> {
+export async function localPlacesInRing(ring: LngLat[], read: CellReader = readCells, holes: LngLat[][] = []): Promise<unknown[] | null> {
   if (ring.length < 3 || !ring.every(([lng, lat]) => inLocalCoverage(lat, lng))) return null;
-  return ringRows(ring, read);
+  return ringRows(ring, read, holes);
 }
 
 /**
@@ -137,17 +137,17 @@ export async function localPlacesInRing(ring: LngLat[], read: CellReader = readC
  * copy holds there. Never complete (the rest may lie across the border), so the caller shows it only as a fallback while
  * Overpass is asked; a corridor wholly abroad simply finds nothing.
  */
-export async function localPlacesInRingPartial(ring: LngLat[], read: CellReader = readCells): Promise<unknown[] | null> {
+export async function localPlacesInRingPartial(ring: LngLat[], read: CellReader = readCells, holes: LngLat[][] = []): Promise<unknown[] | null> {
   if (ring.length < 3) return null;
   // Cheap geographic filter: a corridor nowhere near North America has no US places to find (and must not flush the cell cache).
   if (!ring.some(([lng, lat]) => lat >= 17 && lat <= 72 && lng >= -180 && lng <= -64)) return null;
-  return ringRows(ring, read);
+  return ringRows(ring, read, holes);
 }
 
-async function ringRows(ring: LngLat[], read: CellReader): Promise<unknown[] | null> {
-  const cells = cellsForRing(ring);
+async function ringRows(ring: LngLat[], read: CellReader, holes: LngLat[][]): Promise<unknown[] | null> {
+  const cells = cellsForRing(ring, holes);
   if (cells.length > MAX_RING_CELLS) return null; // not a real corridor: do not read the map for it
   const rows = await read(cells);
-  const inside = createRingTester(ring);
+  const inside = createRingTester(ring, holes);
   return toElements(rows.filter((r) => inside(r.lng, r.lat)));
 }

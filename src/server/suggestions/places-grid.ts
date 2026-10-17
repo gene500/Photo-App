@@ -48,14 +48,16 @@ export function cellRuns(cells: readonly number[]): [number, number][] {
  * Every cell a corridor polygon touches: its outline is walked in small steps, and the inside is filled row by row (a long
  * route's corridor can be wider than a cell, and cells wholly inside it must not be skipped).
  */
-export function cellsForRing(ring: readonly LngLat[]): number[] {
+export function cellsForRing(ring: readonly LngLat[], holes: readonly (readonly LngLat[])[] = []): number[] {
   const cells = new Set<number>();
   const step = CELL_DEG / 5;
-  for (let i = 0; i < ring.length; i++) {
-    const [lng1, lat1] = ring[i];
-    const [lng2, lat2] = ring[(i + 1) % ring.length];
-    const n = Math.max(1, Math.ceil(Math.max(Math.abs(lng2 - lng1), Math.abs(lat2 - lat1)) / step));
-    for (let k = 0; k <= n; k++) cells.add(cellOf(lat1 + ((lat2 - lat1) * k) / n, lng1 + ((lng2 - lng1) * k) / n));
+  for (const r of [ring, ...holes]) {
+    for (let i = 0; i < r.length; i++) {
+      const [lng1, lat1] = r[i];
+      const [lng2, lat2] = r[(i + 1) % r.length];
+      const n = Math.max(1, Math.ceil(Math.max(Math.abs(lng2 - lng1), Math.abs(lat2 - lat1)) / step));
+      for (let k = 0; k <= n; k++) cells.add(cellOf(lat1 + ((lat2 - lat1) * k) / n, lng1 + ((lng2 - lng1) * k) / n));
+    }
   }
   if (ring.length >= 3) {
     const lats = ring.map((p) => p[1]);
@@ -64,10 +66,13 @@ export function cellsForRing(ring: readonly LngLat[]): number[] {
     for (let r = row0; r <= row1; r++) {
       const y = (r + 0.5) * CELL_DEG - 90; // the middle of the cell row
       const xs: number[] = [];
-      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-        const [xi, yi] = ring[i];
-        const [xj, yj] = ring[j];
-        if (yi > y !== yj > y) xs.push(xi + ((y - yi) * (xj - xi)) / (yj - yi));
+      // Even-odd across the outer ring and the holes together: the spans between a hole's edges are left unfilled.
+      for (const r of [ring, ...holes]) {
+        for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+          const [xi, yi] = r[i];
+          const [xj, yj] = r[j];
+          if (yi > y !== yj > y) xs.push(xi + ((y - yi) * (xj - xi)) / (yj - yi));
+        }
       }
       xs.sort((a, b) => a - b);
       for (let k = 0; k + 1 < xs.length; k += 2) {
@@ -81,10 +86,17 @@ export function cellsForRing(ring: readonly LngLat[]): number[] {
 }
 
 /**
- * Same answer as `pointInRing`, built for testing many points against one ring: a bounding-box reject, then only the edges
+ * Same answer as `pointInRing` (and not inside any of `holes`), built for testing many points against one ring: a bounding-box reject, then only the edges
  * that span the point's latitude strip are ray-cast (a corridor ring has hundreds of edges, a point touches a handful).
  */
-export function createRingTester(ring: readonly LngLat[]): (lng: number, lat: number) => boolean {
+export function createRingTester(ring: readonly LngLat[], holes: readonly (readonly LngLat[])[] = []): (lng: number, lat: number) => boolean {
+  const outer = createSingleRingTester(ring);
+  if (holes.length === 0) return outer;
+  const inHole = holes.map(createSingleRingTester);
+  return (lng, lat) => outer(lng, lat) && !inHole.some((h) => h(lng, lat));
+}
+
+function createSingleRingTester(ring: readonly LngLat[]): (lng: number, lat: number) => boolean {
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const [x, y] of ring) {
     if (x < minX) minX = x;

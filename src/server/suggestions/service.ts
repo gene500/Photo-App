@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import type { LngLat, Suggestion } from "@/lib/types";
 import { fakeSuggestions, isFakeExternal } from "../external/fake";
 import { TtlCache } from "./cache";
-import { AROUND_RADIUS_KM, buildCorridor, buildOverpassAroundQuery, buildOverpassQuery, toOverpassPoly } from "./corridor";
+import { AROUND_RADIUS_KM, buildCorridorShape, buildOverpassAroundQuery, buildOverpassQuery, type CorridorShape, toOverpassPoly } from "./corridor";
+import { createRingTester } from "./places-grid";
 import { clearCellCache, localPlacesAround, localPlacesInRing, localPlacesInRingPartial } from "./local-places";
 import { fetchOverpass, OverpassError } from "./overpass";
 import { parseOverpassResponse, SUGGESTION_CAP } from "./parse";
@@ -174,19 +175,40 @@ async function compute(key: string, buildQuery: () => string, local: () => Promi
 
 export async function findSuggestions(route: LngLat[], deps: Deps = {}): Promise<Suggestion[]> {
   if (isFakeExternal()) return fakeSuggestions(route);
-  let ring: LngLat[] | null = null;
-  const corridor = () => {
+  let shape: CorridorShape | null = null;
+  const corridor = (): CorridorShape => {
     // Defense-in-depth: the schema cap on `coordinates` (see suggestionsRequestSchema)
     // is the real mitigation for pathological input reaching @turf/simplify here, but
     // wrap this anyway so any unexpected failure becomes a clean, typed error instead
     // of an unguarded throw.
     try {
-      return (ring ??= buildCorridor(route));
+      return (shape ??= buildCorridorShape(route));
     } catch (e) {
       throw new OverpassError(e instanceof Error ? e.message : "Could not build a route corridor");
     }
   };
-  return runSearch(routeCacheKey(route), () => buildOverpassQuery(toOverpassPoly(corridor())), async () => localPlacesInRing(corridor()), deps, undefined, async () => localPlacesInRingPartial(corridor()));
+  // Overpass's `poly:` filter takes one ring and no holes, so a loop route's hole is cut out of its answer afterwards.
+  const askOverpass = deps.fetchOverpass ?? fetchOverpass;
+  const outsideHoles = async (query: string): Promise<unknown> => {
+    const json = await askOverpass(query);
+    const { outer, holes } = corridor();
+    return holes.length ? dropElementsInHoles(json, createRingTester(outer, holes)) : json;
+  };
+  return runSearch(routeCacheKey(route), () => buildOverpassQuery(toOverpassPoly(corridor().outer)), async () => localPlacesInRing(corridor().outer, undefined, corridor().holes), { ...deps, fetchOverpass: outsideHoles }, undefined, async () => localPlacesInRingPartial(corridor().outer, undefined, corridor().holes));
+}
+
+type LooseElement = { lat?: number; lon?: number; center?: { lat: number; lon: number } };
+
+/** An Overpass response without the elements the tester refuses (elements with no position are left for the parser to judge). */
+function dropElementsInHoles(json: unknown, inside: (lng: number, lat: number) => boolean): unknown {
+  const elements = (json as { elements?: unknown } | null)?.elements;
+  if (!Array.isArray(elements)) return json;
+  const kept = elements.filter((e: LooseElement | null) => {
+    const lat = e?.lat ?? e?.center?.lat;
+    const lng = e?.lon ?? e?.center?.lon;
+    return typeof lat !== "number" || typeof lng !== "number" || inside(lng, lat);
+  });
+  return { ...(json as object), elements: kept };
 }
 
 /** Suggestions in a circle around one point (a trip's first stop, before there is a route). */

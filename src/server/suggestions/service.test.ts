@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LngLat } from "@/lib/types";
+import { CorridorError } from "./corridor";
 import { OverpassError } from "./overpass";
 import { clearSuggestionCache, findSuggestions, findSuggestionsAround, routeCacheKey } from "./service";
 
@@ -60,11 +61,11 @@ describe("findSuggestions", () => {
     expect(fetchOverpass).not.toHaveBeenCalled();
   });
 
-  it("wraps a corridor-building failure in a typed OverpassError instead of throwing unguarded", async () => {
+  it("reports a corridor-building failure as a typed CorridorError (not a retryable OverpassError) instead of throwing unguarded", async () => {
     const fetchOverpass = vi.fn();
     // A single-point route can't build a route (buildCorridor requires >= 2 points).
     await expect(findSuggestions([[-119.79, 36.74]], { fetchOverpass })).rejects.toBeInstanceOf(
-      OverpassError,
+      CorridorError,
     );
     expect(fetchOverpass).not.toHaveBeenCalled();
   });

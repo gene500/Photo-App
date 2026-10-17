@@ -206,3 +206,41 @@ describe("mapbox caches and shape guards", () => {
     await expect(getDirections([[1, 2], [3, 4]], d as unknown as typeof fetch)).rejects.toBeInstanceOf(ExternalServiceError);
   });
 });
+
+describe("mapbox malformed upstream data", () => {
+  beforeEach(() => {
+    process.env.MAPBOX_TOKEN = "test-token";
+    delete process.env.EXTERNAL_APIS_FAKE;
+    clearMapboxCaches();
+  });
+  afterEach(() => {
+    delete process.env.MAPBOX_TOKEN;
+  });
+  const stops: [number, number][] = [[-1, -1], [-2, -2]];
+  const withLegs = (legs: unknown) => ({ code: "Ok", routes: [{ geometry: { coordinates: [[0, 0], [1, 1]] }, legs, distance: 1, duration: 1 }] });
+
+  it("rejects directions with bad legs as an ExternalServiceError", async () => {
+    for (const legs of [[null], [{}], [{ distance: "a", duration: 1 }]]) {
+      await expect(getDirections(stops, async () => json(withLegs(legs)))).rejects.toThrow(ExternalServiceError);
+    }
+  });
+  it("skips geocode features with a non-string name or out-of-range coordinates", async () => {
+    const features = [
+      { geometry: { coordinates: [999, -999] }, properties: { full_address: "Far" } },
+      { geometry: { coordinates: [-100, 40] }, properties: { full_address: 5, name: 7 } },
+      { geometry: { coordinates: [-101, 41] }, properties: { full_address: "Good" } },
+    ];
+    const out = await geocode("x", {}, async () => json({ features }));
+    expect(out.map((p) => p.name)).toEqual(["x", "Good"]);
+  });
+  it("rejects a matrix with negative durations", async () => {
+    await expect(getDurationMatrix(stops, async () => json({ code: "Ok", durations: [[0, -5], [3, 0]] }))).rejects.toThrow(ExternalServiceError);
+  });
+  it("does not name the missing token in the message sent to clients", async () => {
+    delete process.env.MAPBOX_TOKEN;
+    const err = await getDirections(stops, async () => json({})).catch((e) => e);
+    expect(err).toBeInstanceOf(ExternalServiceError);
+    expect(err.message).toBe("Service temporarily unavailable");
+    expect(err.message).not.toMatch(/MAPBOX/);
+  });
+});

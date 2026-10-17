@@ -2,10 +2,10 @@ import { createHash } from "node:crypto";
 import type { LngLat, Suggestion } from "@/lib/types";
 import { fakeSuggestions, isFakeExternal } from "../external/fake";
 import { TtlCache } from "./cache";
-import { AROUND_RADIUS_KM, buildCorridorShape, buildOverpassAroundQuery, buildOverpassQuery, type CorridorShape, toOverpassPoly } from "./corridor";
+import { AROUND_RADIUS_KM, buildCorridorShapes, buildOverpassAroundQuery, buildOverpassQuery, type CorridorShape, OVERPASS_OUT_CAP, toOverpassPoly } from "./corridor";
 import { createRingTester } from "./places-grid";
 import { clearCellCache, localPlacesAround, localPlacesInRing, localPlacesInRingPartial } from "./local-places";
-import { fetchOverpass, OverpassError } from "./overpass";
+import { fetchOverpass } from "./overpass";
 import { parseOverpassResponse, SUGGESTION_CAP } from "./parse";
 import { enrichPopularity, POPULARITY_MAX_CANDIDATES, resetSharedCounter } from "./popularity";
 
@@ -27,7 +27,7 @@ const rawCache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS, 100, () => 
 /** Most Overpass calls kept running in the background per instance after a thin local answer was shown. */
 const MAX_LATE_ASKS = 10;
 /** Overpass calls still running after a thin local answer was shown, so a repeat search joins them instead of racing the mirrors again. */
-const lateAsks = new Map<string, Promise<Suggestion[]>>();
+const lateAsks = new Map<string, Promise<Asked>>();
 /** Searches already underway, so a repeat of the same one (a double-fired effect, a retry click) joins it instead of starting another. */
 const inflight = new Map<string, Promise<{ parsed: Suggestion[]; degraded: boolean }>>();
 
@@ -66,6 +66,9 @@ type Deps = {
 export const THIN_LOCAL_GRACE_MS = 1_500;
 
 type Raw = { parsed: Suggestion[]; degraded: boolean };
+/** An Overpass answer; `truncated` when the output cap cut it short and the hole filter then dropped places (so it is not the whole corridor). */
+type Asked = { parsed: Suggestion[]; truncated: boolean };
+const TRUNCATED = "truncatedByHoles";
 
 async function loadRaw(key: string, buildQuery: () => string, local: () => Promise<unknown[] | null>, deps: Deps, origin?: LngLatLiteral, localPartial?: () => Promise<unknown[] | null>): Promise<Raw> {
   // The local copy answers in milliseconds; Overpass (free, often busy) is only asked when the copy doesn't cover the
@@ -83,11 +86,15 @@ async function loadRaw(key: string, buildQuery: () => string, local: () => Promi
   if (nearby?.length && !lateAsks.has(key) && lateAsks.size >= MAX_LATE_ASKS) {
     return { parsed: parseOverpassResponse({ elements: nearby }, SUGGESTION_CAP, origin), degraded: true };
   }
-  const asked = lateAsks.get(key) ?? (async () => parseOverpassResponse(await (deps.fetchOverpass ?? fetchOverpass)(buildQuery()), SUGGESTION_CAP, origin))();
+  const asked = lateAsks.get(key) ?? (async (): Promise<Asked> => {
+    const json = await (deps.fetchOverpass ?? fetchOverpass)(buildQuery());
+    return { parsed: parseOverpassResponse(json, SUGGESTION_CAP, origin), truncated: (json as Record<string, unknown> | null)?.[TRUNCATED] === true };
+  })();
   if (!nearby?.length) {
-    const parsed = await asked;
-    rawCache.set(key, parsed);
-    return { parsed, degraded: false };
+    const { parsed, truncated } = await asked;
+    // A truncated answer is shown, but not remembered as the whole corridor.
+    if (!truncated) rawCache.set(key, parsed);
+    return { parsed, degraded: truncated };
   }
   // Something local to show: don't make the first page wait out a slow or failing Overpass.
   const thin = parseOverpassResponse({ elements: nearby }, SUGGESTION_CAP, origin);
@@ -101,7 +108,7 @@ async function loadRaw(key: string, buildQuery: () => string, local: () => Promi
       // Overpass is still working: remember its answer if it comes, so the next search is complete.
       if (!lateAsks.has(key)) {
         lateAsks.set(key, asked);
-        const settle = asked.then((p) => { rawCache.set(key, p); }, () => undefined).finally(() => {
+        const settle = asked.then((a) => { if (!a.truncated) rawCache.set(key, a.parsed); }, () => undefined).finally(() => {
           if (lateAsks.get(key) === asked) lateAsks.delete(key);
         });
         deps.defer?.(settle);
@@ -109,8 +116,8 @@ async function loadRaw(key: string, buildQuery: () => string, local: () => Promi
       // A thin answer shown only because Overpass was slow must not be remembered as the real result.
       return { parsed: thin, degraded: true };
     }
-    rawCache.set(key, won);
-    return { parsed: won, degraded: false };
+    if (!won.truncated) rawCache.set(key, won.parsed);
+    return { parsed: won.parsed, degraded: won.truncated };
   } catch {
     return { parsed: thin, degraded: true };
   } finally {
@@ -175,31 +182,37 @@ async function compute(key: string, buildQuery: () => string, local: () => Promi
 
 export async function findSuggestions(route: LngLat[], deps: Deps = {}): Promise<Suggestion[]> {
   if (isFakeExternal()) return fakeSuggestions(route);
-  let shape: CorridorShape | null = null;
-  const corridor = (): CorridorShape => {
-    // Defense-in-depth: the schema cap on `coordinates` (see suggestionsRequestSchema)
-    // is the real mitigation for pathological input reaching @turf/simplify here, but
-    // wrap this anyway so any unexpected failure becomes a clean, typed error instead
-    // of an unguarded throw.
-    try {
-      return (shape ??= buildCorridorShape(route));
-    } catch (e) {
-      throw new OverpassError(e instanceof Error ? e.message : "Could not build a route corridor");
-    }
-  };
+  let shapes: CorridorShape[] | null = null;
+  // Throws CorridorError (a route that can never be searched, so the caller answers 400 rather than "retry"); the schema cap
+  // on `coordinates` (see suggestionsRequestSchema) is the real mitigation for pathological input.
+  const corridor = (): CorridorShape[] => (shapes ??= buildCorridorShapes(route));
   // Overpass's `poly:` filter takes one ring and no holes, so a loop route's hole is cut out of its answer afterwards.
   const askOverpass = deps.fetchOverpass ?? fetchOverpass;
   const outsideHoles = async (query: string): Promise<unknown> => {
     const json = await askOverpass(query);
-    const { outer, holes } = corridor();
-    return holes.length ? dropElementsInHoles(json, createRingTester(outer, holes)) : json;
+    const parts = corridor();
+    if (!parts.some((p) => p.holes.length)) return json;
+    const testers = parts.map((p) => createRingTester(p.outer, p.holes));
+    return dropElementsInHoles(json, (lng, lat) => testers.some((t) => t(lng, lat)));
   };
-  return runSearch(routeCacheKey(route), () => buildOverpassQuery(toOverpassPoly(corridor().outer)), async () => localPlacesInRing(corridor().outer, undefined, corridor().holes), { ...deps, fetchOverpass: outsideHoles }, undefined, async () => localPlacesInRingPartial(corridor().outer, undefined, corridor().holes));
+  // The local copy answers per part; one part outside its coverage makes the whole answer "not covered".
+  const coveredParts = async (): Promise<unknown[] | null> => {
+    const found = await Promise.all(corridor().map((p) => localPlacesInRing(p.outer, undefined, p.holes)));
+    return found.some((f) => f === null) ? null : found.flat() as unknown[];
+  };
+  const partialParts = async (): Promise<unknown[] | null> => {
+    const found = (await Promise.all(corridor().map((p) => localPlacesInRingPartial(p.outer, undefined, p.holes)))).filter((f) => f !== null);
+    return found.length ? found.flat() : null;
+  };
+  return runSearch(routeCacheKey(route), () => buildOverpassQuery(corridor().map((p) => toOverpassPoly(p.outer))), coveredParts, { ...deps, fetchOverpass: outsideHoles }, undefined, partialParts);
 }
 
 type LooseElement = { lat?: number; lon?: number; center?: { lat: number; lon: number } };
 
-/** An Overpass response without the elements the tester refuses (elements with no position are left for the parser to judge). */
+/**
+ * An Overpass response without the elements the tester refuses (elements with no position are left for the parser to judge).
+ * A response at the output cap that lost places to the filter is marked truncated: the cap may have hidden places outside the holes.
+ */
 function dropElementsInHoles(json: unknown, inside: (lng: number, lat: number) => boolean): unknown {
   const elements = (json as { elements?: unknown } | null)?.elements;
   if (!Array.isArray(elements)) return json;
@@ -208,7 +221,8 @@ function dropElementsInHoles(json: unknown, inside: (lng: number, lat: number) =
     const lng = e?.lon ?? e?.center?.lon;
     return typeof lat !== "number" || typeof lng !== "number" || inside(lng, lat);
   });
-  return { ...(json as object), elements: kept };
+  const truncated = elements.length >= OVERPASS_OUT_CAP && kept.length < elements.length;
+  return { ...(json as object), elements: kept, ...(truncated ? { [TRUNCATED]: true } : {}) };
 }
 
 /** Suggestions in a circle around one point (a trip's first stop, before there is a route). */

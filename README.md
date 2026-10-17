@@ -147,8 +147,10 @@ once (the URL then 404s); sharing again issues a new token. The token is 32 rand
 bytes (43 base64url chars) stored in `Trip.shareToken` (nullable, unique; additive
 migration `20261010120000_share_token`). The public page reads a dedicated sanitized
 DTO (`toPublicTripDto`): no email, user id, database ids or uploaded photos, and it is
-`noindex, nofollow` with `referrer: no-referrer`. `/api/directions` stays login-only, so
-the shared view uses straight lines and distance-based time estimates. Owner-only API:
+`noindex, nofollow` with `referrer: no-referrer`. `/api/directions` stays login-only, but
+the share page fetches the real driving route on the server (`routeFor` in
+`src/app/s/[token]/page.tsx`); straight lines and distance-based time estimates are only
+the fallback when routing is unavailable. Owner-only API:
 `POST /api/trips/[id]/share` (create or return the existing token) and `DELETE` (revoke).
 
 ### Export and navigation links
@@ -160,6 +162,18 @@ from the loaded stops (`src/lib/export.ts`), no server route. Google allows 11 p
 link, so longer trips get "Part 1/2", "Part 2/2" links that share an end point. User text
 is XML-escaped and stripped of characters illegal in XML 1.0; the file name is reduced to
 `[A-Za-z0-9_-]`; URLs use `URLSearchParams` only.
+
+**Download PDF** (editor Export menu and the public share page) builds a printable
+itinerary in the browser with jsPDF 4.2.1, loaded only when the button is clicked. It has a
+trip summary, a Mapbox Static Images map (route and numbered pins; it uses the public
+`NEXT_PUBLIC_MAPBOX_TOKEN`, one request per download, so it counts toward your Mapbox
+usage) and a stop schedule with arrival time, best light, weather (editor only) and notes.
+With no token, in fake-map mode, or when the map request fails (8 s timeout), a drawn
+fallback map is used instead. Characters outside Western European alphabets print as "?".
+A URL-restricted public token may make the share page's static-map request fail (the page
+sends no Referer); the PDF then falls back to the drawn map. The static map was verified
+against real Mapbox on 2026-10-16 from the editor and the share page with an unrestricted
+token.
 
 ### Photo popups and beige map
 

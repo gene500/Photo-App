@@ -6,12 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createItineraryPdf, loadWeatherLines, saveBlob } from "@/lib/itinerary-download";
 import { ExportControl } from "./ExportControl";
 
-vi.mock("@/lib/itinerary-download", () => ({
-  createItineraryPdf: vi.fn(),
-  loadWeatherLines: vi.fn(),
-  saveBlob: vi.fn(),
-  mapTokenFromEnv: vi.fn(() => null),
-}));
+vi.mock("@/lib/itinerary-download", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/itinerary-download")>();
+  // saveBlob is a spy; the GPX test re-installs the real implementation.
+  return {
+    createItineraryPdf: vi.fn(),
+    loadWeatherLines: vi.fn(),
+    saveBlob: vi.fn(actual.saveBlob),
+    mapTokenFromEnv: vi.fn(() => null),
+  };
+});
 
 const stop = (i: number) => ({ name: `S${i}`, lat: 40 + i, lng: -120, notes: null });
 
@@ -93,6 +97,8 @@ describe("ExportControl", () => {
   });
 
   it("offers GPX and both map links with 2 stops", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/itinerary-download")>("@/lib/itinerary-download");
+    vi.mocked(saveBlob).mockImplementation(actual.saveBlob);
     render(<ExportControl tripName="Big Sur / 2026" stops={[stop(0), stop(1)]} route={[[-120, 40], [-120, 41]]} />);
     expect(screen.queryByRole("group", { name: "Export trip" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Export" }));

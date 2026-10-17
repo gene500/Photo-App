@@ -2,6 +2,7 @@
 
 import { downsampleRoute } from "./downsample";
 import type { ItineraryInput } from "./itinerary";
+import { STATIC_MAP_HEIGHT, STATIC_MAP_WIDTH } from "./static-map";
 import type { LngLat } from "./types";
 
 export type PdfMap = { kind: "image"; dataUrl: string } | { kind: "fallback" };
@@ -24,7 +25,7 @@ export function pdfSafe(text: string): string {
 }
 
 const MARGIN = 40;
-const MAP_ASPECT = 400 / 640;
+const MAP_ASPECT = STATIC_MAP_HEIGHT / STATIC_MAP_WIDTH;
 const FOOTER_SPACE = 30;
 const INDENT = 16;
 const GREY = 110;

@@ -2,6 +2,8 @@ import { downsampleRoute } from "./downsample";
 import type { LngLat } from "./types";
 
 export const STATIC_MAP_MAX_URL = 7500;
+export const STATIC_MAP_WIDTH = 640;
+export const STATIC_MAP_HEIGHT = 400;
 
 const MAX_SIDE = 1280;
 const START_POINTS = 1000;
@@ -43,8 +45,8 @@ export function staticMapUrl(a: {
   height?: number;
 }): string | null {
   if (!a.token || a.stops.length < 2) return null;
-  const w = clampSide(a.width ?? 640);
-  const h = clampSide(a.height ?? 400);
+  const w = clampSide(a.width ?? STATIC_MAP_WIDTH);
+  const h = clampSide(a.height ?? STATIC_MAP_HEIGHT);
   const pins = a.stops.map((s, i) => {
     const label = i + 1 <= 99 ? `-${i + 1}` : "";
     return `pin-s${label}+${PIN_COLOR}(${s.lng.toFixed(5)},${s.lat.toFixed(5)})`;

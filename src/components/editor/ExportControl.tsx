@@ -7,7 +7,7 @@ import type { LngLat } from "@/lib/types";
 import { useItineraryDownload } from "@/components/itinerary/use-itinerary-download";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { buildItinerary, itineraryFileName, type ItineraryStopSource } from "@/lib/itinerary";
-import { createItineraryPdf, loadWeatherLines, mapTokenFromEnv } from "@/lib/itinerary-download";
+import { createItineraryPdf, loadWeatherLines, mapTokenFromEnv, saveBlob } from "@/lib/itinerary-download";
 import { usePopover } from "./use-popover";
 
 type Props = {
@@ -23,7 +23,7 @@ type Props = {
 
 const item = "block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent-strong";
 
-/** "Export" button with a small menu: GPX download and Google / Apple Maps directions. Needs 2+ stops. */
+/** "Export" button with a small menu: GPX download, PDF itinerary download and Google / Apple Maps directions. Needs 2+ stops. */
 export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Props) {
   const { open, setOpen, close, toggle, rootRef, triggerRef, panelRef, panelId } = usePopover();
   const { settings } = useSettings();
@@ -39,15 +39,7 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
 
   function downloadGpx() {
     const blob = new Blob([buildGpx({ name: tripName, stops, route })], { type: "application/gpx+xml" });
-    const href = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = href;
-    a.download = gpxFileName(tripName, plannedDate);
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    // Revoked a moment later: some browsers start the download asynchronously and need the URL until then.
-    setTimeout(() => URL.revokeObjectURL(href), 1000);
+    saveBlob(blob, gpxFileName(tripName, plannedDate));
     close();
   }
 

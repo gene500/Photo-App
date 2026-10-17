@@ -32,10 +32,12 @@ export function SkyCard({ lat, lng, plannedDate }: Props) {
   }, [valid, lat, lng, plannedDate]);
   if (!sky) return null;
 
-  const { sunrise, sunset, moon } = sky;
+  const { sunrise, sunset, moon, alwaysUp, alwaysDown } = sky;
   const clock = (at: Date) => formatClock(at, undefined, settings.timeFormat);
   const row = (label: string, ev: SkyEvent | null, missing: string) => (ev ? `${label} ${clock(ev.at)} · ${bearingText(ev.bearing)}` : missing);
-  const dialLabel = sunrise && sunset ? `Sunrise from ${bearingText(sunrise.bearing)}, sunset toward ${bearingText(sunset.bearing)}` : "Sun does not rise and set on this date";
+  // Polar day and night get one line each; the per-event fallbacks are for the mixed case of exactly one missing event.
+  const polarNote = alwaysUp ? "Sun does not set on this date" : alwaysDown ? "Sun does not rise on this date" : null;
+  const dialLabel = polarNote ?? (sunrise && sunset ? `Sunrise from ${bearingText(sunrise.bearing)}, sunset toward ${bearingText(sunset.bearing)}` : "Sun does not rise and set on this date");
 
   return (
     <div data-testid="sky-card" className="flex items-start gap-3 rounded-xl bg-background p-3 ring-1 ring-border">
@@ -46,8 +48,14 @@ export function SkyCard({ lat, lng, plannedDate }: Props) {
         {sunset && <circle data-marker="sunset" cx={onDial(sunset.bearing).x} cy={onDial(sunset.bearing).y} r="5" className="fill-foreground" />}
       </svg>
       <div className="min-w-0 space-y-1 text-sm">
-        <p>{row("Sunrise", sunrise, "Sun does not rise on this date")}</p>
-        <p>{row("Sunset", sunset, "Sun does not set on this date")}</p>
+        {polarNote ? (
+          <p>{polarNote}</p>
+        ) : (
+          <>
+            <p>{row("Sunrise", sunrise, "Sun does not rise on this date")}</p>
+            <p>{row("Sunset", sunset, "Sun does not set on this date")}</p>
+          </>
+        )}
         <p className="text-xs text-muted">
           {`${moon.phase.charAt(0).toUpperCase()}${moon.phase.slice(1)} · ${moon.illuminationPct}% lit · ${moon.rise ? `Moonrise ${clock(moon.rise)}` : "No moonrise this day"}`}
         </p>

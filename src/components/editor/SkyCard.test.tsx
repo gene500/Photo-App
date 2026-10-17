@@ -22,13 +22,18 @@ describe("SkyCard", () => {
     render(<SkyCard lat={78} lng={15} plannedDate="2026-06-21" />);
     const card = screen.getByTestId("sky-card");
     expect(card.textContent).toContain("Sun does not set on this date");
+    expect(card.textContent).not.toContain("does not rise");
+    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("Sun does not set on this date");
     expect(card.textContent).not.toMatch(/Sunrise \d/);
     expect(card.querySelectorAll("[data-marker]").length).toBe(0);
   });
 
   it("explains polar night", () => {
     render(<SkyCard lat={78} lng={15} plannedDate="2026-12-21" />);
-    expect(screen.getByTestId("sky-card").textContent).toContain("Sun does not rise on this date");
+    const text = screen.getByTestId("sky-card").textContent;
+    expect(text).toContain("Sun does not rise on this date");
+    expect(text).not.toContain("does not set");
+    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("Sun does not rise on this date");
   });
 
   it.each([

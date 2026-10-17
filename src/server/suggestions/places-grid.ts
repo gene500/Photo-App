@@ -9,8 +9,9 @@ const COLS = Math.round(360 / CELL_DEG);
 /** Wraps a grid column across the antimeridian into 0..COLS-1. */
 const wrapCol = (c: number) => ((c % COLS) + COLS) % COLS;
 
+/** Longitude 180 (or a hair under it that rounds up) wraps to column 0 with -180, the column every search looks it up in. */
 export function cellOf(lat: number, lng: number): number {
-  return Math.floor((lat + 90) / CELL_DEG) * LNG_STRIDE + Math.floor((lng + 180) / CELL_DEG);
+  return Math.floor((lat + 90) / CELL_DEG) * LNG_STRIDE + wrapCol(Math.floor((lng + 180) / CELL_DEG));
 }
 
 const KM_PER_DEG = 111.32;

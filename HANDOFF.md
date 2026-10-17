@@ -4,6 +4,77 @@ How to pick this project back up in a new session, device, or after a
 compaction. Updated at phase transitions, not every task — check the
 ledger (below) for exact task-by-task status.
 
+## Current work: PDF itinerary (2026-10-16, IN PROGRESS)
+
+Read this section first; the older sections below are history.
+
+**Goal:** a "Download PDF" action in the editor's Export menu and on the public share page: a schedule of
+every stop plus a route map. Built in the browser with jsPDF (loaded only on click).
+
+**Documents (all committed on local `main`):**
+- Spec: `docs/superpowers/specs/2026-10-16-pdf-itinerary-design.md`
+- Plan (7 tasks): `docs/superpowers/plans/2026-10-16-pdf-itinerary.md`, including a "Deviations" section
+  (fallback map is drawn with PDF vector shapes; editor weather is fetched at click time).
+
+**Where the code is:** worktree `/Users/genestone/photo-pdf-itinerary`, branch `feat/pdf-itinerary`
+(based on local `main` at `682414c`). **This branch is local only and must not be pushed** (Preview builds
+hold the Turso credentials, see the deploy caution below). If you are on another machine it does not exist
+there: the work only reaches GitHub when merged into `main` and pushed.
+
+| Task | What | Status | Commit |
+|---|---|---|---|
+| 1 | `src/lib/itinerary.ts` data builder | done, reviewed | `8aa6381` |
+| 2 | `src/lib/static-map.ts` Mapbox static map URL | done, reviewed | `50c29be` |
+| 3 | `src/lib/itinerary-pdf.ts` jsPDF renderer (jspdf 4.2.1 exact pin) | done, reviewed + fix | `bea92fe`, `c42d112` |
+| 4 | `src/lib/itinerary-download.ts` + `use-itinerary-download.ts` | done, reviewed | `39c1c37` |
+| 5 | Export-menu item (`ExportControl`, `TripHeader`, `TripEditor`) | done, reviewed | `e3360ca` |
+| 6 | Share-page button (`SharedTripView`) | in progress when this was written | |
+| 7 | `e2e/pdf-itinerary.spec.ts` + full gates | pending | |
+
+**Still to do after Task 7:** final whole-branch review (on **Opus**, per the standing rule below); test in the
+real app with the Mapbox token from the gitignored `.env` (download once from the editor and once from a share
+link, and force the static-map request to fail to see the fallback; confirm api.mapbox.com allows the browser
+fetch, and that a URL-restricted token still works from the share page, which sends `no-referrer`); merge
+`feat/pdf-itinerary` into `main` (ff-only if possible); push to `main` only when the owner says "push"; then check
+Vercel and CI.
+
+**Resuming the subagent build:** the controller ledger is
+`/Users/genestone/photo-pdf-itinerary/.superpowers/sdd/2026-10-16-pdf-itinerary/progress.md` (git-ignored, local;
+if gone, trust `git log feat/pdf-itinerary`). Briefs and reports sit next to it as `task-N-brief.md` and
+`task-N-report.md`. Do not re-dispatch a task that has a `complete` line in the ledger.
+
+**Minor review findings parked (none blocking):** no tests for `saveBlob`, `mapTokenFromEnv`,
+`createItineraryPdf`; PDF title loop has no page-break check (trip names are capped at 120 chars); the editor's
+error alert only shows while the Export menu is open; no TripEditor-level test for the `pdf` prop; antimeridian
+and long-title tests only assert valid output.
+
+**Local `main` is ahead of GitHub (not pushed):** the speed-up merge (`06f68ed`), the popularity test fix
+(`ea649b8`), the PDF spec and plan docs, and the sky/weather work is already pushed (`b90f726`). Run
+`git log origin/main..main` to see the exact list. `CLAUDE.md` in the repo root is still **uncommitted**: it holds
+the owner's rules (below), so commit it.
+
+**Other open items:**
+- Share-link bug (shared link opens the generic page): not reproduced locally or on the live site; needs the
+  device used and what the page showed. Hypotheses: an installed PWA capturing the link (manifest `start_url`
+  is `/trips`), a mangled token, or production data.
+- Email verification (and the 409 on signup that reveals whether an email exists): blocked on choosing a mail
+  provider.
+- Branch `worktree-agent-a22e92e8e241870c4` (leftover) is awaiting the owner's decision to delete.
+- `~/.playwright-mcp` holds screenshots from testing; clear it when the PDF work is done.
+
+**Owner's standing rules (also in memory and `CLAUDE.md`):**
+- "push" means push to `main` of `gene500/Photo-App`; never push other branches.
+- After every push, check that Vercel deployed: only project `photo-app-pi2o` counts
+  (https://photo-app-pi2o.vercel.app); command in `CLAUDE.md`. Also watch the GitHub Actions run.
+- Keep a visible to-do list with statuses and report progress against it.
+- Run subagents one at a time, not in parallel. Implementers and per-task reviews on Sonnet; final reviews on Opus.
+- Commit trailers: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` and a `Claude-Session:` line.
+- Never print or commit the Mapbox `pk.` token; it lives only in gitignored `.env` files.
+
+**Setup on a new machine:** clone the repo, `npm ci`, copy `.env.example` to `.env` and `.env.local` and fill in values
+(the Mapbox token is not in git), `npm run typecheck && npm run lint && npm test`. Next.js here is 16.x with
+breaking changes: read `node_modules/next/dist/docs/` before writing Next-specific code (see `AGENTS.md`).
+
 ## What this is
 
 Road Trip Photo Planner — see `docs/superpowers/specs/2026-10-06-road-trip-photo-planner-design.md`

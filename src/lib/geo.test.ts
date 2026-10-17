@@ -36,6 +36,16 @@ describe("bearingEndpoint", () => {
     expect(Math.abs(lng)).toBeLessThan(0.01);
     expect(Math.abs(lat - 1)).toBeLessThan(0.01);
   });
+  it("does not wrap across the antimeridian, so a map line takes the short way", () => {
+    const [lng] = bearingEndpoint({ lat: 0, lng: 179.5 }, 90, 111.195);
+    expect(Math.abs(lng - 180.5)).toBeLessThan(0.01);
+    expect(Math.abs(lng - 179.5 - 1)).toBeLessThan(0.01);
+  });
+  it("does not wrap west across the antimeridian either", () => {
+    const [lng] = bearingEndpoint({ lat: 0, lng: -179.5 }, 270, 111.195);
+    expect(Math.abs(lng - -180.5)).toBeLessThan(0.01);
+    expect(Math.abs(lng + 179.5 + 1)).toBeLessThan(0.01);
+  });
   it("stays finite near the pole", () => {
     const [lng, lat] = bearingEndpoint({ lat: 89, lng: 0 }, 90, 50);
     expect(Number.isFinite(lng)).toBe(true);

@@ -24,7 +24,10 @@ export function wrapLng(lng: number): number {
 
 const EARTH_RADIUS_KM = 6371.0088;
 
-/** The point `distanceKm` from `origin` along a great circle, heading `bearing` degrees clockwise from north. */
+/**
+ * The point `distanceKm` from `origin` along a great circle, heading `bearing` degrees clockwise from north.
+ * The longitude is not wrapped (it can pass +-180), so a line from the origin to it takes the short way on a map.
+ */
 export function bearingEndpoint(
   origin: { lat: number; lng: number },
   bearing: number,
@@ -36,5 +39,5 @@ export function bearingEndpoint(
   const sinLat2 = Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(brng);
   const lat2 = Math.asin(Math.max(-1, Math.min(1, sinLat2)));
   const dLng = Math.atan2(Math.sin(brng) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * sinLat2);
-  return [wrapLng(origin.lng + (dLng * 180) / Math.PI), (lat2 * 180) / Math.PI];
+  return [origin.lng + (dLng * 180) / Math.PI, (lat2 * 180) / Math.PI];
 }

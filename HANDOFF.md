@@ -16,6 +16,8 @@ Last updated 2026-10-17.
 | # | Task | Status | Notes |
 |---|---|---|---|
 | S5 | Security L5: Mapbox tokens: use a separate server `MAPBOX_TOKEN`, URL-restrict `NEXT_PUBLIC_MAPBOX_TOKEN`, set a spend cap | blocked | owner action in the Mapbox and Vercel dashboards (cannot be done from code); steps will be given in the reply. L1 (signup 409) is accepted, no work |
+| Z1 | Security attack round: 5 Opus attackers in parallel on private local copies (auth, authorization, injection and uploads, abuse and cost, client and infrastructure) | in progress | owner-requested; reports in `.superpowers/sdd/sec/attack-1..5.md` (git-ignored); attacks run only against localhost copies in fake-external mode |
+| Z2 | Triage the attack findings and fix the real ones (Sonnet implementers, one at a time, reviewed) | pending | |
 | B7 | FINAL (always the last row, combined): full codebase check (Opus), handle its findings, then merge, push to `main`, and confirm both Vercel (`photo-app-pi2o`) and CI succeeded | pending | standing row for the next batch of work. Last run: deferred fixes G1-G7 merged and pushed (see git log); owner follow-ups: try landmark search once on the live site; re-run `import-places` so places at exactly lng 180.0 become reachable |
 
 ### Place search (P1)

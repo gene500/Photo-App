@@ -19,6 +19,7 @@ import { fromTimeValue, toTimeValue } from "./StartTimeControl";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useOfflineCopy } from "@/lib/use-offline-copy";
 import { isExactOptimization } from "@/lib/optimize-schedule";
+import { routeSignature } from "@/lib/route-signature";
 import { defaultLightPref } from "@/lib/light-windows";
 import { formatDistance, formatDuration } from "@/lib/format";
 import { coordsLabel, haversineMeters } from "@/lib/geo";
@@ -81,6 +82,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     appliedIds: string[];
     previousDepartAt: string | null;
     appliedDepartAt: string | null;
+    previousOptimizedFor: string | null;
   } | null>(null);
   const [optimizeNote, setOptimizeNote] = useState<{ text: string; idsKey: string } | null>(null);
   // Alternatives found for one stop, tagged with the stop and the waypoints they were found for (stale ones are not shown).
@@ -375,15 +377,21 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }
 
   async function optimizeRoute() {
-    if (optimizing || stops.length < 3) return;
+    if (optimizing || stops.length < 2) return;
     const startKey = idsKey;
     const startWaypoints = waypointKey;
     const startPrefs = prefsKey;
     const before = stops;
     const previousDepartAt = trip.departAt;
+    const previousOptimizedFor = trip.routeOptimizedFor ?? null;
     setOptimizing(true);
     setOptimizeNote(null);
     try {
+      // Two stops have nothing to reorder (the optimizer needs three), so Optimize only records the state.
+      if (before.length < 3) {
+        await saveTrip({ routeOptimizedFor: routeSignature(trip.plannedDate, before) });
+        return;
+      }
       const result = await api.optimizeOrder(before.map((s): LngLat => [s.lng, s.lat]), {
         stops: before.map((s) => ({ lightPref: s.lightPref, priority: s.priority, dwellMinutes: s.dwellMinutes })),
         plannedDate: trip.plannedDate,
@@ -410,7 +418,10 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const nextDepartAt = result.departAt ? clampToSolarDay(new Date(result.departAt), trip.plannedDate, before[result.order[0] ?? 0].lng).toISOString() : previousDepartAt;
       const orderChanged = ids.join(",") !== startKey;
       const departChanged = !sameInstant(nextDepartAt, previousDepartAt);
+      // Marks the trip optimized for the new order, in the same save as the departure.
+      const optimizedFor = routeSignature(trip.plannedDate, ids.map((id) => before.find((s) => s.id === id)!));
       if (!orderChanged && !departChanged) {
+        await saveTrip({ routeOptimizedFor: optimizedFor });
         const usesLight = before.some((s) => s.lightPref !== "any");
         const verdict = isExactOptimization(before.length, usesLight) && result.complete !== false ? "Already the fastest order" : "No faster order found";
         setOptimizeNote({ text: [verdict, missNote].filter(Boolean).join(". "), idsKey: startKey });
@@ -419,15 +430,13 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const previousIds = before.map((s) => s.id);
       if (orderChanged && !(await reorder(ids))) return;
       let appliedDepartAt = previousDepartAt;
-      if (departChanged) {
-        try {
-          await saveTrip({ departAt: nextDepartAt });
-          appliedDepartAt = nextDepartAt;
-        } catch (e) {
-          setStopsError(errorMessage(e, "Couldn't save the departure time"));
-        }
+      try {
+        await saveTrip({ ...(departChanged && { departAt: nextDepartAt }), routeOptimizedFor: optimizedFor });
+        appliedDepartAt = nextDepartAt;
+      } catch (e) {
+        setStopsError(errorMessage(e, "Couldn't save the route"));
       }
-      setUndo({ previousIds, appliedIds: ids, previousDepartAt, appliedDepartAt });
+      setUndo({ previousIds, appliedIds: ids, previousDepartAt, appliedDepartAt, previousOptimizedFor });
       // Say so when the start time moved, so the change in the Start time field is not a surprise.
       const moveNote = !sameInstant(appliedDepartAt, previousDepartAt) && appliedDepartAt ? `Start time moved to ${formatClock(new Date(appliedDepartAt), undefined, settings.timeFormat)} so stops land in their light` : null;
       const note = [moveNote, missNote].filter(Boolean).join(". ");
@@ -441,16 +450,15 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
 
   async function undoOptimize() {
     if (!undo || undoing) return;
-    const { previousIds, previousDepartAt } = undo;
+    const { previousIds, previousDepartAt, previousOptimizedFor } = undo;
     setUndoing(true);
     try {
       if (previousIds.join(",") !== idsKey && !(await reorder(previousIds))) return;
-      if (previousDepartAt !== trip.departAt) {
-        try {
-          await saveTrip({ departAt: previousDepartAt });
-        } catch (e) {
-          setStopsError(errorMessage(e, "Couldn't restore the departure time"));
-        }
+      // One save for both, so the optimized mark and the start time cannot disagree.
+      try {
+        await saveTrip({ ...(previousDepartAt !== trip.departAt && { departAt: previousDepartAt }), routeOptimizedFor: previousOptimizedFor });
+      } catch (e) {
+        setStopsError(errorMessage(e, "Couldn't restore the departure time"));
       }
     } finally {
       setUndoing(false);
@@ -781,7 +789,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
               <button
                 type="button"
                 onClick={() => void optimizeRoute()}
-                disabled={stops.length < 3 || optimizing}
+                disabled={stops.length < 2 || optimizing}
                 className="inline-flex min-h-9 items-center rounded-full bg-ink px-4 text-sm font-medium text-ink-foreground transition hover:opacity-85 disabled:opacity-40"
               >
                 {optimizing ? "Optimizing…" : "Optimize route"}
@@ -796,7 +804,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                   Undo
                 </button>
               )}
-              {stops.length < 3 && <p className="text-xs text-muted">Add at least 3 stops to optimize the order.</p>}
+              {stops.length < 2 && <p className="text-xs text-muted">Add at least 2 stops to plan the route.</p>}
               {/* Screen-reader only: always mounted so a text change is announced; nothing shows under the button. */}
               <p role="status" data-testid="optimize-status" className="sr-only">{optimizeNote?.idsKey === idsKey ? optimizeNote.text : ""}</p>
             </div>

@@ -22,6 +22,9 @@ test("optimize route reorders stops for the shortest drive and can be undone", a
     await expect(page.getByText(/^Spot .* \(fake\)$/)).toBeVisible();
     await page.getByRole("button", { name: "Add stop" }).click();
     await expect(rows).toHaveCount(++count);
+    // Two stops are enough to Optimize (nothing to reorder, it just plans the route).
+    if (count === 1) await expect(optimize).toBeDisabled();
+    if (count === 2) await expect(optimize).toBeEnabled();
   }
   await expect(optimize).toBeEnabled();
 

@@ -53,6 +53,7 @@ import { api } from "@/lib/api-client";
 import { createItineraryPdf, loadWeatherLines, saveBlob } from "@/lib/itinerary-download";
 import type { Stop, TripWithStops } from "@/lib/types";
 import { solarDateAt } from "@/lib/best-time";
+import { routeSignature } from "@/lib/route-signature";
 import { TripEditor } from "./TripEditor";
 
 const trip: TripWithStops = { id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] };
@@ -707,11 +708,57 @@ describe("TripEditor", () => {
       vi.mocked(api.reorderStops).mockImplementation(async (_t, ids) => ({
         stops: ids.map((id, order) => ({ ...three.find((s) => s.id === id)!, order })),
       }));
-    beforeEach(() => vi.mocked(api.directions).mockResolvedValue({ route }));
+    beforeEach(() => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.updateTrip).mockImplementation(async (_id, patch) => ({ trip: { ...trip, ...patch } as never }));
+    });
 
-    it("is disabled until there are three stops", () => {
-      render(<TripEditor initialTrip={withStops(seed)} />);
+    it("is disabled until there are two stops", () => {
+      const { unmount } = render(<TripEditor initialTrip={withStops(seed.slice(0, 1))} />);
       expect((screen.getByRole("button", { name: "Optimize route" }) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByText("Add at least 2 stops to plan the route.")).toBeTruthy();
+      unmount();
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      expect((screen.getByRole("button", { name: "Optimize route" }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("optimizes two stops without calling the optimizer", async () => {
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", { routeOptimizedFor: routeSignature("2026-07-01", seed) }));
+      expect(api.optimizeOrder).not.toHaveBeenCalled();
+      expect(api.reorderStops).not.toHaveBeenCalled();
+    });
+
+    it("saves the route signature with the departure in one PATCH when optimizing", async () => {
+      reorderEcho();
+      vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1] });
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(three)} />);
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      const reordered = [three[0], three[2], three[1]];
+      await waitFor(() => expect(api.updateTrip).toHaveBeenCalledTimes(1));
+      expect(api.updateTrip).toHaveBeenCalledWith("t1", expect.objectContaining({ routeOptimizedFor: routeSignature("2026-07-01", reordered) }));
+    });
+
+    it("marks an already-optimal order as optimized", async () => {
+      vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2] });
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(three)} />);
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", { routeOptimizedFor: routeSignature("2026-07-01", three) }));
+      expect(api.reorderStops).not.toHaveBeenCalled();
+    });
+
+    it("restores the previous signature on Undo", async () => {
+      reorderEcho();
+      vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1] });
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={{ ...withStops(three), routeOptimizedFor: "v1:0123456789abcdef" }} />);
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      await user.click(await screen.findByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(api.updateTrip).toHaveBeenLastCalledWith("t1", { routeOptimizedFor: "v1:0123456789abcdef" }));
     });
 
     it("sends the coordinates, applies the order through reorder, and offers Undo", async () => {
@@ -747,12 +794,12 @@ describe("TripEditor", () => {
         render(<TripEditor initialTrip={trip2(null)} />);
         await user.click(screen.getByRole("button", { name: "Optimize route" }));
         expect(vi.mocked(api.optimizeOrder).mock.calls[0]![1]!.stops[2]).toEqual({ lightPref: "sunset", priority: "normal", dwellMinutes: 30 });
-        await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", { departAt: "2026-07-01T23:15:00.000Z" }));
+        await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", expect.objectContaining({ departAt: "2026-07-01T23:15:00.000Z" })));
         expect(((await screen.findByLabelText("Start time")) as HTMLInputElement).value).toMatch(/^\d{2}:\d{2}$/);
         expect(screen.getByRole("button", { name: "Reset to now" })).toBeTruthy();
 
         await user.click(await screen.findByRole("button", { name: "Undo" }));
-        await waitFor(() => expect(api.updateTrip).toHaveBeenLastCalledWith("t1", { departAt: null }));
+        await waitFor(() => expect(api.updateTrip).toHaveBeenLastCalledWith("t1", { departAt: null, routeOptimizedFor: null }));
         await waitFor(() => expect(api.reorderStops).toHaveBeenLastCalledWith("t1", ["a", "b", "c"]));
         await waitFor(() => expect(screen.queryByRole("button", { name: "Reset to now" })).toBeNull());
         expect((screen.getByLabelText("Start time") as HTMLInputElement).value).toMatch(/^\d{2}:\d{2}$/); // back to now
@@ -806,7 +853,7 @@ describe("TripEditor", () => {
         await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("Already the fastest order"));
         expectOptimizeNoteHidden();
         expect(vi.mocked(api.optimizeOrder).mock.calls[0]![1]!.departAt).toBe("2026-07-02T00:22:00Z");
-        expect(api.updateTrip).not.toHaveBeenCalled();
+        expect(vi.mocked(api.updateTrip).mock.calls.every(([, patch]) => !("departAt" in patch))).toBe(true); // only the optimized mark is saved
         expect(screen.queryByText(/Start time moved/)).toBeNull();
       });
 
@@ -819,7 +866,7 @@ describe("TripEditor", () => {
         await user.click(screen.getByRole("button", { name: "Optimize route" }));
         await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("Can't fit 2 stops in their light: C, B."));
         expectOptimizeNoteHidden();
-        expect(api.updateTrip).not.toHaveBeenCalled(); // null departAt leaves the departure alone
+        expect(vi.mocked(api.updateTrip).mock.calls.every(([, patch]) => !("departAt" in patch))).toBe(true); // null departAt leaves the departure alone
       });
 
       it("resets a chosen departure back to sunrise", async () => {

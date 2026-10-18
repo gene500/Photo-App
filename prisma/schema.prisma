@@ -22,19 +22,21 @@ model User {
 }
 
 model Trip {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name        String
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String
   /// Calendar date stored at UTC midnight; exposed as "YYYY-MM-DD".
-  plannedDate DateTime
+  plannedDate       DateTime
   /// When the trip leaves the first stop; null = sunrise at the first stop.
-  departAt    DateTime?
+  departAt          DateTime?
   /// Unguessable read-only share token (32 random bytes, base64url); null = not shared.
-  shareToken  String?   @unique
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  stops       Stop[]
+  shareToken        String?   @unique
+  /// routeSignature of the stops Optimize route last ran on (client-computed); null = never optimized.
+  routeOptimizedFor String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  stops             Stop[]
 
   @@index([userId])
 }

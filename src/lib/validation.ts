@@ -66,7 +66,11 @@ export const stopPrioritySchema = z.enum(["normal", "high", "must"]);
 export const dwellMinutesSchema = z.number().int().min(0).max(MAX_DWELL_MINUTES);
 
 export const tripPatchSchema = tripInputSchema
-  .extend({ departAt: departAtSchema.nullable() })
+  .extend({
+    departAt: departAtSchema.nullable(),
+    // Stored as sent: the client computes it (route-signature.ts); the server never does.
+    routeOptimizedFor: z.string().regex(/^v1:[0-9a-f]{16}$/).nullable(),
+  })
   .partial()
   .refine((o) => Object.keys(o).length > 0, "Nothing to update");
 export type TripPatch = z.infer<typeof tripPatchSchema>;

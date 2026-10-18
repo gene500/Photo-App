@@ -637,6 +637,14 @@ describe("TripEditor", () => {
     await waitFor(() => expect(screen.queryByText("Searching…")).toBeNull());
   });
 
+  it("pins the search bar to the top edge under the header", () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    const wrapper = screen.getByRole("button", { name: "pick place" }).closest(".absolute")!;
+    expect(wrapper.className).toContain("top-0");
+    expect(wrapper.className).not.toContain("top-3");
+  });
+
   it("keeps a newer drawer open when an earlier delete finishes", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     let resolveDelete!: () => void;

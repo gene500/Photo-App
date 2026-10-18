@@ -24,6 +24,14 @@ describe("white surfaces set their own text colour", () => {
     render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
     expect(screen.getByRole("combobox").className).toContain("text-foreground");
   });
+  it("SearchBar joins the header: square top, rounded bottom, header surface", () => {
+    render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
+    const cls = screen.getByRole("combobox").className;
+    expect(cls).toContain("rounded-t-none");
+    expect(cls).toContain("rounded-b-2xl");
+    expect(cls).toContain("bg-surface");
+    expect(cls).not.toMatch(/(^| )rounded-2xl/);
+  });
   it("PlaceCard", () => {
     render(<PlaceCard name="x" resolving={false} busy={false} onAdd={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByRole("region", { name: "Selected place" }).className).toContain("text-foreground");

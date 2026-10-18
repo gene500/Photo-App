@@ -87,6 +87,12 @@ shows upright.
 
 The search bar finds landmarks, viewpoints and other points of interest by name ("Horseshoe Bend", "Griffith Observatory"), plus towns and addresses. It uses the Mapbox Search Box API: `GET /api/geocode?q&session[&proximity]` calls `suggest` (5 results, `types=poi,address,place,locality,neighborhood`) and answers `{ suggestions: [{ name, subtitle?, mapboxId?, lat?, lng? }] }`, points of interest first (stable, Mapbox's order is kept within a group). Suggestions carry no coordinates, so picking one calls `GET /api/geocode/retrieve?id&session`, which answers `{ place }` named like "Horseshoe Bend, Page, Arizona". The client makes one uuid `session` per search (shared by every suggest and the retrieve, which Mapbox bills as one) and renews it after a pick or when the search is cleared. If `suggest` fails, the old v6 forward geocoder answers instead and its rows already carry `lat`/`lng`, so no retrieve is needed. Both routes need sign-in, are rate limited (`geocode`, `geocode-retrieve`, 60/min) and cache for 10 minutes. In fake mode `suggest` returns canned landmarks that match the query plus the old fake address.
 
+The search bar is pinned to the top edge of the map, joined to the header (square top corners, rounded bottom) with no strip of map between them.
+
+### Confirm dialogs
+
+Deleting a trip or a stop asks through an in-app, themed dialog (`src/components/ui/Dialog.tsx`, `useConfirm` in `ConfirmDialog.tsx`), not the browser's `window.confirm`: Cancel is focused first, Tab stays inside, Escape or a press on the backdrop cancels, and focus returns to the button that opened it. Only one confirm is open at a time.
+
 ## 4. Scripts
 
 | Script | Command | Purpose |

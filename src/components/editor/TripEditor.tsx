@@ -696,7 +696,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         onCenterChange={handleCenter}
       />
 
-      <div className="pointer-events-none absolute inset-x-3 top-3 z-[15] space-y-2 lg:inset-x-auto lg:left-[24.25rem] lg:w-[28.75rem] lg:max-w-[calc(100vw-29rem)]">
+      <div className="pointer-events-none absolute inset-x-3 top-0 z-[15] space-y-2 lg:inset-x-auto lg:left-[24.25rem] lg:w-[28.75rem] lg:max-w-[calc(100vw-29rem)]">
         <div className="pointer-events-auto">
           <SearchBar getProximity={() => centerRef.current} onSelect={selectSearchResult} />
         </div>

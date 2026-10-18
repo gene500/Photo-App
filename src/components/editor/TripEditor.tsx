@@ -781,7 +781,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
           <>
             <p className="text-sm text-muted">{stops.length} {stops.length === 1 ? "stop" : "stops"}</p>
             <ErrorBanner
-              message={current?.dismissed ? null : activeRouteError}
+              // The route is not drawn before Optimize, so a failure to fetch it is not worth a banner until then.
+              message={current?.dismissed || !(optimized || optimizing) ? null : activeRouteError}
               onDismiss={() => setRouteResult((r) => (r ? { ...r, dismissed: true } : r))}
             />
             <ErrorBanner message={stopsError} onDismiss={() => setStopsError(null)} />

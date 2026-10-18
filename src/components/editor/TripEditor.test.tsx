@@ -216,6 +216,14 @@ describe("TripEditor", () => {
     expect(await screen.findByRole("region", { name: "Selected place" })).toBeTruthy();
   });
 
+  it("shows no route error banner before Optimize", async () => {
+    vi.mocked(api.directions).mockRejectedValue(new Error("No driving route found between these points"));
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await waitFor(() => expect(api.directions).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("names a clicked spot, then adds it as a stop and refetches the route", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     vi.mocked(api.addStop).mockResolvedValue({ stop: newStop({ id: "c", order: 2, name: "Tunnel View" }) });

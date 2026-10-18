@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import {
   closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from "@dnd-kit/core";
@@ -31,9 +32,25 @@ export function StopList({ stops, onReorder, ...handlers }: Props) {
     useSensor(KeyboardSensor, { coordinateGetter: centreAlignedKeyboardCoordinates }),
   );
 
-  if (stops.length === 0) return <p className="text-sm text-muted">No stops yet.</p>;
-
+  const rootRef = useRef<HTMLDivElement>(null);
+  const prevIds = useRef<string[]>([]);
   const ids = stops.map((s) => s.id);
+  const idsKey = ids.join(",");
+  useEffect(() => {
+    const before = prevIds.current;
+    prevIds.current = idsKey ? idsKey.split(",") : [];
+    // After a delete the focused button is gone and focus drops to the page: put it on the next row (or the last), else the list.
+    if (prevIds.current.length >= before.length) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    const gone = before.findIndex((id) => !prevIds.current.includes(id));
+    const rows = rootRef.current?.querySelectorAll<HTMLElement>('li > button');
+    const next = rows && rows.length > 0 ? rows[Math.min(Math.max(gone, 0), rows.length - 1)] : null;
+    (next ?? rootRef.current)?.focus();
+  }, [idsKey]);
+
+  if (stops.length === 0) return <div ref={rootRef} tabIndex={-1} className="outline-none"><p className="text-sm text-muted">No stops yet.</p></div>;
+
   function handleDragEnd({ active, over }: DragEndEvent) {
     if (!over) return;
     const next = reorderIds(ids, String(active.id), String(over.id));
@@ -41,7 +58,8 @@ export function StopList({ stops, onReorder, ...handlers }: Props) {
   }
 
   return (
-    // A stable id avoids dnd-kit's SSR aria-describedby hydration mismatch.
+    <div ref={rootRef} tabIndex={-1} className="outline-none">
+    {/* A stable id avoids dnd-kit's SSR aria-describedby hydration mismatch. */}
     <DndContext id="stop-list" sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         <ol>
@@ -51,6 +69,7 @@ export function StopList({ stops, onReorder, ...handlers }: Props) {
         </ol>
       </SortableContext>
     </DndContext>
+    </div>
   );
 }
 

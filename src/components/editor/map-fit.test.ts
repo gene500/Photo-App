@@ -1,24 +1,37 @@
 import { describe, expect, it } from "vitest";
-import { shouldFitStops } from "./map-fit";
+import { decideFit, routeKey } from "./map-fit";
 
-const base = { prevCount: 0, count: 2, routePoints: 0, fitted: false };
+const base = { prevCount: 0, count: 2, route: null as string | null, fittedRoute: null as string | null, fitted: false };
 
-describe("shouldFitStops", () => {
-  it("frames a trip opened with 2+ stops and no route", () => {
-    expect(shouldFitStops(base)).toBe(true);
+describe("routeKey", () => {
+  it("is null for no route or an empty one, and differs between routes", () => {
+    expect(routeKey(null)).toBeNull();
+    expect(routeKey([])).toBeNull();
+    expect(routeKey([[1, 2]])).toBeNull();
+    expect(routeKey([[1, 2], [3, 4]])).not.toBe(routeKey([[1, 2], [5, 6]]));
+    expect(routeKey([[1, 2], [3, 4]])).toBe(routeKey([[1, 2], [3, 4]]));
   });
-  it("frames when an empty or one-stop trip gets its 2nd stop, even if the map was already fitted", () => {
-    expect(shouldFitStops({ ...base, prevCount: 1, fitted: false })).toBe(true);
-    expect(shouldFitStops({ ...base, prevCount: 1, fitted: true })).toBe(true);
+});
+
+describe("decideFit (no route)", () => {
+  it("frames a trip opened with 2+ stops", () => {
+    expect(decideFit(base)).toBe("stops");
   });
-  it("does not frame fewer than 2 stops", () => {
-    expect(shouldFitStops({ ...base, count: 1 })).toBe(false);
+  it("frames when a trip reaches its 2nd stop, even if already fitted", () => {
+    expect(decideFit({ ...base, prevCount: 1, fitted: true })).toBe("stops");
   });
-  it("does not reframe on a 3rd stop or later changes", () => {
-    expect(shouldFitStops({ ...base, prevCount: 2, count: 3, fitted: true })).toBe(false);
+  it("does not frame fewer than 2 stops, nor later adds", () => {
+    expect(decideFit({ ...base, count: 1 })).toBeNull();
+    expect(decideFit({ ...base, prevCount: 2, count: 3, fitted: true })).toBeNull();
   });
-  it("leaves framing to the route when one is drawn, and treats an empty route as none", () => {
-    expect(shouldFitStops({ ...base, routePoints: 5 })).toBe(false);
-    expect(shouldFitStops({ ...base, routePoints: 0 })).toBe(true);
+});
+
+describe("decideFit (route)", () => {
+  it("frames the route when it appears, even though the stops were already framed", () => {
+    expect(decideFit({ ...base, prevCount: 2, fitted: true, route: "r1" })).toBe("route");
+  });
+  it("frames a new route (re-Optimize or Undo) but not the same one again", () => {
+    expect(decideFit({ ...base, prevCount: 2, fitted: true, route: "r2", fittedRoute: "r1" })).toBe("route");
+    expect(decideFit({ ...base, prevCount: 2, fitted: true, route: "r1", fittedRoute: "r1" })).toBeNull();
   });
 });

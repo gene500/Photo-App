@@ -55,4 +55,26 @@ describe("StopList", () => {
     render(<StopList stops={[stop("a", "A")]} {...handlers} />);
     expect(screen.getByRole("button", { name: "1. A" }).textContent).toBe("1. A");
   });
+
+  it("after a delete moves focus to the next row's name (the last row's, or the list when empty)", () => {
+    const three = [stop("a", "A"), stop("b", "B"), stop("c", "C")];
+    const { rerender } = render(<StopList stops={three} {...handlers} />);
+    screen.getByRole("button", { name: "Delete B" }).focus();
+    rerender(<StopList stops={[three[0]!, three[2]!]} {...handlers} />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "2. C" }));
+    screen.getByRole("button", { name: "Delete C" }).focus();
+    rerender(<StopList stops={[three[0]!]} {...handlers} />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "1. A" }));
+    screen.getByRole("button", { name: "Delete A" }).focus();
+    rerender(<StopList stops={[]} {...handlers} />);
+    expect(document.activeElement?.textContent).toBe("No stops yet.");
+  });
+
+  it("does not steal focus from elsewhere when a stop disappears", () => {
+    const two = [stop("a", "A"), stop("b", "B")];
+    const { rerender } = render(<><input aria-label="other" /><StopList stops={two} {...handlers} /></>);
+    screen.getByLabelText("other").focus();
+    rerender(<><input aria-label="other" /><StopList stops={[two[0]!]} {...handlers} /></>);
+    expect(document.activeElement).toBe(screen.getByLabelText("other"));
+  });
 });

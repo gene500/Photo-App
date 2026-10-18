@@ -9,7 +9,7 @@ import { bearingEndpoint, wrapLng } from "@/lib/geo";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { applyMapTheme } from "@/lib/map-theme";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
-import { shouldFitStops } from "./map-fit";
+import { decideFit, routeKey } from "./map-fit";
 import { STOP_MARKER_CLASS, stopColor } from "@/lib/stop-style";
 import type { LngLat, Suggestion } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
@@ -108,6 +108,7 @@ export default function MapPanel({
   const initialRef = useRef({ center: (stops[0] ? [stops[0].lng, stops[0].lat] : DEFAULT_CENTER) as LngLat, zoom: stops.length ? 7 : 3.5 });
   const fittedRef = useRef(false);
   const prevStopCountRef = useRef(0);
+  const fittedRouteRef = useRef<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -210,18 +211,18 @@ export default function MapPanel({
     const map = mapRef.current;
     if (!map || !loaded) return;
     (map.getSource(ROUTE_SOURCE) as mapboxgl.GeoJSONSource | undefined)?.setData(routeData(routeGeometry));
-    if (!fittedRef.current && routeGeometry && routeGeometry.length > 1) {
-      const bounds = new mapboxgl.LngLatBounds(routeGeometry[0], routeGeometry[0]);
-      for (const c of routeGeometry) bounds.extend(c);
-      map.fitBounds(bounds, { padding: viewPadding(readOnly), duration: 0 });
-      fittedRef.current = true;
-    } else if (shouldFitStops({ prevCount: prevStopCountRef.current, count: stops.length, routePoints: routeGeometry?.length ?? 0, fitted: fittedRef.current })) {
-      // No route is drawn before Optimize, so frame the stops themselves.
-      const bounds = new mapboxgl.LngLatBounds([stops[0].lng, stops[0].lat], [stops[0].lng, stops[0].lat]);
-      for (const s of stops) bounds.extend([s.lng, s.lat]);
+    const key = routeKey(routeGeometry);
+    const fit = decideFit({ prevCount: prevStopCountRef.current, count: stops.length, route: key, fittedRoute: fittedRouteRef.current, fitted: fittedRef.current });
+    if (fit) {
+      // A route frames itself; without one (before Optimize) the stops are framed.
+      const points: LngLat[] = fit === "route" ? routeGeometry! : stops.map((s) => [s.lng, s.lat]);
+      const bounds = new mapboxgl.LngLatBounds(points[0], points[0]);
+      for (const c of points) bounds.extend(c);
       map.fitBounds(bounds, { padding: viewPadding(readOnly), duration: 0 });
       fittedRef.current = true;
     }
+    // Forgotten while no route is drawn, so the same route coming back (Undo) is framed again.
+    fittedRouteRef.current = fit === "route" ? key : key === null ? null : fittedRouteRef.current;
     prevStopCountRef.current = stops.length;
     // Only the stop count matters here (not their positions), so a drag does not reframe the map.
     // eslint-disable-next-line react-hooks/exhaustive-deps

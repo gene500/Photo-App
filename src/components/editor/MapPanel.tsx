@@ -35,6 +35,29 @@ function routeData(geometry: LngLat[] | null): Feature<LineString> {
   return { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: geometry ?? [] } };
 }
 
+const ARROW_FRACTION = 0.45;
+
+/** A solid up-pointing arrowhead in `color`, registered as a map image so the sky layer can rotate it. */
+function arrowImage(color: string): ImageData {
+  const size = 32;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  ctx.beginPath();
+  ctx.moveTo(size / 2, 2);
+  ctx.lineTo(size - 5, size - 4);
+  ctx.lineTo(size / 2, size - 11);
+  ctx.lineTo(5, size - 4);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineJoin = "round";
+  ctx.stroke();
+  return ctx.getImageData(0, 0, size, size);
+}
+
 function emptySky(): FeatureCollection {
   return { type: "FeatureCollection", features: [] };
 }
@@ -47,7 +70,10 @@ function skyData(sky: MapViewProps["sky"], zoom: number): FeatureCollection {
   for (const [kind, name, bearing] of [["sunrise", "Sunrise", sky.sunrise], ["sunset", "Sunset", sky.sunset]] as const) {
     if (bearing === null) continue;
     const end = bearingEndpoint(sky, bearing, km);
+    // The arrowhead sits ARROW_FRACTION of the way out and points back at the stop: light travels from the sun to it.
+    const arrowAt = bearingEndpoint(sky, bearing, km * ARROW_FRACTION);
     features.push(
+      { type: "Feature", properties: { kind, arrow: true, rotation: (bearing + 180) % 360 }, geometry: { type: "Point", coordinates: arrowAt } },
       { type: "Feature", properties: { kind }, geometry: { type: "LineString", coordinates: [[sky.lng, sky.lat], end] } },
       { type: "Feature", properties: { kind, name }, geometry: { type: "Point", coordinates: end } },
     );
@@ -169,11 +195,27 @@ export default function MapPanel({
           paint: { "line-color": color, "line-width": 3, "line-dasharray": [2, 1.5] },
         });
       }
+      for (const [kind, color] of [["sunrise", SUNRISE_COLOR], ["sunset", SUNSET_COLOR]] as const) {
+        map.addImage(`sky-arrow-${kind}`, arrowImage(color), { pixelRatio: 2 });
+        map.addLayer({
+          id: `sky-arrow-${kind}`,
+          type: "symbol",
+          source: SKY_SOURCE,
+          filter: ["all", ["==", ["get", "arrow"], true], ["==", ["get", "kind"], kind]],
+          layout: {
+            "icon-image": `sky-arrow-${kind}`,
+            "icon-rotate": ["get", "rotation"],
+            "icon-rotation-alignment": "map",
+            "icon-allow-overlap": true,
+            "icon-ignore-placement": true,
+          },
+        });
+      }
       map.addLayer({
         id: "sky-names",
         type: "symbol",
         source: SKY_SOURCE,
-        filter: ["==", ["geometry-type"], "Point"],
+        filter: ["has", "name"],
         layout: {
           "text-field": ["get", "name"],
           // The stock light/dark styles serve these glyph ranges.

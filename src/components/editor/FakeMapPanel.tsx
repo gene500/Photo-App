@@ -60,7 +60,16 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
         const [lng, lat] = bearingEndpoint(sky, bearing, SKY_LINE_KM);
         const a = pos(sky);
         const b = pos({ lat, lng });
-        return [{ name, bearing, color, points: `${a.left},${a.top} ${b.left},${b.top}` }];
+        // Arrowhead 45% of the way out, pointing back at the stop (the light travels from the sun to it).
+        const ax = a.left + (b.left - a.left) * 0.45;
+        const ay = a.top + (b.top - a.top) * 0.45;
+        const len = Math.hypot(b.left - a.left, b.top - a.top) || 1;
+        const ux = (a.left - b.left) / len;
+        const uy = (a.top - b.top) / len;
+        const tip = [ax + ux * 1.2, ay + uy * 1.2];
+        const l = [ax - ux * 1.2 - uy * 1, ay - uy * 1.2 + ux * 1];
+        const r = [ax - ux * 1.2 + uy * 1, ay - uy * 1.2 - ux * 1];
+        return [{ name, bearing, color, points: `${a.left},${a.top} ${b.left},${b.top}`, arrow: `${tip} ${l} ${r}` }];
       })
     : [];
 
@@ -79,7 +88,10 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
       <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
         {routePoints && <polyline data-testid="route-line" points={routePoints} fill="none" stroke="#b08d57" strokeWidth={0.6} strokeLinecap="round" strokeLinejoin="round" />}
         {skyLines.map((l) => (
-          <polyline key={l.name} data-testid={`sky-line-${l.name}`} data-bearing={l.bearing} points={l.points} fill="none" stroke={l.color} strokeWidth={0.5} strokeDasharray="1.5 1" strokeLinecap="round" />
+          <g key={l.name}>
+            <polyline data-testid={`sky-line-${l.name}`} data-bearing={l.bearing} points={l.points} fill="none" stroke={l.color} strokeWidth={0.5} strokeDasharray="1.5 1" strokeLinecap="round" />
+            <polygon data-testid={`sky-arrow-${l.name}`} points={l.arrow} fill={l.color} />
+          </g>
         ))}
       </svg>
       {stops.map((s, i) => {

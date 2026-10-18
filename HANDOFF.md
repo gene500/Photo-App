@@ -16,6 +16,7 @@ Last updated 2026-10-17.
 | # | Task | Status | Notes |
 |---|---|---|---|
 | S5 | Security L5: Mapbox tokens: use a separate server `MAPBOX_TOKEN`, URL-restrict `NEXT_PUBLIC_MAPBOX_TOKEN`, set a spend cap | blocked | owner action in the Mapbox and Vercel dashboards (cannot be done from code); steps will be given in the reply. L1 (signup 409) is accepted, no work |
+| C1 | Delete trip popup (trips list, "Delete \"Yosemite\"? This cannot be undone.") is the browser's native white confirm dialog; replace it with an in-app dialog matching the app theme (dark/light, rounded card, app button styles, Cancel and a danger Delete button, focus trap, Escape cancels) and replace any other native confirm()/alert() the same way | pending | owner request 2026-10-18 from a screenshot; not started, waiting for the owner's list |
 | B7 | FINAL (always the last row, combined): full codebase check (Opus), handle its findings, then merge, push to `main`, and confirm both Vercel (`photo-app-pi2o`) and CI succeeded | pending | standing row for the next batch of work. Last run: security round 1 fixes merged and pushed (Opus attack round, one Opus re-attack clean, Opus final check MERGE). Owner follow-ups: S5 dashboard steps; re-run `import-places` so places at exactly lng 180.0 are reachable; watch Turso rows-written (paid routes now write one row per request); self-hosting needs `TRUST_PROXY_HEADERS=1` |
 
 ### Place search (P1)

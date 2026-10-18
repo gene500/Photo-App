@@ -1,10 +1,10 @@
 import { pointQuerySchema } from "@/lib/validation";
 import { ExternalServiceError, reverseGeocode } from "@/server/external/mapbox";
 import { handle, HttpError, requireUserId } from "@/server/http";
-import { enforceLimit } from "@/server/rate-limit";
+import { enforcePaidLimit } from "@/server/shared-limit";
 
 export const GET = handle(async (req: Request) => {
-  enforceLimit("reverse-geocode", await requireUserId());
+  await enforcePaidLimit("reverse-geocode", await requireUserId());
   const params = new URL(req.url).searchParams;
   const point = pointQuerySchema.parse({ lat: params.get("lat") ?? undefined, lng: params.get("lng") ?? undefined });
   try {

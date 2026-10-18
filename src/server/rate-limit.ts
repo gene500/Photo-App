@@ -160,8 +160,14 @@ export function clientIp(headers: Headers): string {
     const list = entries();
     raw = list.length >= depth ? list[list.length - depth] : undefined;
   }
+  if (!raw && !warnedNoProxy && process.env.NODE_ENV === "production" && !process.env.VERCEL && process.env.TRUST_PROXY_HEADERS !== "1") {
+    warnedNoProxy = true;
+    console.warn("[rate-limit] No trusted proxy configured: every client shares one address key. Set TRUST_PROXY_HEADERS=1 (and TRUSTED_PROXY_DEPTH) when running behind a proxy.");
+  }
   return raw ? ipKey(raw) : "unknown";
 }
+
+let warnedNoProxy = false;
 
 /** IPv4 as is. IPv6 collapses to its /64, because one customer controls a whole /64 and could otherwise rotate addresses past every per-IP limit. */
 export function ipKey(raw: string): string {

@@ -67,6 +67,16 @@ describe("clientIp trust modes", () => {
     expect(clientIp(new Headers())).toBe("unknown");
   });
 
+  it("warns once in production when no trusted proxy is configured", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    clientIp(new Headers());
+    clientIp(new Headers());
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toMatch(/TRUST_PROXY_HEADERS/);
+    warn.mockRestore();
+  });
+
   it("on Vercel uses x-vercel-forwarded-for, never x-real-ip or the first forwarded entry", () => {
     vi.stubEnv("VERCEL", "1");
     expect(clientIp(h(spoof))).toBe("5.5.5.5");

@@ -222,9 +222,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const current = enoughForRoute && routeResult?.key === waypointKey ? routeResult : null;
   const activeRoute = current?.route ?? null;
   const activeRouteError = current?.error ?? null;
-  // Optimized only while the stored signature still matches the stops: any edit that matters turns it off by itself.
   // The unsaved Start time edit lives here so it survives a switch to another tab.
   const [startDraft, setStartDraft] = useState<string | null>(null);
+  // Optimized only while the stored signature still matches the stops: any edit that matters turns it off by itself.
   const optimized = stops.length >= 2 && trip.routeOptimizedFor === routeSignature(trip.plannedDate, stops);
   const optimizeStale = !optimized && stops.length >= 2 && !!trip.routeOptimizedFor;
   // Once the route has been steady for a moment, fetch the place list quietly (popularity waits for the click), so

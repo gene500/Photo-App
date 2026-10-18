@@ -9,6 +9,7 @@ import { bearingEndpoint, wrapLng } from "@/lib/geo";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { applyMapTheme } from "@/lib/map-theme";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
+import { shouldFitStops } from "./map-fit";
 import { STOP_MARKER_CLASS, stopColor } from "@/lib/stop-style";
 import type { LngLat, Suggestion } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
@@ -106,6 +107,7 @@ export default function MapPanel({
   const handlersRef = useRef({ onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange });
   const initialRef = useRef({ center: (stops[0] ? [stops[0].lng, stops[0].lat] : DEFAULT_CENTER) as LngLat, zoom: stops.length ? 7 : 3.5 });
   const fittedRef = useRef(false);
+  const prevStopCountRef = useRef(0);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -213,16 +215,17 @@ export default function MapPanel({
       for (const c of routeGeometry) bounds.extend(c);
       map.fitBounds(bounds, { padding: viewPadding(readOnly), duration: 0 });
       fittedRef.current = true;
-    } else if (!fittedRef.current && !routeGeometry && stops.length >= 2) {
-      // No route is drawn before Optimize, so frame the stops themselves once.
+    } else if (shouldFitStops({ prevCount: prevStopCountRef.current, count: stops.length, routePoints: routeGeometry?.length ?? 0, fitted: fittedRef.current })) {
+      // No route is drawn before Optimize, so frame the stops themselves.
       const bounds = new mapboxgl.LngLatBounds([stops[0].lng, stops[0].lat], [stops[0].lng, stops[0].lat]);
       for (const s of stops) bounds.extend([s.lng, s.lat]);
       map.fitBounds(bounds, { padding: viewPadding(readOnly), duration: 0 });
       fittedRef.current = true;
     }
-    // Only the first fit reads the stops; later stop edits must not re-run this effect.
+    prevStopCountRef.current = stops.length;
+    // Only the stop count matters here (not their positions), so a drag does not reframe the map.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, routeGeometry, readOnly]);
+  }, [loaded, routeGeometry, readOnly, stops.length]);
 
   // Sunrise/sunset lines for the selected stop; redrawn after each zoom so they stay SKY_LINE_PX long.
   useEffect(() => {

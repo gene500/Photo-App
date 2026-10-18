@@ -89,4 +89,18 @@ describe("DownloadDialog", () => {
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
+
+  it("moves focus to Try again on error, back to Cancel on retry, and announces the error", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<Harness />);
+    let release!: (r: typeof result) => void;
+    const make = vi.fn().mockRejectedValueOnce(new Error("x")).mockImplementationOnce(() => new Promise((r) => { release = r; }));
+    await act(async () => api.prepare(make));
+    expect(screen.getByRole("alert").textContent).toBe("Could not create the PDF. Try again.");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Try again" }));
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" }));
+    await act(async () => release(result));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Download" }));
+  });
 });

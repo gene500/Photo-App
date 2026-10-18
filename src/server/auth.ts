@@ -88,7 +88,8 @@ export async function handleGoogleSignIn(
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
   secret: process.env.NEXTAUTH_SECRET,
-  pages: { signIn: "/login" },
+  // Errors (a failed Google sign-in, say) go to the styled login page as ?error=..., not NextAuth's unstyled /api/auth/error.
+  pages: { signIn: "/login", error: "/login" },
   providers: [
     CredentialsProvider({
       name: "Email and password",

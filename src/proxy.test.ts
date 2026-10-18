@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readdirSync } from "node:fs";
+import { join, relative } from "node:path";
 import { NextRequest } from "next/server";
 import { clearAllLimits, POLICIES } from "@/server/rate-limit";
 import { config, proxy } from "./proxy";
@@ -18,8 +20,17 @@ describe("proxy: public share page render limit", () => {
 
   it("runs on pages but not on the API or build assets", () => {
     const re = new RegExp(`^${config.matcher[0]}$`);
-    for (const path of ["/", "/login", "/trips/abc", "/s/abc", "/offline", "/privacy"]) expect(re.test(path), path).toBe(true);
-    for (const path of ["/api/optimize", "/_next/static/chunks/a.js", "/_next/image"]) expect(re.test(path), path).toBe(false);
+    for (const path of ["/", "/login", "/trips/abc", "/s/abc", "/offline", "/privacy", "/apiary", "/icons-guide", "/fonts-we-love"]) expect(re.test(path), path).toBe(true);
+    for (const path of ["/api/optimize", "/api", "/_next/static/chunks/a.js", "/_next/image"]) expect(re.test(path), path).toBe(false);
+  });
+
+  it("skips the public files, so only pages and share links reach the proxy", () => {
+    const re = new RegExp(`^${config.matcher[0]}$`);
+    const publicFiles = ["/icons/icon-192.png", "/fonts/NotoSans-Bold.ttf", "/manifest.webmanifest", "/sw.js", "/favicon.ico", "/file.svg", "/globe.svg", "/next.svg", "/vercel.svg", "/window.svg"];
+    for (const path of publicFiles) expect(re.test(path), path).toBe(false);
+    // Every file actually in /public is covered.
+    const onDisk = readdirSync("public", { recursive: true, withFileTypes: true }).filter((e) => e.isFile()).map((e) => `/${relative("public", join(e.parentPath, e.name))}`);
+    for (const path of onDisk.filter((p) => !p.endsWith("OFL.txt"))) expect(re.test(path), path).toBe(false);
   });
 
   it("lets requests through up to the limit, then answers 429 with Retry-After, noindex and no-store", async () => {

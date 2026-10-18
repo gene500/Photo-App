@@ -38,7 +38,9 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  // Everything except the API (JSON, locked down in next.config.ts), build assets and the image optimizer. Prefetches are
-  // not excluded: a header the client controls must not be able to skip the share-page limit.
-  matcher: ["/((?!api|_next/static|_next/image).*)"],
+  // Pages only: not the API (JSON, locked down in next.config.ts), build assets, the image optimizer, or the public files
+  // (icons, fonts, manifest, service worker, favicon and the other static files). Prefetches are not excluded: a header the
+  // client controls must not be able to skip the share-page limit. The segment match is exact (`api/` or `api` alone), so a
+  // page such as /apiary or /icons-guide still gets the CSP.
+  matcher: ["/((?!(?:api|_next/static|_next/image|icons|fonts)(?:/|$)|(?:manifest\\.webmanifest|sw\\.js|favicon\\.ico|file\\.svg|globe\\.svg|next\\.svg|vercel\\.svg|window\\.svg)$).*)"],
 };

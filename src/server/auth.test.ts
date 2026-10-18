@@ -14,6 +14,7 @@ describe("auth", () => {
   it("uses JWT sessions and the /login page", () => {
     expect(authOptions.session?.strategy).toBe("jwt");
     expect(authOptions.pages?.signIn).toBe("/login");
+    expect(authOptions.pages?.error).toBe("/login");
   });
 
   it("authorizes valid credentials and rejects missing fields", async () => {

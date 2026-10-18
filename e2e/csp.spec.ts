@@ -69,7 +69,8 @@ test("pages carry the security headers and the map + photo popups raise no CSP v
     await expect(shared.locator("main, h1").first()).toBeVisible();
   }
   // Every inline script on a page carries the page's nonce (the browser hides the value, so check the attribute exists).
-  expect(await shared.evaluate(() => [...document.querySelectorAll("script:not([src])")].filter((s) => (s as HTMLScriptElement).type !== "text/plain" && !(s as HTMLScriptElement).nonce).length)).toBe(0);
+  // (Production build only: `next dev` injects its own un-nonced inline scripts, which strict-dynamic tolerates.)
+  if (process.env.E2E_PROD === "1") expect(await shared.evaluate(() => [...document.querySelectorAll("script:not([src])")].filter((s) => (s as HTMLScriptElement).type !== "text/plain" && !(s as HTMLScriptElement).nonce).length)).toBe(0);
 
   expect(violations).toEqual([]);
 });

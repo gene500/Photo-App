@@ -141,12 +141,24 @@ export function enforceLimit(name: PolicyName, key: string, now = Date.now()): v
   if (!r.ok) throw new HttpError(429, POLICIES[name].message, r.retryAfter);
 }
 
-/** Best-effort client address. Vercel overwrites these headers, so they are trustworthy there. */
+/**
+ * Client address for per-IP limits. Client-supplied headers are only believed where a trusted proxy sets them:
+ * - on Vercel (VERCEL is set): x-vercel-forwarded-for, else the LAST x-forwarded-for entry (the one Vercel appends);
+ * - elsewhere only with TRUST_PROXY_HEADERS=1: the x-forwarded-for entry TRUSTED_PROXY_DEPTH (default 1) from the right;
+ * - otherwise every address header is ignored and all clients share one key (limits then apply to everyone together).
+ * x-real-ip and the first x-forwarded-for entry are never used: a client can write both.
+ */
 export function clientIp(headers: Headers): string {
-  const real = headers.get("x-real-ip")?.trim();
-  if (real) return ipKey(real);
-  const first = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return first ? ipKey(first) : "unknown";
+  const entries = () => (headers.get("x-forwarded-for") ?? "").split(",").map((e) => e.trim()).filter(Boolean);
+  let raw: string | undefined;
+  if (process.env.VERCEL) {
+    raw = headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() || entries().at(-1);
+  } else if (process.env.TRUST_PROXY_HEADERS === "1") {
+    const depth = Math.max(1, Math.floor(Number(process.env.TRUSTED_PROXY_DEPTH)) || 1);
+    const list = entries();
+    raw = list.length >= depth ? list[list.length - depth] : undefined;
+  }
+  return raw ? ipKey(raw) : "unknown";
 }
 
 /** IPv4 as is. IPv6 collapses to its /64, because one customer controls a whole /64 and could otherwise rotate addresses past every per-IP limit. */

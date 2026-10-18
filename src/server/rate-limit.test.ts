@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearAllLimits, clientIp, enforceLimit, hit, isBlocked, POLICIES, resetLimit } from "./rate-limit";
 
 describe("rate limiter", () => {
@@ -49,10 +49,43 @@ describe("rate limiter", () => {
     for (let i = 0; i < 100; i++) expect(hit("signup-ip", "x").ok).toBe(true);
   });
 
-  it("reads the client address from proxy headers", () => {
-    expect(clientIp(new Headers({ "x-real-ip": "9.9.9.9", "x-forwarded-for": "1.1.1.1" }))).toBe("9.9.9.9");
-    expect(clientIp(new Headers({ "x-forwarded-for": "1.1.1.1, 2.2.2.2" }))).toBe("1.1.1.1");
+});
+
+describe("clientIp trust modes", () => {
+  const h = (o: Record<string, string>) => new Headers(o);
+  const spoof = { "x-real-ip": "6.6.6.6", "x-forwarded-for": "6.6.6.6, 7.7.7.7", "x-vercel-forwarded-for": "5.5.5.5" };
+  afterEach(() => vi.unstubAllEnvs());
+  beforeEach(() => {
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("TRUST_PROXY_HEADERS", "");
+    vi.stubEnv("TRUSTED_PROXY_DEPTH", "");
+  });
+
+  it("ignores every client address header by default (one constant key)", () => {
+    expect(clientIp(h(spoof))).toBe("unknown");
+    expect(clientIp(h({ "x-forwarded-for": "1.1.1.1" }))).toBe(clientIp(h({ "x-forwarded-for": "2.2.2.2" })));
     expect(clientIp(new Headers())).toBe("unknown");
+  });
+
+  it("on Vercel uses x-vercel-forwarded-for, never x-real-ip or the first forwarded entry", () => {
+    vi.stubEnv("VERCEL", "1");
+    expect(clientIp(h(spoof))).toBe("5.5.5.5");
+    expect(clientIp(h({ "x-real-ip": "6.6.6.6", "x-forwarded-for": "6.6.6.6, 7.7.7.7" }))).toBe("7.7.7.7");
+    expect(clientIp(h({ "x-real-ip": "6.6.6.6" }))).toBe("unknown");
+  });
+
+  it("with TRUST_PROXY_HEADERS=1 takes the forwarded entry added by the trusted proxy (rightmost minus depth)", () => {
+    vi.stubEnv("TRUST_PROXY_HEADERS", "1");
+    expect(clientIp(h(spoof))).toBe("7.7.7.7"); // a spoofed first entry and x-real-ip do not matter
+    expect(clientIp(h({ "x-real-ip": "6.6.6.6" }))).toBe("unknown");
+    vi.stubEnv("TRUSTED_PROXY_DEPTH", "2");
+    expect(clientIp(h({ "x-forwarded-for": "9.9.9.9, 6.6.6.6, 7.7.7.7" }))).toBe("6.6.6.6");
+    expect(clientIp(h({ "x-forwarded-for": "7.7.7.7" }))).toBe("unknown"); // fewer entries than the depth
+  });
+
+  it("only the exact value 1 enables TRUST_PROXY_HEADERS", () => {
+    vi.stubEnv("TRUST_PROXY_HEADERS", "true");
+    expect(clientIp(h(spoof))).toBe("unknown");
   });
 });
 

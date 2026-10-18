@@ -43,7 +43,7 @@ To verify by hand:
 - Apple Maps link with every stop, on a real iPhone (the multi-`daddr` format is unconfirmed).
 - Google Maps link with every stop (up to 11 stops per link; longer trips split into parts).
 - Hover photo card stays fully on screen in the Suggestions tab.
-- Priority pill (Stops tab: Normal / High / Must) and optimize behavior with a Must-have stop, on a real phone.
+- Priority pill (My trip tab: Normal / High / Must) and optimize behavior with a Must-have stop, on a real phone.
 - Live site: sign-in, map, suggestions, photo upload, privacy/terms, account deletion, Imperial/Metric setting, Escape key, prewarm speed.
 
 Owner's accounts and settings:
@@ -65,6 +65,7 @@ Known gaps:
 - Google-only account deletion re-confirms through Google's account chooser (`prompt=select_account`; `login` is not a documented Google value); existing sessions must sign in once first.
 - Header: below 360 px wide the Edit/Export/Share buttons become icons (aria-labels and title tooltips kept) so the trip name and buttons share one row; verified by eye at 320 and 390 px and 320 px with 1.5x text. The icon buttons are 32 px wide by 44 px tall (the text buttons above 360 px are 36 px tall).
 - PDF font: full Noto Sans Regular and Bold (about 1.2 MB raw, about 0.6 MB gzipped) are fetched on click; they are not subset because no subsetting tool is in the repo toolchain.
+- PDF downloads (C5): Download PDF (Export menu, share page) first opens a themed "Itinerary PDF" dialog and builds the file, then saves it from a fresh tap on the dialog's Download button (`saveBlob` runs synchronously in the click), so Safari no longer sees a download started long after the tap. GPX already saved straight from its tap. Safari's own "allow downloads on this site" prompt may still appear once per site; it is Safari's and could not be tested here (no Safari or iOS device). Owner to confirm on the deployed site.
 - Photo uploads: metadata is stripped by a small structural walker (no image library, no re-encode); a JPEG keeps only its EXIF orientation. Pixel data is not decoded, so a file with valid structure but broken pixels is stored as sent.
 - Share page `no-referrer` vs a URL-restricted Mapbox token.
 - Offline copies: a save that does not fit the browser's storage deletes nothing unless a measured shortfall shows the oldest copies free enough room (they are put back if the write still fails); sign-out, delete-account, sign-out-everywhere and change-password share one awaited sign-out, and an answer without a redirect url (next-auth hides the status of a 500) or with an error/csrf url counts as not signed out.

@@ -25,3 +25,7 @@ export const card = "anim-rise rounded-2xl bg-surface text-foreground shadow-lg 
 /** Round icon-only button (close, delete-row). */
 export const btnIcon =
   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg leading-none text-muted transition active:scale-[0.94] hover:bg-hover hover:text-foreground";
+
+/** Destructive action (confirm Delete): btnPrimary geometry on the danger token. */
+export const btnDanger =
+  "inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl bg-danger px-4 py-2 text-sm font-medium text-ink-foreground transition active:scale-[0.97] hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong disabled:opacity-50";

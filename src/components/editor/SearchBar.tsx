@@ -120,7 +120,7 @@ export function SearchBar({ getProximity, onSelect }: Props) {
           if (e.key === "Escape") clear();
         }}
         placeholder="Search for a place"
-        className="w-full rounded-2xl bg-surface px-4 py-3 text-foreground placeholder:text-muted shadow-lg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-strong"
+        className="w-full rounded-b-2xl rounded-t-none bg-surface px-4 py-3 text-foreground placeholder:text-muted shadow-lg outline-none ring-1 ring-border focus:ring-2 focus:ring-accent-strong"
       />
       {(pickError ?? shown?.error) && (
         <p className="mt-1 rounded-xl bg-surface px-3 py-2 text-sm text-danger shadow-lg">{pickError ?? shown?.error}</p>

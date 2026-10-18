@@ -26,21 +26,25 @@ async function tripWithSunsetStop(page: Page, plannedDate: string) {
   await drawer.getByLabel("Best light").selectOption("sunset");
   await drawer.getByRole("button", { name: "Save" }).click();
   await expect(drawer).toHaveCount(0);
-  return rows;
+  // Weather shows on My trip once the route is optimized.
+  await page.getByRole("tab", { name: "My trip" }).click();
+  await page.getByRole("button", { name: "Optimize route" }).click();
+  return page.getByTestId("trip-row");
 }
 
-const SKY = "(☀️|⛅|🌥️|☁️|🌧️)";
-
-test("every stop on a near date shows an emoji and temperature", async ({ page }) => {
+test("every stop on a near date shows a sky icon and temperature", async ({ page }) => {
   const rows = await tripWithSunsetStop(page, inDays(2));
-  const glyph = new RegExp(`^${SKY} -?\\d+°[CF]$`);
-  await expect(rows.nth(2).getByTestId("stop-weather")).toHaveText(glyph);
-  // Stops that do not care about light get weather too.
-  await expect(rows.nth(0).getByTestId("stop-weather")).toHaveText(glyph);
+  const temp = /^-?\d+°[CF]$/;
+  for (const i of [2, 0]) {
+    // Stops that do not care about light (row 0) get weather too.
+    const weather = rows.nth(i).getByTestId("stop-weather");
+    await expect(weather).toHaveText(temp);
+    await expect(weather.locator("svg[data-sky]")).toHaveCount(1);
+  }
 });
 
 test("a date beyond the forecast horizon shows typical weather, labelled as such", async ({ page }) => {
   const rows = await tripWithSunsetStop(page, inDays(40));
-  await expect(rows.nth(2).getByTestId("stop-weather")).toHaveText(new RegExp(`^Typical ${SKY} -?\\d+°[CF]$`));
+  await expect(rows.nth(2).getByTestId("stop-weather")).toHaveText(/^Typical -?\d+°[CF]$/);
   await expect(rows.nth(2).getByTestId("stop-weather")).toHaveAttribute("title", /^Typically .*rain on ~\d+% of days$/);
 });

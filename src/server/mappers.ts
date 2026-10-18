@@ -10,6 +10,7 @@ export function toTripDto(row: TripRow): Trip {
     plannedDate: utcToDateOnly(row.plannedDate),
     departAt: row.departAt ? row.departAt.toISOString() : null,
     shareToken: row.shareToken,
+    routeOptimizedFor: row.routeOptimizedFor ?? null,
   };
 }
 

@@ -11,6 +11,7 @@ function panel() {
       collapsedSummary="3 stops · 2 h 5 min"
       summary={<p>100 km</p>}
       stops={<p>stops content</p>}
+      trip={<p>trip content</p>}
       suggestions={<p>suggestions content</p>}
       suggestionCount={3}
     />,
@@ -26,6 +27,19 @@ describe("StopsPanel", () => {
     expect(screen.getByText("stops content")).toBeTruthy();
     expect(screen.queryByText("suggestions content")).toBeNull();
     expect(screen.getByRole("tab", { name: "Stops" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("has Stops, My trip and Suggestions tabs in that order", () => {
+    panel();
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Stops", "My trip", "Suggestions (3)"]);
+  });
+
+  it("shows the trip panel on My trip", async () => {
+    panel();
+    await userEvent.click(screen.getByRole("tab", { name: "My trip" }));
+    expect(screen.getByText("trip content")).toBeTruthy();
+    expect(screen.queryByText("stops content")).toBeNull();
+    expect(screen.queryByText("suggestions content")).toBeNull();
   });
 
   it("switches to the Suggestions tab and shows the count", async () => {
@@ -75,6 +89,9 @@ describe("StopsPanel tabs follow the ARIA tab pattern", () => {
     const user = userEvent.setup();
     const stops = screen.getByRole("tab", { name: "Stops" });
     stops.focus();
+    await user.keyboard("{ArrowRight}");
+    const trip = screen.getByRole("tab", { name: "My trip" });
+    expect(document.activeElement).toBe(trip);
     await user.keyboard("{ArrowRight}");
     const sugg = screen.getByRole("tab", { name: "Suggestions (3)" });
     expect(sugg.getAttribute("aria-selected")).toBe("true");

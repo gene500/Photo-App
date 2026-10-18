@@ -9,7 +9,8 @@ import { bearingEndpoint, wrapLng } from "@/lib/geo";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { applyMapTheme } from "@/lib/map-theme";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
-import { stopColor } from "@/lib/stop-style";
+import { decideFit, routeKey } from "./map-fit";
+import { STOP_MARKER_CLASS, stopColor } from "@/lib/stop-style";
 import type { LngLat, Suggestion } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
 import { isHoverPointer } from "./hover-pointer";
@@ -26,7 +27,6 @@ const SUNSET_COLOR = "#7b4fa3";
 const SKY_LINE_PX = 90;
 const MARKER_CLASS = "map-marker";
 const DEFAULT_CENTER: LngLat = [-98.5, 39.8];
-const STOP_CLASS = "flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-xs font-semibold shadow-md";
 // Visited markers are light, so they get dark numerals; the rest get white.
 const textClass = (visited: boolean) => (visited ? "text-black/75" : "text-white");
 const PENDING_CLASS = "h-5 w-5 rounded-full border-2 border-white bg-[#3b3226] shadow-md";
@@ -107,6 +107,8 @@ export default function MapPanel({
   const handlersRef = useRef({ onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange });
   const initialRef = useRef({ center: (stops[0] ? [stops[0].lng, stops[0].lat] : DEFAULT_CENTER) as LngLat, zoom: stops.length ? 7 : 3.5 });
   const fittedRef = useRef(false);
+  const prevStopCountRef = useRef(0);
+  const fittedRouteRef = useRef<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -209,13 +211,22 @@ export default function MapPanel({
     const map = mapRef.current;
     if (!map || !loaded) return;
     (map.getSource(ROUTE_SOURCE) as mapboxgl.GeoJSONSource | undefined)?.setData(routeData(routeGeometry));
-    if (!fittedRef.current && routeGeometry && routeGeometry.length > 1) {
-      const bounds = new mapboxgl.LngLatBounds(routeGeometry[0], routeGeometry[0]);
-      for (const c of routeGeometry) bounds.extend(c);
+    const key = routeKey(routeGeometry);
+    const fit = decideFit({ prevCount: prevStopCountRef.current, count: stops.length, route: key, fittedRoute: fittedRouteRef.current, fitted: fittedRef.current });
+    if (fit) {
+      // A route frames itself; without one (before Optimize) the stops are framed.
+      const points: LngLat[] = fit === "route" ? routeGeometry! : stops.map((s) => [s.lng, s.lat]);
+      const bounds = new mapboxgl.LngLatBounds(points[0], points[0]);
+      for (const c of points) bounds.extend(c);
       map.fitBounds(bounds, { padding: viewPadding(readOnly), duration: 0 });
       fittedRef.current = true;
     }
-  }, [loaded, routeGeometry, readOnly]);
+    // Forgotten while no route is drawn, so the same route coming back (Undo) is framed again.
+    fittedRouteRef.current = fit === "route" ? key : key === null ? null : fittedRouteRef.current;
+    prevStopCountRef.current = stops.length;
+    // Only the stop count matters here (not their positions), so a drag does not reframe the map.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, routeGeometry, readOnly, stops.length]);
 
   // Sunrise/sunset lines for the selected stop; redrawn after each zoom so they stay SKY_LINE_PX long.
   useEffect(() => {
@@ -262,7 +273,7 @@ export default function MapPanel({
         el.setAttribute("aria-label", label);
         el.title = label;
       } else if (addSet.has(s.id)) {
-        const el = markerElement(`${STOP_CLASS} ${textClass(s.visited)} ${selected ? "ring-2 ring-route" : ""}`, label, String(i + 1));
+        const el = markerElement(`${STOP_MARKER_CLASS} ${textClass(s.visited)} ${selected ? "ring-2 ring-route" : ""}`, label, String(i + 1));
         el.style.background = stopColor(s);
         const id = s.id;
         el.addEventListener("click", () => handlersRef.current.onStopClick(id));

@@ -47,6 +47,8 @@ export type Trip = {
   departAt: string | null;
   /** Read-only share token; only ever sent to the trip's owner. */
   shareToken: string | null;
+  /** `routeSignature` of the stops Optimize route last ran on; the trip counts as optimized only while it still matches. Optional so old offline copies still type-check. */
+  routeOptimizedFor?: string | null;
 };
 
 /** One stop as shown on the public share page: no ids, no uploaded photo, no private notes (shot notes and the shot list are meant for sharing). */

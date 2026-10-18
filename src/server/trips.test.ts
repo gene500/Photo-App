@@ -10,7 +10,7 @@ describe("trips data access", () => {
   it("creates a trip and returns a DTO with a date-only plannedDate", async () => {
     const user = await createTestUser();
     const trip = await createTrip(user.id, sampleTripInput);
-    expect(trip).toEqual({ id: expect.any(String), ...sampleTripInput, departAt: null, shareToken: null });
+    expect(trip).toEqual({ id: expect.any(String), ...sampleTripInput, departAt: null, shareToken: null, routeOptimizedFor: null });
   });
 
   it("sets and clears departAt as an ISO string", async () => {
@@ -19,6 +19,14 @@ describe("trips data access", () => {
     const set = await updateTrip(user.id, trip.id, { departAt: "2026-07-01T17:42:00.000Z" });
     expect(set?.departAt).toBe("2026-07-01T17:42:00.000Z");
     expect((await updateTrip(user.id, trip.id, { departAt: null }))?.departAt).toBeNull();
+  });
+
+  it("stores and clears routeOptimizedFor", async () => {
+    const user = await createTestUser();
+    const trip = await createTrip(user.id, sampleTripInput);
+    const set = await updateTrip(user.id, trip.id, { routeOptimizedFor: "v1:0123456789abcdef" });
+    expect(set?.routeOptimizedFor).toBe("v1:0123456789abcdef");
+    expect((await updateTrip(user.id, trip.id, { routeOptimizedFor: null }))?.routeOptimizedFor).toBeNull();
   });
 
   it("only checks a start time against the planned day when it changes (Undo of a legacy mismatched value still saves)", async () => {

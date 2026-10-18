@@ -6,7 +6,7 @@ import { btnAccent, btnGhost, btnSecondary } from "@/components/ui/styles";
 import { formatPhotoCount } from "@/lib/format";
 import { isHoverPointer } from "./hover-pointer";
 import { hasRoomBeside, SuggestionHoverPhoto } from "./SuggestionHoverPhoto";
-import { weatherAriaLabel } from "@/lib/weather";
+import { WeatherText } from "@/components/weather/WeatherIcon";
 import type { WeatherLine } from "@/lib/use-weather";
 import type { Suggestion } from "@/lib/types";
 
@@ -121,7 +121,7 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
               </p>
               {line && (
                 <p data-testid="suggestion-weather" data-light-quality={line.quality ?? undefined} title={line.label} className={`text-xs ${line.quality === "poor" ? "text-sand" : "text-muted"}`}>
-                  <span role="img" aria-label={weatherAriaLabel(line)}>{line.text}</span>
+                  <WeatherText line={line} />
                 </p>
               )}
             </div>

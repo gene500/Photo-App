@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { installMemoryStorage } from "../../../tests/helpers/memory-storage";
@@ -18,30 +18,35 @@ const trip: TripSummary = {
 
 const copy = (id: string) => ({ id, name: id, plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] });
 
+const confirmDelete = () => userEvent.click(within(screen.getByRole("alertdialog", { name: "Delete trip?" })).getByRole("button", { name: "Delete" }));
+
 describe("TripList", () => {
   beforeEach(() => {
     installMemoryStorage().setItem("rtpp.offline.owner", "u1");
   });
 
   it("drops the offline copy of a trip when it is deleted", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.mocked(api.deleteTrip).mockResolvedValue(undefined);
     saveTripCopy(copy("t1"));
     render(<TripList trips={[trip]} />);
     await userEvent.click(screen.getByRole("button", { name: "Delete Sierra loop" }));
+    await confirmDelete();
     expect(listTripCopies()).toEqual([]);
   });
 
   it("sends one delete (and asks once) when Delete is clicked twice while it is in flight", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    confirm.mockClear();
     let finish!: () => void;
     vi.mocked(api.deleteTrip).mockReset().mockReturnValue(new Promise<void>((r) => { finish = r; }));
     render(<TripList trips={[trip]} />);
     const button = screen.getByRole("button", { name: "Delete Sierra loop" });
     await userEvent.dblClick(button);
+    expect(screen.getAllByRole("alertdialog")).toHaveLength(1);
+    await confirmDelete();
     expect(api.deleteTrip).toHaveBeenCalledTimes(1);
-    expect(confirm).toHaveBeenCalledTimes(1);
+    // The row is disabled while the delete runs, so a further press opens no dialog.
+    await userEvent.click(button);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(api.deleteTrip).toHaveBeenCalledTimes(1);
     expect((button as HTMLButtonElement).disabled).toBe(true);
     finish();
     await vi.waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
@@ -73,10 +78,10 @@ describe("TripList", () => {
   });
 
   it("deletes after confirmation and refreshes", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.mocked(api.deleteTrip).mockResolvedValue(undefined);
     render(<TripList trips={[trip]} />);
     await userEvent.click(screen.getByRole("button", { name: "Delete Sierra loop" }));
+    await confirmDelete();
     expect(api.deleteTrip).toHaveBeenCalledWith("t1");
     expect(refresh).toHaveBeenCalled();
   });

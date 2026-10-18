@@ -56,6 +56,28 @@ describe("FakeMapPanel", () => {
     expect(screen.getByRole("button", { name: "Stop 1: Pin 1" }).className).toContain("ring-2");
   });
 
+  it("stop markers use the shared distinctive class and stand apart from suggestion dots", () => {
+    render(<FakeMapPanel {...base} stops={[stop]} suggestions={[suggestion]} />);
+    const stopClass = screen.getByRole("button", { name: "Stop 1: Pin 1" }).className;
+    expect(stopClass).toContain("h-8 w-8");
+    expect(stopClass).toContain("border-[3px]");
+    const dot = screen.getByRole("button", { name: "Suggestion: Fake Viewpoint" }).className;
+    expect(dot).toContain("h-3.5");
+    expect(dot).toContain("opacity-70");
+  });
+
+  it("rings the selected stop in the route colour", () => {
+    render(<FakeMapPanel {...base} stops={[stop]} selectedId="s1" />);
+    expect(screen.getByRole("button", { name: "Stop 1: Pin 1" }).className).toContain("ring-route");
+  });
+
+  it("tags the route line for e2e, and draws none without a route", () => {
+    const { rerender } = render(<FakeMapPanel {...base} stops={[stop]} />);
+    expect(screen.queryByTestId("route-line")).toBeNull();
+    rerender(<FakeMapPanel {...base} stops={[stop]} routeGeometry={[[-119, 37], [-118.5, 37.2]]} />);
+    expect(screen.getByTestId("route-line")).toBeTruthy();
+  });
+
   it("enlarges the highlighted suggestion marker", () => {
     render(<FakeMapPanel {...base} suggestions={[suggestion]} highlightedSuggestionId="node/1" />);
     expect(screen.getByRole("button", { name: "Suggestion: Fake Viewpoint" }).className).toContain("h-5 w-5");

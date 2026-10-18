@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { HeaderButtonLabel } from "./HeaderButtonLabel";
 import { btnGhost, card } from "@/components/ui/styles";
 import { appleMapsUrls, buildGpx, googleMapsUrl, gpxFileName, type ExportStop } from "@/lib/export";
 import type { LngLat } from "@/lib/types";
+import { DownloadDialog } from "@/components/itinerary/DownloadDialog";
 import { useItineraryDownload } from "@/components/itinerary/use-itinerary-download";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { buildItinerary, itineraryFileName, type ItineraryStopSource } from "@/lib/itinerary";
@@ -29,10 +29,6 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
   const { open, setOpen, close, toggle, rootRef, triggerRef, panelRef, panelId } = usePopover();
   const { settings } = useSettings();
   const download = useItineraryDownload();
-  const openRef = useRef(open);
-  useEffect(() => {
-    openRef.current = open;
-  }, [open]);
   const enough = stops.length >= 2;
   if (open && !enough) setOpen(false); // stops were removed while the menu was open
   const google = googleMapsUrl(stops);
@@ -44,10 +40,9 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
     close();
   }
 
-  async function downloadPdf() {
+  function downloadPdf() {
     if (!pdf) return;
-    let made = false;
-    await download.run(async () => {
+    download.prepare(async () => {
       const weather = await loadWeatherLines({ stops: pdf.stops, unit: settings.distanceUnit });
       const input = buildItinerary({
         tripName,
@@ -62,10 +57,9 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
         distanceUnit: settings.distanceUnit,
       });
       const blob = await createItineraryPdf({ input, geometry: route ?? [], stops: stops.map((s) => ({ lat: s.lat, lng: s.lng })), token: mapTokenFromEnv() });
-      made = true;
       return { blob, fileName: itineraryFileName(tripName, plannedDate) };
     });
-    if (made && openRef.current) close();
+    close(); // the dialog takes over; it hands focus back to this trigger when it closes
   }
 
   return (
@@ -73,10 +67,7 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => {
-          if (!open) download.clearError();
-          toggle();
-        }}
+        onClick={toggle}
         disabled={!enough}
         aria-expanded={open && enough}
         aria-controls={open && enough ? panelId : undefined}
@@ -86,19 +77,13 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
       >
         <HeaderButtonLabel icon="export">Export</HeaderButtonLabel>
       </button>
-      {/* The menu may have been closed while the PDF was being made; the failure must still be seen. */}
-      {download.error && !(open && enough) && (
-        <p role="alert" className={`absolute right-0 top-full z-20 mt-1 w-56 max-w-full px-3 py-2 text-sm text-danger ${card}`}>{download.error}</p>
-      )}
+      <DownloadDialog download={download} />
       {open && enough && (
         <div ref={panelRef} id={panelId} role="group" aria-label="Export trip" className={`absolute right-0 top-full z-20 mt-1 w-56 max-w-full p-1 ${card}`}>
           <button type="button" onClick={downloadGpx} className={item}>Download GPX</button>
           {pdf && (
-            <button type="button" onClick={() => void downloadPdf()} aria-disabled={download.busy || undefined} className={`${item} aria-disabled:opacity-50`}>
-              {download.busy ? "Preparing PDF..." : "Download PDF"}
-            </button>
+            <button type="button" onClick={downloadPdf} className={item}>Download PDF</button>
           )}
-          {download.error && <p role="alert" className="px-3 py-2 text-sm text-danger">{download.error}</p>}
           {google?.map((g) => (
             <a key={g.url} href={g.url} onClick={() => close()} target="_blank" rel="noopener noreferrer" className={item}>
               Open in Google Maps{g.label && ` (${g.label})`}

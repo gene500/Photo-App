@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { MapView } from "@/components/editor/MapView";
 import { useSettings } from "@/components/settings/SettingsProvider";
+import { DownloadDialog } from "@/components/itinerary/DownloadDialog";
 import { useItineraryDownload } from "@/components/itinerary/use-itinerary-download";
 import { btnGhost, card } from "@/components/ui/styles";
 import { computeArrivals, computeBestTimes, describeBestTime, formatClock } from "@/lib/best-time";
@@ -49,7 +50,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
   const canDownload = mounted && trip.stops.length >= 2;
 
   function downloadPdf() {
-    return download.run(async () => {
+    download.prepare(async () => {
       const input = buildItinerary({
         tripName: trip.name,
         plannedDate: trip.plannedDate,
@@ -85,12 +86,9 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
           <div className="flex flex-wrap items-start justify-between gap-x-2">
             <h1 className="min-w-0 max-w-full flex-1 basis-28 text-lg font-semibold">{trip.name}</h1>
             {canDownload && (
-              <button type="button" onClick={() => void downloadPdf()} aria-disabled={download.busy || undefined} className={`${btnGhost} shrink-0 aria-disabled:opacity-50`}>
-                {download.busy ? "Preparing PDF..." : "Download PDF"}
-              </button>
+              <button type="button" onClick={downloadPdf} className={`${btnGhost} shrink-0`}>Download PDF</button>
             )}
           </div>
-          {download.error && <p role="alert" className="text-sm text-danger">{download.error}</p>}
           <p className="text-sm text-muted">
             View only · planned for {trip.plannedDate}
             {mounted && trip.departAt && <> · Starts {formatClock(new Date(trip.departAt), undefined, tf)}</>}
@@ -148,6 +146,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
           </>
         )}
       </aside>
+      <DownloadDialog download={download} />
     </main>
   );
 }

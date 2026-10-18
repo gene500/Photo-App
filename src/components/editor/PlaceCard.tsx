@@ -6,7 +6,7 @@ import { btnPrimary, card, btnIcon } from "@/components/ui/styles";
 import { formatClock, getSunWindows } from "@/lib/best-time";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import { useWeatherLine } from "@/lib/use-weather";
-import { weatherAriaLabel } from "@/lib/weather";
+import { WeatherText } from "@/components/weather/WeatherIcon";
 import type { PlacePhoto } from "@/lib/types";
 
 /** Set when the place came from a suggestion: its photo is looked up lazily (shared cache with the map popup). */
@@ -49,7 +49,7 @@ export function PlaceCard({ name, resolving, busy, suggestion, visit, onAdd, onC
         <p className={`text-sm font-medium ${resolving ? "text-muted" : ""}`}>{name}</p>
         {golden && weather && (
           <p data-testid="place-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-sand" : "text-muted"}`}>
-            Golden hour {formatClock(golden, undefined, settings.timeFormat)} · <span role="img" aria-label={weatherAriaLabel(weather)}>{weather.text}</span>
+            Golden hour {formatClock(golden, undefined, settings.timeFormat)} · <WeatherText line={weather} />
           </p>
         )}
         {photo && <p data-testid="photo-credit" className="text-xs text-muted">{photo.credit}</p>}

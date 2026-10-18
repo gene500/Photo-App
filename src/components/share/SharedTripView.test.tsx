@@ -114,6 +114,8 @@ describe("SharedTripView Download PDF", () => {
     expect(arg.input.stops.every((s) => s.weather === null)).toBe(true);
     expect(arg.input.routeLine).toBeTruthy();
     expect(loadWeatherLines).not.toHaveBeenCalled();
+    expect(saveBlob).not.toHaveBeenCalled(); // only from the fresh tap on the dialog's Download
+    await userEvent.click(await screen.findByRole("button", { name: "Download" }));
     expect(saveBlob).toHaveBeenCalledWith(blob, "Coast-run-itinerary.pdf");
   });
 
@@ -142,25 +144,28 @@ describe("SharedTripView Download PDF", () => {
     expect(vi.mocked(createItineraryPdf).mock.calls[0]![0].input.note).toBeNull();
   });
 
-  it("shows Preparing PDF... and disables the button while pending", async () => {
+  it("shows the Preparing dialog while pending", async () => {
     let resolve!: (b: Blob) => void;
     vi.mocked(createItineraryPdf).mockReturnValue(new Promise<Blob>((r) => { resolve = r; }));
     render(<SharedTripView trip={trip} />);
     await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
-    const busy = (await screen.findByRole("button", { name: "Preparing PDF..." })) as HTMLButtonElement;
-    expect(busy.getAttribute("aria-disabled")).toBe("true");
-    await userEvent.click(busy);
+    const dialog = await screen.findByRole("alertdialog", { name: "Itinerary PDF" });
+    expect(dialog.getAttribute("aria-busy")).toBe("true");
+    expect(dialog.textContent).toContain("Preparing your PDF…");
     expect(createItineraryPdf).toHaveBeenCalledTimes(1);
     await act(async () => resolve(new Blob(["x"])));
+    expect(saveBlob).not.toHaveBeenCalled();
+    await userEvent.click(await screen.findByRole("button", { name: "Download" }));
     expect(saveBlob).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Download PDF" }));
   });
 
-  it("shows an alert when it fails", async () => {
+  it("shows the failure in the dialog", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(createItineraryPdf).mockRejectedValue(new Error("boom"));
     render(<SharedTripView trip={trip} />);
     await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
-    expect((await screen.findByRole("alert")).textContent).toBe("Could not create the PDF. Try again.");
+    expect((await screen.findByRole("alertdialog")).textContent).toContain("Could not create the PDF. Try again.");
     expect(saveBlob).not.toHaveBeenCalled();
   });
 });

@@ -40,6 +40,13 @@ describe("tripPatchSchema", () => {
     expect(tripPatchSchema.parse({ name: "New name" })).toEqual({ name: "New name" });
   });
 
+  it("accepts a route signature or null, and rejects anything else", () => {
+    expect(tripPatchSchema.safeParse({ routeOptimizedFor: "v1:0123456789abcdef" }).success).toBe(true);
+    expect(tripPatchSchema.safeParse({ routeOptimizedFor: null }).success).toBe(true);
+    expect(tripPatchSchema.safeParse({ routeOptimizedFor: "x" }).success).toBe(false);
+    expect(tripPatchSchema.safeParse({ routeOptimizedFor: "v1:XYZ" }).success).toBe(false);
+  });
+
   it("rejects an empty patch", () => {
     expect(formatZodError(tripPatchSchema.safeParse({}).error!)).toBe("Nothing to update");
   });

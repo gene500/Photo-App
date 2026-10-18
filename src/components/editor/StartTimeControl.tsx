@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { btnGhost, inputClass } from "@/components/ui/styles";
 import { solarDateAt } from "@/lib/best-time";
 import { useMounted } from "@/lib/use-mounted";
@@ -33,7 +33,7 @@ export function fromTimeValue(plannedDate: string, time: string, lng?: number): 
 }
 
 /** Lets the traveller pick when the trip starts; with none saved it starts at the time the editor was opened. */
-export function StartTimeControl({ plannedDate, departAt, defaultDepartAt = null, lng, disabled, onChange, onReset }: {
+export function StartTimeControl({ plannedDate, departAt, defaultDepartAt = null, lng, disabled, onChange, onReset, draft: draftProp, onDraftChange }: {
   plannedDate: string;
   departAt: string | null;
   /** Shown (and used by the schedule) while no start time is saved: the current time on the trip's day. */
@@ -45,13 +45,18 @@ export function StartTimeControl({ plannedDate, departAt, defaultDepartAt = null
   onChange: (iso: string | null) => void | Promise<void>;
   /** Clears the start time back to now; the button shows only while the start time differs from now. */
   onReset?: () => void;
+  /** Optional: a parent that owns the unsaved edit keeps it when this control unmounts (a tab switch). */
+  draft?: string | null;
+  onDraftChange?: Dispatch<SetStateAction<string | null>>;
 }) {
   const id = useId();
   // The time is read in the viewer's zone, so the server (and the first client render) show an empty field.
   const mounted = useMounted();
   const saved = mounted ? toTimeValue(departAt ?? defaultDepartAt) : "";
   // null while the person is not editing, so the field always follows the saved value.
-  const [draft, setDraft] = useState<string | null>(null);
+  const [ownDraft, setOwnDraft] = useState<string | null>(null);
+  const draft = draftProp !== undefined ? draftProp : ownDraft;
+  const setDraft = onDraftChange ?? setOwnDraft;
 
   const saving = useRef(false);
 

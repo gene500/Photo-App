@@ -4,6 +4,7 @@ import { StartTimeControl } from "./StartTimeControl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useSettings } from "@/components/settings/SettingsProvider";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { btnGhost } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { downsampleRoute } from "@/lib/downsample";
@@ -18,6 +19,7 @@ import { fromTimeValue, toTimeValue } from "./StartTimeControl";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useOfflineCopy } from "@/lib/use-offline-copy";
 import { isExactOptimization } from "@/lib/optimize-schedule";
+import { routeSignature } from "@/lib/route-signature";
 import { defaultLightPref } from "@/lib/light-windows";
 import { formatDistance, formatDuration } from "@/lib/format";
 import { coordsLabel, haversineMeters } from "@/lib/geo";
@@ -30,6 +32,8 @@ import { SearchBar } from "./SearchBar";
 import { StopCard } from "./StopCard";
 import { StopDrawer } from "./StopDrawer";
 import { StopList } from "./StopList";
+import { TripPlan } from "./TripPlan";
+import { TripPlanList } from "./TripPlanList";
 import { StopsPanel } from "./StopsPanel";
 import { SuggestionsPanel, type SuggestionsStatus } from "./SuggestionsPanel";
 import { TripHeader } from "./TripHeader";
@@ -55,6 +59,7 @@ function sameInstant(a: string | null, b: string | null): boolean {
 export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops; /** Signed-in user; enables the offline copy. */ userId?: string }) {
   const { stops: initialStops, ...initialFields } = initialTrip;
   const { settings } = useSettings();
+  const { confirm, dialog } = useConfirm();
   const [trip, setTrip] = useState<Trip>(initialFields);
   const [stops, setStops] = useState<Stop[]>(initialStops);
   useOfflineCopy(trip, stops, userId);
@@ -79,6 +84,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     appliedIds: string[];
     previousDepartAt: string | null;
     appliedDepartAt: string | null;
+    previousOptimizedFor: string | null;
   } | null>(null);
   const [optimizeNote, setOptimizeNote] = useState<{ text: string; idsKey: string } | null>(null);
   // Alternatives found for one stop, tagged with the stop and the waypoints they were found for (stale ones are not shown).
@@ -216,6 +222,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const current = enoughForRoute && routeResult?.key === waypointKey ? routeResult : null;
   const activeRoute = current?.route ?? null;
   const activeRouteError = current?.error ?? null;
+  // The unsaved Start time edit lives here so it survives a switch to another tab.
+  const [startDraft, setStartDraft] = useState<string | null>(null);
+  // Optimized only while the stored signature still matches the stops: any edit that matters turns it off by itself.
+  const optimized = stops.length >= 2 && trip.routeOptimizedFor === routeSignature(trip.plannedDate, stops);
+  const optimizeStale = !optimized && stops.length >= 2 && !!trip.routeOptimizedFor;
   // Once the route has been steady for a moment, fetch the place list quietly (popularity waits for the click), so
   // "Find photo spots" answers from what has already come in. Dropped when the stops change.
   const prewarmRef = useRef<{ key: string; prewarm: Prewarm } | null>(null);
@@ -373,15 +384,21 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }
 
   async function optimizeRoute() {
-    if (optimizing || stops.length < 3) return;
+    if (optimizing || stops.length < 2) return;
     const startKey = idsKey;
     const startWaypoints = waypointKey;
     const startPrefs = prefsKey;
     const before = stops;
     const previousDepartAt = trip.departAt;
+    const previousOptimizedFor = trip.routeOptimizedFor ?? null;
     setOptimizing(true);
     setOptimizeNote(null);
     try {
+      // Two stops have nothing to reorder (the optimizer needs three), so Optimize only records the state.
+      if (before.length < 3) {
+        await saveTrip({ routeOptimizedFor: routeSignature(trip.plannedDate, before) });
+        return;
+      }
       const result = await api.optimizeOrder(before.map((s): LngLat => [s.lng, s.lat]), {
         stops: before.map((s) => ({ lightPref: s.lightPref, priority: s.priority, dwellMinutes: s.dwellMinutes })),
         plannedDate: trip.plannedDate,
@@ -408,7 +425,10 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const nextDepartAt = result.departAt ? clampToSolarDay(new Date(result.departAt), trip.plannedDate, before[result.order[0] ?? 0].lng).toISOString() : previousDepartAt;
       const orderChanged = ids.join(",") !== startKey;
       const departChanged = !sameInstant(nextDepartAt, previousDepartAt);
+      // Marks the trip optimized for the new order, in the same save as the departure.
+      const optimizedFor = routeSignature(trip.plannedDate, ids.map((id) => before.find((s) => s.id === id)!));
       if (!orderChanged && !departChanged) {
+        await saveTrip({ routeOptimizedFor: optimizedFor });
         const usesLight = before.some((s) => s.lightPref !== "any");
         const verdict = isExactOptimization(before.length, usesLight) && result.complete !== false ? "Already the fastest order" : "No faster order found";
         setOptimizeNote({ text: [verdict, missNote].filter(Boolean).join(". "), idsKey: startKey });
@@ -417,15 +437,13 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const previousIds = before.map((s) => s.id);
       if (orderChanged && !(await reorder(ids))) return;
       let appliedDepartAt = previousDepartAt;
-      if (departChanged) {
-        try {
-          await saveTrip({ departAt: nextDepartAt });
-          appliedDepartAt = nextDepartAt;
-        } catch (e) {
-          setStopsError(errorMessage(e, "Couldn't save the departure time"));
-        }
+      try {
+        await saveTrip({ ...(departChanged && { departAt: nextDepartAt }), routeOptimizedFor: optimizedFor });
+        appliedDepartAt = nextDepartAt;
+      } catch (e) {
+        setStopsError(errorMessage(e, "Couldn't save the route"));
       }
-      setUndo({ previousIds, appliedIds: ids, previousDepartAt, appliedDepartAt });
+      setUndo({ previousIds, appliedIds: ids, previousDepartAt, appliedDepartAt, previousOptimizedFor });
       // Say so when the start time moved, so the change in the Start time field is not a surprise.
       const moveNote = !sameInstant(appliedDepartAt, previousDepartAt) && appliedDepartAt ? `Start time moved to ${formatClock(new Date(appliedDepartAt), undefined, settings.timeFormat)} so stops land in their light` : null;
       const note = [moveNote, missNote].filter(Boolean).join(". ");
@@ -439,16 +457,15 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
 
   async function undoOptimize() {
     if (!undo || undoing) return;
-    const { previousIds, previousDepartAt } = undo;
+    const { previousIds, previousDepartAt, previousOptimizedFor } = undo;
     setUndoing(true);
     try {
       if (previousIds.join(",") !== idsKey && !(await reorder(previousIds))) return;
-      if (previousDepartAt !== trip.departAt) {
-        try {
-          await saveTrip({ departAt: previousDepartAt });
-        } catch (e) {
-          setStopsError(errorMessage(e, "Couldn't restore the departure time"));
-        }
+      // One save for both, so the optimized mark and the start time cannot disagree.
+      try {
+        await saveTrip({ ...(previousDepartAt !== trip.departAt && { departAt: previousDepartAt }), routeOptimizedFor: previousOptimizedFor });
+      } catch (e) {
+        setStopsError(errorMessage(e, "Couldn't restore the departure time"));
       }
     } finally {
       setUndoing(false);
@@ -512,7 +529,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }
 
   async function removeStop(id: string) {
-    if (!window.confirm("Delete this stop?")) return;
+    const name = stops.find((s) => s.id === id)?.name;
+    if (name === undefined) return;
+    if (!(await confirm({ title: "Delete stop?", message: `Delete "${name}" from this trip?`, confirmLabel: "Delete" }))) return;
     try {
       try {
         await api.deleteStop(id);
@@ -673,11 +692,22 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }, [skyStop, trip.plannedDate]);
   const freshAlternatives = alternativesState?.stopId === drawerId && alternativesState.key === waypointKey ? alternativesState : null;
 
+  // The same note on Stops and My trip: a swap is usually made from the drawer while Stops is open.
+  const swapNoteEl = swapNote && canUndoSwap && (
+    <div role="status" data-testid="swap-note" className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
+      <p>Swapped {swapNote.fromName} for {swapNote.toName}{swapNote.lostPhoto ? " (reference photo removed)" : ""}</p>
+      <button type="button" onClick={() => void undoSwap()} className={btnGhost}>
+        Undo swap
+      </button>
+    </div>
+  );
+
   return (
     <div className="relative h-[calc(100dvh-3rem)] overflow-hidden">
+      {dialog}
       <MapView
         stops={stops}
-        routeGeometry={activeRoute?.geometry ?? null}
+        routeGeometry={optimized ? activeRoute?.geometry ?? null : null}
         pending={pending}
         suggestions={suggestions}
         highlightedSuggestionId={highlightedId}
@@ -691,7 +721,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         onCenterChange={handleCenter}
       />
 
-      <div className="pointer-events-none absolute inset-x-3 top-3 z-[15] space-y-2 lg:inset-x-auto lg:left-[24.25rem] lg:w-[28.75rem] lg:max-w-[calc(100vw-29rem)]">
+      <div className="pointer-events-none absolute inset-x-3 top-0 z-[15] space-y-2 lg:inset-x-auto lg:left-[24.25rem] lg:w-[28.75rem] lg:max-w-[calc(100vw-29rem)]">
         <div className="pointer-events-auto">
           <SearchBar getProximity={() => centerRef.current} onSelect={selectSearchResult} />
         </div>
@@ -743,28 +773,16 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
           },
         }} />}
         collapsedSummary={
-          activeRoute
+          optimized && activeRoute
             ? `${stops.length} ${stops.length === 1 ? "stop" : "stops"} · ${formatDuration(activeRoute.duration)}`
             : trip.name
         }
         summary={
           <>
-            <div className="flex flex-wrap items-baseline gap-x-1.5 text-sm text-muted">
-            <p>{stops.length} {stops.length === 1 ? "stop" : "stops"}</p>
-            <span aria-hidden>·</span>
-            <p data-testid="route-status">
-              {activeRoute
-                ? `${formatDistance(activeRoute.distance, settings.distanceUnit)} · ${formatDuration(activeRoute.duration)}`
-                : activeRouteError
-                  ? "Route unavailable"
-                  : enoughForRoute
-                    ? "Loading route…"
-                    : "Add 2 stops to see the route"}
-            </p>
-            </div>
-            <StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} defaultDepartAt={defaultDepartAt} lng={stops[0]?.lng} disabled={optimizing} onChange={(iso) => saveStartTime(iso)} onReset={() => void resetDeparture()} />
+            <p className="text-sm text-muted">{stops.length} {stops.length === 1 ? "stop" : "stops"}</p>
             <ErrorBanner
-              message={current?.dismissed ? null : activeRouteError}
+              // The route is not drawn before Optimize, so a failure to fetch it is not worth a banner until then.
+              message={current?.dismissed || !(optimized || optimizing) ? null : activeRouteError}
               onDismiss={() => setRouteResult((r) => (r ? { ...r, dismissed: true } : r))}
             />
             <ErrorBanner message={stopsError} onDismiss={() => setStopsError(null)} />
@@ -772,48 +790,52 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         }
         stops={
           <>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <button
-                type="button"
-                onClick={() => void optimizeRoute()}
-                disabled={stops.length < 3 || optimizing}
-                className="inline-flex min-h-9 items-center rounded-full bg-ink px-4 text-sm font-medium text-ink-foreground transition hover:opacity-85 disabled:opacity-40"
-              >
-                {optimizing ? "Optimizing…" : "Optimize route"}
-              </button>
-              {canUndo && undo && (
-                <button
-                  type="button"
-                  onClick={() => void undoOptimize()}
-                  disabled={undoing}
-                  className="inline-flex min-h-9 items-center rounded-full bg-hover px-4 text-sm font-medium text-foreground ring-1 ring-border transition active:scale-[0.97] hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
-                >
-                  Undo
-                </button>
-              )}
-              {stops.length < 3 && <p className="text-xs text-muted">Add at least 3 stops to optimize the order.</p>}
-              {/* Screen-reader only: always mounted so a text change is announced; nothing shows under the button. */}
-              <p role="status" data-testid="optimize-status" className="sr-only">{optimizeNote?.idsKey === idsKey ? optimizeNote.text : ""}</p>
-            </div>
-            {swapNote && canUndoSwap && (
-              <div role="status" data-testid="swap-note" className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
-                <p>Swapped {swapNote.fromName} for {swapNote.toName}{swapNote.lostPhoto ? " (reference photo removed)" : ""}</p>
-                <button type="button" onClick={() => void undoSwap()} className={btnGhost}>
-                  Undo swap
-                </button>
-              </div>
-            )}
+            {swapNoteEl}
             <StopList
               stops={stops}
-              bestTimes={bestTimes}
-              arrivals={arrivals}
               onReorder={(ids) => void reorder(ids)}
-              onToggleVisited={(id, visited) => void patchStop(id, { visited })}
-              onPriorityChange={(id, priority) => patchStop(id, { priority })}
               onDelete={(id) => void removeStop(id)}
               onSelect={openFromList}
             />
           </>
+        }
+        trip={
+          <TripPlan
+            startTime={<StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} defaultDepartAt={defaultDepartAt} lng={stops[0]?.lng} disabled={optimizing} draft={startDraft} onDraftChange={setStartDraft} onChange={(iso) => saveStartTime(iso)} onReset={() => void resetDeparture()} />}
+            optimize={{
+              onOptimize: () => void optimizeRoute(),
+              onUndo: canUndo && undo ? () => void undoOptimize() : null,
+              busy: optimizing,
+              undoing,
+              disabled: stops.length < 2 || optimizing,
+              status: optimizeNote?.idsKey === idsKey ? optimizeNote.text : "",
+            }}
+            routeStatus={
+              !enoughForRoute
+                ? "Add 2 stops to plan the route"
+                : optimizeStale
+                  ? "Your stops changed. Optimize again to see the route."
+                  : !optimized
+                    ? "Optimize the route to see drive times and the route line"
+                    : activeRoute
+                      ? `${formatDistance(activeRoute.distance, settings.distanceUnit)} · ${formatDuration(activeRoute.duration)}`
+                      : activeRouteError
+                        ? "Route unavailable"
+                        : "Loading route…"
+            }
+            swapNote={swapNoteEl}
+            list={
+              <TripPlanList
+                stops={stops}
+                optimized={optimized}
+                bestTimes={bestTimes}
+                arrivals={arrivals}
+                onToggleVisited={(id, visited) => void patchStop(id, { visited })}
+                onPriorityChange={(id, priority) => patchStop(id, { priority })}
+                onSelect={openFromList}
+              />
+            }
+          />
         }
         suggestions={
           <SuggestionsPanel

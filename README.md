@@ -87,6 +87,12 @@ shows upright.
 
 The search bar finds landmarks, viewpoints and other points of interest by name ("Horseshoe Bend", "Griffith Observatory"), plus towns and addresses. It uses the Mapbox Search Box API: `GET /api/geocode?q&session[&proximity]` calls `suggest` (5 results, `types=poi,address,place,locality,neighborhood`) and answers `{ suggestions: [{ name, subtitle?, mapboxId?, lat?, lng? }] }`, points of interest first (stable, Mapbox's order is kept within a group). Suggestions carry no coordinates, so picking one calls `GET /api/geocode/retrieve?id&session`, which answers `{ place }` named like "Horseshoe Bend, Page, Arizona". The client makes one uuid `session` per search (shared by every suggest and the retrieve, which Mapbox bills as one) and renews it after a pick or when the search is cleared. If `suggest` fails, the old v6 forward geocoder answers instead and its rows already carry `lat`/`lng`, so no retrieve is needed. Both routes need sign-in, are rate limited (`geocode`, `geocode-retrieve`, 60/min) and cache for 10 minutes. In fake mode `suggest` returns canned landmarks that match the query plus the old fake address.
 
+The search bar is pinned to the top edge of the map, joined to the header (square top corners, rounded bottom) with no strip of map between them.
+
+### Confirm dialogs
+
+Deleting a trip or a stop asks through an in-app, themed dialog (`src/components/ui/Dialog.tsx`, `useConfirm` in `ConfirmDialog.tsx`), not the browser's `window.confirm`: Cancel is focused first, Tab stays inside, Escape or a press on the backdrop cancels, and focus returns to the button that opened it. Only one confirm is open at a time.
+
 ## 4. Scripts
 
 | Script | Command | Purpose |
@@ -101,14 +107,35 @@ The search bar finds landmarks, viewpoints and other points of interest by name 
 
 ## 5. Optimize route
 
-The **Optimize route** button (3+ stops) reorders the stops for the shortest
+The **Optimize route** button (on the **My trip** tab; 2+ stops) reorders the stops for the shortest
 total drive time. The first stop stays the starting point and the last stop is
 free (an open path, not a round trip). The server (`POST /api/optimize`) asks the
 Mapbox Matrix API (`directions-matrix/v1/mapbox/driving`, `annotations=duration`)
 for pairwise drive times, then solves the order in `src/lib/optimize-order.ts`:
 exact (Held-Karp) for up to 9 stops, nearest-neighbour plus 2-opt/or-opt above that. The
 Matrix API allows at most 25 coordinates per request, which matches the app's
-25-stop limit. **Undo** restores the previous order until the stops change again.
+25-stop limit. **Undo** restores the previous order until the stops change again. With exactly
+2 stops there is nothing to reorder, so Optimize only marks the trip optimized.
+
+### The My trip tab
+
+The panel has three tabs: **Stops** (the places to go), **My trip** and **Suggestions**.
+A Stops row shows only a small rounded photo (your upload, else the place's photo, loaded when the row scrolls into view, else a
+placeholder), the name, the drag handle and Delete; Visited, times and weather are on My trip. A swap's "Swapped X for Y" note with
+**Undo swap** shows on both Stops and My trip.
+My trip holds the start time, **Optimize route** and Undo, the route totals
+(`62 mi · 1 h 0 min`) and the itinerary: one row per stop with its number (the Visited
+toggle), name, Start/End badge and, for a stop with a best light, the **Priority** pill
+(Normal / High / Must). Once the route is optimized each row also shows the light
+window or arrival, the weather and any poor-light warning. Before that the totals
+read "Optimize the route to see drive times and the route line"; if the stops or their
+settings changed since, "Your stops changed. Optimize again to see the route." The
+panel's collapsed one-liner shows the stop count and drive time only while optimized.
+The editor map draws no route line until the trip is optimized (Export still uses the real
+route); before that the stops are bold numbered discs (`STOP_MARKER_CLASS`), clearly unlike
+the small faded suggestion dots, and the map frames the stops. The public share page keeps
+its line: it is rendered fresh on every load from the saved stop order, so it always follows
+the owner's latest Optimize (it does not auto-refresh; reload to see a change).
 
 ### Light-aware optimization
 
@@ -246,6 +273,9 @@ credit; any failure just means no photo. Results are cached on the server
 (500 entries LRU, 6 h for hits, 15 min for misses, concurrent lookups shared) and
 in the browser; browser failures are remembered for 60 s. Names are matched
 strictly (an "Eagle Peak" never matches "Eagle Rock").
+The lookup sends the stop's name and coordinates to these providers (no account details);
+the Stops-row thumbnail skips it for a dropped pin named only by coordinates or a street
+address (`isAddressOrCoordsName`) and shows the placeholder.
 
 #### Popularity ranking
 
@@ -265,9 +295,12 @@ never touched.
 
 ## Weather and light-window forecast
 
-Every stop with an estimated arrival shows a small emoji for the sky and the
-temperature (e.g. "⛅ 18°C"; °F when distances are in miles) under its row and on the
-selected-stop card. A stop with a preferred light (sunrise, golden hour, sunset)
+Every stop with an estimated arrival shows a small line icon for the sky (clear,
+partly cloudy, mostly cloudy, overcast, rain likely; drawn in the theme's muted or
+sand colour, never an emoji) and the temperature (e.g. "18°C"; °F when distances are
+in miles). Snow, fog, storm and wind icons would need weather codes the forecast does
+not carry yet. The line sits under the stop's row on My trip (once the route is
+optimized) and on the selected-stop card. A stop with a preferred light (sunrise, golden hour, sunset)
 is read at the middle of its light window (the window the visit is in, else the
 nearest); other stops at their arrival. Hovering shows the words ("mostly
 cloudy, 15% rain"), and the colour turns red when the weather is poor for the
@@ -278,7 +311,7 @@ Data comes from Open-Meteo (free, no key). Forecasts (`api.open-meteo.com`) reac
 about 16 days ahead through the signed-in-only `GET /api/weather?lat&lng&date`,
 cached 30 minutes per ~1 km and day (failures 60 s); each request covers the day
 before to the day after. Later dates (up to about two years ahead) show
-**typical** weather, labelled "Typical ⛅ 18°C": averages of the same calendar
+**typical** weather, labelled "Typical 18°C" beside the sky icon: averages of the same calendar
 date (plus or minus 3 days) over the previous 3 years from the Open-Meteo archive
 (`archive-api.open-meteo.com`), with "rain on ~N% of days" as the rain figure.
 Typical answers are cached 24 hours. Suggestion cards use

@@ -40,6 +40,7 @@ function patchData(patch: TripPatch, shiftedDepartAt: Date | null | undefined) {
     ...(patch.plannedDate && { plannedDate: dateOnlyToUtc(patch.plannedDate) }),
     // Changing the date moves a saved start time to the same time of day on the new date.
     ...(shiftedDepartAt !== undefined && patch.departAt === undefined && { departAt: shiftedDepartAt }),
+    ...(patch.routeOptimizedFor !== undefined && { routeOptimizedFor: patch.routeOptimizedFor }),
     ...(patch.departAt !== undefined && { departAt: patch.departAt === null ? null : new Date(patch.departAt) }),
   };
 }

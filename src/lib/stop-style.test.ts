@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { STOP_COLORS, stopColor } from "./stop-style";
+import { STOP_COLORS, STOP_MARKER_CLASS, stopColor } from "./stop-style";
 
 describe("stopColor", () => {
   it("distinguishes source and visited status", () => {
@@ -8,5 +8,11 @@ describe("stopColor", () => {
     expect(stopColor({ source: "suggested", visited: false })).toBe(STOP_COLORS.suggested);
     expect(stopColor({ source: "suggested", visited: true })).toBe(STOP_COLORS.suggestedVisited);
     expect(new Set(Object.values(STOP_COLORS)).size).toBe(4);
+  });
+});
+
+describe("STOP_MARKER_CLASS", () => {
+  it("is a bold ringed disc, larger than a suggestion dot", () => {
+    for (const c of ["h-8 w-8", "rounded-full", "border-[3px]", "font-bold", "ring-1"]) expect(STOP_MARKER_CLASS).toContain(c);
   });
 });

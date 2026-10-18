@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  addDays, describeTypical, describeWeather, weatherAriaLabel, forecastSpan, hourInstant, inForecastRange, lightQuality, lightWarning, parseOpenMeteo, summarizeAt, weatherLabel,
+  addDays, describeTypical, describeWeather, formatTemp, weatherAriaLabel, forecastSpan, hourInstant, inForecastRange, lightQuality, lightWarning, parseOpenMeteo, summarizeAt, weatherLabel,
 } from "./weather";
 import type { WeatherForecast } from "./types";
 
@@ -122,10 +122,16 @@ describe("labels and light quality", () => {
     expect(describeWeather({ ...w, tempC: null }, "km")).toBe("partly cloudy, 15% rain");
   });
 
+  it("formats the temperature in the chosen unit, or null when unknown", () => {
+    expect(formatTemp(18, "km")).toBe("18°C");
+    expect(formatTemp(18, "mi")).toBe("64°F");
+    expect(formatTemp(null, "km")).toBeNull();
+  });
+
   it("builds the aria label from a weather line", () => {
-    expect(weatherAriaLabel({ text: "⛅ 18°C", label: "partly cloudy, 15% rain" })).toBe("partly cloudy, 15% rain, 18°C");
-    expect(weatherAriaLabel({ text: "⛅ 64°F", label: "partly cloudy, 15% rain, 64°F" })).toBe("partly cloudy, 15% rain, 64°F");
-    expect(weatherAriaLabel({ text: "☀️", label: "clear, 0% rain" })).toBe("clear, 0% rain");
+    expect(weatherAriaLabel({ text: "18°C", label: "partly cloudy, 15% rain" })).toBe("partly cloudy, 15% rain, 18°C");
+    expect(weatherAriaLabel({ text: "64°F", label: "partly cloudy, 15% rain, 64°F" })).toBe("partly cloudy, 15% rain, 64°F");
+    expect(weatherAriaLabel({ text: "", label: "clear, 0% rain" })).toBe("clear, 0% rain");
     expect(weatherAriaLabel({ text: "Forecast not available yet" })).toBe("Forecast not available yet");
   });
 });

@@ -59,8 +59,12 @@ describe("ExportControl", () => {
       await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
       expect(createItineraryPdf).toHaveBeenCalledTimes(1);
       expect(vi.mocked(createItineraryPdf).mock.calls[0][0].input.stops).toHaveLength(2);
-      expect(saveBlob).toHaveBeenCalledWith(blob, "Big-Sur-2026-itinerary.pdf");
+      expect(saveBlob).not.toHaveBeenCalled(); // not until the fresh tap on the dialog's Download
       expect(screen.queryByRole("group", { name: "Export trip" })).toBeNull();
+      await userEvent.click(await screen.findByRole("button", { name: "Download" }));
+      expect(saveBlob).toHaveBeenCalledWith(blob, "Big-Sur-2026-itinerary.pdf");
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Export" }));
     });
 
     it("adds a note when every arrival is missing, and none when some are known", async () => {
@@ -77,48 +81,49 @@ describe("ExportControl", () => {
       expect(vi.mocked(createItineraryPdf).mock.calls[1][0].input.note).toBeNull();
     });
 
-    it("shows Preparing PDF... and disables the item while pending", async () => {
+    it("shows the Preparing dialog while pending, and a second Download PDF cannot start another build", async () => {
       let resolve!: (b: Blob) => void;
       vi.mocked(createItineraryPdf).mockReturnValue(new Promise<Blob>((r) => { resolve = r; }));
       render(<ExportControl tripName="T" stops={two} route={null} pdf={pdf} />);
       await userEvent.click(screen.getByRole("button", { name: "Export" }));
       await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
-      const busy = (await screen.findByRole("button", { name: "Preparing PDF..." })) as HTMLButtonElement;
-      expect(busy.getAttribute("aria-disabled")).toBe("true");
-      await userEvent.click(busy);
+      const dialog = await screen.findByRole("alertdialog", { name: "Itinerary PDF" });
+      expect(dialog.getAttribute("aria-busy")).toBe("true");
+      expect(dialog.textContent).toContain("Preparing your PDF…");
       expect(createItineraryPdf).toHaveBeenCalledTimes(1);
       await act(async () => resolve(new Blob(["x"])));
+      expect(saveBlob).not.toHaveBeenCalled();
+      await userEvent.click(await screen.findByRole("button", { name: "Download" }));
       expect(saveBlob).toHaveBeenCalledTimes(1);
     });
 
-    it("shows an alert when it fails and the menu still works", async () => {
-      vi.spyOn(console, "error").mockImplementation(() => {});
-      vi.mocked(createItineraryPdf).mockRejectedValue(new Error("boom"));
+    it("Escape in the dialog cancels it and later results are dropped", async () => {
+      let resolve!: (b: Blob) => void;
+      vi.mocked(createItineraryPdf).mockReturnValue(new Promise<Blob>((r) => { resolve = r; }));
       render(<ExportControl tripName="T" stops={two} route={null} pdf={pdf} />);
       await userEvent.click(screen.getByRole("button", { name: "Export" }));
       await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
-      expect((await screen.findByRole("alert")).textContent).toBe("Could not create the PDF. Try again.");
+      await screen.findByRole("alertdialog");
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+      await act(async () => resolve(new Blob(["x"])));
+      expect(screen.queryByRole("alertdialog")).toBeNull();
       expect(saveBlob).not.toHaveBeenCalled();
-      expect(screen.getByRole("button", { name: "Download GPX" })).toBeTruthy();
-      await userEvent.click(screen.getByRole("button", { name: "Export" }));
-      expect(screen.queryByRole("group", { name: "Export trip" })).toBeNull();
     });
-  });
 
-  it("still shows the PDF error when the menu was closed while the PDF was being made", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const two = [stop(0), stop(1)];
-    const pdf = { departAt: null, totalDistanceM: 1000, totalDurationS: 600, stops: two.map((s) => ({ ...s, lightPref: "any" as const, arrival: null })) };
-    vi.mocked(loadWeatherLines).mockReset().mockResolvedValue([null, null]);
-    let reject!: (e: Error) => void;
-    vi.mocked(createItineraryPdf).mockReset().mockReturnValue(new Promise<Blob>((_r, rej) => { reject = rej; }));
-    render(<ExportControl tripName="T" stops={two} route={null} pdf={pdf} />);
-    await userEvent.click(screen.getByRole("button", { name: "Export" }));
-    await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
-    await userEvent.keyboard("{Escape}");
-    expect(screen.queryByRole("group", { name: "Export trip" })).toBeNull();
-    await act(async () => reject(new Error("boom")));
-    expect(screen.getByRole("alert").textContent).toBe("Could not create the PDF. Try again.");
+    it("shows the failure in the dialog, and Try again builds once more", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      vi.mocked(createItineraryPdf).mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce(new Blob(["x"]));
+      render(<ExportControl tripName="T" stops={two} route={null} pdf={pdf} />);
+      await userEvent.click(screen.getByRole("button", { name: "Export" }));
+      await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
+      expect((await screen.findByRole("alertdialog")).textContent).toContain("Could not create the PDF. Try again.");
+      expect(saveBlob).not.toHaveBeenCalled();
+      await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Download" }));
+      expect(createItineraryPdf).toHaveBeenCalledTimes(2);
+      expect(saveBlob).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("has a tooltip (title) on the icon-only button, with a hint when disabled", () => {

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMemoryStorage } from "../../../tests/helpers/memory-storage";
@@ -53,6 +53,7 @@ import { api } from "@/lib/api-client";
 import { createItineraryPdf, loadWeatherLines, saveBlob } from "@/lib/itinerary-download";
 import type { Stop, TripWithStops } from "@/lib/types";
 import { solarDateAt } from "@/lib/best-time";
+import { routeSignature } from "@/lib/route-signature";
 import { TripEditor } from "./TripEditor";
 
 const trip: TripWithStops = { id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] };
@@ -71,6 +72,14 @@ function expectOptimizeNoteHidden() {
   expect(screen.getByTestId("optimize-status").className).toBe("sr-only");
 }
 
+// A trip whose stored signature matches its stops, i.e. one that was already optimized.
+const optimizedTrip = (stops: Stop[], over: Partial<TripWithStops> = {}): TripWithStops => ({ ...withStops(stops), routeOptimizedFor: routeSignature("2026-07-01", stops), ...over });
+const openMyTrip = () => userEvent.click(screen.getByRole("tab", { name: "My trip" }));
+const openStops = () => userEvent.click(screen.getByRole("tab", { name: "Stops" }));
+
+const confirmDeleteStop = () =>
+  userEvent.click(within(screen.getByRole("alertdialog", { name: "Delete stop?" })).getByRole("button", { name: "Delete" }));
+
 describe("TripEditor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -79,10 +88,11 @@ describe("TripEditor", () => {
     vi.mocked(api.reverseGeocode).mockResolvedValue({ place: { name: "Tunnel View", lat: 37.5, lng: -119.5 } });
   });
 
-  it("asks for stops and skips routing until there are two", () => {
+  it("asks for stops and skips routing until there are two", async () => {
     render(<TripEditor initialTrip={trip} />);
+    await openMyTrip();
     expect(screen.getByTestId("empty-hint").textContent).toBe("Search for a place or click the map to add your first stop.");
-    expect(screen.getByTestId("route-status").textContent).toBe("Add 2 stops to see the route");
+    expect(screen.getByTestId("route-status").textContent).toBe("Add 2 stops to plan the route");
     expect(api.directions).not.toHaveBeenCalled();
   });
 
@@ -92,11 +102,13 @@ describe("TripEditor", () => {
     const blob = new Blob(["pdf"]);
     vi.mocked(createItineraryPdf).mockResolvedValue(blob);
     const departAt = "2026-07-01T15:00:00.000Z";
-    render(<TripEditor initialTrip={{ ...withStops([{ ...seed[0], notes: "Bring water" }, { ...seed[1], lightPref: "sunset" }]), departAt }} />);
+    render(<TripEditor initialTrip={optimizedTrip([{ ...seed[0], notes: "Bring water" }, { ...seed[1], lightPref: "sunset" }], { departAt })} />);
+    await openMyTrip();
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toBe("62 mi · 1 h 0 min"));
     await userEvent.click(screen.getByRole("button", { name: "Export" }));
     await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
-    await waitFor(() => expect(saveBlob).toHaveBeenCalledWith(blob, "Sierra-loop-itinerary.pdf"));
+    await userEvent.click(await screen.findByRole("button", { name: "Download" }));
+    expect(saveBlob).toHaveBeenCalledWith(blob, "Sierra-loop-itinerary.pdf");
     const arg = vi.mocked(createItineraryPdf).mock.calls[0]![0];
     expect(arg.input.tripName).toBe("Sierra loop");
     expect(arg.input.dateLine).toBe("Planned for 2026-07-01");
@@ -109,20 +121,107 @@ describe("TripEditor", () => {
     expect(arg.stops).toEqual([{ lat: 36.74, lng: -119.79 }, { lat: 37.96, lng: -119.12 }]);
   });
 
-  it("loads the route through the stops in order and shows its summary", async () => {
+  it("loads the route through the stops in order and shows its summary on My trip", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
-    render(<TripEditor initialTrip={withStops(seed)} />);
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+    await openMyTrip();
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toBe("62 mi · 1 h 0 min"));
     expect(api.directions).toHaveBeenCalledWith([[-119.79, 36.74], [-119.12, 37.96]]);
   });
 
+  it("moves route totals and start time to My trip", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+    expect(screen.queryByTestId("route-status")).toBeNull();
+    expect(screen.queryByLabelText("Start time")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Optimize route" })).toBeNull();
+    await openMyTrip();
+    expect(screen.getByTestId("route-status")).toBeTruthy();
+    expect(screen.getByLabelText("Start time")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Optimize route" })).toBeTruthy();
+  });
+
+  it("shows totals only after Optimize", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.mocked(api.updateTrip).mockImplementation(async (_id, patch) => ({ trip: { ...trip, ...patch } as never }));
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await openMyTrip();
+    expect(screen.getByTestId("route-status").textContent).toBe("Optimize the route to see drive times and the route line");
+    await userEvent.click(screen.getByRole("button", { name: "Optimize route" }));
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toBe("62 mi · 1 h 0 min"));
+  });
+
+  it("draws no route line until Optimize, then draws it", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.mocked(api.updateTrip).mockImplementation(async (_id, patch) => ({ trip: { ...trip, ...patch } as never }));
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await openMyTrip();
+    await waitFor(() => expect(api.directions).toHaveBeenCalled());
+    expect(screen.queryByTestId("route-line")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Optimize route" }));
+    await waitFor(() => expect(screen.getByTestId("route-line")).toBeTruthy());
+  });
+
+  it("still hands the real route to Export before Optimize", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.mocked(loadWeatherLines).mockResolvedValue([null, null]);
+    vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["pdf"]));
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await waitFor(() => expect(api.directions).toHaveBeenCalled());
+    expect(screen.queryByTestId("route-line")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Export" }));
+    await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
+    await waitFor(() => expect(createItineraryPdf).toHaveBeenCalled());
+    expect(vi.mocked(createItineraryPdf).mock.calls.at(-1)![0].geometry).toEqual(route.geometry);
+  });
+
+  it("keeps an unsaved Start time edit when switching tabs", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await openMyTrip();
+    const input = (await screen.findByLabelText("Start time")) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "05:45" } });
+    await openStops();
+    await openMyTrip();
+    expect((screen.getByLabelText("Start time") as HTMLInputElement).value).toBe("05:45");
+    expect(api.updateTrip).not.toHaveBeenCalled();
+  });
+
+  it("says when the stops changed since Optimize", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    render(<TripEditor initialTrip={{ ...withStops(seed), routeOptimizedFor: "v1:0000000000000000" }} />);
+    await openMyTrip();
+    expect(screen.getByTestId("route-status").textContent).toBe("Your stops changed. Optimize again to see the route.");
+  });
+
+  it("hides arrival-based lines on My trip until the route is optimized", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    const sunset = [{ ...seed[0], lightPref: "sunset" as const }, seed[1]];
+    const { unmount } = render(<TripEditor initialTrip={withStops(sunset)} />);
+    await openMyTrip();
+    expect(screen.queryAllByTestId("best-time")).toHaveLength(0);
+    unmount();
+    render(<TripEditor initialTrip={optimizedTrip(sunset)} />);
+    await openMyTrip();
+    expect((await screen.findAllByTestId("best-time")).length).toBeGreaterThan(0);
+  });
+
   it("shows a dismissible route error while the rest of the editor keeps working", async () => {
     vi.mocked(api.directions).mockRejectedValue(new Error("No driving route found between these points"));
-    render(<TripEditor initialTrip={withStops(seed)} />);
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
     expect((await screen.findByRole("alert")).textContent).toContain("No driving route found");
+    await openMyTrip();
     expect(screen.getByTestId("route-status").textContent).toBe("Route unavailable");
     await userEvent.click(screen.getByRole("button", { name: "drop pin" }));
     expect(await screen.findByRole("region", { name: "Selected place" })).toBeTruthy();
+  });
+
+  it("shows no route error banner before Optimize", async () => {
+    vi.mocked(api.directions).mockRejectedValue(new Error("No driving route found between these points"));
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    await waitFor(() => expect(api.directions).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("names a clicked spot, then adds it as a stop and refetches the route", async () => {
@@ -149,21 +248,24 @@ describe("TripEditor", () => {
 
   it("never sticks on Loading after the route error is dismissed", async () => {
     vi.mocked(api.directions).mockRejectedValue(new Error("No driving route found"));
-    render(<TripEditor initialTrip={withStops(seed)} />);
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
     const alert = await screen.findByRole("alert");
     await userEvent.click(within(alert).getByRole("button"));
     expect(screen.queryByRole("alert")).toBeNull();
+    await openMyTrip();
     expect(screen.getByTestId("route-status").textContent).toBe("Route unavailable");
   });
 
-  it("drops the old route while a new one loads after stops change", async () => {
+  it("drops the old route and totals at once after the stops change", async () => {
     vi.mocked(api.directions).mockResolvedValueOnce({ route });
     vi.mocked(api.updateStop).mockResolvedValue({ stop: { ...seed[0], lat: 38, lng: -118 } });
-    render(<TripEditor initialTrip={withStops(seed)} />);
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+    await openMyTrip();
     await waitFor(() => expect(screen.getByTestId("route-line")).toBeTruthy());
     vi.mocked(api.directions).mockImplementation(() => new Promise(() => {}));
     await userEvent.click(screen.getByRole("button", { name: "drag first marker" }));
-    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toBe("Loading route…"));
+    // Moving a marker changes the stops, so the trip is no longer optimized and the totals go at once.
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toBe("Your stops changed. Optimize again to see the route."));
     expect(screen.queryByTestId("route-line")).toBeNull();
   });
 
@@ -257,7 +359,8 @@ describe("TripEditor", () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: six });
     vi.mocked(api.suggestionPopularity).mockResolvedValue({ counts: six.map(() => 7) });
-    render(<TripEditor initialTrip={withStops(seed)} />);
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+    await openMyTrip();
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/\d mi\b/));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
@@ -296,7 +399,8 @@ describe("TripEditor", () => {
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });
     vi.mocked(api.addStop).mockResolvedValue({ stop: newStop({ id: "c", order: 2, name: "Tunnel View", source: "suggested", lat: 37.7, lng: -119.7 }) });
     vi.mocked(api.placePhoto).mockResolvedValue({ photo: { url: "https://upload.wikimedia.org/tv.jpg", title: "Tunnel View", pageUrl: "https://en.wikipedia.org/wiki/Tunnel_View", credit: "Wikipedia" } });
-    render(<TripEditor initialTrip={withStops(seed)} />);
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+    await openMyTrip();
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/\d mi\b/));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
@@ -310,7 +414,8 @@ describe("TripEditor", () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });
     vi.mocked(api.addStop).mockResolvedValue({ stop: newStop({ id: "c", order: 2, name: "Tunnel View", source: "suggested", lat: 37.7, lng: -119.7 }) });
-    render(<TripEditor initialTrip={withStops(seed)} />);
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+    await openMyTrip();
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/\d mi\b/));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
@@ -370,19 +475,39 @@ describe("TripEditor", () => {
       vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: { ...withPhoto[0], name: "Glacier Point", lat: 37.73, lng: -119.57, source: "suggested", visited: false, photoUrl: null } });
       await userEvent.click(await within(dialog).findByRole("button", { name: "Swap in Glacier Point" }));
       expect(api.updateStop).toHaveBeenLastCalledWith("a", { name: "Glacier Point", lat: 37.73, lng: -119.57, source: "suggested", visited: false, photoUrl: null });
+      await openMyTrip(); // the swap note lives on My trip
       const note = await screen.findByTestId("swap-note");
       expect(note.textContent).toContain("Swapped A for Glacier Point");
       expect(note.textContent).toContain("reference photo removed");
       expect(screen.queryByRole("dialog")).toBeNull();
       // Same slot, new place, and the route is asked for again with the new waypoint.
-      expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("Glacier Point");
+      expect(screen.getAllByTestId("trip-row")[0].textContent).toContain("Glacier Point");
       await waitFor(() => expect(api.directions).toHaveBeenLastCalledWith([[-119.57, 37.73], [-119.12, 37.96]]));
 
       vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: { ...withPhoto[0], photoUrl: null } });
       await userEvent.click(within(note).getByRole("button", { name: "Undo swap" }));
       expect(api.updateStop).toHaveBeenLastCalledWith("a", { name: "A", lat: 36.74, lng: -119.79, source: "manual", visited: true });
-      await waitFor(() => expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("A"));
+      await waitFor(() => expect(screen.getAllByTestId("trip-row")[0].textContent).toContain("A"));
       expect(screen.queryByTestId("swap-note")).toBeNull();
+    });
+
+    it("shows the swap note and Undo swap on the Stops tab too", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.placePhoto).mockResolvedValue({ photo: null });
+      vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [sug(1, { name: "Glacier Point", lat: 37.73, lng: -119.57 })] });
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      const dialog = await openFirstDrawer();
+      await userEvent.click(within(dialog).getByRole("button", { name: "Find alternatives" }));
+      vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: { ...seed[0], name: "Glacier Point", lat: 37.73, lng: -119.57, source: "suggested", visited: false, photoUrl: null } });
+      await userEvent.click(await within(dialog).findByRole("button", { name: "Swap in Glacier Point" }));
+      // No tab switch: Stops is still the open tab.
+      const note = await screen.findByTestId("swap-note");
+      expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("Glacier Point");
+      expect(note.textContent).toContain("Swapped A for Glacier Point");
+      vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: seed[0] });
+      await userEvent.click(within(note).getByRole("button", { name: "Undo swap" }));
+      await waitFor(() => expect(screen.queryByTestId("swap-note")).toBeNull());
+      expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("A");
     });
 
     it("offers Undo only while the swapped stop is untouched: a later rename or tick removes it", async () => {
@@ -395,6 +520,7 @@ describe("TripEditor", () => {
       const swappedStop = { ...seed[0], name: "Glacier Point", lat: 37.73, lng: -119.57, source: "suggested" as const, visited: false };
       vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: swappedStop });
       await userEvent.click(await within(dialog).findByRole("button", { name: "Swap in Glacier Point" }));
+      await openMyTrip();
       expect(await screen.findByTestId("swap-note")).toBeTruthy();
       // Tick Visited and rename (as the drawer would): the stop is no longer what the swap wrote.
       vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: { ...swappedStop, visited: true } });
@@ -414,6 +540,7 @@ describe("TripEditor", () => {
       await userEvent.click(within(dialog).getByRole("button", { name: "Find alternatives" }));
       vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: { ...seed[0], name: "Glacier Point", lat: 37.73, lng: -119.57, source: "suggested", visited: false } });
       await userEvent.click(await within(dialog).findByRole("button", { name: "Swap in Glacier Point" }));
+      await openMyTrip();
       expect(await screen.findByTestId("swap-note")).toBeTruthy();
       await userEvent.click(screen.getByRole("button", { name: "click first marker" }));
       await userEvent.click(within(await screen.findByRole("region", { name: "Selected stop" })).getByRole("button", { name: "Open details" }));
@@ -432,6 +559,7 @@ describe("TripEditor", () => {
       const swappedStop = { ...seed[0], name: "Glacier Point", lat: 37.73, lng: -119.57, source: "suggested" as const, visited: false };
       vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: swappedStop });
       await userEvent.click(await within(dialog).findByRole("button", { name: "Swap in Glacier Point" }));
+      await openMyTrip(); // the swap note lives on My trip
       const note = await screen.findByTestId("swap-note");
       await userEvent.click(screen.getByRole("button", { name: "click first marker" }));
       await userEvent.click(within(await screen.findByRole("region", { name: "Selected stop" })).getByRole("button", { name: "Open details" }));
@@ -516,9 +644,10 @@ describe("TripEditor", () => {
     const existing = newStop({});
     vi.mocked(api.updateStop).mockResolvedValue({ stop: { ...existing, visited: true } });
     render(<TripEditor initialTrip={withStops([existing])} />);
-    await userEvent.click(screen.getByLabelText("Visited"));
+    await openMyTrip(); // Visited is no longer on the Stops rows
+    await userEvent.click(screen.getByLabelText(/^Visited/));
     expect(api.updateStop).toHaveBeenCalledWith("s1", { visited: true });
-    await waitFor(() => expect((screen.getByLabelText("Visited") as HTMLInputElement).checked).toBe(true));
+    await waitFor(() => expect((screen.getByLabelText(/^Visited/) as HTMLInputElement).checked).toBe(true));
   });
 
   it("reverts an optimistic reorder when the API rejects", async () => {
@@ -546,16 +675,17 @@ describe("TripEditor", () => {
     render(<TripEditor initialTrip={withStops([stop1, stop2])} />);
     await userEvent.click(screen.getByRole("button", { name: "reorder" }));
     await waitFor(() => expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 2"));
-    const pin1Row = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("Pin 1"))!;
-    await userEvent.click(within(pin1Row).getByLabelText("Visited"));
+    await openMyTrip();
+    const pin1Row = screen.getAllByTestId("trip-row").find((r) => r.textContent?.includes("Pin 1"))!;
+    await userEvent.click(within(pin1Row).getByLabelText(/^Visited/));
     await waitFor(() => {
-      const row = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("Pin 1"))!;
-      expect((within(row).getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
+      const row = screen.getAllByTestId("trip-row").find((r) => r.textContent?.includes("Pin 1"))!;
+      expect((within(row).getByLabelText(/^Visited/) as HTMLInputElement).checked).toBe(true);
     });
     await act(async () => { rejectReorder(new Error("Couldn't save the new order")); });
-    await waitFor(() => expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 1"));
-    const after = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("Pin 1"))!;
-    expect((within(after).getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
+    await waitFor(() => expect(screen.getAllByTestId("trip-row")[0].textContent).toContain("Pin 1"));
+    const after = screen.getAllByTestId("trip-row").find((r) => r.textContent?.includes("Pin 1"))!;
+    expect((within(after).getByLabelText(/^Visited/) as HTMLInputElement).checked).toBe(true);
   });
 
   it("keeps the latest order when a slower stop patch returns a stale copy", async () => {
@@ -565,8 +695,10 @@ describe("TripEditor", () => {
     let resolvePatch!: (v: { stop: Stop }) => void;
     vi.mocked(api.updateStop).mockImplementation(() => new Promise((r) => { resolvePatch = r; }));
     render(<TripEditor initialTrip={withStops([stop1, stop2])} />);
-    const pin1Row = () => screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("Pin 1"))!;
-    await userEvent.click(within(pin1Row()).getByLabelText("Visited"));
+    const pin1Row = () => screen.getAllByTestId("trip-row").find((r) => r.textContent?.includes("Pin 1"))!;
+    await openMyTrip();
+    await userEvent.click(within(pin1Row()).getByLabelText(/^Visited/));
+    await openStops();
     vi.mocked(api.reorderStops).mockResolvedValueOnce({ stops: [{ ...stop2, order: 0 }, { ...stop1, order: 1 }] });
     await userEvent.click(screen.getByRole("button", { name: "reorder" }));
     await waitFor(() => expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 2"));
@@ -576,14 +708,16 @@ describe("TripEditor", () => {
     await userEvent.click(screen.getByRole("button", { name: "reorder" }));
     await screen.findByRole("alert");
     expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 2");
-    expect((within(pin1Row()).getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
+    await openMyTrip();
+    expect((within(pin1Row()).getByLabelText(/^Visited/) as HTMLInputElement).checked).toBe(true);
   });
 
   it("downsamples a long route before asking for suggestions", async () => {
     const geometry = Array.from({ length: 3000 }, (_, i) => [-119.79 + i * 0.0002, 36.74 + i * 0.0004] as [number, number]);
     vi.mocked(api.directions).mockResolvedValue({ route: { ...route, geometry } });
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [] });
-    render(<TripEditor initialTrip={withStops(seed)} />);
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+    await openMyTrip();
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/\d mi\b/));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
@@ -599,7 +733,8 @@ describe("TripEditor", () => {
     let resolveLate!: (v: { suggestions: import("@/lib/types").Suggestion[] }) => void;
     vi.mocked(api.suggestions).mockResolvedValueOnce({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });
     vi.mocked(api.updateStop).mockResolvedValue({ stop: { ...seed[0], lat: 38, lng: -118 } });
-    render(<TripEditor initialTrip={withStops(seed)} />);
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+    await openMyTrip();
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/\d mi\b/));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
@@ -623,7 +758,8 @@ describe("TripEditor", () => {
     let rejectMove!: (e: Error) => void;
     vi.mocked(api.suggestions).mockImplementationOnce(() => new Promise((r) => { resolveSearch = r; }));
     vi.mocked(api.updateStop).mockImplementation(() => new Promise((_r, reject) => { rejectMove = reject; }));
-    render(<TripEditor initialTrip={withStops(seed)} />);
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+    await openMyTrip();
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/\d mi\b/));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
@@ -634,15 +770,23 @@ describe("TripEditor", () => {
     await waitFor(() => expect(screen.queryByText("Searching…")).toBeNull());
   });
 
+  it("pins the search bar to the top edge under the header", () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    render(<TripEditor initialTrip={withStops(seed)} />);
+    const wrapper = screen.getByRole("button", { name: "pick place" }).closest(".absolute")!;
+    expect(wrapper.className).toContain("top-0");
+    expect(wrapper.className).not.toContain("top-3");
+  });
+
   it("keeps a newer drawer open when an earlier delete finishes", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     let resolveDelete!: () => void;
     vi.mocked(api.deleteStop).mockImplementation(() => new Promise<void>((r) => { resolveDelete = r; }) as never);
     render(<TripEditor initialTrip={withStops(seed)} />);
     await userEvent.click(screen.getByRole("button", { name: "2. B" }));
     expect(await screen.findByRole("dialog", { name: "Edit B" })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Delete B" }));
+    await confirmDeleteStop();
     await userEvent.click(screen.getByRole("button", { name: "1. A" }));
     expect(await screen.findByRole("dialog", { name: "Edit A" })).toBeTruthy();
     await act(async () => { resolveDelete(); });
@@ -652,10 +796,10 @@ describe("TripEditor", () => {
 
   it("treats deleting a stop that is already gone (404) as success", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.mocked(api.deleteStop).mockRejectedValue(Object.assign(new Error("Stop not found"), { status: 404 }));
     render(<TripEditor initialTrip={withStops(seed)} />);
     await userEvent.click(screen.getByRole("button", { name: "Delete B" }));
+    await confirmDeleteStop();
     await waitFor(() => expect(screen.getAllByTestId("stop-row")).toHaveLength(1));
     expect(screen.queryByText("Stop not found")).toBeNull();
   });
@@ -676,7 +820,8 @@ describe("TripEditor", () => {
       { osmId: "node/2", name: "Glacier Point", lat: 37.73, lng: -119.57, kind: "viewpoint" },
     ] });
     vi.mocked(api.addStop).mockResolvedValue({ stop: newStop({ id: "c", order: 2, name: "Tunnel View", source: "suggested", lat: 37.7, lng: -119.7 }) });
-    render(<TripEditor initialTrip={withStops(seed)} />);
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+    await openMyTrip();
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/\d mi\b/));
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
@@ -691,16 +836,75 @@ describe("TripEditor", () => {
       newStop({ id: "b", order: 1, name: "B", lat: 38, lng: -119 }),
       newStop({ id: "c", order: 2, name: "C", lat: 37, lng: -119 }),
     ];
-    const rowNames = () => screen.getAllByTestId("stop-row").map((r) => r.textContent ?? "");
+    const rowNames = () => screen.getAllByTestId("trip-row").map((r) => r.textContent ?? "");
+    // The drag stand-in lives on the Stops tab; Optimize, Undo and the itinerary on My trip.
+    const reorderViaStops = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.click(screen.getByRole("tab", { name: "Stops" }));
+      await user.click(screen.getByRole("button", { name: "reorder" }));
+      await openMyTrip();
+    };
     const reorderEcho = () =>
       vi.mocked(api.reorderStops).mockImplementation(async (_t, ids) => ({
         stops: ids.map((id, order) => ({ ...three.find((s) => s.id === id)!, order })),
       }));
-    beforeEach(() => vi.mocked(api.directions).mockResolvedValue({ route }));
+    beforeEach(() => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.updateTrip).mockImplementation(async (_id, patch) => ({ trip: { ...trip, ...patch } as never }));
+    });
 
-    it("is disabled until there are three stops", () => {
-      render(<TripEditor initialTrip={withStops(seed)} />);
+    it("is disabled until there are two stops", async () => {
+      const { unmount } = render(<TripEditor initialTrip={withStops(seed.slice(0, 1))} />);
+      await openMyTrip();
       expect((screen.getByRole("button", { name: "Optimize route" }) as HTMLButtonElement).disabled).toBe(true);
+      // One "add 2 stops" line only (the route status), not a second hint beside the button.
+      expect(screen.getAllByText(/add (at least )?2 stops/i)).toHaveLength(1);
+      unmount();
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      await openMyTrip();
+      expect((screen.getByRole("button", { name: "Optimize route" }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("optimizes two stops without calling the optimizer", async () => {
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      await openMyTrip();
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", { routeOptimizedFor: routeSignature("2026-07-01", seed) }));
+      expect(api.optimizeOrder).not.toHaveBeenCalled();
+      expect(api.reorderStops).not.toHaveBeenCalled();
+    });
+
+    it("saves the route signature with the departure in one PATCH when optimizing", async () => {
+      reorderEcho();
+      vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1] });
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(three)} />);
+      await openMyTrip();
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      const reordered = [three[0], three[2], three[1]];
+      await waitFor(() => expect(api.updateTrip).toHaveBeenCalledTimes(1));
+      expect(api.updateTrip).toHaveBeenCalledWith("t1", expect.objectContaining({ routeOptimizedFor: routeSignature("2026-07-01", reordered) }));
+    });
+
+    it("marks an already-optimal order as optimized", async () => {
+      vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2] });
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(three)} />);
+      await openMyTrip();
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", { routeOptimizedFor: routeSignature("2026-07-01", three) }));
+      expect(api.reorderStops).not.toHaveBeenCalled();
+    });
+
+    it("restores the previous signature on Undo", async () => {
+      reorderEcho();
+      vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1] });
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={{ ...withStops(three), routeOptimizedFor: "v1:0123456789abcdef" }} />);
+      await openMyTrip();
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      await user.click(await screen.findByRole("button", { name: "Undo" }));
+      await waitFor(() => expect(api.updateTrip).toHaveBeenLastCalledWith("t1", { routeOptimizedFor: "v1:0123456789abcdef" }));
     });
 
     it("sends the coordinates, applies the order through reorder, and offers Undo", async () => {
@@ -708,6 +912,7 @@ describe("TripEditor", () => {
       vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1] });
       const user = userEvent.setup();
       render(<TripEditor initialTrip={withStops(three)} />);
+      await openMyTrip();
       await user.click(screen.getByRole("button", { name: "Optimize route" }));
       expect(api.optimizeOrder).toHaveBeenCalledWith([[-119, 36], [-119, 38], [-119, 37]], {
         stops: [30, 30, 30].map((dwellMinutes) => ({ lightPref: "any", priority: "normal", dwellMinutes })),
@@ -734,14 +939,15 @@ describe("TripEditor", () => {
         vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1], departAt: "2026-07-01T23:15:00.000Z", misses: [] });
         const user = userEvent.setup();
         render(<TripEditor initialTrip={trip2(null)} />);
+        await openMyTrip();
         await user.click(screen.getByRole("button", { name: "Optimize route" }));
         expect(vi.mocked(api.optimizeOrder).mock.calls[0]![1]!.stops[2]).toEqual({ lightPref: "sunset", priority: "normal", dwellMinutes: 30 });
-        await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", { departAt: "2026-07-01T23:15:00.000Z" }));
+        await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", expect.objectContaining({ departAt: "2026-07-01T23:15:00.000Z" })));
         expect(((await screen.findByLabelText("Start time")) as HTMLInputElement).value).toMatch(/^\d{2}:\d{2}$/);
         expect(screen.getByRole("button", { name: "Reset to now" })).toBeTruthy();
 
         await user.click(await screen.findByRole("button", { name: "Undo" }));
-        await waitFor(() => expect(api.updateTrip).toHaveBeenLastCalledWith("t1", { departAt: null }));
+        await waitFor(() => expect(api.updateTrip).toHaveBeenLastCalledWith("t1", { departAt: null, routeOptimizedFor: null }));
         await waitFor(() => expect(api.reorderStops).toHaveBeenLastCalledWith("t1", ["a", "b", "c"]));
         await waitFor(() => expect(screen.queryByRole("button", { name: "Reset to now" })).toBeNull());
         expect((screen.getByLabelText("Start time") as HTMLInputElement).value).toMatch(/^\d{2}:\d{2}$/); // back to now
@@ -753,6 +959,7 @@ describe("TripEditor", () => {
         vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], departAt: "2026-07-02T09:00:00.000Z", misses: [] });
         const user = userEvent.setup();
         render(<TripEditor initialTrip={trip2(null)} />);
+        await openMyTrip();
         await user.click(screen.getByRole("button", { name: "Optimize route" }));
         await waitFor(() => expect(api.updateTrip).toHaveBeenCalledTimes(1));
         const sent = vi.mocked(api.updateTrip).mock.calls[0]![1].departAt as string;
@@ -767,6 +974,7 @@ describe("TripEditor", () => {
         vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [1, 0, 2], departAt: "2026-07-02T09:00:00.000Z", misses: [] });
         const user = userEvent.setup();
         render(<TripEditor initialTrip={{ ...withStops(far), departAt: null }} />);
+        await openMyTrip();
         await user.click(screen.getByRole("button", { name: "Optimize route" }));
         await waitFor(() => expect(api.updateTrip).toHaveBeenCalledTimes(1));
         const sent = vi.mocked(api.updateTrip).mock.calls[0]![1].departAt as string;
@@ -778,6 +986,7 @@ describe("TripEditor", () => {
         vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], departAt: "2026-07-01T23:15:00.000Z", misses: [] });
         const user = userEvent.setup();
         render(<TripEditor initialTrip={trip2(null)} />);
+        await openMyTrip();
         await user.click(screen.getByRole("button", { name: "Optimize route" }));
         await waitFor(() => expect(api.updateTrip).toHaveBeenCalledTimes(1));
         expect(api.reorderStops).not.toHaveBeenCalled();
@@ -791,11 +1000,12 @@ describe("TripEditor", () => {
         vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], departAt: "2026-07-02T00:22:00.000Z", misses: [] });
         const user = userEvent.setup();
         render(<TripEditor initialTrip={trip2("2026-07-02T00:22:00Z")} />);
+        await openMyTrip();
         await user.click(screen.getByRole("button", { name: "Optimize route" }));
         await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("Already the fastest order"));
         expectOptimizeNoteHidden();
         expect(vi.mocked(api.optimizeOrder).mock.calls[0]![1]!.departAt).toBe("2026-07-02T00:22:00Z");
-        expect(api.updateTrip).not.toHaveBeenCalled();
+        expect(vi.mocked(api.updateTrip).mock.calls.every(([, patch]) => !("departAt" in patch))).toBe(true); // only the optimized mark is saved
         expect(screen.queryByText(/Start time moved/)).toBeNull();
       });
 
@@ -805,16 +1015,18 @@ describe("TripEditor", () => {
         vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1], departAt: null, misses: [{ stopIndex: 2, minutes: 90 }, { stopIndex: 1, minutes: 20 }] });
         const user = userEvent.setup();
         render(<TripEditor initialTrip={trip2(null)} />);
+        await openMyTrip();
         await user.click(screen.getByRole("button", { name: "Optimize route" }));
         await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("Can't fit 2 stops in their light: C, B."));
         expectOptimizeNoteHidden();
-        expect(api.updateTrip).not.toHaveBeenCalled(); // null departAt leaves the departure alone
+        expect(vi.mocked(api.updateTrip).mock.calls.every(([, patch]) => !("departAt" in patch))).toBe(true); // null departAt leaves the departure alone
       });
 
       it("resets a chosen departure back to sunrise", async () => {
         echoTrip();
         const user = userEvent.setup();
         render(<TripEditor initialTrip={trip2("2026-07-01T23:15:00.000Z")} />);
+        await openMyTrip();
         expect((screen.getByLabelText("Start time") as HTMLInputElement).value).toMatch(/^\d{2}:\d{2}$/);
         expect(screen.queryByTestId("depart-note")).toBeNull();
         await user.click(screen.getByRole("button", { name: "Reset to now" }));
@@ -827,6 +1039,7 @@ describe("TripEditor", () => {
       vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2] });
       const user = userEvent.setup();
       render(<TripEditor initialTrip={withStops(three)} />);
+      await openMyTrip();
       await user.click(screen.getByRole("button", { name: "Optimize route" }));
       await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("Already the fastest order"));
       expectOptimizeNoteHidden();
@@ -838,6 +1051,7 @@ describe("TripEditor", () => {
       vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], complete: false });
       const user = userEvent.setup();
       render(<TripEditor initialTrip={withStops(three)} />);
+      await openMyTrip();
       await user.click(screen.getByRole("button", { name: "Optimize route" }));
       await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("No faster order found"));
       expect(screen.getByTestId("optimize-status").textContent).not.toContain("Already the fastest");
@@ -850,6 +1064,7 @@ describe("TripEditor", () => {
         const stops = many(n).map((s, i) => (sunset && i === n - 1 ? { ...s, lightPref: "sunset" as const } : s));
         const user = userEvent.setup();
         const { unmount } = render(<TripEditor initialTrip={withStops(stops)} />);
+        await openMyTrip();
         await user.click(screen.getByRole("button", { name: "Optimize route" }));
         await waitFor(() => expect(screen.getByTestId("optimize-status").textContent, `${n} stops`).toContain(text));
         unmount();
@@ -861,11 +1076,12 @@ describe("TripEditor", () => {
       vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1] });
       const user = userEvent.setup();
       render(<TripEditor initialTrip={withStops(three)} />);
+      await openMyTrip();
       await user.click(screen.getByRole("button", { name: "Optimize route" }));
       await screen.findByRole("button", { name: "Undo" });
-      await user.click(screen.getByRole("button", { name: "reorder" })); // a, c, b -> b, c, a
+      await reorderViaStops(user); // a, c, b -> b, c, a
       await waitFor(() => expect(rowNames()[0]).toContain("B"));
-      await user.click(screen.getByRole("button", { name: "reorder" })); // back to a, c, b
+      await reorderViaStops(user); // back to a, c, b
       await waitFor(() => expect(rowNames()[0]).toContain("A"));
       expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
     });
@@ -877,6 +1093,7 @@ describe("TripEditor", () => {
       vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], departAt: "2026-07-01T23:15:00.000Z", misses: [] });
       const user = userEvent.setup();
       render(<TripEditor initialTrip={lit} />);
+      await openMyTrip();
       await user.click(screen.getByRole("button", { name: "Optimize route" }));
       const undoButton = await screen.findByRole("button", { name: "Undo" });
       let release!: () => void;
@@ -895,6 +1112,7 @@ describe("TripEditor", () => {
       vi.mocked(api.optimizeOrder).mockReturnValue(new Promise((_, rej) => (rejectIt = rej)));
       const user = userEvent.setup();
       render(<TripEditor initialTrip={withStops(three)} />);
+      await openMyTrip();
       await user.click(screen.getByRole("button", { name: "Optimize route" }));
       const busy = screen.getByRole("button", { name: "Optimizing…" });
       expect((busy as HTMLButtonElement).disabled).toBe(true);
@@ -912,14 +1130,15 @@ describe("TripEditor", () => {
       vi.mocked(api.updateStop).mockImplementation(async (id, patch) => ({ stop: { ...three.find((s) => s.id === id)!, ...patch } }));
       const user = userEvent.setup();
       render(<TripEditor initialTrip={withStops(three)} />);
+      await openMyTrip();
       await user.click(screen.getByRole("button", { name: "Optimize route" }));
-      const rowB = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("B"))!;
-      await user.click(within(rowB).getByLabelText("Visited"));
+      const rowB = screen.getAllByTestId("trip-row").find((r) => r.textContent?.includes("B"))!;
+      await user.click(within(rowB).getByLabelText(/^Visited/));
       await waitFor(() => expect(api.updateStop).toHaveBeenCalled());
       await act(async () => resolveIt({ order: [0, 2, 1] }));
       await waitFor(() => expect(rowNames()[1]).toContain("C"));
-      const after = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("B"))!;
-      expect((within(after).getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
+      const after = screen.getAllByTestId("trip-row").find((r) => r.textContent?.includes("B"))!;
+      expect((within(after).getByLabelText(/^Visited/) as HTMLInputElement).checked).toBe(true);
     });
 
     it("discards the result when the stops changed while it was in flight", async () => {
@@ -928,8 +1147,9 @@ describe("TripEditor", () => {
       reorderEcho();
       const user = userEvent.setup();
       render(<TripEditor initialTrip={withStops(three)} />);
+      await openMyTrip();
       await user.click(screen.getByRole("button", { name: "Optimize route" }));
-      await user.click(screen.getByRole("button", { name: "reorder" })); // manual change mid-flight
+      await reorderViaStops(user); // manual change mid-flight
       await act(async () => resolveIt({ order: [0, 2, 1] }));
       expect((await screen.findByRole("alert")).textContent).toContain("changed");
       expect(api.reorderStops).toHaveBeenCalledTimes(1); // only the manual one
@@ -940,9 +1160,10 @@ describe("TripEditor", () => {
       vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1] });
       const user = userEvent.setup();
       render(<TripEditor initialTrip={withStops(three)} />);
+      await openMyTrip();
       await user.click(screen.getByRole("button", { name: "Optimize route" }));
       await screen.findByRole("button", { name: "Undo" });
-      await user.click(screen.getByRole("button", { name: "reorder" }));
+      await reorderViaStops(user);
       await waitFor(() => expect(screen.queryByRole("button", { name: "Undo" })).toBeNull());
     });
   });
@@ -969,7 +1190,8 @@ describe("TripEditor with saved settings", () => {
     const { api: freshApi } = await import("@/lib/api-client");
     vi.mocked(freshApi.suggestions).mockResolvedValue({ suggestions: [] });
     vi.mocked(freshApi.directions).mockResolvedValue({ route });
-    await renderWith({ distanceUnit: "mi" }, withStops(seed));
+    await renderWith({ distanceUnit: "mi" }, optimizedTrip(seed));
+    await openMyTrip();
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toBe("62 mi · 1 h 0 min"));
   });
 

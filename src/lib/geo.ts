@@ -16,6 +16,15 @@ export function coordsLabel(p: { lat: number; lng: number }): string {
   return `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
 }
 
+/**
+ * A name that is only a coordinate label ("37.7456, -119.5972", the fake map's "Spot ..."), or a street address the
+ * reverse geocoder gave a dropped pin (house number first). Such names find no photo, so they are never sent to photo providers.
+ */
+export function isAddressOrCoordsName(name: string): boolean {
+  const n = name.trim();
+  return /^(spot\s+)?-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?/i.test(n) || /^\d+[A-Za-z]?(-\d+)?\s+\p{L}/u.test(n);
+}
+
 /** Normalise a longitude (e.g. from a map panned across the antimeridian) into [-180, 180]. */
 export function wrapLng(lng: number): number {
   if (lng >= -180 && lng <= 180) return lng;

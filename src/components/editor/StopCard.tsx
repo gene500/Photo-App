@@ -5,7 +5,7 @@ import { useSettings } from "@/components/settings/SettingsProvider";
 import { btnSecondary, card, btnIcon } from "@/components/ui/styles";
 import { useMounted } from "@/lib/use-mounted";
 import { useWeatherLine } from "@/lib/use-weather";
-import { weatherAriaLabel } from "@/lib/weather";
+import { WeatherText } from "@/components/weather/WeatherIcon";
 import type { BestTime } from "@/lib/best-time";
 import type { Stop } from "@/lib/types";
 
@@ -39,7 +39,7 @@ export function StopCard({ stop, bestTime, arrival, onToggleVisited, onOpenDetai
       {mounted && arrival && <p className="text-xs text-muted">Arrive ~{formatClock(arrival, undefined, settings.timeFormat)}</p>}
       {weather && (
         <p data-testid="card-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-sand" : "text-muted"}`}>
-          <span role="img" aria-label={weatherAriaLabel(weather)}>{weather.text}</span>
+          <WeatherText line={weather} />
         </p>
       )}
       <div className="flex items-center justify-between">

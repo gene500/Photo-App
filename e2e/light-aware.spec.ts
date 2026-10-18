@@ -26,7 +26,9 @@ test("a sunset stop moves the departure so it is reached in its light, and Undo 
   await drawer.getByLabel("Best light").selectOption("sunset");
   await drawer.getByRole("button", { name: "Save" }).click();
   await expect(drawer).toHaveCount(0);
-  await expect(rows.nth(2).getByTestId("best-time")).toHaveText(/^(Misses sunset by|Sunset window)/);
+  // Start time and Optimize live on My trip; the light lines appear there once optimized.
+  await page.getByRole("tab", { name: "My trip" }).click();
+  const tripRows = page.getByTestId("trip-row");
   await expect(page.getByLabel("Start time")).toHaveValue(/^\d{2}:\d{2}$/); // a new trip starts at the time it was created
 
   const departSaved = page.waitForResponse((r) => r.request().method() === "PATCH" && /\/api\/trips\/[^/]+$/.test(r.url()));
@@ -35,7 +37,7 @@ test("a sunset stop moves the departure so it is reached in its light, and Undo 
   await expect(page.getByLabel("Start time")).toHaveValue(/^\d{2}:\d{2}$/);
   await expect(page.getByRole("button", { name: "Reset to now" })).toBeVisible();
   // The sunset stop is now reached inside its window.
-  const sunsetRow = rows.filter({ hasText: "Sunset window" });
+  const sunsetRow = tripRows.filter({ hasText: "Sunset window" });
   await expect(sunsetRow).toHaveCount(1);
   await expect(sunsetRow.getByTestId("best-time")).toHaveText(/Sunset window .* · arrive /);
 
@@ -48,6 +50,7 @@ test("a sunset stop moves the departure so it is reached in its light, and Undo 
   await page.getByRole("button", { name: "Optimize route" }).click();
   await expect(page.getByRole("button", { name: "Reset to now" })).toBeVisible();
   await page.reload();
+  await page.getByRole("tab", { name: "My trip" }).click();
   await expect(page.getByRole("button", { name: "Reset to now" })).toBeVisible();
   const reset = page.waitForResponse((r) => r.request().method() === "PATCH" && /\/api\/trips\/[^/]+$/.test(r.url()));
   await page.getByRole("button", { name: "Reset to now" }).click();

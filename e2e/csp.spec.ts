@@ -48,7 +48,8 @@ test("pages carry the security headers and the map + photo popups raise no CSP v
 
   // The PDF flow (the Export menu), the public share page, and the static-looking pages.
   await page.getByRole("button", { name: "Export", exact: true }).click();
-  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download PDF" }).click()]);
+  await page.getByRole("button", { name: "Download PDF" }).click();
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("alertdialog", { name: "Itinerary PDF" }).getByRole("button", { name: "Download", exact: true }).click()]);
   expect(download.suggestedFilename()).toMatch(/\.pdf$/);
   await page.getByRole("button", { name: "Share", exact: true }).click();
   await page.getByRole("button", { name: "Create link" }).click();
@@ -59,7 +60,8 @@ test("pages carry the security headers and the map + photo popups raise no CSP v
   });
   await shared.goto(shareUrl);
   await expect(shared.getByRole("heading", { name: "CSP check" })).toBeVisible();
-  const [sharedDownload] = await Promise.all([shared.waitForEvent("download"), shared.getByRole("button", { name: "Download PDF" }).click()]);
+  await shared.getByRole("button", { name: "Download PDF" }).click();
+  const [sharedDownload] = await Promise.all([shared.waitForEvent("download"), shared.getByRole("alertdialog", { name: "Itinerary PDF" }).getByRole("button", { name: "Download", exact: true }).click()]);
   expect(sharedDownload.suggestedFilename()).toMatch(/\.pdf$/);
   for (const path of ["/offline", "/privacy", "/terms", "/settings"]) {
     const res = await shared.goto(path);

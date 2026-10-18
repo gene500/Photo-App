@@ -7,6 +7,7 @@ describe("legal pages", () => {
   it("renders the privacy policy with its key disclosures", () => {
     const html = renderToStaticMarkup(<PrivacyPage />);
     expect(html).toContain("Privacy Policy");
+    expect(html).toContain("name and coordinates of that place");
     for (const term of ["Mapbox", "Open-Meteo", "Vercel Blob", "Sign out on all devices"]) expect(html).toContain(term);
     expect(html).toContain('href="/terms"');
   });

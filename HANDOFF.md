@@ -58,7 +58,7 @@ Known gaps:
 - Google accounts are never auto-linked to an existing password account with the same email.
 - Must-have priority is a heavy weight, not a hard block.
 - Optimize keeps a saved start time when it costs nothing; otherwise it searches from sunrise (the result is announced to screen readers only).
-- CSP still allows `'unsafe-inline'`.
+- CSP: scripts need a per-request nonce (set in `src/proxy.ts`, `'strict-dynamic'`, no `'unsafe-inline'` for scripts); styles still allow `'unsafe-inline'` (Mapbox GL and React inline style attributes). Because of the nonce every page renders per request (the root layout reads `x-nonce`), including `/offline`, whose cached copy replays its own nonce. API responses carry `default-src 'none'`.
 - Google-only account deletion re-confirms through Google's account chooser (`prompt=select_account`; `login` is not a documented Google value); existing sessions must sign in once first.
 - Header: below 360 px wide the Edit/Export/Share buttons become icons (aria-labels and title tooltips kept) so the trip name and buttons share one row; verified by eye at 320 and 390 px and 320 px with 1.5x text. The icon buttons are 32 px wide by 44 px tall (the text buttons above 360 px are 36 px tall).
 - PDF font: full Noto Sans Regular and Bold (about 1.2 MB raw, about 0.6 MB gzipped) are fetched on click; they are not subset because no subsetting tool is in the repo toolchain.

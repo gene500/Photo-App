@@ -168,11 +168,11 @@ source and visited flag (not the deleted photo) and is forgotten on reload or wh
 
 The **Share** button in the trip header creates a link (`/s/<token>`) anyone can open
 without an account: the map with numbered pins and a straight route line, and the stops
-with shot lists (not the stop notes, which stay private) and estimated arrival/light hints. **Revoke link** kills it at
+with their shot notes and shot checklists, ticked items included (these ARE visible to anyone with the link; the private stop notes are not) and estimated arrival/light hints. **Revoke link** kills it at
 once (the URL then 404s); sharing again issues a new token. The token is 32 random
 bytes (43 base64url chars) stored in `Trip.shareToken` (nullable, unique; additive
 migration `20261010120000_share_token`). The public page reads a dedicated sanitized
-DTO (`toPublicTripDto`): no email, user id, database ids, uploaded photos or stop notes (shot notes and the shot list are shared; the page and its PDF omit `notes`), and it is
+DTO (`toPublicTripDto`): no email, user id, database ids, uploaded photos or stop notes (shot notes and the shot checklist, with ticks, are shared and visible to anyone with the link; the private `notes` are omitted from the page and its PDF), and it is
 `noindex, nofollow` with `referrer: no-referrer`. `/api/directions` stays login-only, but
 the share page fetches the real driving route on the server (`routeFor` in
 `src/app/s/[token]/page.tsx`); straight lines and distance-based time estimates are only

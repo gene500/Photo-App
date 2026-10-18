@@ -46,5 +46,30 @@ test("pages carry the security headers and the map + photo popups raise no CSP v
   await page.getByRole("button", { name: "Suggestion: Fake Attraction" }).click();
   await expect(page.getByRole("region", { name: "Selected place" }).locator("img")).toBeVisible();
 
+  // The PDF flow (the Export menu), the public share page, and the static-looking pages.
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download PDF" }).click()]);
+  expect(download.suggestedFilename()).toMatch(/\.pdf$/);
+  await page.getByRole("button", { name: "Share", exact: true }).click();
+  await page.getByRole("button", { name: "Create link" }).click();
+  const shareUrl = await page.getByLabel("Share link").inputValue();
+  const shared = await page.context().newPage();
+  shared.on("console", (m) => {
+    if (/content security policy|refused to (load|connect|create|execute|apply)/i.test(m.text())) violations.push(m.text());
+  });
+  await shared.goto(shareUrl);
+  await expect(shared.getByRole("heading", { name: "CSP check" })).toBeVisible();
+  const [sharedDownload] = await Promise.all([shared.waitForEvent("download"), shared.getByRole("button", { name: "Download PDF" }).click()]);
+  expect(sharedDownload.suggestedFilename()).toMatch(/\.pdf$/);
+  for (const path of ["/offline", "/privacy", "/terms", "/settings"]) {
+    const res = await shared.goto(path);
+    const csp = res!.headers()["content-security-policy"] ?? "";
+    expect(csp, path).toMatch(/script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
+    expect(csp, path).not.toMatch(/script-src[^;]*unsafe-inline/);
+    await expect(shared.locator("main, h1").first()).toBeVisible();
+  }
+  // Every inline script on a page carries the page's nonce (the browser hides the value, so check the attribute exists).
+  expect(await shared.evaluate(() => [...document.querySelectorAll("script:not([src])")].filter((s) => (s as HTMLScriptElement).type !== "text/plain" && !(s as HTMLScriptElement).nonce).length)).toBe(0);
+
   expect(violations).toEqual([]);
 });

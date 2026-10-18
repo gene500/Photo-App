@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { isAddressOrCoordsName } from "@/lib/geo";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import type { Stop } from "@/lib/types";
 
-type PhotoStop = Pick<Stop, "name" | "lat" | "lng" | "photoUrl">;
+type PhotoStop = Pick<Stop, "name" | "lat" | "lng" | "photoUrl"> & { source?: Stop["source"] };
 
 export function stopPhotoKey(stop: Pick<Stop, "lat" | "lng" | "name">): string {
   return `stop:${stop.lat.toFixed(5)},${stop.lng.toFixed(5)}:${stop.name}`;
@@ -21,10 +22,12 @@ export function StopPhoto({ stop }: { stop: PhotoStop }) {
   const [found, setFound] = useState<{ key: string; url: string | null } | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const own = stop.photoUrl;
+  // A pin named only by coordinates or a street address has no photo to find: nothing is sent to the photo providers.
+  const lookup = !(stop.source === "manual" && isAddressOrCoordsName(stop.name));
   const { name, lat, lng } = stop;
 
   useEffect(() => {
-    if (visible || own) return;
+    if (visible || own || !lookup) return;
     const el = ref.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
     const io = new IntersectionObserver((entries) => {
@@ -32,16 +35,16 @@ export function StopPhoto({ stop }: { stop: PhotoStop }) {
     }, { rootMargin: "200px" });
     io.observe(el);
     return () => io.disconnect();
-  }, [visible, own]);
+  }, [visible, own, lookup]);
 
   useEffect(() => {
-    if (own || !visible) return;
+    if (own || !visible || !lookup) return;
     let current = true;
     void loadPlacePhoto({ key, name, lat, lng }).then((p) => {
       if (current) setFound({ key, url: p?.url ?? null });
     });
     return () => { current = false; };
-  }, [own, visible, key, name, lat, lng]);
+  }, [own, visible, lookup, key, name, lat, lng]);
 
   const url = own ?? (found?.key === key ? found.url : null);
   if (url && failed !== url) {

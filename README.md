@@ -273,6 +273,9 @@ credit; any failure just means no photo. Results are cached on the server
 (500 entries LRU, 6 h for hits, 15 min for misses, concurrent lookups shared) and
 in the browser; browser failures are remembered for 60 s. Names are matched
 strictly (an "Eagle Peak" never matches "Eagle Rock").
+The lookup sends the stop's name and coordinates to these providers (no account details);
+the Stops-row thumbnail skips it for a dropped pin named only by coordinates or a street
+address (`isAddressOrCoordsName`) and shows the placeholder.
 
 #### Popularity ranking
 

@@ -30,6 +30,7 @@ export default function PrivacyPage() {
         <li><strong>Mapbox</strong> draws the map and provides routes and place search. It receives the map areas you view, coordinates for directions and search text, and your browser&apos;s IP address.</li>
         <li><strong>Open-Meteo</strong> provides weather. It receives the coordinates (to about 1 km) of stops and suggested places you view, and the dates involved; for dates far ahead it is asked about the same date in past years.</li>
         <li><strong>OpenStreetMap / Overpass</strong> and <strong>Wikimedia Commons</strong> (and Flickr, if enabled) supply nearby places and photo counts. They receive the area being searched, not your identity.</li>
+        <li><strong>Wikimedia Commons, Wikipedia</strong> (and Flickr, if enabled) also find a photo for each place you add. They receive the name and coordinates of that place (not for a dropped pin that is only a street address or coordinates), and no account details.</li>
         <li>Images for places may load directly from Mapbox, Wikimedia or Flickr servers, which see your IP address like any website.</li>
         <li><strong>Abuse protection:</strong> to limit repeated requests, our database briefly keeps counters keyed by your account or by your IP address (IPv6 addresses shortened, login-failure counters using only a hashed form). They are removed when their time window (at most an hour) ends.</li>
       </ul>

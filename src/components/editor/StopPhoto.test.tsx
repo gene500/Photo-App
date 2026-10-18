@@ -35,6 +35,20 @@ describe("StopPhoto", () => {
     expect(container.querySelector("img")!.getAttribute("src")).toBe("https://upload.wikimedia.org/x.jpg");
   });
 
+  it("skips the lookup for a dropped pin named by coordinates or a street address, and keeps the placeholder", () => {
+    for (const name of ["37.7456, -119.5972", "1600 Pennsylvania Ave NW"]) {
+      const { unmount } = render(<StopPhoto stop={{ ...base, name, source: "manual" }} />);
+      expect(screen.getByTestId("stop-photo-placeholder")).toBeTruthy();
+      unmount();
+    }
+    expect(loadPlacePhoto).not.toHaveBeenCalled();
+  });
+
+  it("still looks up a suggested stop whose name starts with a number", async () => {
+    render(<StopPhoto stop={{ ...base, name: "7 Mile Beach", source: "suggested" }} />);
+    await waitFor(() => expect(loadPlacePhoto).toHaveBeenCalledTimes(1));
+  });
+
   it("does not request until visible", () => {
     let fire: (e: Partial<IntersectionObserverEntry>[]) => void = () => {};
     class IO {

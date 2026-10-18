@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bearingEndpoint, haversineMeters, wrapLng } from "./geo";
+import { bearingEndpoint, isAddressOrCoordsName, haversineMeters, wrapLng } from "./geo";
 
 describe("haversineMeters", () => {
   it("measures one degree of longitude at the equator (~111.2 km)", () => {
@@ -51,5 +51,18 @@ describe("bearingEndpoint", () => {
     expect(Number.isFinite(lng)).toBe(true);
     expect(Number.isFinite(lat)).toBe(true);
     expect(Math.abs(lat - 89)).toBeLessThan(0.1);
+  });
+});
+
+describe("isAddressOrCoordsName", () => {
+  it("flags coordinate labels, fake spots and house-number-first addresses", () => {
+    for (const n of ["37.7456, -119.5972", "-37.7, 119.5", "Spot 37.1071, -119.1250 (fake)", "1600 Pennsylvania Ave NW", "12B Rue de Rivoli, Paris", "221 Baker Street, London, UK"]) {
+      expect(isAddressOrCoordsName(n), n).toBe(true);
+    }
+  });
+  it("leaves real place names alone", () => {
+    for (const n of ["Tunnel View", "Golden Gate Bridge", "Route 66 Diner", "Alpha Town (fake)", "Mount Whitney"]) {
+      expect(isAddressOrCoordsName(n), n).toBe(false);
+    }
   });
 });

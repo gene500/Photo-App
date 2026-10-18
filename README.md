@@ -271,8 +271,11 @@ never touched.
 
 ## Weather and light-window forecast
 
-Every stop with an estimated arrival shows a small emoji for the sky and the
-temperature (e.g. "⛅ 18°C"; °F when distances are in miles) under its row and on the
+Every stop with an estimated arrival shows a small line icon for the sky (clear,
+partly cloudy, mostly cloudy, overcast, rain likely; drawn in the theme's muted or
+sand colour, never an emoji) and the temperature (e.g. "18°C"; °F when distances are
+in miles). Snow, fog, storm and wind icons would need weather codes the forecast does
+not carry yet under its row and on the
 selected-stop card. A stop with a preferred light (sunrise, golden hour, sunset)
 is read at the middle of its light window (the window the visit is in, else the
 nearest); other stops at their arrival. Hovering shows the words ("mostly

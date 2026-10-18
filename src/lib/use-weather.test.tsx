@@ -19,16 +19,20 @@ const forecastFor = (date: string): WeatherForecast => ({
 describe("weatherLine", () => {
   it("describes the hour and rates the light", () => {
     const at = new Date("2026-07-01T12:10:00Z");
-    expect(weatherLine(forecastFor("2026-07-01"), "sunset", at)).toEqual({ text: "☀️ 20°C", label: "clear, 15% rain", quality: "good" });
+    expect(weatherLine(forecastFor("2026-07-01"), "sunset", at)).toEqual({ text: "20°C", sky: "Clear", label: "clear, 15% rain", quality: "good" });
   });
   it("shows Fahrenheit for miles", () => {
-    expect(weatherLine(forecastFor("2026-07-01"), "any", new Date("2026-07-01T12:10:00Z"), "mi")?.text).toBe("☀️ 68°F");
+    expect(weatherLine(forecastFor("2026-07-01"), "any", new Date("2026-07-01T12:10:00Z"), "mi")?.text).toBe("68°F");
   });
   it("marks typical weather as typical, not a forecast", () => {
     const typical = { ...forecastFor("2027-07-01"), typical: true as const };
     const line = weatherLine(typical, "any", new Date("2027-07-01T12:10:00Z"));
-    expect(line?.text).toBe("Typical ☀️ 20°C");
+    expect(line).toMatchObject({ text: "Typical 20°C", sky: "Clear" });
     expect(line?.label).toMatch(/^Typically clear, rain on ~15% of days$/);
+  });
+  it("keeps the sky when the temperature is unknown", () => {
+    const f = { ...forecastFor("2026-07-01"), hours: [{ time: "2026-07-01T12:00", cloudPct: 10, rainPct: 15, tempC: null }] };
+    expect(weatherLine(f, "any", new Date("2026-07-01T12:10:00Z"))).toMatchObject({ text: "", sky: "Clear" });
   });
   it("says nothing when the lookup failed, is unavailable or has no hour near the instant", () => {
     const at = new Date("2026-07-01T12:10:00Z");
@@ -37,6 +41,7 @@ describe("weatherLine", () => {
     expect(weatherLine(forecastFor("2026-07-01"), "sunset", new Date("2026-07-01T20:00:00Z"))).toBeNull();
   });
   it("says 'Forecast not available yet' when out of range", () => {
+    expect(weatherLine({ available: false, reason: "out_of_range" }, "golden", new Date())).toEqual({ text: "Forecast not available yet", quality: null });
     expect(weatherLine({ available: false, reason: "out_of_range" }, "golden", new Date())?.text).toBe("Forecast not available yet");
   });
 });
@@ -76,7 +81,7 @@ describe("useWeatherLine", () => {
     const date = dateOf(at);
     loadForecast.mockResolvedValue(forecastFor(date));
     const { result } = renderHook(() => useWeatherLine(0, 0, at, "any"));
-    await waitFor(() => expect(result.current).toEqual({ text: "☀️ 68°F", label: "clear, 15% rain", quality: null }));
+    await waitFor(() => expect(result.current).toEqual({ text: "68°F", sky: "Clear", label: "clear, 15% rain", quality: null }));
     expect(loadForecast).toHaveBeenCalledWith(0, 0, date);
   });
 
@@ -89,7 +94,7 @@ describe("useWeatherLine", () => {
     const midHour = new Date(Math.round(mid.getTime() / 3600_000) * 3600_000);
     loadForecast.mockResolvedValue({ available: true, utcOffsetSeconds: 0, hours: [hour(arrival, 3), hour(midHour, 95)] });
     const { result } = renderHook(() => useWeatherLine(0, 0, arrival, "sunset"));
-    await waitFor(() => expect(result.current).toEqual({ text: "☁️ 68°F", label: "overcast, 5% rain", quality: "poor", warning: "Sunset: 95% cloud, likely washed out" }));
+    await waitFor(() => expect(result.current).toEqual({ text: "68°F", sky: "Overcast", label: "overcast, 5% rain", quality: "poor", warning: "Sunset: 95% cloud, likely washed out" }));
     expect(loadForecast).toHaveBeenCalledWith(0, 0, dateOf(mid));
   });
 
@@ -106,7 +111,7 @@ describe("useWeatherLine", () => {
     at.setUTCHours(12, 0, 0, 0);
     loadForecast.mockResolvedValue({ ...forecastFor(dateOf(at)), typical: true });
     const { result } = renderHook(() => useWeatherLine(0, 0, at, "any"));
-    await waitFor(() => expect(result.current?.text).toBe("Typical ☀️ 68°F"));
+    await waitFor(() => expect(result.current?.text).toBe("Typical 68°F"));
   });
 
   it("answers 'not available yet' beyond the typical range without a request, and nothing for the past", () => {

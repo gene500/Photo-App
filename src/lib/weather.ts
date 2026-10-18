@@ -134,17 +134,10 @@ export function lightWarning(pref: LightPref, w: Pick<WeatherSummary, "cloudPct"
   return rainy ? `${name}: rain likely` : `${name}: ${Math.round(w.cloudPct)}% cloud, likely washed out`;
 }
 
-const EMOJI: Record<WeatherLabel, string> = { Clear: "☀️", "Partly cloudy": "⛅", "Mostly cloudy": "🌥️", Overcast: "☁️", "Rain likely": "🌧️" };
-
 /** "18°C" / "64°F" (null when the temperature is unknown). */
 export function formatTemp(tempC: number | null, unit: "km" | "mi"): string | null {
   if (tempC === null) return null;
   return unit === "mi" ? `${Math.round((tempC * 9) / 5 + 32)}°F` : `${Math.round(tempC)}°C`;
-}
-
-/** "⛅ 18°C": a small emoji for the sky and the temperature. Words for screen readers come from describeWeather. */
-export function weatherGlyph(w: WeatherSummary, unit: "km" | "mi" = "km"): string {
-  return [EMOJI[w.label], formatTemp(w.tempC, unit)].filter(Boolean).join(" ");
 }
 
 /** ", 18°C" when a unit is given and the temperature is known, so the spoken label carries it too. */
@@ -165,7 +158,7 @@ export function describeTypical(w: WeatherSummary, unit?: "km" | "mi"): string {
 }
 
 /**
- * The screen-reader label for a weather line: its words plus the temperature shown in `text` ("⛅ 18°C"), which the
+ * The screen-reader label for a weather line: its words plus the temperature shown in `text` ("18°C"), which the
  * words alone omit. Without words the text itself is the label.
  */
 export function weatherAriaLabel(line: { text: string; label?: string }): string {

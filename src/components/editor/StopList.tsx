@@ -15,7 +15,7 @@ import { useMounted } from "@/lib/use-mounted";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { PRIORITIES, PRIORITY_LABEL, stopColor } from "@/lib/stop-style";
 import { useWeatherLine } from "@/lib/use-weather";
-import { weatherAriaLabel } from "@/lib/weather";
+import { WeatherText } from "@/components/weather/WeatherIcon";
 import type { Stop, StopPriority } from "@/lib/types";
 
 type Handlers = {
@@ -197,7 +197,7 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
         </p>
         {weather && (
           <p data-testid="stop-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-sand" : "text-muted"}`}>
-            <span role="img" aria-label={weatherAriaLabel(weather)}>{weather.text}</span>
+            <WeatherText line={weather} />
           </p>
         )}
         {weather?.warning && <p data-testid="light-warning" className="text-xs text-sand">{weather.warning}</p>}

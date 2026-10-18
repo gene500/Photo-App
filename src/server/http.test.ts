@@ -152,3 +152,14 @@ describe("cross-site guard", () => {
     expect(res.headers.get("Retry-After")).toBe("42");
   });
 });
+
+describe("HttpError module", () => {
+  it("is shared with http.ts and imported by the rate limiter without the session/Prisma chain", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { HttpError: fromHttp } = await import("./http");
+    const { HttpError: fromLeaf } = await import("./http-error");
+    expect(fromHttp).toBe(fromLeaf);
+    expect(readFileSync("src/server/http-error.ts", "utf8")).not.toMatch(/^import /m);
+    expect(readFileSync("src/server/rate-limit.ts", "utf8")).not.toMatch(/from "\.\/http"/);
+  });
+});

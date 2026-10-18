@@ -77,6 +77,20 @@ describe("clientIp trust modes", () => {
     warn.mockRestore();
   });
 
+  it("warns once even when the module is loaded twice (proxy and routes are separate bundles)", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    delete (globalThis as Record<string, unknown>).__rtppWarnedNoProxy;
+    vi.resetModules();
+    const a = await import("./rate-limit");
+    vi.resetModules();
+    const b = await import("./rate-limit");
+    a.clientIp(new Headers());
+    b.clientIp(new Headers());
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
   it("on Vercel uses x-vercel-forwarded-for, never x-real-ip or the first forwarded entry", () => {
     vi.stubEnv("VERCEL", "1");
     expect(clientIp(h(spoof))).toBe("5.5.5.5");

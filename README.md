@@ -187,9 +187,8 @@ per 15 minutes) still applies, and after 50 failures per hour per email only add
 refused. Guesses against one account are therefore bounded by the per-IP limit plus a hard ceiling: at 200 failures per
 hour an email refuses every address (the owner included) until the window clears. That trade-off lets a determined
 distributed attacker lock the owner out of password login for as long as they keep spending about 200 failures per hour (the window is fixed, so they can renew it every hour; Google sign-in is unaffected), in return for
-a firm bound on guessing. The client address is read from the platform proxy header (`x-real-ip`, else the first
-`x-forwarded-for` entry), so self-hosting needs a trusted reverse proxy that overwrites those headers; otherwise a client
-can pick its own address key and sidestep the per-address and per-IP limits. Counting happens before the bcrypt check; bodies over 16 KB are refused.
+a firm bound on guessing. The client address comes from proxy headers only where they can be trusted (see "Client address
+and proxies" under Deploying); elsewhere all clients share one address key. Counting happens before the bcrypt check; bodies over 16 KB are refused.
 
 ### Export and navigation links
 
@@ -389,10 +388,30 @@ whitespace, which shows up as a Turso `401` during the build.
   retries photo-file deletions that failed earlier and clears expired rate-limit
   counters. Set `CRON_SECRET` (any long random string) in Vercel; without it the
   route answers 404 and does nothing.
-- **Rate limits** for login, signup, password change and account deletion are
-  counted in the database, so they hold across serverless instances. The other
-  limits (geocoding, suggestions, uploads, ...) are per instance; put Vercel's WAF
-  rate limiting in front if you need exact global limits.
+- **Rate limits** for login, signup, password change, account deletion and every
+  route that spends paid-service quota (geocoding and retrieve, directions, optimize,
+  popularity/Flickr, place photos, and the app-wide Flickr budget) are counted in the
+  database, so they hold across serverless instances. The paid routes fail closed: if
+  the database cannot be reached they answer 503 with `Retry-After` instead of letting
+  requests through. The cheap limits (suggestions, weather, trip writes, photo reads,
+  uploads, the `/s/[token]` page render limit of 300/min per address) stay per instance;
+  put Vercel's WAF rate limiting in front if you need exact global limits.
+- **Client address and proxies.** Per-IP limits (signup, login, share page) key on the
+  client address, which is only read from headers a trusted proxy sets:
+  - On Vercel (the `VERCEL` variable is set) the address is `x-vercel-forwarded-for`,
+    else the last `x-forwarded-for` entry. `x-real-ip` and the first entry are never used.
+  - Elsewhere set `TRUST_PROXY_HEADERS=1` only if every request really passes through
+    your own reverse proxy; the address is then the `x-forwarded-for` entry
+    `TRUSTED_PROXY_DEPTH` places from the right (default 1 = the address your proxy
+    appended; use 2 behind two proxies).
+  - Otherwise (the default) every client header is ignored and all clients share one
+    address key, so the per-IP limits become global ones: safe, but one busy client can
+    use them up for everybody.
+- **Optimize load.** `/api/optimize` runs at most 2 optimizations at once per server
+  instance (`OPTIMIZE_MAX_CONCURRENT`); more get 503 with `Retry-After` and the editor
+  shows "The route optimizer is busy right now". A solve yields to other requests as it
+  works and stops improving after `OPTIMIZE_BUDGET_MS` (default 1000), returning the
+  best order found so far.
 - **CI** (`.github/workflows/ci.yml`) runs type-check, lint, unit tests, build,
   `npm audit` (critical only) and the Playwright suite on every push and pull request.
 - A local `.env.local` created by `vercel env pull` makes `npm run dev` use the

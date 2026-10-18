@@ -264,7 +264,7 @@ describe("optimizeScheduleAsync (shared-server solver)", () => {
 
   it.each([5, 8, 12, 25])("gives the same answer as the synchronous solver when no budget applies (%i stops)", async (n) => {
     const input = make(n);
-    expect(await optimizeScheduleAsync(input)).toEqual(optimizeSchedule(input));
+    expect(await optimizeScheduleAsync(input)).toEqual({ ...optimizeSchedule(input), complete: true });
   });
 
   it("with an exhausted time budget still returns a complete valid schedule, quickly", async () => {
@@ -276,6 +276,11 @@ describe("optimizeScheduleAsync (shared-server solver)", () => {
       expect(r.order[0]).toBe(0);
       expect([...r.order].sort((a, b) => a - b)).toEqual(Array.from({ length: n }, (_, i) => i));
     }
+  });
+
+  it("flags a budget-cut search as incomplete, and an uncut one as complete", async () => {
+    expect((await optimizeScheduleAsync(make(12), { budgetMs: 0 })).complete).toBe(false);
+    expect((await optimizeScheduleAsync(make(12))).complete).toBe(true);
   });
 
   it("is never worse for having more time (a cut-short search is a valid, not-better answer)", async () => {

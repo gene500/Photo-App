@@ -36,7 +36,7 @@ describe("POST /api/optimize", () => {
     // lat 0, 3, 1, 2 along one meridian
     const res = await post([[0, 0], [0, 3], [0, 1], [0, 2]]);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ order: [0, 2, 3, 1], departAt: null, misses: [] });
+    expect(await res.json()).toEqual({ order: [0, 2, 3, 1], complete: true, departAt: null, misses: [] });
   });
 
   it("rejects a stops list whose length differs from the coordinates", async () => {
@@ -180,6 +180,18 @@ describe("POST /api/optimize", () => {
         clearInterval(timer);
       }
       expect(worst).toBeLessThan(250); // the blocking solver held it for ~1 s here
+    });
+
+    it("reports complete: false when the time budget cut the search short, true otherwise", async () => {
+      expect((await (await heavy()).json()).complete).toBe(true);
+      vi.stubEnv("OPTIMIZE_BUDGET_MS", "1");
+      try {
+        const body = await (await heavy()).json();
+        expect(body.complete).toBe(false);
+        expect([...body.order].sort((a: number, b: number) => a - b)).toEqual(Array.from({ length: 25 }, (_, i) => i));
+      } finally {
+        vi.unstubAllEnvs();
+      }
     });
 
     it("honours OPTIMIZE_MAX_CONCURRENT", async () => {

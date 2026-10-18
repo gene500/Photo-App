@@ -46,6 +46,7 @@ export const POST = handle(async (req: Request) => {
     const answerDepartAt = usesLight ? clampToSolarDay(new Date(departMs), date, stops[result.order[0] ?? 0]!.lng).toISOString() : null;
     return Response.json({
       order: result.order,
+      complete: result.complete !== false,
       departAt: answerDepartAt,
       misses: result.misses
         .map((m) => ({ stopIndex: m.stopIndex, minutes: Math.round(m.minutes), priority: m.priority }))

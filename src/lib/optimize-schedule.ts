@@ -13,7 +13,8 @@ export type ScheduleMiss = {
   priority: StopPriority;
 };
 
-export type Schedule = { order: number[]; departAt: Date; misses: ScheduleMiss[] };
+/** `complete` is false when the time budget ended the search early, so the order is good but not necessarily the best the search could find. */
+export type Schedule = { order: number[]; departAt: Date; misses: ScheduleMiss[]; complete?: boolean };
 
 /** One minute of missed light costs as much as this many seconds of driving. */
 const MISS_WEIGHT_SECONDS_PER_MIN = 3 * 60;
@@ -55,10 +56,11 @@ export async function optimizeScheduleAsync(input: ScheduleInput, opts: { budget
     return plan.done;
   }
   const deadline = opts.budgetMs === undefined ? Infinity : Date.now() + opts.budgetMs;
-  const steps = plan.steps(() => Date.now() > deadline);
+  let cut = false;
+  const steps = plan.steps(() => (cut ||= Date.now() > deadline));
   for (;;) {
     const r = steps.next();
-    if (r.done) return plan.finish(r.value);
+    if (r.done) return { ...plan.finish(r.value), complete: !cut };
     await yieldToEventLoop();
   }
 }

@@ -71,6 +71,9 @@ function expectOptimizeNoteHidden() {
   expect(screen.getByTestId("optimize-status").className).toBe("sr-only");
 }
 
+const confirmDeleteStop = () =>
+  userEvent.click(within(screen.getByRole("alertdialog", { name: "Delete stop?" })).getByRole("button", { name: "Delete" }));
+
 describe("TripEditor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -636,13 +639,13 @@ describe("TripEditor", () => {
 
   it("keeps a newer drawer open when an earlier delete finishes", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     let resolveDelete!: () => void;
     vi.mocked(api.deleteStop).mockImplementation(() => new Promise<void>((r) => { resolveDelete = r; }) as never);
     render(<TripEditor initialTrip={withStops(seed)} />);
     await userEvent.click(screen.getByRole("button", { name: "2. B" }));
     expect(await screen.findByRole("dialog", { name: "Edit B" })).toBeTruthy();
     await userEvent.click(screen.getByRole("button", { name: "Delete B" }));
+    await confirmDeleteStop();
     await userEvent.click(screen.getByRole("button", { name: "1. A" }));
     expect(await screen.findByRole("dialog", { name: "Edit A" })).toBeTruthy();
     await act(async () => { resolveDelete(); });
@@ -652,10 +655,10 @@ describe("TripEditor", () => {
 
   it("treats deleting a stop that is already gone (404) as success", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     vi.mocked(api.deleteStop).mockRejectedValue(Object.assign(new Error("Stop not found"), { status: 404 }));
     render(<TripEditor initialTrip={withStops(seed)} />);
     await userEvent.click(screen.getByRole("button", { name: "Delete B" }));
+    await confirmDeleteStop();
     await waitFor(() => expect(screen.getAllByTestId("stop-row")).toHaveLength(1));
     expect(screen.queryByText("Stop not found")).toBeNull();
   });

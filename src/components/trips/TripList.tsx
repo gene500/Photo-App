@@ -4,12 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { api } from "@/lib/api-client";
 import { pruneTripCopies, removeTripCopy } from "@/lib/offline-store";
 import type { TripSummary } from "@/lib/types";
 
 export function TripList({ trips }: { trips: TripSummary[] }) {
   const router = useRouter();
+  const { confirm, dialog } = useConfirm();
   const [error, setError] = useState<string | null>(null);
   // A second click while a delete is in flight must not send another request (or show another confirm).
   const inFlight = useRef(new Set<string>());
@@ -22,7 +24,8 @@ export function TripList({ trips }: { trips: TripSummary[] }) {
 
   async function remove(trip: TripSummary) {
     if (inFlight.current.has(trip.id)) return;
-    if (!window.confirm(`Delete "${trip.name}"? This cannot be undone.`)) return;
+    if (!(await confirm({ title: "Delete trip?", message: `Delete "${trip.name}"? This cannot be undone.`, confirmLabel: "Delete" }))) return;
+    if (inFlight.current.has(trip.id)) return;
     inFlight.current.add(trip.id);
     markDeleting();
     try {
@@ -59,6 +62,7 @@ export function TripList({ trips }: { trips: TripSummary[] }) {
           </li>
         ))}
       </ul>
+      {dialog}
     </div>
   );
 }

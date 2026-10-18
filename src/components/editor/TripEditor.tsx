@@ -4,6 +4,7 @@ import { StartTimeControl } from "./StartTimeControl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useSettings } from "@/components/settings/SettingsProvider";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { btnGhost } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { downsampleRoute } from "@/lib/downsample";
@@ -55,6 +56,7 @@ function sameInstant(a: string | null, b: string | null): boolean {
 export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops; /** Signed-in user; enables the offline copy. */ userId?: string }) {
   const { stops: initialStops, ...initialFields } = initialTrip;
   const { settings } = useSettings();
+  const { confirm, dialog } = useConfirm();
   const [trip, setTrip] = useState<Trip>(initialFields);
   const [stops, setStops] = useState<Stop[]>(initialStops);
   useOfflineCopy(trip, stops, userId);
@@ -512,7 +514,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }
 
   async function removeStop(id: string) {
-    if (!window.confirm("Delete this stop?")) return;
+    const name = stops.find((s) => s.id === id)?.name;
+    if (name === undefined) return;
+    if (!(await confirm({ title: "Delete stop?", message: `Delete "${name}" from this trip?`, confirmLabel: "Delete" }))) return;
     try {
       try {
         await api.deleteStop(id);
@@ -675,6 +679,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
 
   return (
     <div className="relative h-[calc(100dvh-3rem)] overflow-hidden">
+      {dialog}
       <MapView
         stops={stops}
         routeGeometry={activeRoute?.geometry ?? null}

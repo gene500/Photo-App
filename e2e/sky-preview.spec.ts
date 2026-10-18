@@ -31,8 +31,8 @@ test("selecting a stop draws its sunrise and sunset lines and the drawer shows t
   await page.keyboard.press("Escape");
   await expect(drawer).toHaveCount(0);
 
-  page.once("dialog", (d) => void d.accept());
   await rows.first().getByRole("button", { name: /^Delete / }).click();
+  await page.getByRole("alertdialog", { name: "Delete stop?" }).getByRole("button", { name: "Delete" }).click();
   await expect(rows).toHaveCount(0);
   await expect(page.getByTestId("sky-line-sunrise")).toHaveCount(0);
 });

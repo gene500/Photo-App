@@ -4,7 +4,7 @@ const SESSION_URL = "/api/auth/session";
 const CHECK_TIMEOUT_MS = 4000;
 
 /**
- * Whether the saved trip copies may be shown on /offline, which is a static shell with no server-side login check.
+ * Whether the saved trip copies may be shown on /offline, which is a public shell with no server-side login check.
  * - Online: only when the signed-in user is the one who saved the copies. Signed out, or a different user: the copies
  *   are wiped and the visitor is sent to /login.
  * - Offline (no network, or the session check cannot be reached): the copies are shown only if this device has an owner

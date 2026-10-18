@@ -75,6 +75,7 @@ function expectOptimizeNoteHidden() {
 // A trip whose stored signature matches its stops, i.e. one that was already optimized.
 const optimizedTrip = (stops: Stop[], over: Partial<TripWithStops> = {}): TripWithStops => ({ ...withStops(stops), routeOptimizedFor: routeSignature("2026-07-01", stops), ...over });
 const openMyTrip = () => userEvent.click(screen.getByRole("tab", { name: "My trip" }));
+const openStops = () => userEvent.click(screen.getByRole("tab", { name: "Stops" }));
 
 const confirmDeleteStop = () =>
   userEvent.click(within(screen.getByRole("alertdialog", { name: "Delete stop?" })).getByRole("button", { name: "Delete" }));
@@ -445,6 +446,25 @@ describe("TripEditor", () => {
       expect(screen.queryByTestId("swap-note")).toBeNull();
     });
 
+    it("shows the swap note and Undo swap on the Stops tab too", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.placePhoto).mockResolvedValue({ photo: null });
+      vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [sug(1, { name: "Glacier Point", lat: 37.73, lng: -119.57 })] });
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      const dialog = await openFirstDrawer();
+      await userEvent.click(within(dialog).getByRole("button", { name: "Find alternatives" }));
+      vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: { ...seed[0], name: "Glacier Point", lat: 37.73, lng: -119.57, source: "suggested", visited: false, photoUrl: null } });
+      await userEvent.click(await within(dialog).findByRole("button", { name: "Swap in Glacier Point" }));
+      // No tab switch: Stops is still the open tab.
+      const note = await screen.findByTestId("swap-note");
+      expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("Glacier Point");
+      expect(note.textContent).toContain("Swapped A for Glacier Point");
+      vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: seed[0] });
+      await userEvent.click(within(note).getByRole("button", { name: "Undo swap" }));
+      await waitFor(() => expect(screen.queryByTestId("swap-note")).toBeNull());
+      expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("A");
+    });
+
     it("offers Undo only while the swapped stop is untouched: a later rename or tick removes it", async () => {
       vi.mocked(api.directions).mockResolvedValue({ route });
       vi.mocked(api.placePhoto).mockResolvedValue({ photo: null });
@@ -579,6 +599,7 @@ describe("TripEditor", () => {
     const existing = newStop({});
     vi.mocked(api.updateStop).mockResolvedValue({ stop: { ...existing, visited: true } });
     render(<TripEditor initialTrip={withStops([existing])} />);
+    await openMyTrip(); // Visited is no longer on the Stops rows
     await userEvent.click(screen.getByLabelText("Visited"));
     expect(api.updateStop).toHaveBeenCalledWith("s1", { visited: true });
     await waitFor(() => expect((screen.getByLabelText("Visited") as HTMLInputElement).checked).toBe(true));
@@ -609,15 +630,16 @@ describe("TripEditor", () => {
     render(<TripEditor initialTrip={withStops([stop1, stop2])} />);
     await userEvent.click(screen.getByRole("button", { name: "reorder" }));
     await waitFor(() => expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 2"));
-    const pin1Row = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("Pin 1"))!;
+    await openMyTrip();
+    const pin1Row = screen.getAllByTestId("trip-row").find((r) => r.textContent?.includes("Pin 1"))!;
     await userEvent.click(within(pin1Row).getByLabelText("Visited"));
     await waitFor(() => {
-      const row = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("Pin 1"))!;
+      const row = screen.getAllByTestId("trip-row").find((r) => r.textContent?.includes("Pin 1"))!;
       expect((within(row).getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
     });
     await act(async () => { rejectReorder(new Error("Couldn't save the new order")); });
-    await waitFor(() => expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 1"));
-    const after = screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("Pin 1"))!;
+    await waitFor(() => expect(screen.getAllByTestId("trip-row")[0].textContent).toContain("Pin 1"));
+    const after = screen.getAllByTestId("trip-row").find((r) => r.textContent?.includes("Pin 1"))!;
     expect((within(after).getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
   });
 
@@ -628,8 +650,10 @@ describe("TripEditor", () => {
     let resolvePatch!: (v: { stop: Stop }) => void;
     vi.mocked(api.updateStop).mockImplementation(() => new Promise((r) => { resolvePatch = r; }));
     render(<TripEditor initialTrip={withStops([stop1, stop2])} />);
-    const pin1Row = () => screen.getAllByTestId("stop-row").find((r) => r.textContent?.includes("Pin 1"))!;
+    const pin1Row = () => screen.getAllByTestId("trip-row").find((r) => r.textContent?.includes("Pin 1"))!;
+    await openMyTrip();
     await userEvent.click(within(pin1Row()).getByLabelText("Visited"));
+    await openStops();
     vi.mocked(api.reorderStops).mockResolvedValueOnce({ stops: [{ ...stop2, order: 0 }, { ...stop1, order: 1 }] });
     await userEvent.click(screen.getByRole("button", { name: "reorder" }));
     await waitFor(() => expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 2"));
@@ -639,6 +663,7 @@ describe("TripEditor", () => {
     await userEvent.click(screen.getByRole("button", { name: "reorder" }));
     await screen.findByRole("alert");
     expect(screen.getAllByTestId("stop-row")[0].textContent).toContain("1. Pin 2");
+    await openMyTrip();
     expect((within(pin1Row()).getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
   });
 

@@ -120,6 +120,9 @@ Matrix API allows at most 25 coordinates per request, which matches the app's
 ### The My trip tab
 
 The panel has three tabs: **Stops** (the places to go), **My trip** and **Suggestions**.
+A Stops row shows only a small rounded photo (your upload, else the place's photo, loaded when the row scrolls into view, else a
+placeholder), the name, the drag handle and Delete; Visited, times and weather are on My trip. A swap's "Swapped X for Y" note with
+**Undo swap** shows on both Stops and My trip.
 My trip holds the start time, **Optimize route** and Undo, the route totals
 (`62 mi · 1 h 0 min`) and the itinerary: one row per stop with its number (the Visited
 toggle), name, Start/End badge and, for a stop with a best light, the **Priority** pill

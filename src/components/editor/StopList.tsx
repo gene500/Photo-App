@@ -8,22 +8,15 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { centreAlignedKeyboardCoordinates } from "./keyboard-coordinates";
-import { describeBestTime, type BestTime } from "@/lib/best-time";
-import { describeLightHint } from "@/lib/light-windows";
-import { useMounted } from "@/lib/use-mounted";
-import { useSettings } from "@/components/settings/SettingsProvider";
-import { stopColor } from "@/lib/stop-style";
-import { useWeatherLine } from "@/lib/use-weather";
-import { WeatherText } from "@/components/weather/WeatherIcon";
+import { StopPhoto } from "./StopPhoto";
 import type { Stop } from "@/lib/types";
 
 type Handlers = {
-  onToggleVisited: (stopId: string, visited: boolean) => void;
   onDelete: (stopId: string) => void;
   onSelect: (stopId: string) => void;
 };
 
-type Props = Handlers & { stops: Stop[]; bestTimes: BestTime[]; arrivals?: (Date | null)[]; onReorder: (stopIds: string[]) => void };
+type Props = Handlers & { stops: Stop[]; onReorder: (stopIds: string[]) => void };
 
 export function reorderIds(ids: string[], activeId: string, overId: string): string[] | null {
   const from = ids.indexOf(activeId);
@@ -32,7 +25,7 @@ export function reorderIds(ids: string[], activeId: string, overId: string): str
   return arrayMove(ids, from, to);
 }
 
-export function StopList({ stops, bestTimes, arrivals, onReorder, ...handlers }: Props) {
+export function StopList({ stops, onReorder, ...handlers }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: centreAlignedKeyboardCoordinates }),
@@ -53,11 +46,7 @@ export function StopList({ stops, bestTimes, arrivals, onReorder, ...handlers }:
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         <ol>
           {stops.map((s, i) => (
-            <StopRow key={s.id} stop={s} index={i} bestTime={bestTimes[i] ?? null} arrival={arrivals?.[i] ?? null}
-              first={i === 0} last={i === stops.length - 1}
-              role={stops.length > 1 ? (i === 0 ? "Start" : i === stops.length - 1 ? "End" : null) : null}
-              {...handlers}
-            />
+            <StopRow key={s.id} stop={s} index={i} {...handlers} />
           ))}
         </ol>
       </SortableContext>
@@ -68,77 +57,19 @@ export function StopList({ stops, bestTimes, arrivals, onReorder, ...handlers }:
 // Hover-capable pointers reveal the secondary controls on row hover/focus; touch always shows them.
 const REVEAL = "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 focus-visible:!opacity-100";
 
-function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVisited, onDelete, onSelect }: Handlers & { stop: Stop; index: number; bestTime: BestTime; arrival: Date | null; role: "Start" | "End" | null; first: boolean; last: boolean }) {
+function StopRow({ stop, index, onDelete, onSelect }: Handlers & { stop: Stop; index: number }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id });
-  const { settings } = useSettings();
-  const mounted = useMounted(); // clock text is in the viewer's time zone: only a placeholder until mounted
-  const hint = !mounted ? null : describeLightHint(stop, arrival, undefined, settings.timeFormat);
-  // Weather at the arrival (or the stop's light window); silent while loading or when it fails.
-  const weather = useWeatherLine(stop.lat, stop.lng, arrival, stop.lightPref);
-  // The timeline line runs through the dot centre (22px down) and stops at the first/last dot.
-  const line = first && last ? "hidden" : first ? "top-[22px] bottom-0" : last ? "top-0 h-[22px]" : "inset-y-0";
   return (
     <li
       ref={setNodeRef}
       data-testid="stop-row"
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`group relative flex items-start gap-3 rounded-xl py-2 pr-1 text-foreground ${isDragging ? "z-10 bg-surface opacity-70 shadow-lg" : ""}`}
+      className={`group relative flex items-center gap-3 rounded-xl px-1 py-1.5 text-foreground ${isDragging ? "z-10 bg-surface opacity-70 shadow-lg" : ""}`}
     >
-      <span aria-hidden className={`absolute left-[13px] w-px bg-border ${line}`} />
-      {/* The dot is the Visited toggle: a real checkbox laid invisibly over it. */}
-      <span
-        className={`relative z-[1] flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ring-4 ring-surface ${stop.visited ? "text-black/75" : "text-white"}`}
-        style={{ background: stopColor(stop) }}
-      >
-        <input
-          type="checkbox"
-          aria-label="Visited"
-          className="peer absolute inset-0 h-full w-full cursor-pointer opacity-0"
-          checked={stop.visited}
-          onChange={(e) => onToggleVisited(stop.id, e.target.checked)}
-        />
-        {stop.visited ? (
-          <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 8.5l3.2 3.2L13 4.8" />
-          </svg>
-        ) : (
-          <span aria-hidden>{index + 1}</span>
-        )}
-        <span aria-hidden className="pointer-events-none absolute -inset-1 rounded-full ring-2 ring-accent-strong opacity-0 peer-focus-visible:opacity-100" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <button type="button" onClick={() => onSelect(stop.id)} className="block min-h-7 min-w-0 truncate text-left text-sm font-medium leading-7 hover:underline">
-            <span className="sr-only">{index + 1}.</span>{" "}{stop.name}
-          </button>
-          {role && <span data-testid="stop-role" className="shrink-0 rounded-md bg-hover px-1.5 py-px text-xs font-medium text-muted">{role}</span>}
-        </div>
-        <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
-          {hint ? (
-            <span data-testid="best-time" data-light-met={hint.met} className={`flex min-w-0 items-center gap-1 ${hint.met ? "" : "text-sand"}`}>
-              {hint.met && (
-                <svg aria-hidden viewBox="0 0 16 16" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 8.5l3.2 3.2L13 4.8" />
-                </svg>
-              )}
-              <span>{hint.text}</span>
-            </span>
-          ) : (
-            <span data-testid="best-time">{mounted ? describeBestTime(bestTime, undefined, settings.timeFormat) : "\u00A0"}</span>
-          )}
-        </p>
-        {weather && (
-          <p data-testid="stop-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-sand" : "text-muted"}`}>
-            <WeatherText line={weather} />
-          </p>
-        )}
-        {weather?.warning && <p data-testid="light-warning" className="text-xs text-sand">{weather.warning}</p>}
-        {stop.notes && <p className="truncate text-xs text-muted">{stop.notes}</p>}
-      </div>
-      {stop.photoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- user uploads served by an auth-checked route
-        <img src={stop.photoUrl} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
-      ) : null}
+      <StopPhoto stop={stop} />
+      <button type="button" onClick={() => onSelect(stop.id)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline">
+        <span className="sr-only">{index + 1}.</span>{" "}{stop.name}
+      </button>
       <div className={`flex shrink-0 items-center transition-opacity ${REVEAL}`}>
         <button type="button" data-testid="drag-handle" title="Drag to reorder" aria-label={`Reorder ${stop.name}`} className="flex h-9 w-8 cursor-grab touch-none items-center justify-center rounded-lg text-muted hover:bg-hover" {...attributes} {...listeners}>
           ⋮⋮

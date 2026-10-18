@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Stop } from "@/lib/types";
 
-vi.mock("@/lib/api-client", () => ({ api: { geocode: vi.fn(), retrievePlace: vi.fn() } }));
+vi.mock("@/lib/api-client", () => ({ api: { geocode: vi.fn(), retrievePlace: vi.fn(), placePhoto: vi.fn(async () => ({ photo: null })) } }));
 import { PlaceCard } from "./PlaceCard";
 import { SearchBar } from "./SearchBar";
 import { StopCard } from "./StopCard";
@@ -46,7 +46,7 @@ describe("white surfaces set their own text colour", () => {
     expect(screen.getByRole("dialog").className).toContain("text-foreground");
   });
   it("StopList rows", () => {
-    render(<StopList stops={[stop]} bestTimes={[null]} onReorder={vi.fn()} onToggleVisited={vi.fn()} onDelete={vi.fn()} onSelect={vi.fn()} />);
+    render(<StopList stops={[stop]} onReorder={vi.fn()} onDelete={vi.fn()} onSelect={vi.fn()} />);
     expect(screen.getByTestId("stop-row").className).toContain("text-foreground");
   });
   it("TripPlanList rows", () => {

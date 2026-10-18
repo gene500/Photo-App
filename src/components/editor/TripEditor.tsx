@@ -690,6 +690,16 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }, [skyStop, trip.plannedDate]);
   const freshAlternatives = alternativesState?.stopId === drawerId && alternativesState.key === waypointKey ? alternativesState : null;
 
+  // The same note on Stops and My trip: a swap is usually made from the drawer while Stops is open.
+  const swapNoteEl = swapNote && canUndoSwap && (
+    <div role="status" data-testid="swap-note" className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
+      <p>Swapped {swapNote.fromName} for {swapNote.toName}{swapNote.lostPhoto ? " (reference photo removed)" : ""}</p>
+      <button type="button" onClick={() => void undoSwap()} className={btnGhost}>
+        Undo swap
+      </button>
+    </div>
+  );
+
   return (
     <div className="relative h-[calc(100dvh-3rem)] overflow-hidden">
       {dialog}
@@ -777,12 +787,10 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         }
         stops={
           <>
+            {swapNoteEl}
             <StopList
               stops={stops}
-              bestTimes={bestTimes}
-              arrivals={arrivals}
               onReorder={(ids) => void reorder(ids)}
-              onToggleVisited={(id, visited) => void patchStop(id, { visited })}
               onDelete={(id) => void removeStop(id)}
               onSelect={openFromList}
             />
@@ -813,14 +821,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                         ? "Route unavailable"
                         : "Loading route…"
             }
-            swapNote={swapNote && canUndoSwap && (
-              <div role="status" data-testid="swap-note" className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
-                <p>Swapped {swapNote.fromName} for {swapNote.toName}{swapNote.lostPhoto ? " (reference photo removed)" : ""}</p>
-                <button type="button" onClick={() => void undoSwap()} className={btnGhost}>
-                  Undo swap
-                </button>
-              </div>
-            )}
+            swapNote={swapNoteEl}
             list={
               <TripPlanList
                 stops={stops}

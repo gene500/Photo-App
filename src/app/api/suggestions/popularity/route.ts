@@ -1,4 +1,4 @@
-import { enforceLimit } from "@/server/rate-limit";
+import { enforcePaidLimit } from "@/server/shared-limit";
 import { popularityRequestSchema } from "@/lib/validation";
 import { handle, readJson, requireUserId } from "@/server/http";
 import { isFakeExternal } from "@/server/external/fake";
@@ -7,7 +7,7 @@ import { POPULARITY_TIMEOUT_MS, sharedCounter, sharedNotable } from "@/server/su
 /** Photo-count popularity for one batch of (at most 5) places; the client ranks suggestions as batches arrive. */
 export const POST = handle(async (req: Request) => {
   const userId = await requireUserId();
-  enforceLimit("popularity", userId);
+  await enforcePaidLimit("popularity", userId);
   const { places } = popularityRequestSchema.parse(await readJson(req));
   if (isFakeExternal()) return Response.json({ counts: places.map((_, i) => (i * 7) % 50), notable: places.map((_, i) => i % 2 === 0) });
   const count = sharedCounter();

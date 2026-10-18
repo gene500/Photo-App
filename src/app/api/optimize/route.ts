@@ -1,4 +1,4 @@
-import { enforceLimit } from "@/server/rate-limit";
+import { enforcePaidLimit } from "@/server/shared-limit";
 import { clampToSolarDay, departureTime } from "@/lib/best-time";
 import { optimizeSchedule } from "@/lib/optimize-schedule";
 import { optimizeRequestSchema } from "@/lib/validation";
@@ -12,7 +12,7 @@ import { handle, HttpError, readJson, requireUserId } from "@/server/http";
  */
 export const POST = handle(async (req: Request) => {
   const userId = await requireUserId();
-  enforceLimit("optimize", userId);
+  await enforcePaidLimit("optimize", userId);
   const { coordinates, stops: prefs, plannedDate, departAt } = optimizeRequestSchema.parse(await readJson(req));
   try {
     const durations = await getDurationMatrix(coordinates);

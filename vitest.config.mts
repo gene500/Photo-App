@@ -17,6 +17,7 @@ export default defineConfig({
       NEXTAUTH_SECRET: "test-secret",
       RATE_LIMIT_DISABLED: "1", // the limiter has its own tests that switch it on
       SIGNUP_MIN_SECONDS: "0",
+      TRUST_PROXY_HEADERS: "1", // tests simulate client addresses with x-forwarded-for; clientIp has its own tests for every trust mode
     },
     fileParallelism: false, // DB-backed tests share one SQLite file
     // The tdd-guard reporter is a local dev aid; it is skipped on CI, where it only adds a path that can fail to write.

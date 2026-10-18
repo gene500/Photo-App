@@ -29,7 +29,7 @@ export const flickrKey = (): string | undefined => process.env.FLICKR_API_KEY?.t
  * by one busy user). False once spent: callers then use another source instead of failing.
  */
 export async function flickrBudgetLeft(): Promise<boolean> {
-  return (await hitShared("flickr-app", "all")).ok;
+  return (await hitShared("flickr-app", "all", Date.now(), { failClosed: true })).ok;
 }
 
 function searchUrl(key: string, place: PlaceQuery, extra: Record<string, string>): string {

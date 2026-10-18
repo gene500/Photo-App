@@ -112,4 +112,18 @@ describe("Flickr", () => {
       vi.unstubAllEnvs();
     }
   });
+
+  it("skips Flickr too when the shared budget counter cannot be reached (fails closed)", async () => {
+    vi.stubEnv("RATE_LIMIT_DISABLED", "0");
+    const { prisma } = await import("../db");
+    const spy = vi.spyOn(prisma, "$queryRaw").mockRejectedValue(new Error("db down"));
+    try {
+      const f = ok(search([photo()]));
+      expect(await getFlickrPhoto(obs, f)).toBeNull();
+      expect(f).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+      vi.unstubAllEnvs();
+    }
+  });
 });

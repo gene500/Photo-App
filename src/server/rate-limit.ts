@@ -47,6 +47,8 @@ export const POLICIES = {
   "account-delete": { limit: 5, windowMs: 15 * MINUTE, message: "Too many attempts. Try again later." },
   /** Route lookups made by anonymous visitors of one owner's share links, across all of them. */
   "share-directions": { limit: 120, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
+  /** Renders of the public /s/[token] page, per client address (enforced in src/proxy.ts). Generous: only stops a flood. */
+  "share-view": { limit: 300, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   directions: { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   optimize: { limit: 10, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   "photo-upload": { limit: 20, windowMs: 10 * MINUTE, message: "Too many uploads. Try again in a few minutes." },

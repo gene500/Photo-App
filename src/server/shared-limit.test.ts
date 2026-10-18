@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "./db";
 import { clearAllLimits, POLICIES } from "./rate-limit";
-import { hitShared, isBlockedShared, resetShared, sweepSharedLimits } from "./shared-limit";
+import { enforcePaidLimit, hitShared, isBlockedShared, resetShared, sweepSharedLimits } from "./shared-limit";
 import { resetDb } from "../../tests/helpers/db";
 
 describe("shared (database) rate limits", () => {
@@ -69,5 +69,21 @@ describe("shared (database) rate limits", () => {
     await prisma.rateLimitCounter.createMany({ data: [{ key: "old", count: 1, resetAt: 10 }, { key: "live", count: 1, resetAt: 9_999_999_999_999 }] });
     await sweepSharedLimits(1000);
     expect((await prisma.rateLimitCounter.findMany()).map((r) => r.key)).toEqual(["live"]);
+  });
+
+  it("hitShared with failClosed refuses when the database fails", async () => {
+    const spy = vi.spyOn(prisma, "$queryRaw").mockRejectedValue(new Error("db down"));
+    const r = await hitShared("geocode", "u", Date.now(), { failClosed: true });
+    spy.mockRestore();
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect("unavailable" in r).toBe(true);
+  });
+
+  it("enforcePaidLimit throws 429 over the limit and 503 when the database is down", async () => {
+    for (let i = 0; i < POLICIES.geocode.limit; i++) await enforcePaidLimit("geocode", "p1");
+    await expect(enforcePaidLimit("geocode", "p1")).rejects.toMatchObject({ status: 429 });
+    const spy = vi.spyOn(prisma, "$queryRaw").mockRejectedValue(new Error("db down"));
+    await expect(enforcePaidLimit("geocode", "p2")).rejects.toMatchObject({ status: 503, retryAfter: expect.any(Number) });
+    spy.mockRestore();
   });
 });

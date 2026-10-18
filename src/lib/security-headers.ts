@@ -1,15 +1,15 @@
 /**
- * Response headers for every route (applied in next.config.ts).
- *
- * script-src keeps 'unsafe-inline': Next's own bootstrap scripts and the theme init script are inline, and
- * a nonce-based policy would need a proxy plus fully dynamic rendering of every page. Everything else is locked
+ * Content-Security-Policy. Pages get it from src/proxy.ts with a fresh nonce per request: scripts run only if they carry
+ * the nonce (Next adds it to its own scripts; the theme init script gets it from the layout) or were loaded by such a
+ * script ('strict-dynamic'), so injected markup cannot run script. Without a nonce, `script-src` is just 'self'.
+ * style-src keeps 'unsafe-inline' because Mapbox GL and React set inline style attributes. Everything else is locked
  * down: no framing, no plugins, no foreign form targets, and outbound connections / images only to the hosts
  * the app really uses (Mapbox, and the Wikimedia / Flickr image hosts for place photos).
  */
-export function contentSecurityPolicy(dev: boolean): string {
+export function contentSecurityPolicy(dev: boolean, nonce?: string): string {
   const directives: Record<string, string[]> = {
     "default-src": ["'self'"],
-    "script-src": ["'self'", "'unsafe-inline'", ...(dev ? ["'unsafe-eval'"] : [])],
+    "script-src": ["'self'", ...(nonce ? [`'nonce-${nonce}'`, "'strict-dynamic'"] : []), ...(dev ? ["'unsafe-eval'"] : [])],
     // Mapbox GL and React set inline style attributes.
     "style-src": ["'self'", "'unsafe-inline'"],
     "img-src": [
@@ -44,9 +44,12 @@ export function contentSecurityPolicy(dev: boolean): string {
     .join("; ");
 }
 
-export function securityHeaders(dev: boolean): { key: string; value: string }[] {
+/** For API responses (JSON, never rendered): nothing may load or frame. Pages get their policy from the proxy. */
+export const API_CONTENT_SECURITY_POLICY = "default-src 'none'; frame-ancestors 'none'";
+
+/** Hardening headers for every route except the CSP (see contentSecurityPolicy and API_CONTENT_SECURITY_POLICY). */
+export function securityHeaders(): { key: string; value: string }[] {
   return [
-    { key: "Content-Security-Policy", value: contentSecurityPolicy(dev) },
     { key: "X-Frame-Options", value: "DENY" },
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

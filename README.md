@@ -131,6 +131,11 @@ window or arrival, the weather and any poor-light warning. Before that the total
 read "Optimize the route to see drive times and the route line"; if the stops or their
 settings changed since, "Your stops changed. Optimize again to see the route." The
 panel's collapsed one-liner shows the stop count and drive time only while optimized.
+The editor map draws no route line until the trip is optimized (Export still uses the real
+route); before that the stops are bold numbered discs (`STOP_MARKER_CLASS`), clearly unlike
+the small faded suggestion dots, and the map frames the stops. The public share page keeps
+its line: it is rendered fresh on every load from the saved stop order, so it always follows
+the owner's latest Optimize (it does not auto-refresh; reload to see a change).
 
 ### Light-aware optimization
 

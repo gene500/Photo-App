@@ -223,6 +223,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const activeRoute = current?.route ?? null;
   const activeRouteError = current?.error ?? null;
   // Optimized only while the stored signature still matches the stops: any edit that matters turns it off by itself.
+  // The unsaved Start time edit lives here so it survives a switch to another tab.
+  const [startDraft, setStartDraft] = useState<string | null>(null);
   const optimized = stops.length >= 2 && trip.routeOptimizedFor === routeSignature(trip.plannedDate, stops);
   const optimizeStale = !optimized && stops.length >= 2 && !!trip.routeOptimizedFor;
   // Once the route has been steady for a moment, fetch the place list quietly (popularity waits for the click), so
@@ -705,7 +707,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       {dialog}
       <MapView
         stops={stops}
-        routeGeometry={activeRoute?.geometry ?? null}
+        routeGeometry={optimized ? activeRoute?.geometry ?? null : null}
         pending={pending}
         suggestions={suggestions}
         highlightedSuggestionId={highlightedId}
@@ -798,14 +800,13 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         }
         trip={
           <TripPlan
-            startTime={<StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} defaultDepartAt={defaultDepartAt} lng={stops[0]?.lng} disabled={optimizing} onChange={(iso) => saveStartTime(iso)} onReset={() => void resetDeparture()} />}
+            startTime={<StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} defaultDepartAt={defaultDepartAt} lng={stops[0]?.lng} disabled={optimizing} draft={startDraft} onDraftChange={setStartDraft} onChange={(iso) => saveStartTime(iso)} onReset={() => void resetDeparture()} />}
             optimize={{
               onOptimize: () => void optimizeRoute(),
               onUndo: canUndo && undo ? () => void undoOptimize() : null,
               busy: optimizing,
               undoing,
               disabled: stops.length < 2 || optimizing,
-              hint: stops.length < 2 ? "Add at least 2 stops to plan the route." : null,
               status: optimizeNote?.idsKey === idsKey ? optimizeNote.text : "",
             }}
             routeStatus={

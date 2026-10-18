@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { bearingEndpoint } from "@/lib/geo";
 import { latLngToPercent, pixelToLatLng, type Bounds } from "@/lib/map-bounds";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
-import { stopColor } from "@/lib/stop-style";
+import { STOP_MARKER_CLASS, stopColor } from "@/lib/stop-style";
 import type { Suggestion } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
 import { isHoverPointer } from "./hover-pointer";
@@ -77,7 +77,7 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
       }}
     >
       <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-        {routePoints && <polyline points={routePoints} fill="none" stroke="#b08d57" strokeWidth={0.6} strokeLinecap="round" strokeLinejoin="round" />}
+        {routePoints && <polyline data-testid="route-line" points={routePoints} fill="none" stroke="#b08d57" strokeWidth={0.6} strokeLinecap="round" strokeLinejoin="round" />}
         {skyLines.map((l) => (
           <polyline key={l.name} data-testid={`sky-line-${l.name}`} data-bearing={l.bearing} points={l.points} fill="none" stroke={l.color} strokeWidth={0.5} strokeDasharray="1.5 1" strokeLinecap="round" />
         ))}
@@ -90,7 +90,7 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
             type="button"
             aria-label={`Stop ${i + 1}: ${s.name}`}
             title={s.name}
-            className={`absolute flex h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white text-xs font-semibold shadow-md ${s.visited ? "text-black/75" : "text-white"} ${
+            className={`absolute -translate-x-1/2 -translate-y-1/2 ${STOP_MARKER_CLASS} ${s.visited ? "text-black/75" : "text-white"} ${
               s.id === selectedId ? "ring-2 ring-route" : ""
             }`}
             style={{ left: `${p.left}%`, top: `${p.top}%`, background: stopColor(s) }}

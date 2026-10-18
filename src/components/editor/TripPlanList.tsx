@@ -83,7 +83,7 @@ function TripRow({ stop, index, first, last, optimized, bestTime, arrival, role,
       >
         <input
           type="checkbox"
-          aria-label="Visited"
+          aria-label={`Visited: ${stop.name}`}
           className="peer absolute inset-0 h-full w-full cursor-pointer opacity-0"
           checked={stop.visited}
           onChange={(e) => onToggleVisited(stop.id, e.target.checked)}

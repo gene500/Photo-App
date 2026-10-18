@@ -32,12 +32,16 @@ test("sign up → new trip → search + click to add stops → suggestion → re
   await page.getByRole("button", { name: "Add stop" }).click();
   await expect(rows).toHaveCount(2);
 
+  // No driving line until Optimize
+  await expect(page.getByTestId("route-line")).toHaveCount(0);
+
   // My trip: totals appear only after Optimize
   await page.getByRole("tab", { name: "My trip" }).click();
   await expect(page.getByTestId("route-status")).toHaveText("Optimize the route to see drive times and the route line");
   await page.getByRole("button", { name: "Optimize route" }).click();
   await expect(page.getByTestId("route-status")).toHaveText(/\d mi\b/);
   await expect(page.getByTestId("stop-role")).toHaveText(["Start", "End"]);
+  await expect(page.getByTestId("route-line")).toHaveCount(1);
 
   // Accept a suggestion from the Suggestions tab
   await page.getByRole("tab", { name: "Suggestions" }).click();

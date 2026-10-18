@@ -11,7 +11,6 @@ type Props = {
     busy: boolean;
     undoing: boolean;
     disabled: boolean;
-    hint: string | null;
     status: string;
   };
   routeStatus: string;
@@ -43,7 +42,6 @@ export function TripPlan({ startTime, optimize, routeStatus, swapNote, list }: P
             Undo
           </button>
         )}
-        {optimize.hint && <p className="text-xs text-muted">{optimize.hint}</p>}
         {/* Screen-reader only: always mounted so a text change is announced; nothing shows under the button. */}
         <p role="status" data-testid="optimize-status" className="sr-only">{optimize.status}</p>
       </div>

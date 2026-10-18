@@ -9,7 +9,7 @@ import { bearingEndpoint, wrapLng } from "@/lib/geo";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { applyMapTheme } from "@/lib/map-theme";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
-import { stopColor } from "@/lib/stop-style";
+import { STOP_MARKER_CLASS, stopColor } from "@/lib/stop-style";
 import type { LngLat, Suggestion } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
 import { isHoverPointer } from "./hover-pointer";
@@ -26,7 +26,6 @@ const SUNSET_COLOR = "#7b4fa3";
 const SKY_LINE_PX = 90;
 const MARKER_CLASS = "map-marker";
 const DEFAULT_CENTER: LngLat = [-98.5, 39.8];
-const STOP_CLASS = "flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-xs font-semibold shadow-md";
 // Visited markers are light, so they get dark numerals; the rest get white.
 const textClass = (visited: boolean) => (visited ? "text-black/75" : "text-white");
 const PENDING_CLASS = "h-5 w-5 rounded-full border-2 border-white bg-[#3b3226] shadow-md";
@@ -214,7 +213,15 @@ export default function MapPanel({
       for (const c of routeGeometry) bounds.extend(c);
       map.fitBounds(bounds, { padding: viewPadding(readOnly), duration: 0 });
       fittedRef.current = true;
+    } else if (!fittedRef.current && !routeGeometry && stops.length >= 2) {
+      // No route is drawn before Optimize, so frame the stops themselves once.
+      const bounds = new mapboxgl.LngLatBounds([stops[0].lng, stops[0].lat], [stops[0].lng, stops[0].lat]);
+      for (const s of stops) bounds.extend([s.lng, s.lat]);
+      map.fitBounds(bounds, { padding: viewPadding(readOnly), duration: 0 });
+      fittedRef.current = true;
     }
+    // Only the first fit reads the stops; later stop edits must not re-run this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, routeGeometry, readOnly]);
 
   // Sunrise/sunset lines for the selected stop; redrawn after each zoom so they stay SKY_LINE_PX long.
@@ -262,7 +269,7 @@ export default function MapPanel({
         el.setAttribute("aria-label", label);
         el.title = label;
       } else if (addSet.has(s.id)) {
-        const el = markerElement(`${STOP_CLASS} ${textClass(s.visited)} ${selected ? "ring-2 ring-route" : ""}`, label, String(i + 1));
+        const el = markerElement(`${STOP_MARKER_CLASS} ${textClass(s.visited)} ${selected ? "ring-2 ring-route" : ""}`, label, String(i + 1));
         el.style.background = stopColor(s);
         const id = s.id;
         el.addEventListener("click", () => handlersRef.current.onStopClick(id));

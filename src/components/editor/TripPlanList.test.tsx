@@ -188,9 +188,14 @@ describe("TripPlanList", () => {
   });
 
 
+  it("gives each Visited checkbox its stop's name", () => {
+    render(<TripPlanList stops={[stop("a", "Tunnel View"), stop("b", "Glacier Point")]} optimized bestTimes={[null, null]} {...handlers} />);
+    expect(screen.getAllByRole("checkbox").map((c) => c.getAttribute("aria-label"))).toEqual(["Visited: Tunnel View", "Visited: Glacier Point"]);
+  });
+
   it("calls handlers for visited and select", async () => {
     render(<TripPlanList stops={[stop("a", "Tunnel View")]} optimized bestTimes={[null]} {...handlers} />);
-    await userEvent.click(screen.getByLabelText("Visited"));
+    await userEvent.click(screen.getByLabelText("Visited: Tunnel View"));
     await userEvent.click(screen.getByRole("button", { name: "1. Tunnel View" }));
     expect(handlers.onToggleVisited).toHaveBeenCalledWith("a", true);
     expect(handlers.onSelect).toHaveBeenCalledWith("a");

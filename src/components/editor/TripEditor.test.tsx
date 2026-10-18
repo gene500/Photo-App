@@ -834,6 +834,15 @@ describe("TripEditor", () => {
       expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
     });
 
+    it("does not claim the fastest order when the server's time budget cut the search short", async () => {
+      vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], complete: false });
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(three)} />);
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("No faster order found"));
+      expect(screen.getByTestId("optimize-status").textContent).not.toContain("Already the fastest");
+    });
+
     it("says 'No faster order found' where the answer came from a heuristic, by stop count", async () => {
       const many = (n: number) => Array.from({ length: n }, (_, i) => newStop({ id: `s${i}`, order: i, name: `S${i}`, lat: 36 + i * 0.1, lng: -119 }));
       for (const [n, sunset, text] of [[13, false, "No faster order found"], [12, false, "Already the fastest order"], [9, true, "No faster order found"], [8, true, "Already the fastest order"]] as const) {

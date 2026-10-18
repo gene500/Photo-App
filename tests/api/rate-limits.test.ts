@@ -10,6 +10,7 @@ import { GET as geocodeGET } from "@/app/api/geocode/route";
 import { GET as retrieveGET } from "@/app/api/geocode/retrieve/route";
 import { GET as placePhoto } from "@/app/api/place-photo/route";
 import { POST as photoPOST } from "@/app/api/stops/[id]/photo/route";
+import { prisma } from "@/server/db";
 import { clearAllLimits, POLICIES } from "@/server/rate-limit";
 import { idParams, jsonRequest } from "../helpers/requests";
 
@@ -26,7 +27,8 @@ const cases: [string, keyof typeof POLICIES, (n: number) => Promise<Response>][]
 ];
 
 describe("per-user limits on costly routes", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await prisma.rateLimitCounter.deleteMany();
     process.env.RATE_LIMIT_DISABLED = "";
     clearAllLimits();
   });
@@ -43,5 +45,26 @@ describe("per-user limits on costly routes", () => {
     // Another user is not affected.
     vi.mocked(getCurrentUserId).mockResolvedValue("user-b");
     expect((await call(0)).status).not.toBe(429);
+  });
+
+  // The paid-service routes count in the shared database; when it is down they refuse rather than let requests through.
+  const paid = cases.filter(([, policy]) => policy !== "photo-upload" && policy !== "suggestions");
+  it.each(paid)("%s fails closed (503 with Retry-After) when the shared limiter's database is down", async (_n, _policy, call) => {
+    vi.mocked(getCurrentUserId).mockResolvedValue("user-db-down");
+    const spy = vi.spyOn(prisma, "$queryRaw").mockRejectedValue(new Error("db down"));
+    try {
+      const res = await call(0);
+      expect(res.status).toBe(503);
+      expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("counts paid routes across instances: a fresh instance still sees the user's spent budget", async () => {
+    vi.mocked(getCurrentUserId).mockResolvedValue("user-shared");
+    for (let i = 0; i < POLICIES.geocode.limit; i++) await geocodeGET(new Request("http://localhost/api/geocode"));
+    clearAllLimits(); // another warm instance
+    expect((await geocodeGET(new Request("http://localhost/api/geocode"))).status).toBe(429);
   });
 });

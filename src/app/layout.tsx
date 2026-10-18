@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/offline/ServiceWorkerRegister";
+import { headers } from "next/headers";
 import { InitScript } from "@/components/settings/InitScript";
 import { SettingsProvider } from "@/components/settings/SettingsProvider";
 import "./globals.css";
@@ -26,7 +27,9 @@ export const metadata: Metadata = {
   description: "Plan photo ops: scenic stops, the best light, and the route between them.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // The proxy puts a per-request CSP nonce here; reading it makes every page render per request, as a nonce needs.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html
       lang="en"
@@ -35,7 +38,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <head>
-        <InitScript />
+        <InitScript nonce={nonce} />
       </head>
       <body className="min-h-full flex flex-col">
         <SettingsProvider>

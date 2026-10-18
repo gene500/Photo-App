@@ -36,7 +36,7 @@ describe("POST /api/optimize", () => {
     // lat 0, 3, 1, 2 along one meridian
     const res = await post([[0, 0], [0, 3], [0, 1], [0, 2]]);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ order: [0, 2, 3, 1], departAt: null, misses: [] });
+    expect(await res.json()).toEqual({ order: [0, 2, 3, 1], complete: true, departAt: null, misses: [] });
   });
 
   it("rejects a stops list whose length differs from the coordinates", async () => {
@@ -133,5 +133,75 @@ describe("POST /api/optimize", () => {
     const res = await post([[0, 0], [0, 1], [0, 2]]);
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({ error: "Couldn't calculate drive times. Please try again." });
+  });
+
+  describe("server-wide load protection", () => {
+    // 25 stops with light preferences is the heaviest request the schema allows.
+    const heavy = () => {
+      const coords = Array.from({ length: 25 }, (_, i) => [-119.6 + (i % 5) * 0.05, 37.7 + Math.floor(i / 5) * 0.05]);
+      const kinds = ["any", "sunrise", "sunset", "golden"] as const;
+      return post(coords, {
+        plannedDate: "2026-07-01",
+        stops: coords.map((_, i) => ({ lightPref: i === 0 ? "any" : kinds[i % 4], dwellMinutes: 30, priority: "must" })),
+      });
+    };
+
+    it("runs at most 2 optimizations at once and turns the rest away with 503 + Retry-After and a clear message", async () => {
+      const results = await Promise.all([heavy(), heavy(), heavy(), heavy(), heavy()]);
+      const statuses = results.map((r) => r.status).sort();
+      expect(statuses.filter((x) => x === 200).length).toBe(2);
+      expect(statuses.filter((x) => x === 503).length).toBe(3);
+      const busy = results.find((r) => r.status === 503)!;
+      expect(Number(busy.headers.get("Retry-After"))).toBeGreaterThan(0);
+      expect((await busy.json()).error).toMatch(/busy/i);
+      // The slots are free again afterwards.
+      expect((await heavy()).status).toBe(200);
+    });
+
+    it("releases the slot when the solve fails", async () => {
+      vi.mocked(getDurationMatrix).mockRejectedValue(new ExternalServiceError("down"));
+      for (let i = 0; i < 5; i++) expect((await post([[0, 0], [0, 1], [0, 2]])).status).toBe(502);
+      vi.mocked(getDurationMatrix).mockImplementation(async (c) => fakeDurationMatrix(c));
+      expect((await post([[0, 0], [0, 1], [0, 2]])).status).toBe(200);
+    });
+
+    it("does not stall other requests while a heavy optimization runs", async () => {
+      let worst = 0;
+      let last = performance.now();
+      const timer = setInterval(() => {
+        const now = performance.now();
+        worst = Math.max(worst, now - last);
+        last = now;
+      }, 1);
+      try {
+        await Promise.all([heavy(), heavy()]);
+        await new Promise((r) => setTimeout(r, 10)); // let the timer record a gap that ended with the work
+      } finally {
+        clearInterval(timer);
+      }
+      expect(worst).toBeLessThan(250); // the blocking solver held it for ~1 s here
+    });
+
+    it("reports complete: false when the time budget cut the search short, true otherwise", async () => {
+      expect((await (await heavy()).json()).complete).toBe(true);
+      vi.stubEnv("OPTIMIZE_BUDGET_MS", "1");
+      try {
+        const body = await (await heavy()).json();
+        expect(body.complete).toBe(false);
+        expect([...body.order].sort((a: number, b: number) => a - b)).toEqual(Array.from({ length: 25 }, (_, i) => i));
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+
+    it("honours OPTIMIZE_MAX_CONCURRENT", async () => {
+      vi.stubEnv("OPTIMIZE_MAX_CONCURRENT", "1");
+      try {
+        const statuses = (await Promise.all([heavy(), heavy()])).map((r) => r.status).sort();
+        expect(statuses).toEqual([200, 503]);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
   });
 });

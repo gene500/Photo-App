@@ -68,19 +68,19 @@ describe("POST /api/signup", () => {
     });
 
     it("answers 429 with Retry-After after too many attempts from one address", async () => {
-      const ip = { "x-real-ip": "203.0.113.7" };
+      const ip = { "x-forwarded-for": "203.0.113.7" };
       for (let i = 0; i < 5; i++) expect((await signup({ email: `u${i}@example.com`, password: "correct-horse" }, ip)).status).toBe(201);
       const res = await signup({ email: "u9@example.com", password: "correct-horse" }, ip);
       expect(res.status).toBe(429);
       expect(Number(res.headers.get("Retry-After"))).toBeGreaterThan(0);
       // Another address is unaffected.
-      expect((await signup({ email: "other@example.com", password: "correct-horse" }, { "x-real-ip": "203.0.113.8" })).status).toBe(201);
+      expect((await signup({ email: "other@example.com", password: "correct-horse" }, { "x-forwarded-for": "203.0.113.8" })).status).toBe(201);
     });
 
     it("limits repeated signups for one email across addresses", async () => {
       const body = { email: "ann@example.com", password: "correct-horse" };
-      for (let i = 0; i < 3; i++) await signup(body, { "x-real-ip": `198.51.100.${i}` });
-      expect((await signup(body, { "x-real-ip": "198.51.100.99" })).status).toBe(429);
+      for (let i = 0; i < 3; i++) await signup(body, { "x-forwarded-for": `198.51.100.${i}` });
+      expect((await signup(body, { "x-forwarded-for": "198.51.100.99" })).status).toBe(429);
     });
   });
 });

@@ -410,7 +410,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const departChanged = !sameInstant(nextDepartAt, previousDepartAt);
       if (!orderChanged && !departChanged) {
         const usesLight = before.some((s) => s.lightPref !== "any");
-        const verdict = isExactOptimization(before.length, usesLight) ? "Already the fastest order" : "No faster order found";
+        const verdict = isExactOptimization(before.length, usesLight) && result.complete !== false ? "Already the fastest order" : "No faster order found";
         setOptimizeNote({ text: [verdict, missNote].filter(Boolean).join(". "), idsKey: startKey });
         return;
       }

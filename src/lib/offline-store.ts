@@ -311,6 +311,16 @@ export function hasOwner(): boolean {
   }
 }
 
+/** The user id that claimed this device's copies, or null. */
+export function getOwner(): string | null {
+  const s = storage();
+  try {
+    return s ? s.getItem(OWNER_KEY) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Deletes one trip's copy (the trip was deleted). */
 export function removeTripCopy(id: string): void {
   const s = storage();

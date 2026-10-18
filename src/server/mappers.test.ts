@@ -25,3 +25,10 @@ describe("toStopDto shot list", () => {
     expect(parseShotChecklist('[{"text":"ok","done":true},{"text":1},null,"x"]')).toEqual([{ text: "ok", done: true }]);
   });
 });
+
+describe("stored text written before the bidi rule", () => {
+  it("is cleaned on the way out (notes, shot notes and checklist items), keeping newlines", () => {
+    const dto = toStopDto({ ...row, notes: "a\u202Eb\u2028c\nd", shotNotes: "x\u2066y\u2029z", shotChecklist: JSON.stringify([{ text: "t\u202Eu", done: false }]) });
+    expect(dto).toMatchObject({ notes: "abc\nd", shotNotes: "xyz", shotChecklist: [{ text: "tu", done: false }] });
+  });
+});

@@ -14,6 +14,7 @@ describe("auth", () => {
   it("uses JWT sessions and the /login page", () => {
     expect(authOptions.session?.strategy).toBe("jwt");
     expect(authOptions.pages?.signIn).toBe("/login");
+    expect(authOptions.pages?.error).toBe("/login");
   });
 
   it("authorizes valid credentials and rejects missing fields", async () => {
@@ -121,7 +122,7 @@ describe("auth", () => {
     });
 
     describe("lockout is per email and client address", () => {
-      const from = (ip: string) => new Headers({ "x-real-ip": ip });
+      const from = (ip: string) => new Headers({ "x-forwarded-for": ip });
       const attempt = (password: string, ip: string, email = "ann@example.com") =>
         authorizeCredentials({ email, password }, from(ip));
 
@@ -158,7 +159,7 @@ describe("auth", () => {
           verify.mockResolvedValue({ id: "u", email: "ann@example.com" });
           await expect(attempt("correct-horse", "198.51.100.77")).rejects.toThrow("RateLimited");
           // Other emails are unaffected.
-          expect(await authorizeCredentials({ email: "bob@example.com", password: "ok" }, new Headers({ "x-real-ip": "198.51.100.77" }))).not.toBeNull();
+          expect(await authorizeCredentials({ email: "bob@example.com", password: "ok" }, new Headers({ "x-forwarded-for": "198.51.100.77" }))).not.toBeNull();
         } finally {
           verify.mockRestore();
         }

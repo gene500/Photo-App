@@ -5,6 +5,7 @@ vi.mock("@/server/external/flickr", () => ({ flickrKey: () => "test-key", flickr
 vi.mock("@/server/external/wikipedia-notability", () => ({ getWikipediaNotable: vi.fn(async () => false) }));
 import { getCurrentUserId } from "@/server/session";
 import { getFlickrPhotoCount } from "@/server/external/flickr";
+import { prisma } from "@/server/db";
 import { clearAllLimits, POLICIES } from "@/server/rate-limit";
 import { resetSharedCounter } from "@/server/suggestions/popularity";
 import { POST } from "./route";
@@ -13,7 +14,8 @@ const post = (places: { lat: number; lng: number }[]) =>
   new Request("http://localhost/api/suggestions/popularity", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost" }, body: JSON.stringify({ places }) });
 
 describe("POST /api/suggestions/popularity (Flickr quota)", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await prisma.rateLimitCounter.deleteMany(); // the popularity limit is counted in the shared database
     vi.stubEnv("RATE_LIMIT_DISABLED", "0");
     vi.mocked(getCurrentUserId).mockResolvedValue("u1");
     clearAllLimits();

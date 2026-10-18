@@ -1,5 +1,5 @@
 import type { NextConfig } from "next";
-import { securityHeaders } from "./src/lib/security-headers";
+import { API_CONTENT_SECURITY_POLICY, securityHeaders } from "./src/lib/security-headers";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
@@ -11,7 +11,9 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       // Hardening headers for everything. Later rules override earlier ones for the same key (e.g. /s below).
-      { source: "/:path*", headers: securityHeaders(process.env.NODE_ENV !== "production") },
+      // (The page Content-Security-Policy carries a per-request nonce, so src/proxy.ts sets it.)
+      { source: "/:path*", headers: securityHeaders() },
+      { source: "/api/:path*", headers: [{ key: "Content-Security-Policy", value: API_CONTENT_SECURITY_POLICY }] },
       // The worker script itself must always be revalidated so an update reaches users.
       { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" }] },
       {

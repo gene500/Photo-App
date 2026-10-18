@@ -1,18 +1,9 @@
 import { ZodError } from "zod";
 import { formatZodError } from "@/lib/validation";
+import { HttpError } from "./http-error";
 import { getCurrentUserId } from "./session";
 
-export class HttpError extends Error {
-  readonly status: number;
-  /** Seconds for a Retry-After header (429 responses). */
-  readonly retryAfter?: number;
-  constructor(status: number, message: string, retryAfter?: number) {
-    super(message);
-    this.name = "HttpError";
-    this.status = status;
-    this.retryAfter = retryAfter;
-  }
-}
+export { HttpError };
 
 export function jsonError(status: number, message: string, retryAfter?: number): Response {
   return Response.json(

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { departureTime, getSunWindows } from "./best-time";
 import { lightWindows } from "./light-windows";
 import { optimizeOrder } from "./optimize-order";
-import { optimizeSchedule, isExactOptimization, optimizeScheduleExact, scheduleCost } from "./optimize-schedule";
+import { optimizeSchedule, optimizeScheduleAsync, isExactOptimization, optimizeScheduleExact, scheduleCost } from "./optimize-schedule";
 import type { LightPref, StopPriority } from "./types";
 
 const DATE = "2026-07-01";
@@ -250,5 +250,62 @@ describe("isExactOptimization", () => {
     expect(isExactOptimization(8, true)).toBe(true);
     expect(isExactOptimization(9, true)).toBe(false);
     expect(isExactOptimization(25, true)).toBe(false);
+  });
+});
+
+describe("optimizeScheduleAsync (shared-server solver)", () => {
+  const prefs: LightPref[] = ["sunrise", "sunset", "any", "golden", "any", "sunrise", "sunset"];
+  const make = (n: number) => ({
+    stops: Array.from({ length: n }, (_, i) => stop(i === 0 ? "any" : prefs[i % prefs.length]!, 20, { lat: 37.7 + i * 0.01 })),
+    durations: Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? 0 : 600 + ((i * 7 + j * 13) % 11) * 120))),
+    plannedDate: DATE,
+    defaultDeparture,
+  });
+
+  it.each([5, 8, 12, 25])("gives the same answer as the synchronous solver when no budget applies (%i stops)", async (n) => {
+    const input = make(n);
+    expect(await optimizeScheduleAsync(input)).toEqual({ ...optimizeSchedule(input), complete: true });
+  });
+
+  it("with an exhausted time budget still returns a complete valid schedule, quickly", async () => {
+    for (const n of [8, 25]) {
+      const input = make(n);
+      const t0 = performance.now();
+      const r = await optimizeScheduleAsync(input, { budgetMs: 0 });
+      expect(performance.now() - t0).toBeLessThan(n === 8 ? 600 : 400);
+      expect(r.order[0]).toBe(0);
+      expect([...r.order].sort((a, b) => a - b)).toEqual(Array.from({ length: n }, (_, i) => i));
+    }
+  });
+
+  it("flags a budget-cut search as incomplete, and an uncut one as complete", async () => {
+    expect((await optimizeScheduleAsync(make(12), { budgetMs: 0 })).complete).toBe(false);
+    expect((await optimizeScheduleAsync(make(12))).complete).toBe(true);
+  });
+
+  it("is never worse for having more time (a cut-short search is a valid, not-better answer)", async () => {
+    const input = make(12);
+    const cut = await optimizeScheduleAsync(input, { budgetMs: 0 });
+    const full = await optimizeScheduleAsync(input);
+    expect(scheduleCost(input, full.order, full.departAt)).toBeLessThanOrEqual(scheduleCost(input, cut.order, cut.departAt) + 1e-6);
+  });
+
+  it("lets other work run while it solves: the event loop is never held for long", async () => {
+    let worst = 0;
+    let last = performance.now();
+    const timer = setInterval(() => {
+      const now = performance.now();
+      worst = Math.max(worst, now - last);
+      last = now;
+    }, 1);
+    try {
+      await optimizeScheduleAsync(make(25));
+      await optimizeScheduleAsync(make(8));
+      await new Promise((r) => setTimeout(r, 10)); // let the timer record a gap that ended with the work
+    } finally {
+      clearInterval(timer);
+    }
+    // The synchronous solver holds the loop for hundreds of ms on these inputs.
+    expect(worst).toBeLessThan(250);
   });
 });

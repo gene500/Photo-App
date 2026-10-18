@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto";
 import { prisma } from "./db";
 import { HttpError } from "./http";
-import { hit, isBlocked, peek, POLICIES, resetLimit, type LimitResult, type PolicyName } from "./rate-limit";
+import { hit, isBlocked, peek, POLICIES, resetLimit, type PolicyName } from "./rate-limit";
+import type { LimitResult as BaseResult } from "./rate-limit";
+
+/** `unavailable` marks a refusal because the shared store could not be reached (fail closed), not because the limit was reached. */
+export type LimitResult = BaseResult | { ok: false; retryAfter: number; unavailable: true };
 
 /**
  * Rate limits for the auth-sensitive policies, counted in the database so they hold across serverless instances
@@ -16,8 +20,10 @@ export const limitKey = (key: string) => (key.length > 254 ? createHash("sha256"
 const rowKey = (name: PolicyName, key: string) => `${name}:${key}`;
 const fail = (retryAfterMs: number): LimitResult => ({ ok: false, retryAfter: Math.max(1, Math.ceil(retryAfterMs / 1000)) });
 
+const UNAVAILABLE_RETRY_S = 5;
+
 /** Counts one hit in the shared store and reports whether it is still within the limit. */
-export async function hitShared(name: PolicyName, key: string, now = Date.now()): Promise<LimitResult> {
+export async function hitShared(name: PolicyName, key: string, now = Date.now(), opts: { failClosed?: boolean } = {}): Promise<LimitResult> {
   if (disabled()) return { ok: true };
   const local = hit(name, key, now);
   if (!local.ok) return local;
@@ -35,7 +41,8 @@ export async function hitShared(name: PolicyName, key: string, now = Date.now())
     const row = rows[0];
     if (row && Number(row.count) > limit) return fail(Number(row.resetAt) - now);
   } catch {
-    // Database unavailable: fall back to the in-memory answer above.
+    // Database unavailable: fall back to the in-memory answer above, unless the caller guards a paid service.
+    if (opts.failClosed) return { ok: false, retryAfter: UNAVAILABLE_RETRY_S, unavailable: true };
   }
   return { ok: true };
 }
@@ -83,6 +90,17 @@ export async function enforceSharedLimit(name: PolicyName, key: string, now = Da
   if (!r.ok) {
     throw new HttpError(429, POLICIES[name].message, r.retryAfter);
   }
+}
+
+/**
+ * For routes that spend paid-service quota (Mapbox, Flickr): counted in the shared database like the auth limits, and if
+ * the database cannot be reached the request is refused (503) instead of allowed, so an outage cannot lift the cap.
+ */
+export async function enforcePaidLimit(name: PolicyName, key: string, now = Date.now()): Promise<void> {
+  const r = await hitShared(name, key, now, { failClosed: true });
+  if (r.ok) return;
+  if ("unavailable" in r) throw new HttpError(503, "The service is busy right now. Try again in a moment.", r.retryAfter);
+  throw new HttpError(429, POLICIES[name].message, r.retryAfter);
 }
 
 /** Removes expired counters. Called opportunistically; the table stays small because rows only exist for active keys. */

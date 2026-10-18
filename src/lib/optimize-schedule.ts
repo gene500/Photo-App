@@ -13,7 +13,8 @@ export type ScheduleMiss = {
   priority: StopPriority;
 };
 
-export type Schedule = { order: number[]; departAt: Date; misses: ScheduleMiss[] };
+/** `complete` is false when the time budget ended the search early, so the order is good but not necessarily the best the search could find. */
+export type Schedule = { order: number[]; departAt: Date; misses: ScheduleMiss[]; complete?: boolean };
 
 /** One minute of missed light costs as much as this many seconds of driving. */
 const MISS_WEIGHT_SECONDS_PER_MIN = 3 * 60;
@@ -37,32 +38,64 @@ type Interval = [number, number];
  * drive seconds + 3 x 60 x minutes of missed preferred light.
  * With no light preferences this is exactly the shortest-drive order at the default departure.
  */
-export function optimizeSchedule(input: {
+export function optimizeSchedule(input: ScheduleInput): Schedule {
+  const plan = plannedSearch(input);
+  if ("done" in plan) return plan.done;
+  return plan.finish(drain(plan.steps(() => false)));
+}
+
+/**
+ * Same answer as `optimizeSchedule`, but for a shared server: it hands the event loop back between steps (so other requests
+ * are served while it works) and stops improving once `budgetMs` of wall-clock time has passed, returning the best found so far.
+ * Without a time cutoff the result is identical to the synchronous one.
+ */
+export async function optimizeScheduleAsync(input: ScheduleInput, opts: { budgetMs?: number } = {}): Promise<Schedule> {
+  const plan = plannedSearch(input);
+  if ("done" in plan) {
+    await yieldToEventLoop();
+    return plan.done;
+  }
+  const deadline = opts.budgetMs === undefined ? Infinity : Date.now() + opts.budgetMs;
+  let cut = false;
+  const steps = plan.steps(() => (cut ||= Date.now() > deadline));
+  for (;;) {
+    const r = steps.next();
+    if (r.done) return { ...plan.finish(r.value), complete: !cut };
+    await yieldToEventLoop();
+  }
+}
+
+const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+type ScheduleInput = {
   durations: number[][];
   stops: ScheduleStop[];
   plannedDate: string;
   defaultDeparture: Date;
   /** A departure to keep when it is as good as any other (e.g. the trip's saved start); the search window still follows `defaultDeparture`. */
   preferredDeparture?: Date;
-}): Schedule {
+};
+
+function plannedSearch(input: ScheduleInput):
+  | { done: Schedule }
+  | { steps: (over: () => boolean) => Generator<void, Solution>; finish: (sol: Solution) => Schedule } {
   const { durations, stops, defaultDeparture, preferredDeparture } = input;
   const n = stops.length;
   if (stops.every((s) => s.lightPref === "any") || n < 2) {
-    return { order: optimizeOrder(durations), departAt: defaultDeparture, misses: [] };
+    return { done: { order: optimizeOrder(durations), departAt: defaultDeparture, misses: [] } };
   }
-
   const d = sanitised(durations);
   const ctx = new Evaluator(d, stops, defaultDeparture.getTime(), preferredDeparture?.getTime());
-  const { order, departMs } = n - 1 <= EXACT_MAX_STOPS ? exactSearch(ctx, n) : localSearch(ctx, n);
   return {
-    order,
-    departAt:
-      departMs === preferredDeparture?.getTime() ? preferredDeparture : departMs === defaultDeparture.getTime() ? defaultDeparture : new Date(departMs),
-    misses: ctx.misses(order, departMs),
+    steps: (over) => (n - 1 <= EXACT_MAX_STOPS ? exactSteps(ctx, n, over) : localSteps(ctx, n, over)),
+    finish: ({ order, departMs }) => ({
+      order,
+      departAt:
+        departMs === preferredDeparture?.getTime() ? preferredDeparture : departMs === defaultDeparture.getTime() ? defaultDeparture : new Date(departMs),
+      misses: ctx.misses(order, departMs),
+    }),
   };
 }
-
-type ScheduleInput = Parameters<typeof optimizeSchedule>[0];
 
 const sanitised = (durations: number[][]) => durations.map((row) => row.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : PENALTY)));
 
@@ -191,8 +224,8 @@ class Evaluator {
 
 type Solution = { order: number[]; departMs: number; cost: number };
 
-/** Every order of stops 1..n-1 against every candidate departure. */
-function exactSearch(ctx: Evaluator, n: number): Solution {
+/** Every order of stops 1..n-1 against every candidate departure. Yields after each choice of the second stop. */
+function* exactSteps(ctx: Evaluator, n: number, over: () => boolean): Generator<void, Solution> {
   let best: Solution = { order: [], departMs: ctx.candidates[0]!, cost: Infinity };
   const order = [0];
   const used = new Array<boolean>(n).fill(false);
@@ -212,35 +245,60 @@ function exactSearch(ctx: Evaluator, n: number): Solution {
       used[i] = false;
     }
   };
-  visit();
+  // The first level is unrolled so the generator can pause between its branches.
+  for (let first = 1; first < n; first++) {
+    used[first] = true;
+    order.push(first);
+    visit();
+    order.pop();
+    used[first] = false;
+    if (first < n - 1) {
+      yield;
+      if (over()) break;
+    }
+  }
   return best;
+}
+
+function exactSearch(ctx: Evaluator, n: number): Solution {
+  return drain(exactSteps(ctx, n, () => false));
+}
+
+/** Runs a stepwise search to the end without ever pausing. */
+function drain<T>(g: Generator<void, T>): T {
+  for (;;) {
+    const r = g.next();
+    if (r.done) return r.value;
+  }
 }
 
 const MAX_ROUNDS = 25;
 
 /**
- * Extra perturbed restarts after the seeded descents. A fixed count per size (never a clock) so the answer is the same on
- * every machine; each restart costs more as stops are added, so large trips get fewer (25 stops take ~250 ms).
+ * Extra perturbed restarts after the seeded descents. A fixed count per size so the answer is the same on every machine
+ * (the server may additionally stop early on a time budget, see `optimizeScheduleAsync`); each restart costs more as stops
+ * are added, so large trips get fewer. Kept modest: this runs on the request thread of a shared server.
  */
-const restartsFor = (n: number) => (n <= 12 ? 200 : Math.max(4, Math.floor(300 / n)));
+const restartsFor = (n: number) => (n <= 12 ? 100 : Math.max(4, Math.floor(150 / n)));
 
 /**
  * Local search: descents from several seeds (nearest-neighbour, window-sorted, must-stops-first, shortest drive), then
  * iterated local search that perturbs the best order with a fixed-seed generator, so the same input gives the same answer.
  */
-function localSearch(ctx: Evaluator, n: number): Solution {
+function* localSteps(ctx: Evaluator, n: number, over: () => boolean): Generator<void, Solution> {
   const seeds = [nearestNeighbour(ctx.d, n), windowSorted(ctx.stops, n), mustFirst(ctx.stops, n), optimizeOrder(ctx.d)];
   let best: Solution | null = null;
   for (const seed of seeds) {
     const sol = improve(ctx, seed);
     if (!best || sol.cost < best.cost - EPS) best = sol;
+    yield;
   }
   let state = 0x9e3779b9;
   const rand = (max: number) => {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
     return Math.floor((state / 4294967296) * max);
   };
-  for (let r = 0, restarts = restartsFor(n); r < restarts; r++) {
+  for (let r = 0, restarts = restartsFor(n); r < restarts && !over(); r++) {
     const order = best!.order.slice();
     // Alternate a few random swaps with a reversed random segment; stop 0 never moves.
     for (let k = 0; k < 2 + (r % 3); k++) {
@@ -252,6 +310,7 @@ function localSearch(ctx: Evaluator, n: number): Solution {
     // Every other restart also jumps to another departure: the best order depends on it and the landscape is rugged.
     const sol = improve(ctx, order, r % 4 < 2 ? undefined : ctx.candidates[rand(ctx.candidates.length)]);
     if (sol.cost < best!.cost - EPS) best = sol;
+    yield;
   }
   return best!;
 }

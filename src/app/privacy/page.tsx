@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <ul>
         <li><strong>Account:</strong> your email address and a salted hash of your password (never the password itself).</li>
         <li><strong>Your trips:</strong> trip names, dates, stops and their coordinates, notes, shot lists, and the photos you upload to a stop.</li>
-        <li><strong>Share links:</strong> if you create a share link, anyone who has it can see that trip&apos;s stops with their exact locations, shot lists and progress, times and light preferences (but not photos or your stop notes) until you turn the link off.</li>
+        <li><strong>Share links:</strong> if you create a share link, anyone who has it can see that trip&apos;s stops with their exact locations, times and light preferences, visited progress, and each stop&apos;s shot notes and shot checklist including which items are ticked (but not photos or your private stop notes) until you turn the link off.</li>
         <li><strong>Settings:</strong> display preferences such as theme, text size and time format.</li>
       </ul>
 
@@ -31,6 +31,7 @@ export default function PrivacyPage() {
         <li><strong>Open-Meteo</strong> provides weather. It receives the coordinates (to about 1 km) of stops and suggested places you view, and the dates involved; for dates far ahead it is asked about the same date in past years.</li>
         <li><strong>OpenStreetMap / Overpass</strong> and <strong>Wikimedia Commons</strong> (and Flickr, if enabled) supply nearby places and photo counts. They receive the area being searched, not your identity.</li>
         <li>Images for places may load directly from Mapbox, Wikimedia or Flickr servers, which see your IP address like any website.</li>
+        <li><strong>Abuse protection:</strong> to limit repeated requests, our database briefly keeps counters keyed by your account or by your IP address (IPv6 addresses shortened, login-failure counters using only a hashed form). They are removed when their time window (at most an hour) ends.</li>
       </ul>
 
       <h2>Security</h2>

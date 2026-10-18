@@ -141,7 +141,7 @@ describe("hover photo beside the suggestion", () => {
   });
 
   it("announces the temperature in the weather label", () => {
-    const weather = new Map([["node/1", { text: "⛅ 18°C", label: "partly cloudy, 15% rain", quality: null }]]);
+    const weather = new Map([["node/1", { text: "18°C", sky: "Partly cloudy" as const, label: "partly cloudy, 15% rain", quality: null }]]);
     render(<SuggestionsPanel {...props} suggestions={[one]} weather={weather} />);
     expect(screen.getByRole("img", { name: "partly cloudy, 15% rain, 18°C" })).toBeTruthy();
   });

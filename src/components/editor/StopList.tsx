@@ -1,6 +1,5 @@
 "use client";
 
-import { useRef, useState, type KeyboardEvent } from "react";
 import {
   closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent,
 } from "@dnd-kit/core";
@@ -13,18 +12,15 @@ import { describeBestTime, type BestTime } from "@/lib/best-time";
 import { describeLightHint } from "@/lib/light-windows";
 import { useMounted } from "@/lib/use-mounted";
 import { useSettings } from "@/components/settings/SettingsProvider";
-import { PRIORITIES, PRIORITY_LABEL, stopColor } from "@/lib/stop-style";
+import { stopColor } from "@/lib/stop-style";
 import { useWeatherLine } from "@/lib/use-weather";
 import { WeatherText } from "@/components/weather/WeatherIcon";
-import type { Stop, StopPriority } from "@/lib/types";
+import type { Stop } from "@/lib/types";
 
 type Handlers = {
   onToggleVisited: (stopId: string, visited: boolean) => void;
   onDelete: (stopId: string) => void;
   onSelect: (stopId: string) => void;
-  /** When given, stops with a best light show a small three-part priority pill. */
-  /** May return a promise; the pill shows the new value meanwhile and reverts if it rejects. */
-  onPriorityChange?: (stopId: string, priority: StopPriority) => void | Promise<unknown>;
 };
 
 type Props = Handlers & { stops: Stop[]; bestTimes: BestTime[]; arrivals?: (Date | null)[]; onReorder: (stopIds: string[]) => void };
@@ -34,70 +30,6 @@ export function reorderIds(ids: string[], activeId: string, overId: string): str
   const to = ids.indexOf(overId);
   if (from === -1 || to === -1 || from === to) return null;
   return arrayMove(ids, from, to);
-}
-
-const PRIORITY_SHORT: Record<StopPriority, string> = { normal: "Normal", high: "High", must: "Must" };
-
-function PriorityPill({ stopId, name, value: saved, onChange }: { stopId: string; name: string; value: StopPriority; onChange: (stopId: string, priority: StopPriority) => void | Promise<unknown> }) {
-  const refs = useRef<(HTMLButtonElement | null)[]>([]);
-  // The value just chosen, shown until the parent catches up, so rapid key presses build on each other.
-  const [pending, setPending] = useState<{ value: StopPriority; for: StopPriority } | null>(null);
-  const seq = useRef(0);
-  const value = pending && pending.for === saved ? pending.value : saved;
-  const index = PRIORITIES.indexOf(value);
-  const select = (next: number, focus = false) => {
-    const target = PRIORITIES[next];
-    if (!target) return;
-    if (focus) refs.current[next]?.focus();
-    if (target === value) return;
-    const mine = ++seq.current;
-    setPending({ value: target, for: saved });
-    // Without a promise the choice stays until the saved value changes. With one, only the latest request
-    // clears it when it settles, so a failed save shows the saved value again.
-    const result = onChange(stopId, target);
-    if (result) {
-      const done = () => { if (mine === seq.current) setPending(null); };
-      void result.then(done, done);
-    }
-  };
-  const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
-    const last = PRIORITIES.length - 1;
-    const next = e.key === "ArrowRight" || e.key === "ArrowDown" ? Math.min(index + 1, last)
-      : e.key === "ArrowLeft" || e.key === "ArrowUp" ? Math.max(index - 1, 0)
-      : e.key === "Home" ? 0
-      : e.key === "End" ? last
-      : null;
-    if (next === null) return;
-    e.preventDefault();
-    select(next, true);
-  };
-  return (
-    <div role="radiogroup" aria-label={`Priority for ${name}`} className="relative grid w-48 min-w-[8.5rem] max-w-full grid-cols-3 rounded-full bg-hover p-0.5 ring-1 ring-border">
-      <span
-        aria-hidden
-        data-testid="priority-thumb"
-        className="pointer-events-none absolute inset-y-0.5 left-0.5 w-[calc((100%-0.25rem)/3)] rounded-full bg-accent shadow-sm transition-transform duration-200 ease-out motion-reduce:transition-none"
-        style={{ transform: `translateX(${index * 100}%)` }}
-      />
-      {PRIORITIES.map((p, i) => (
-        <button
-          key={p}
-          ref={(el) => { refs.current[i] = el; }}
-          type="button"
-          role="radio"
-          title={PRIORITY_LABEL[p]}
-          aria-label={PRIORITY_LABEL[p]}
-          aria-checked={p === value}
-          tabIndex={p === value ? 0 : -1}
-          onClick={() => select(i)}
-          onKeyDown={onKeyDown}
-          className={`relative min-h-7 min-w-[2.75rem] truncate rounded-full px-0.5 text-[11px] font-medium focus-visible:outline-2 focus-visible:outline-accent-strong ${p === value ? "text-accent-foreground" : "text-muted hover:text-foreground"}`}
-        >
-          {PRIORITY_SHORT[p]}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 export function StopList({ stops, bestTimes, arrivals, onReorder, ...handlers }: Props) {
@@ -136,7 +68,7 @@ export function StopList({ stops, bestTimes, arrivals, onReorder, ...handlers }:
 // Hover-capable pointers reveal the secondary controls on row hover/focus; touch always shows them.
 const REVEAL = "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 focus-visible:!opacity-100";
 
-function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVisited, onDelete, onSelect, onPriorityChange }: Handlers & { stop: Stop; index: number; bestTime: BestTime; arrival: Date | null; role: "Start" | "End" | null; first: boolean; last: boolean }) {
+function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVisited, onDelete, onSelect }: Handlers & { stop: Stop; index: number; bestTime: BestTime; arrival: Date | null; role: "Start" | "End" | null; first: boolean; last: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id });
   const { settings } = useSettings();
   const mounted = useMounted(); // clock text is in the viewer's time zone: only a placeholder until mounted
@@ -202,12 +134,6 @@ function StopRow({ stop, index, bestTime, arrival, role, first, last, onToggleVi
         )}
         {weather?.warning && <p data-testid="light-warning" className="text-xs text-sand">{weather.warning}</p>}
         {stop.notes && <p className="truncate text-xs text-muted">{stop.notes}</p>}
-        {onPriorityChange && stop.lightPref !== "any" && (
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted" title="Priority: how hard Optimize route works to land this stop in its light">
-            <span className="shrink-0">Priority</span>
-            <PriorityPill stopId={stop.id} name={stop.name} value={stop.priority} onChange={onPriorityChange} />
-          </div>
-        )}
       </div>
       {stop.photoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- user uploads served by an auth-checked route

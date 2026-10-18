@@ -32,6 +32,8 @@ import { SearchBar } from "./SearchBar";
 import { StopCard } from "./StopCard";
 import { StopDrawer } from "./StopDrawer";
 import { StopList } from "./StopList";
+import { TripPlan } from "./TripPlan";
+import { TripPlanList } from "./TripPlanList";
 import { StopsPanel } from "./StopsPanel";
 import { SuggestionsPanel, type SuggestionsStatus } from "./SuggestionsPanel";
 import { TripHeader } from "./TripHeader";
@@ -220,6 +222,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const current = enoughForRoute && routeResult?.key === waypointKey ? routeResult : null;
   const activeRoute = current?.route ?? null;
   const activeRouteError = current?.error ?? null;
+  // Optimized only while the stored signature still matches the stops: any edit that matters turns it off by itself.
+  const optimized = stops.length >= 2 && trip.routeOptimizedFor === routeSignature(trip.plannedDate, stops);
+  const optimizeStale = !optimized && stops.length >= 2 && !!trip.routeOptimizedFor;
   // Once the route has been steady for a moment, fetch the place list quietly (popularity waits for the click), so
   // "Find photo spots" answers from what has already come in. Dropped when the stops change.
   const prewarmRef = useRef<{ key: string; prewarm: Prewarm } | null>(null);
@@ -756,26 +761,13 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
           },
         }} />}
         collapsedSummary={
-          activeRoute
+          optimized && activeRoute
             ? `${stops.length} ${stops.length === 1 ? "stop" : "stops"} · ${formatDuration(activeRoute.duration)}`
             : trip.name
         }
         summary={
           <>
-            <div className="flex flex-wrap items-baseline gap-x-1.5 text-sm text-muted">
-            <p>{stops.length} {stops.length === 1 ? "stop" : "stops"}</p>
-            <span aria-hidden>·</span>
-            <p data-testid="route-status">
-              {activeRoute
-                ? `${formatDistance(activeRoute.distance, settings.distanceUnit)} · ${formatDuration(activeRoute.duration)}`
-                : activeRouteError
-                  ? "Route unavailable"
-                  : enoughForRoute
-                    ? "Loading route…"
-                    : "Add 2 stops to see the route"}
-            </p>
-            </div>
-            <StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} defaultDepartAt={defaultDepartAt} lng={stops[0]?.lng} disabled={optimizing} onChange={(iso) => saveStartTime(iso)} onReset={() => void resetDeparture()} />
+            <p className="text-sm text-muted">{stops.length} {stops.length === 1 ? "stop" : "stops"}</p>
             <ErrorBanner
               message={current?.dismissed ? null : activeRouteError}
               onDismiss={() => setRouteResult((r) => (r ? { ...r, dismissed: true } : r))}
@@ -785,30 +777,43 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         }
         stops={
           <>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <button
-                type="button"
-                onClick={() => void optimizeRoute()}
-                disabled={stops.length < 2 || optimizing}
-                className="inline-flex min-h-9 items-center rounded-full bg-ink px-4 text-sm font-medium text-ink-foreground transition hover:opacity-85 disabled:opacity-40"
-              >
-                {optimizing ? "Optimizing…" : "Optimize route"}
-              </button>
-              {canUndo && undo && (
-                <button
-                  type="button"
-                  onClick={() => void undoOptimize()}
-                  disabled={undoing}
-                  className="inline-flex min-h-9 items-center rounded-full bg-hover px-4 text-sm font-medium text-foreground ring-1 ring-border transition active:scale-[0.97] hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
-                >
-                  Undo
-                </button>
-              )}
-              {stops.length < 2 && <p className="text-xs text-muted">Add at least 2 stops to plan the route.</p>}
-              {/* Screen-reader only: always mounted so a text change is announced; nothing shows under the button. */}
-              <p role="status" data-testid="optimize-status" className="sr-only">{optimizeNote?.idsKey === idsKey ? optimizeNote.text : ""}</p>
-            </div>
-            {swapNote && canUndoSwap && (
+            <StopList
+              stops={stops}
+              bestTimes={bestTimes}
+              arrivals={arrivals}
+              onReorder={(ids) => void reorder(ids)}
+              onToggleVisited={(id, visited) => void patchStop(id, { visited })}
+              onDelete={(id) => void removeStop(id)}
+              onSelect={openFromList}
+            />
+          </>
+        }
+        trip={
+          <TripPlan
+            startTime={<StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} defaultDepartAt={defaultDepartAt} lng={stops[0]?.lng} disabled={optimizing} onChange={(iso) => saveStartTime(iso)} onReset={() => void resetDeparture()} />}
+            optimize={{
+              onOptimize: () => void optimizeRoute(),
+              onUndo: canUndo && undo ? () => void undoOptimize() : null,
+              busy: optimizing,
+              undoing,
+              disabled: stops.length < 2 || optimizing,
+              hint: stops.length < 2 ? "Add at least 2 stops to plan the route." : null,
+              status: optimizeNote?.idsKey === idsKey ? optimizeNote.text : "",
+            }}
+            routeStatus={
+              !enoughForRoute
+                ? "Add 2 stops to plan the route"
+                : optimizeStale
+                  ? "Your stops changed. Optimize again to see the route."
+                  : !optimized
+                    ? "Optimize the route to see drive times and the route line"
+                    : activeRoute
+                      ? `${formatDistance(activeRoute.distance, settings.distanceUnit)} · ${formatDuration(activeRoute.duration)}`
+                      : activeRouteError
+                        ? "Route unavailable"
+                        : "Loading route…"
+            }
+            swapNote={swapNote && canUndoSwap && (
               <div role="status" data-testid="swap-note" className="flex flex-wrap items-center gap-x-2 text-sm text-muted">
                 <p>Swapped {swapNote.fromName} for {swapNote.toName}{swapNote.lostPhoto ? " (reference photo removed)" : ""}</p>
                 <button type="button" onClick={() => void undoSwap()} className={btnGhost}>
@@ -816,17 +821,18 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                 </button>
               </div>
             )}
-            <StopList
-              stops={stops}
-              bestTimes={bestTimes}
-              arrivals={arrivals}
-              onReorder={(ids) => void reorder(ids)}
-              onToggleVisited={(id, visited) => void patchStop(id, { visited })}
-              onPriorityChange={(id, priority) => patchStop(id, { priority })}
-              onDelete={(id) => void removeStop(id)}
-              onSelect={openFromList}
-            />
-          </>
+            list={
+              <TripPlanList
+                stops={stops}
+                optimized={optimized}
+                bestTimes={bestTimes}
+                arrivals={arrivals}
+                onToggleVisited={(id, visited) => void patchStop(id, { visited })}
+                onPriorityChange={(id, priority) => patchStop(id, { priority })}
+                onSelect={openFromList}
+              />
+            }
+          />
         }
         suggestions={
           <SuggestionsPanel

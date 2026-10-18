@@ -43,7 +43,7 @@ To verify by hand:
 - Apple Maps link with every stop, on a real iPhone (the multi-`daddr` format is unconfirmed).
 - Google Maps link with every stop (up to 11 stops per link; longer trips split into parts).
 - Hover photo card stays fully on screen in the Suggestions tab.
-- Priority pill (Stops tab: Normal / High / Must) and optimize behavior with a Must-have stop, on a real phone.
+- Priority pill (My trip tab: Normal / High / Must) and optimize behavior with a Must-have stop, on a real phone.
 - Live site: sign-in, map, suggestions, photo upload, privacy/terms, account deletion, Imperial/Metric setting, Escape key, prewarm speed.
 
 Owner's accounts and settings:

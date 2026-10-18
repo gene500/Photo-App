@@ -14,7 +14,9 @@ test("sign up → new trip → search + click to add stops → suggestion → re
   await page.getByRole("button", { name: "Create trip" }).click();
   await expect(page).toHaveURL(/\/trips\/[^/]+$/);
   await expect(page.getByTestId("empty-hint")).toBeVisible();
-  await expect(page.getByTestId("route-status")).toHaveText("Add 2 stops to see the route");
+  await page.getByRole("tab", { name: "My trip" }).click();
+  await expect(page.getByTestId("route-status")).toHaveText("Add 2 stops to plan the route");
+  await page.getByRole("tab", { name: "Stops" }).click();
 
   // Stop 1: search as you type, pick the result, add it
   await page.getByRole("combobox", { name: "Search for a place" }).fill("Alpha Town");
@@ -29,6 +31,11 @@ test("sign up → new trip → search + click to add stops → suggestion → re
   await expect(page.getByText(/^Spot .* \(fake\)$/)).toBeVisible();
   await page.getByRole("button", { name: "Add stop" }).click();
   await expect(rows).toHaveCount(2);
+
+  // My trip: totals appear only after Optimize
+  await page.getByRole("tab", { name: "My trip" }).click();
+  await expect(page.getByTestId("route-status")).toHaveText("Optimize the route to see drive times and the route line");
+  await page.getByRole("button", { name: "Optimize route" }).click();
   await expect(page.getByTestId("route-status")).toHaveText(/\d mi\b/);
   await expect(page.getByTestId("stop-role")).toHaveText(["Start", "End"]);
 
@@ -64,12 +71,15 @@ test("sign up → new trip → search + click to add stops → suggestion → re
 
   // Mark visited (persists). The checkbox is controlled by server state, so click
   // and let the auto-retrying assertion wait for the PATCH to land.
+  await page.getByRole("tab", { name: "My trip" }).click();
+  const tripRows = page.getByTestId("trip-row");
   const visitedPersisted = page.waitForResponse(
     (res) => res.request().method() === "PATCH" && res.url().includes("/api/stops/"),
   );
-  await rows.first().getByLabel("Visited").click();
+  await tripRows.first().getByLabel("Visited").click();
   await visitedPersisted;
-  await expect(rows.first().getByLabel("Visited")).toBeChecked();
+  await expect(tripRows.first().getByLabel("Visited")).toBeChecked();
   await page.reload();
-  await expect(rows.first().getByLabel("Visited")).toBeChecked();
+  await page.getByRole("tab", { name: "My trip" }).click();
+  await expect(tripRows.first().getByLabel("Visited")).toBeChecked();
 });

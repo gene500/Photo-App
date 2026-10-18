@@ -28,6 +28,11 @@ test("trip page hydrates cleanly when the browser's time zone differs from the s
     await expect(rows).toHaveCount(i + 1);
   }
 
+  // Start time, Optimize and the arrival lines live on My trip.
+  await page.getByRole("tab", { name: "My trip" }).click();
+  const tripRows = page.getByTestId("trip-row");
+  await page.getByRole("button", { name: "Optimize route" }).click();
+
   // Save a start time so the time field and the arrival times have something to show after a full server render.
   const startTime = page.getByLabel("Start time");
   const saved = page.waitForResponse((r) => r.request().method() === "PATCH" && /\/api\/trips\/[^/]+$/.test(r.url()));
@@ -35,13 +40,14 @@ test("trip page hydrates cleanly when the browser's time zone differs from the s
   await startTime.blur();
   await saved; // reloading before the save lands would show the old time
   await expect(startTime).toHaveValue("08:30");
-  await expect(rows.first().getByTestId("best-time")).toHaveText(/\d{1,2}:\d{2} (AM|PM)/);
+  await expect(tripRows.first().getByTestId("best-time")).toHaveText(/\d{1,2}:\d{2} (AM|PM)/);
 
   // A fresh server render of the saved trip, hydrated in the New York browser.
   await page.reload();
-  await expect(rows).toHaveCount(2);
+  await page.getByRole("tab", { name: "My trip" }).click();
+  await expect(tripRows).toHaveCount(2);
   await expect(page.getByLabel("Start time")).toHaveValue("08:30");
-  await expect(rows.first().getByTestId("best-time")).toHaveText(/\d{1,2}:\d{2} (AM|PM)/);
+  await expect(tripRows.first().getByTestId("best-time")).toHaveText(/\d{1,2}:\d{2} (AM|PM)/);
 
   expect(problems).toEqual([]);
 });

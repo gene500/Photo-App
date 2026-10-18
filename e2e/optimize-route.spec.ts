@@ -11,9 +11,13 @@ test("optimize route reorders stops for the shortest drive and can be undone", a
   await page.getByRole("button", { name: "Create trip" }).click();
   await expect(page).toHaveURL(/\/trips\/[^/]+$/);
 
-  const rows = page.getByTestId("stop-row");
+  const stopRows = page.getByTestId("stop-row");
+  const rows = page.getByTestId("trip-row");
   const optimize = page.getByRole("button", { name: "Optimize route" });
+  const myTrip = page.getByRole("tab", { name: "My trip" });
+  await myTrip.click();
   await expect(optimize).toBeDisabled();
+  await page.getByRole("tab", { name: "Stops" }).click();
 
   // Four stops on one horizontal line, deliberately out of order: x = 500, 1000, 700, 850.
   let count = 0;
@@ -21,11 +25,14 @@ test("optimize route reorders stops for the shortest drive and can be undone", a
     await page.getByTestId("map").click({ position: { x, y: 450 } });
     await expect(page.getByText(/^Spot .* \(fake\)$/)).toBeVisible();
     await page.getByRole("button", { name: "Add stop" }).click();
-    await expect(rows).toHaveCount(++count);
+    await expect(stopRows).toHaveCount(++count);
     // Two stops are enough to Optimize (nothing to reorder, it just plans the route).
+    await myTrip.click();
     if (count === 1) await expect(optimize).toBeDisabled();
     if (count === 2) await expect(optimize).toBeEnabled();
+    await page.getByRole("tab", { name: "Stops" }).click();
   }
+  await myTrip.click();
   await expect(optimize).toBeEnabled();
 
   const names = async () => (await rows.allTextContents()).map((t) => /Spot .*? \(fake\)/.exec(t)?.[0] ?? t);

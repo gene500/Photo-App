@@ -28,6 +28,8 @@ test("find alternatives for a stop and swap one in", async ({ page }) => {
   await expect(drawer).toHaveCount(0);
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText("Fake Viewpoint");
+  // The swap note lives on My trip.
+  await page.getByRole("tab", { name: "My trip" }).click();
   const note = page.getByTestId("swap-note");
   await expect(note).toContainText("for Fake Viewpoint");
 
@@ -36,6 +38,7 @@ test("find alternatives for a stop and swap one in", async ({ page }) => {
   await expect(rows.first()).toContainText("Fake Viewpoint");
 
   // The undo row is client-only, so a reload retires it.
+  await page.getByRole("tab", { name: "My trip" }).click();
   await expect(page.getByTestId("swap-note")).toHaveCount(0);
 });
 
@@ -62,7 +65,9 @@ test("undoing a swap restores the previous place", async ({ page }) => {
   await drawer.getByRole("button", { name: "Find alternatives" }).click();
   await drawer.getByRole("button", { name: "Swap in Fake Peak" }).click();
   await expect(rows.first()).toContainText("Fake Peak");
+  await page.getByRole("tab", { name: "My trip" }).click();
   await page.getByRole("button", { name: "Undo swap" }).click();
+  await page.getByRole("tab", { name: "Stops" }).click();
   await expect(rows.first()).not.toContainText("Fake Peak");
   await expect(rows.first()).toContainText(/Spot .* \(fake\)/);
   await expect(page.getByTestId("swap-note")).toHaveCount(0);

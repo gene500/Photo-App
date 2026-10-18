@@ -26,7 +26,10 @@ async function tripWithSunsetStop(page: Page, plannedDate: string) {
   await drawer.getByLabel("Best light").selectOption("sunset");
   await drawer.getByRole("button", { name: "Save" }).click();
   await expect(drawer).toHaveCount(0);
-  return rows;
+  // Weather shows on My trip once the route is optimized.
+  await page.getByRole("tab", { name: "My trip" }).click();
+  await page.getByRole("button", { name: "Optimize route" }).click();
+  return page.getByTestId("trip-row");
 }
 
 test("every stop on a near date shows a sky icon and temperature", async ({ page }) => {

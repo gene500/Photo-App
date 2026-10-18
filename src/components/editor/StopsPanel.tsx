@@ -3,9 +3,9 @@
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 type Snap = "collapsed" | "half" | "full";
-type Tab = "stops" | "suggestions";
+type Tab = "stops" | "trip" | "suggestions";
 
-const TABS: Tab[] = ["stops", "suggestions"];
+const TABS: Tab[] = ["stops", "trip", "suggestions"];
 
 const BIGGER: Partial<Record<Snap, Snap>> = { collapsed: "half", half: "full" };
 const SMALLER: Partial<Record<Snap, Snap>> = { full: "half", half: "collapsed" };
@@ -22,11 +22,12 @@ type Props = {
   collapsedSummary: ReactNode;
   summary: ReactNode;
   stops: ReactNode;
+  trip: ReactNode;
   suggestions: ReactNode;
   suggestionCount: number;
 };
 
-export function StopsPanel({ header, collapsedSummary, summary, stops, suggestions, suggestionCount }: Props) {
+export function StopsPanel({ header, collapsedSummary, summary, stops, trip, suggestions, suggestionCount }: Props) {
   const [snap, setSnap] = useState<Snap>("half");
   const [tab, setTab] = useState<Tab>("stops");
   const uid = useId();
@@ -76,16 +77,19 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, suggestio
       {open && (
         <>
           <div className="space-y-2 px-4">{summary}</div>
-          <div role="tablist" onKeyDown={onTabKey} className="mx-4 mt-3 flex gap-1 rounded-xl bg-hover p-1">
+          <div role="tablist" onKeyDown={onTabKey} className="mx-4 mt-3 flex flex-wrap gap-1 rounded-xl bg-hover p-1">
             <button role="tab" type="button" id={tabId("stops")} ref={(el) => { tabRefs.current.stops = el; }} aria-selected={tab === "stops"} aria-controls={panelId} tabIndex={tab === "stops" ? 0 : -1} className={tabClass("stops")} onClick={() => setTab("stops")}>
               Stops
+            </button>
+            <button role="tab" type="button" id={tabId("trip")} ref={(el) => { tabRefs.current.trip = el; }} aria-selected={tab === "trip"} aria-controls={panelId} tabIndex={tab === "trip" ? 0 : -1} className={tabClass("trip")} onClick={() => setTab("trip")}>
+              My trip
             </button>
             <button role="tab" type="button" id={tabId("suggestions")} ref={(el) => { tabRefs.current.suggestions = el; }} aria-selected={tab === "suggestions"} aria-controls={panelId} tabIndex={tab === "suggestions" ? 0 : -1} className={tabClass("suggestions")} onClick={() => setTab("suggestions")}>
               {suggestionCount > 0 ? `Suggestions (${suggestionCount})` : "Suggestions"}
             </button>
           </div>
           <div role="tabpanel" id={panelId} aria-labelledby={tabId(tab)} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-4 pt-3">
-            {tab === "stops" ? stops : suggestions}
+            {tab === "stops" ? stops : tab === "trip" ? trip : suggestions}
           </div>
         </>
       )}

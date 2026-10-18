@@ -9,6 +9,7 @@ import { SearchBar } from "./SearchBar";
 import { StopCard } from "./StopCard";
 import { StopDrawer } from "./StopDrawer";
 import { StopList } from "./StopList";
+import { TripPlanList } from "./TripPlanList";
 import { StopsPanel } from "./StopsPanel";
 
 const stop: Stop = { id: "a", tripId: "t", order: 0, name: "A", lat: 1, lng: 2, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [] };
@@ -17,7 +18,7 @@ const stop: Stop = { id: "a", tripId: "t", order: 0, name: "A", lat: 1, lng: 2, 
 // floating surface must set its own dark text.
 describe("white surfaces set their own text colour", () => {
   it("StopsPanel", () => {
-    render(<StopsPanel header="h" collapsedSummary="c" summary="s" stops="x" suggestions="y" suggestionCount={0} />);
+    render(<StopsPanel header="h" collapsedSummary="c" summary="s" stops="x" trip="t" suggestions="y" suggestionCount={0} />);
     expect(document.querySelector("aside")!.className).toContain("text-foreground");
   });
   it("SearchBar input", () => {
@@ -47,5 +48,9 @@ describe("white surfaces set their own text colour", () => {
   it("StopList rows", () => {
     render(<StopList stops={[stop]} bestTimes={[null]} onReorder={vi.fn()} onToggleVisited={vi.fn()} onDelete={vi.fn()} onSelect={vi.fn()} />);
     expect(screen.getByTestId("stop-row").className).toContain("text-foreground");
+  });
+  it("TripPlanList rows", () => {
+    render(<TripPlanList stops={[stop]} optimized bestTimes={[null]} onToggleVisited={vi.fn()} onPriorityChange={vi.fn()} onSelect={vi.fn()} />);
+    expect(screen.getByTestId("trip-row").className).toContain("text-foreground");
   });
 });

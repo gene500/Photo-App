@@ -59,6 +59,8 @@ test("settings: theme, text size, units and reset persist per device", async ({ 
     await expect(page.getByText(/^Spot .* \(fake\)$/)).toBeVisible();
     await page.getByRole("button", { name: "Add stop" }).click();
   }
+  await page.getByRole("tab", { name: "My trip" }).click();
+  await page.getByRole("button", { name: "Optimize route" }).click();
   await expect(page.getByTestId("route-status")).toContainText(/\d+ km/);
   await expect(page.getByTestId("route-status")).not.toContainText(/\d mi\b/);
 

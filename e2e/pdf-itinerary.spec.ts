@@ -40,9 +40,23 @@ test("editor Export menu downloads the PDF itinerary", async ({ page }) => {
   });
   await page.getByRole("button", { name: "Export", exact: true }).click();
   expect(fontRequests).toEqual([]); // fetched only on click
-  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download PDF" }).click()]);
+  await page.getByRole("button", { name: "Download PDF" }).click();
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("alertdialog", { name: "Itinerary PDF" }).getByRole("button", { name: "Download", exact: true }).click()]);
   await expectPdf(download);
   expect(fontRequests).toHaveLength(2);
+});
+
+test("Escape closes only the PDF dialog and focus returns to Export", async ({ page }) => {
+  await signupAndAddStops(page, "e2e-pdf-esc");
+  const exportBtn = page.getByRole("button", { name: "Export", exact: true });
+  await exportBtn.click();
+  await page.getByRole("button", { name: "Download PDF" }).click();
+  const dialog = page.getByRole("alertdialog", { name: "Itinerary PDF" });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(exportBtn).toBeFocused();
+  await expect(page.getByRole("group", { name: "Export trip" })).toBeHidden();
 });
 
 test("a stranger downloads the PDF from the share page", async ({ page, browser }) => {
@@ -56,7 +70,8 @@ test("a stranger downloads the PDF from the share page", async ({ page, browser 
   const shared = await stranger.newPage();
   await shared.goto(url);
   await expect(shared.getByRole("heading", { name: "PDF coast" })).toBeVisible();
-  const [download] = await Promise.all([shared.waitForEvent("download"), shared.getByRole("button", { name: "Download PDF" }).click()]);
+  await shared.getByRole("button", { name: "Download PDF" }).click();
+  const [download] = await Promise.all([shared.waitForEvent("download"), shared.getByRole("alertdialog", { name: "Itinerary PDF" }).getByRole("button", { name: "Download", exact: true }).click()]);
   await expectPdf(download);
   await stranger.close();
 });

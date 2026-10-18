@@ -42,7 +42,9 @@ export function Dialog({ open, role = "alertdialog", title, description, onCance
 
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
+        // Capture phase, and stopped here: Escape closes only this dialog, not the popover, drawer or search box under it.
         e.preventDefault();
+        e.stopPropagation();
         cancelRef.current();
         return;
       }
@@ -64,9 +66,9 @@ export function Dialog({ open, role = "alertdialog", title, description, onCance
         firstItem.focus();
       }
     }
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
     return () => {
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey, true);
       if (opener && opener.isConnected) opener.focus();
     };
   }, [open]);

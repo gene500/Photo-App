@@ -107,7 +107,8 @@ describe("TripEditor", () => {
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toBe("62 mi · 1 h 0 min"));
     await userEvent.click(screen.getByRole("button", { name: "Export" }));
     await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
-    await waitFor(() => expect(saveBlob).toHaveBeenCalledWith(blob, "Sierra-loop-itinerary.pdf"));
+    await userEvent.click(await screen.findByRole("button", { name: "Download" }));
+    expect(saveBlob).toHaveBeenCalledWith(blob, "Sierra-loop-itinerary.pdf");
     const arg = vi.mocked(createItineraryPdf).mock.calls[0]![0];
     expect(arg.input.tripName).toBe("Sierra loop");
     expect(arg.input.dateLine).toBe("Planned for 2026-07-01");

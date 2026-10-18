@@ -167,6 +167,17 @@ describe("FakeMapPanel sky lines", () => {
     expect(screen.getByTestId("sky-line-sunset").getAttribute("data-bearing")).toBe("300");
   });
 
+  it("puts an arrowhead on each line whose tip points at the stop", () => {
+    render(<FakeMapPanel {...base} sky={sky} />);
+    for (const name of ["sunrise", "sunset"]) {
+      const line = (screen.getByTestId(`sky-line-${name}`).getAttribute("points") ?? "").split(" ")[0]!.split(",").map(Number);
+      const [tip, left, right] = (screen.getByTestId(`sky-arrow-${name}`).getAttribute("points") ?? "").split(" ").map((p) => p.split(",").map(Number));
+      const dist = (p: number[]) => Math.hypot(p[0]! - line[0]!, p[1]! - line[1]!);
+      expect(dist(tip!)).toBeLessThan(dist(left!));
+      expect(dist(tip!)).toBeLessThan(dist(right!));
+    }
+  });
+
   it("draws only the line whose bearing is known", () => {
     render(<FakeMapPanel {...base} sky={{ ...sky, sunrise: null }} />);
     expect(screen.queryByTestId("sky-line-sunrise")).toBeNull();

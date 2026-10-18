@@ -9,7 +9,8 @@ import { SETTINGS_KEY } from "@/lib/settings";
 import { saveTripCopy } from "@/lib/offline-store";
 import type { Stop, TripWithStops } from "@/lib/types";
 const reloadPage = vi.fn();
-vi.mock("@/lib/reload", () => ({ reloadPage: () => reloadPage() }));
+const goToLogin = vi.fn();
+vi.mock("@/lib/reload", () => ({ reloadPage: () => reloadPage(), goToLogin: () => goToLogin() }));
 import { OfflineView } from "./OfflineView";
 
 const stop = (i: number, over: Partial<Stop> = {}): Stop => ({
@@ -25,6 +26,8 @@ const trip: TripWithStops = {
 };
 
 beforeEach(() => {
+  goToLogin.mockClear();
+  vi.stubGlobal("fetch", vi.fn(async () => Response.json({ user: { id: "u1" } }))); // online, signed in as the owner
   installMemoryStorage();
   localStorage.setItem("rtpp.offline.owner", "u1"); // a signed-in page has claimed the device
 });
@@ -89,5 +92,71 @@ describe("OfflineView", () => {
     expect(screen.queryByText(/back online/)).toBeNull();
     act(() => { window.dispatchEvent(new Event("online")); });
     expect(screen.getByText(/You're back online/)).toBeTruthy();
+  });
+});
+
+describe("OfflineView access check", () => {
+  const session = (body: unknown, ok = true) => vi.stubGlobal("fetch", vi.fn(async () => (ok ? Response.json(body) : new Response("x", { status: 500 }))));
+  const saved = () => JSON.parse(localStorage.getItem("rtpp.offline.index") ?? "[]") as unknown[];
+
+  it("shows the copies while online when the signed-in user owns them", async () => {
+    saveTripCopy(trip);
+    render(<OfflineView />);
+    expect(await screen.findByRole("button", { name: /Yosemite loop/ })).toBeTruthy();
+    expect(goToLogin).not.toHaveBeenCalled();
+  });
+
+  it("while online and signed out: shows nothing, wipes the copies and sends the visitor to /login", async () => {
+    saveTripCopy(trip);
+    session({});
+    render(<OfflineView />);
+    await vi.waitFor(() => expect(goToLogin).toHaveBeenCalled());
+    expect(screen.queryByText("Yosemite loop")).toBeNull();
+    expect(saved()).toEqual([]);
+    expect(localStorage.getItem("rtpp.offline.owner")).toBeNull();
+  });
+
+  it("while online as a different user: never shows the previous user's copies", async () => {
+    saveTripCopy(trip);
+    session({ user: { id: "someone-else" } });
+    render(<OfflineView />);
+    await screen.findByText(/No trips are saved on this device yet/);
+    expect(screen.queryByText("Yosemite loop")).toBeNull();
+    expect(saved()).toEqual([]);
+  });
+
+  it("shows nothing before the check finishes", () => {
+    saveTripCopy(trip);
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    render(<OfflineView />);
+    expect(screen.queryByText("Yosemite loop")).toBeNull();
+  });
+
+  it("when genuinely offline (navigator.onLine false) shows the last signed-in user's copies without any request", async () => {
+    saveTripCopy(trip);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    render(<OfflineView />);
+    expect(await screen.findByRole("button", { name: /Yosemite loop/ })).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(goToLogin).not.toHaveBeenCalled();
+  });
+
+  it("when the session check cannot be reached, it counts as offline", async () => {
+    saveTripCopy(trip);
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Failed to fetch"); }));
+    render(<OfflineView />);
+    expect(await screen.findByRole("button", { name: /Yosemite loop/ })).toBeTruthy();
+  });
+
+  it("offline with no owner mark: copies of unknown origin are wiped, not shown", async () => {
+    saveTripCopy(trip);
+    localStorage.removeItem("rtpp.offline.owner");
+    localStorage.setItem("rtpp.offline.index", JSON.stringify([{ id: "t1", name: "Yosemite loop", plannedDate: "2026-07-01", savedAt: new Date().toISOString(), stopCount: 2 }]));
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    render(<OfflineView />);
+    await screen.findByText(/No trips are saved on this device yet/);
+    expect(screen.queryByText("Yosemite loop")).toBeNull();
   });
 });

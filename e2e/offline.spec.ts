@@ -58,3 +58,15 @@ test("a trip opened online is readable from the saved copy while offline, and si
   await expect(page).toHaveURL(/\/login/);
   expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("rtpp.offline.")))).toEqual([]);
 });
+
+test("/offline does not show saved copies to a visitor who is not signed in", async ({ page }) => {
+  await page.goto("/login");
+  await page.evaluate(() => {
+    localStorage.setItem("rtpp.offline.owner", "someone");
+    localStorage.setItem("rtpp.offline.index", JSON.stringify([{ id: "t1", name: "Secret trip", plannedDate: "2026-07-01", savedAt: new Date().toISOString(), stopCount: 1 }]));
+  });
+  await page.goto("/offline");
+  await expect(page).toHaveURL(/\/login/);
+  await expect(page.getByText("Secret trip")).toHaveCount(0);
+  expect(await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("rtpp.offline.")))).toEqual([]);
+});

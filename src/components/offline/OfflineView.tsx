@@ -7,7 +7,8 @@ import { computeBestTimes, describeBestTime, formatClock, tripDeparture } from "
 import { formatSavedAt } from "@/lib/format";
 import { lightLabel } from "@/lib/light-windows";
 import { listTripCopies, loadTripCopy } from "@/lib/offline-store";
-import { reloadPage } from "@/lib/reload";
+import { checkOfflineAccess } from "@/lib/offline-gate";
+import { goToLogin, reloadPage } from "@/lib/reload";
 import { stopColor } from "@/lib/stop-style";
 
 const noop = () => {};
@@ -23,6 +24,19 @@ const indexSnapshot = () => JSON.stringify(listTripCopies());
 /** Read-only list of the trips saved on this device. No map (map tiles cannot be stored) and no network. */
 export function OfflineView() {
   const mounted = useSyncExternalStore(subscribeNever, () => true, () => false);
+  // This shell is public and static, so nothing is shown until the copies are confirmed to belong to whoever is here.
+  const [access, setAccess] = useState<"checking" | "show">("checking");
+  useEffect(() => {
+    let live = true;
+    void checkOfflineAccess().then((verdict) => {
+      if (!live) return;
+      if (verdict === "login") goToLogin();
+      else setAccess("show");
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
   const rawIndex = useSyncExternalStore(subscribeStorage, indexSnapshot, () => "[]");
   const summaries = useMemo(() => JSON.parse(rawIndex) as ReturnType<typeof listTripCopies>, [rawIndex]);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -38,7 +52,7 @@ export function OfflineView() {
   return (
     <main className="mx-auto w-full max-w-2xl space-y-4 px-4 py-8">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">{copy ? copy.trip.name : "Saved trips"}</h1>
+        <h1 className="text-2xl font-semibold">{copy && access === "show" ? copy.trip.name : "Saved trips"}</h1>
       </header>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -46,7 +60,7 @@ export function OfflineView() {
         <p aria-live="polite" className="text-sm text-muted">{backOnline ? "You're back online. Reload to continue." : ""}</p>
       </div>
 
-      {!mounted ? null : copy ? (
+      {!mounted || access !== "show" ? null : copy ? (
         <TripCopyView copy={copy} onBack={() => setOpenId(null)} />
       ) : summaries.length === 0 ? (
         <p className={`${card} p-4 text-sm text-muted`}>

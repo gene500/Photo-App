@@ -1,8 +1,9 @@
 import { enforcePaidLimit } from "@/server/shared-limit";
 import { clampToSolarDay, departureTime } from "@/lib/best-time";
-import { optimizeSchedule } from "@/lib/optimize-schedule";
+import { optimizeScheduleAsync } from "@/lib/optimize-schedule";
 import { optimizeRequestSchema } from "@/lib/validation";
 import { ExternalServiceError, getDurationMatrix } from "@/server/external/mapbox";
+import { optimizeBudgetMs, withOptimizeSlot } from "@/server/optimize-slots";
 import { handle, HttpError, readJson, requireUserId } from "@/server/http";
 
 /**
@@ -25,13 +26,19 @@ export const POST = handle(async (req: Request) => {
       priority: prefs?.[i]?.priority ?? ("normal" as const),
     }));
     const usesLight = stops.some((s) => s.lightPref !== "any");
-    const result = optimizeSchedule({
-      durations,
-      stops,
-      plannedDate: date,
-      defaultDeparture: departureTime(stops[0]!, date),
-      preferredDeparture: departAt ? new Date(departAt) : undefined,
-    });
+    // Capped at a few at a time per server, yields to other requests while it works, and stops at a time budget.
+    const result = await withOptimizeSlot(() =>
+      optimizeScheduleAsync(
+        {
+          durations,
+          stops,
+          plannedDate: date,
+          defaultDeparture: departureTime(stops[0]!, date),
+          preferredDeparture: departAt ? new Date(departAt) : undefined,
+        },
+        { budgetMs: optimizeBudgetMs() },
+      ),
+    );
     // A kept start time stays as saved; a new one is floored to the minute, as the Start time field shows it (sunrise has seconds).
     const keptSaved = departAt !== undefined && result.departAt.getTime() === new Date(departAt).getTime();
     const departMs = keptSaved ? result.departAt.getTime() : Math.floor(result.departAt.getTime() / 60_000) * 60_000;

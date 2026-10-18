@@ -75,6 +75,13 @@ describe("stop routes", () => {
     expect((await PATCH(jsonRequest("PATCH", `/api/stops/${stop.id}`, { shotNotes: "x".repeat(2001) }), idParams(stop.id))).status).toBe(400);
   });
 
+  it("strips bidi overrides and line/paragraph separators from notes and shot notes but keeps newlines", async () => {
+    const { stop } = await add("a");
+    const evil = "ok\u202Egnp.exe\u202C\u2066x\u2069\u2028y\u2029z\nnext\tline";
+    const res = await PATCH(jsonRequest("PATCH", `/api/stops/${stop.id}`, { notes: evil, shotNotes: evil }), idParams(stop.id));
+    expect((await res.json()).stop).toMatchObject({ notes: "okgnp.exexyz\nnext\tline", shotNotes: "okgnp.exexyz\nnext\tline" });
+  });
+
   it("returns 404 patching another user's shot list", async () => {
     const { stop } = await add("a");
     signInAs((await createTestUser()).id);

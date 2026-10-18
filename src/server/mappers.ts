@@ -1,5 +1,6 @@
 import type { Stop as StopRow, Trip as TripRow } from "@/generated/prisma/client";
 import { utcToDateOnly } from "@/lib/dates";
+import { stripNameChars, stripTextChars } from "@/lib/text";
 import type { LightPref, PublicStop, PublicTrip, ShotItem, Stop, StopPriority, StopSource, Trip } from "@/lib/types";
 
 export function toTripDto(row: TripRow): Trip {
@@ -23,7 +24,7 @@ export function parseShotChecklist(raw: string): ShotItem[] {
     return v
       .flatMap((i) =>
         typeof i === "object" && i !== null && typeof i.text === "string" && typeof i.done === "boolean"
-          ? [{ text: i.text.slice(0, MAX_READ_TEXT), done: i.done }]
+          ? [{ text: stripNameChars(i.text).slice(0, MAX_READ_TEXT), done: i.done }]
           : [],
       )
       .slice(0, MAX_READ_ITEMS);
@@ -44,14 +45,14 @@ export function toStopDto(row: StopRow): Stop {
     name: row.name,
     lat: row.lat,
     lng: row.lng,
-    notes: row.notes,
+    notes: row.notes === null ? null : stripTextChars(row.notes),
     source: row.source as StopSource,
     photoUrl: row.photoUrl,
     visited: row.visited,
     lightPref: row.lightPref as LightPref,
     priority: toPriority(row.priority),
     dwellMinutes: row.dwellMinutes,
-    shotNotes: row.shotNotes,
+    shotNotes: row.shotNotes === null ? null : stripTextChars(row.shotNotes),
     shotChecklist: parseShotChecklist(row.shotChecklist),
   };
 }
@@ -73,7 +74,7 @@ export function toPublicTripDto(row: TripRow & { stops: StopRow[] }): PublicTrip
       lightPref: s.lightPref as LightPref,
       priority: toPriority(s.priority),
       dwellMinutes: s.dwellMinutes,
-      shotNotes: s.shotNotes,
+      shotNotes: s.shotNotes === null ? null : stripTextChars(s.shotNotes),
       shotChecklist: parseShotChecklist(s.shotChecklist),
     }));
   return {

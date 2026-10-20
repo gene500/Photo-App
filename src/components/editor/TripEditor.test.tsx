@@ -909,6 +909,7 @@ describe("TripEditor", () => {
       expect(api.optimizeOrder).toHaveBeenCalledWith([[-119, 36], [-119, 38], [-119, 37]], {
         stops: [30, 30, 30].map((dwellMinutes) => ({ lightPref: "any", priority: "normal", dwellMinutes })),
         plannedDate: "2026-07-01",
+        focus: "priority",
       });
       await waitFor(() => expect(api.reorderStops).toHaveBeenCalledWith("t1", ["a", "c", "b"]));
       await waitFor(() => expect(rowNames()[1]).toContain("C"));

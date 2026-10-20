@@ -77,3 +77,15 @@ export function getSkyInfo(lat: number, lng: number, plannedDate: string): SkyIn
     },
   };
 }
+
+/** Where the sun is at an instant: "Sun SW, 34° high", or that it is below the horizon. */
+export function describeSunPosition(lat: number, lng: number, at: Date): string {
+  const { azimuth, altitude } = getPosition(at, lat, lng);
+  if (!Number.isFinite(altitude) || !Number.isFinite(azimuth)) return "Sun position unavailable";
+  // suncalc v2 returns degrees. The app's sunrise is when the upper limb clears the horizon, where the centre is
+  // about 0.35° down, so the band just below zero still counts as "on the horizon".
+  if (altitude < -0.35) return "Sun below the horizon";
+  const direction = compassWord(normalizeBearing(azimuth));
+  if (altitude < 1) return `Sun on the horizon, ${direction}`;
+  return `Sun ${direction}, ${Math.round(altitude)}° high`;
+}

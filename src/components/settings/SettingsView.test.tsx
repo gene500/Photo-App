@@ -31,6 +31,14 @@ describe("SettingsView", () => {
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
   });
 
+  it("has an Optimize route section where priority focus is the default and time priority can be picked", async () => {
+    await setup();
+    expect(document.getElementById("optimize")).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Priority focus" })).toHaveProperty("checked", true);
+    await userEvent.click(screen.getByRole("radio", { name: "Time priority" }));
+    expect(saved().optimizeFocus).toBe("time");
+  });
+
   it("segmented controls are labelled radio groups that save immediately", async () => {
     await setup();
     expect(screen.getByRole("radio", { name: "System" })).toHaveProperty("checked", true);

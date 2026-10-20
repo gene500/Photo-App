@@ -37,9 +37,9 @@ test("a sunset stop moves the departure so it is reached in its light, and Undo 
   await expect(page.getByLabel("Start time")).toHaveValue(/^\d{2}:\d{2}$/);
   await expect(page.getByRole("button", { name: "Reset to now" })).toBeVisible();
   // The sunset stop is now reached inside its window.
-  const sunsetRow = tripRows.filter({ hasText: "Sunset window" });
+  const sunsetRow = tripRows.filter({ hasText: /Sunset \d/ });
   await expect(sunsetRow).toHaveCount(1);
-  await expect(sunsetRow.getByTestId("best-time")).toHaveText(/Sunset window .* · arrive /);
+  await expect(sunsetRow.getByTestId("best-time")).toHaveText(/^Sunset \d.* · arrive /);
 
   const undone = page.waitForResponse((r) => r.request().method() === "PATCH" && /\/api\/trips\/[^/]+$/.test(r.url()));
   await page.getByRole("button", { name: "Undo" }).click();

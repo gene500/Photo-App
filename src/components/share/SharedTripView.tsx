@@ -7,6 +7,7 @@ import { DownloadDialog } from "@/components/itinerary/DownloadDialog";
 import { useItineraryDownload } from "@/components/itinerary/use-itinerary-download";
 import { btnGhost, card } from "@/components/ui/styles";
 import { computeArrivals, computeBestTimes, describeBestTime, formatClock } from "@/lib/best-time";
+import { appleMapsUrls, googleMapsUrl } from "@/lib/export";
 import { buildItinerary, itineraryFileName } from "@/lib/itinerary";
 import { createItineraryPdf, mapTokenFromEnv } from "@/lib/itinerary-download";
 import { describeLightHint, lightLabel } from "@/lib/light-windows";
@@ -45,6 +46,12 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
     // eslint-disable-next-line react-hooks/exhaustive-deps -- timesInput is rebuilt from these each render
     [trip.plannedDate, trip.departAt, trip.stops, legs],
   );
+
+  // Stop notes are never shared, so the links are built from names and coordinates only.
+  const mapLinks = useMemo(() => {
+    const stops = trip.stops.map((s) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: null }));
+    return { apple: appleMapsUrls(stops) ?? [], google: googleMapsUrl(stops) ?? [] };
+  }, [trip.stops]);
 
   const download = useItineraryDownload();
   const canDownload = mounted && trip.stops.length >= 2;
@@ -93,6 +100,20 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
             View only · planned for {trip.plannedDate}
             {mounted && trip.departAt && <> · Starts {formatClock(new Date(trip.departAt), undefined, tf)}</>}
           </p>
+          {mapLinks.apple.length > 0 && (
+            <p className="flex flex-wrap gap-x-3 gap-y-1 pt-1 text-sm" data-testid="open-in-maps">
+              {mapLinks.apple.map((a) => (
+                <a key={a.url} href={a.url} target="_blank" rel="noopener noreferrer" className="font-medium underline underline-offset-2 hover:text-accent-strong">
+                  Open in Apple Maps{a.label && ` (${a.label})`}
+                </a>
+              ))}
+              {mapLinks.google.map((g) => (
+                <a key={g.url} href={g.url} target="_blank" rel="noopener noreferrer" className="font-medium underline underline-offset-2 hover:text-accent-strong">
+                  Open in Google Maps{g.label && ` (${g.label})`}
+                </a>
+              ))}
+            </p>
+          )}
         </header>
         {trip.stops.length === 0 ? (
           <p className="px-4 pb-4 text-sm text-muted">No stops yet.</p>

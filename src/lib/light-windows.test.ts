@@ -26,6 +26,11 @@ describe("lightWindows", () => {
   it("any is unconstrained", () => {
     expect(lightWindows("any", SUN)).toEqual([]);
   });
+  it("uses solar noon when the sun never reaches golden hour (high-latitude winter)", () => {
+    const dim = { ...SUN, goldenHourEnd: null, goldenHour: null };
+    expect(lightWindows("sunrise", dim)).toEqual([[at("05:40"), SUN.solarNoon]]);
+    expect(lightWindows("sunset", dim)).toEqual([[SUN.solarNoon, at("20:20")]]);
+  });
   it("has no constraint when the sun times are missing (polar)", () => {
     const polar = { ...SUN, sunrise: null, goldenHourEnd: null, goldenHour: null, sunset: null, alwaysUp: true };
     expect(lightWindows("sunrise", polar)).toEqual([]);
@@ -70,7 +75,7 @@ describe("describeLightHint", () => {
   it("shows the window and arrival when the light is met", () => {
     const hint = describeLightHint(yosemite, new Date(from.getTime() + 20 * 60_000), "UTC")!;
     expect(hint.met).toBe(true);
-    expect(hint.text).toMatch(/^Sunset window \d{1,2}:\d{2}–\d{1,2}:\d{2} (AM|PM) · arrive \d{1,2}:\d{2} (AM|PM)$/);
+    expect(hint.text).toMatch(/^Sunset \d{1,2}:\d{2}–\d{1,2}:\d{2} (AM|PM) · arrive \d{1,2}:\d{2} (AM|PM)$/);
   });
   it("says by how much the light is missed", () => {
     const hint = describeLightHint(yosemite, new Date(to.getTime() + 40 * 60_000), "UTC")!;
@@ -123,7 +128,7 @@ describe("settings: time format and suggestion light", () => {
   const stop = { lat: 0, lng: 0, lightPref: "sunset" as const, dwellMinutes: 0 };
   it("24h hint has no AM/PM and a plain range", () => {
     const hint = describeLightHint(stop, new Date("2026-07-01T17:50:00Z"), "UTC", "24h");
-    expect(hint?.text).toMatch(/window \d{2}:\d{2}–\d{2}:\d{2} · arrive 17:50$/);
+    expect(hint?.text).toMatch(/ \d{2}:\d{2}–\d{2}:\d{2} · arrive 17:50$/);
   });
   it("12h and auto hints are the same", () => {
     const a = describeLightHint(stop, new Date("2026-07-01T17:50:00Z"), "UTC");

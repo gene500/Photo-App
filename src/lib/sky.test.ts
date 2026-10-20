@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { solarDayAnchor } from "./best-time";
-import { compassWord, getSkyInfo, moonPhaseName } from "./sky";
+import { getSunWindows, solarDayAnchor } from "./best-time";
+import { compassWord, describeSunPosition, getSkyInfo, moonPhaseName } from "./sky";
 
 describe("compassWord", () => {
   it("names the 16 compass points", () => {
@@ -70,5 +70,31 @@ describe("getSkyInfo", () => {
     expect(within(s.sunrise!.at)).toBe(true);
     expect(within(s.sunset!.at)).toBe(true);
     if (s.moon.rise) expect(within(s.moon.rise)).toBe(true);
+  });
+});
+
+describe("describeSunPosition", () => {
+  it("gives compass word and height for the sun above the horizon", () => {
+    // Solar noon at the equator on the equinox: the sun is almost straight up.
+    const noon = new Date("2026-03-20T12:07:00Z");
+    expect(describeSunPosition(0, 0, noon)).toMatch(/^Sun (N|S|NNE|NNW|SSE|SSW|E|W|NE|NW|SE|SW|ENE|ESE|WNW|WSW), (8\d|90)° high$/);
+  });
+
+  it("says the sun is down at night", () => {
+    expect(describeSunPosition(0, 0, new Date("2026-03-20T00:00:00Z"))).toBe("Sun below the horizon");
+  });
+
+  it("calls the sun on the horizon just after the app's sunrise, and handles bad input", () => {
+    // At the app's own sunrise the centre is still ~0.35 deg down, so it must not read "below the horizon".
+    const sunrise = getSunWindows(36.1, -112.1, "2026-07-01").sunrise!;
+    expect(describeSunPosition(36.1, -112.1, sunrise)).toMatch(/^Sun on the horizon, \w+$/);
+    expect(describeSunPosition(NaN, 0, new Date("2026-03-20T12:00:00Z"))).toBe("Sun position unavailable");
+    expect(describeSunPosition(0, 0, new Date("invalid"))).toBe("Sun position unavailable");
+  });
+
+  it("names the direction in the morning", () => {
+    // 7 am local solar time on the equinox at the equator: sun in the east, low.
+    const text = describeSunPosition(0, 0, new Date("2026-03-20T07:00:00Z"));
+    expect(text).toMatch(/^Sun E(SE|NE)?, \d{1,2}° high$/);
   });
 });

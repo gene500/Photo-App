@@ -17,7 +17,7 @@ function onDial(bearing: number) {
   return { x: CENTER + RADIUS * Math.sin(rad), y: CENTER - RADIUS * Math.cos(rad) };
 }
 
-const bearingText = (b: number) => `${compassWord(b)} ${Math.round(b)}°`;
+const bearingText = (b: number) => `${compassWord(b)} ${Math.round(b) % 360}°`;
 
 export function SkyCard({ lat, lng, plannedDate }: Props) {
   const { settings } = useSettings();

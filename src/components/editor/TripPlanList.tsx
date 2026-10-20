@@ -2,6 +2,7 @@
 
 import { describeBestTime, type BestTime } from "@/lib/best-time";
 import { describeLightHint } from "@/lib/light-windows";
+import { describeSunPosition } from "@/lib/sky";
 import { useMounted } from "@/lib/use-mounted";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { stopColor } from "@/lib/stop-style";
@@ -46,7 +47,7 @@ function ArrivalLines({ stop, bestTime, arrival }: { stop: Stop; bestTime: BestT
   const weather = useWeatherLine(stop.lat, stop.lng, arrival, stop.lightPref);
   return (
     <>
-      <p className="flex min-w-0 items-center gap-1.5 text-xs text-muted">
+      <p className="flex min-w-0 items-center gap-1.5 text-xs text-foreground/80">
         {hint ? (
           <span data-testid="best-time" data-light-met={hint.met} className={`flex min-w-0 items-center gap-1 ${hint.met ? "" : "text-sand"}`}>
             {hint.met && (
@@ -54,14 +55,17 @@ function ArrivalLines({ stop, bestTime, arrival }: { stop: Stop; bestTime: BestT
                 <path d="M3 8.5l3.2 3.2L13 4.8" />
               </svg>
             )}
-            <span>{hint.text}</span>
+            <span className="min-w-0 break-words">{hint.text}</span>
           </span>
         ) : (
           <span data-testid="best-time">{mounted ? describeBestTime(bestTime, undefined, settings.timeFormat) : " "}</span>
         )}
       </p>
+      {mounted && arrival && (
+        <p data-testid="sun-position" className="text-xs text-foreground/80">{describeSunPosition(stop.lat, stop.lng, arrival)}</p>
+      )}
       {weather && (
-        <p data-testid="stop-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-sand" : "text-muted"}`}>
+        <p data-testid="stop-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-sand" : "text-foreground/80"}`}>
           <WeatherText line={weather} />
         </p>
       )}

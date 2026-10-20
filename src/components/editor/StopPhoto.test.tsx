@@ -77,11 +77,11 @@ describe("StopPhoto", () => {
   it("has rounded corners matching the app's thumbnails", async () => {
     const { container } = render(<StopPhoto stop={base} />);
     await waitFor(() => expect(container.querySelector("img")).not.toBeNull());
-    for (const c of ["rounded-xl", "h-10", "w-10", "object-cover"]) expect(container.querySelector("img")!.className).toContain(c);
+    for (const c of ["rounded-xl", "h-16", "w-16", "object-cover"]) expect(container.querySelector("img")!.className).toContain(c);
     vi.mocked(loadPlacePhoto).mockResolvedValue(null);
     const other = render(<StopPhoto stop={{ ...base, name: "Other" }} />);
     const ph = await screen.findByTestId("stop-photo-placeholder");
-    for (const c of ["rounded-xl", "h-10", "w-10"]) expect(ph.className).toContain(c);
+    for (const c of ["rounded-xl", "h-16", "w-16"]) expect(ph.className).toContain(c);
     other.unmount();
   });
 

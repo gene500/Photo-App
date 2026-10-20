@@ -54,7 +54,7 @@ export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: 
       <header className="relative">
         {/* One row: the name truncates, the buttons keep their size (tighter padding so a short name stays readable in a narrow sidebar). The buttons only drop to a second line when a long name would get narrower than 6 characters (narrow phone or large text); a shorter name only needs its own length, so it stays on the row. The minimum is in ch so it scales with the text size. */}
         <div className="flex flex-wrap items-start justify-between gap-x-1">
-          <h1 title={trip.name} style={{ minWidth: nameMin, flexBasis: nameMin }} className="grow truncate text-lg font-semibold leading-9">{trip.name}</h1>
+          <h1 title={trip.name} style={{ minWidth: nameMin, flexBasis: nameMin }} className="grow truncate text-2xl font-semibold leading-9">{trip.name}</h1>
           <div className="ml-auto flex max-w-full shrink-0 flex-wrap justify-end [&>button]:whitespace-nowrap [&>button]:px-1.5 [&>div>button]:whitespace-nowrap [&>div>button]:px-1.5 max-[359px]:[&>button]:min-h-11 max-[359px]:[&>button]:w-8 max-[359px]:[&>button]:justify-center max-[359px]:[&>button]:px-0 max-[359px]:[&>div>button]:min-h-11 max-[359px]:[&>div>button]:w-8 max-[359px]:[&>div>button]:justify-center max-[359px]:[&>div>button]:px-0">
             <button type="button" onClick={beginEdit} aria-label="Edit trip" title="Edit trip" className={btnGhost}><HeaderButtonLabel icon="edit">Edit</HeaderButtonLabel></button>
             {exportData && <ExportControl tripName={trip.name} plannedDate={trip.plannedDate} stops={exportData.stops} route={exportData.route} pdf={exportData.pdf} />}

@@ -2,21 +2,21 @@
 // Pure: maps a style layer to the paint properties to override. Anything unrecognised returns null and is left alone.
 
 export const MAP_COLORS = {
-  land: "#f2eee4",
-  water: "#dfe0da",
-  green: "#e7e5d3",
-  greenLine: "#dad8c4",
-  building: "#e9e3d4",
-  buildingLine: "#ded6c3",
+  land: "#e6e0d0",
+  water: "#c9d0cc",
+  green: "#d8d8bc",
+  greenLine: "#c9c8ab",
+  building: "#dcd3be",
+  buildingLine: "#cdc3aa",
   road: "#fffdf8",
-  roadMajor: "#f5ecd8",
-  roadTunnel: "#f8f3e8",
-  roadCasing: "#e4dccb",
-  roadCasingFaint: "#ece5d6",
-  path: "#e2dac8",
-  boundary: "#d8cfbc",
-  labelText: "#7a6c52",
-  labelHalo: "#f7f3ea",
+  roadMajor: "#f3deb0",
+  roadTunnel: "#f0e8d4",
+  roadCasing: "#bfb399",
+  roadCasingFaint: "#d0c5ac",
+  path: "#a89a7c",
+  boundary: "#b9ad94",
+  labelText: "#5a4d34",
+  labelHalo: "#efe9dc",
 } as const;
 
 export type LayerPaint = { paint: Record<string, unknown>; hide?: boolean };

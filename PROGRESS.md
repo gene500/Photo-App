@@ -3,6 +3,16 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
+## 2026-10-19 (UI batch A, local; sweeps queued)
+
+Done and tested locally (typecheck, lint, 1526 unit tests), **not committed or pushed**, not yet seen on the real Mapbox map: bigger
+sunrise/sunset arrow; darker beige map palette, dimmer dark mode, clearer roads and paths; larger photo tiles on the right of each
+stop row; larger trip title; darker arrival/weather text; Optimize route sits beside the route miles and time; export menu order
+PDF, GPX, Apple Maps, Google Maps; light hint on one line; selection tabs without dead space; per-stop sun position line;
+Optimize priority setting (`optimizeFocus`: priority or time) with a gear link to Settings. Earlier, 2026-10-16 to 18: sky and
+weather warning, PDF itinerary, the C1-C6 UI batch (all pushed, `7a46785`). Next: bug sweeps H3-H2, triage, `/security-review`,
+then the FINAL row. Board and rules are in `HANDOFF.md` and `CLAUDE.md`.
+
 ## 2026-10-08 (light-aware route optimization, branch `light-aware`)
 
 Stops now have a preferred light (`lightPref`: any/sunrise/golden/sunset) and a

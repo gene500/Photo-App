@@ -166,6 +166,15 @@ is announced to screen readers only; nothing shows under the button. **Undo**
 restores the previous order and departure. Each row shows the window and arrival,
 or "Misses sunset by 40 min".
 
+**Optimize focus (Settings, per device).** Settings has an "Optimize route" section (`/settings#optimize`, also reached by the gear
+button beside Optimize route) with **Priority focus** (default) and **Time priority**. Priority focus weights missed light by each
+stop's priority (Normal 1, High 8, Must 1000), so the route may be longer to fit in higher-priority stops; Time priority weights every
+stop the same, so the shortest schedule wins. The choice is sent as `focus` to `POST /api/optimize`. It only matters for stops with a
+best-light preference.
+
+**Sun position.** Once a stop has an arrival time, My trip shows a line such as "Sun SW, 34° high" (`describeSunPosition` in
+`src/lib/sky.ts`), or "Sun below the horizon". The light hint reads like "Sunset 6:10-7:40 PM · arrive 6:25 PM", wrapping on narrow screens.
+
 ### Shot list per stop
 
 The stop drawer has a **Shot list** section: free-text **Shot notes** (up to 2000
@@ -287,7 +296,7 @@ user; Flickr calls (counts and place photos) share an app-wide budget of 3000 pe
 counts come from Commons and place photos skip Flickr, without an error. It shows as a muted "≈N photos nearby" caption
 on the suggestion card and popup.
 
-The Mapbox `light-v11` basemap is recoloured to the beige theme at runtime
+The Mapbox `light-v11` basemap is recoloured to the beige theme at runtime (a slightly darker palette with clearer roads and paths since 2026-10-19; dark mode dims the canvas with a CSS filter)
 (`src/lib/map-theme.ts`, applied on style load); our own `route*` layers are
 never touched.
 
@@ -356,7 +365,7 @@ starts → *midday*, before sunset → *golden hour*, after sunset →
 *sunset* (the window just missed). With fewer than two stops (so no route), the
 display defaults to evening golden hour. See `src/lib/best-time.ts`.
 
-## 6. Tunables
+## 7. Tunables
 
 | Constant | File | Meaning |
 | --- | --- | --- |
@@ -368,7 +377,7 @@ display defaults to evening golden hour. See `src/lib/best-time.ts`.
 | `OVERPASS_TIMEOUT_MS` | `src/server/suggestions/overpass.ts` | Per-attempt timeout for Overpass API requests |
 | `MAX_PHOTO_BYTES` | `src/lib/photo-rules.ts` | Max reference-photo upload size (4 MB: Vercel caps request bodies at 4.5 MB), enforced client- and server-side |
 
-## 7. Deploying to Vercel
+## 8. Deploying to Vercel
 
 The app runs on Vercel with a Turso database (hosted SQLite) and a Vercel
 Blob store for photos. Locally nothing changes.

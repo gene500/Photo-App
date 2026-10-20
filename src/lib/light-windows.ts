@@ -14,15 +14,19 @@ const SUNSET_TAIL = 20 * MS_MIN;
  *   sunset:  start of evening golden hour until 20 min after sunset
  *   golden:  both
  *   any:     no constraint
- * Missing sun times (polar day or night) mean no constraint, so the list is empty.
+ * Midwinter above ~60.5° the sun rises but never reaches 6°, so there is no golden hour: the morning window then
+ * runs to solar noon and the evening one starts at solar noon (the whole low-sun day).
+ * Missing sunrise or sunset (polar day or night) mean no constraint, so the list is empty.
  */
 export function lightWindows(pref: LightPref, sun: SunWindows): LightWindow[] {
   const out: LightWindow[] = [];
-  if ((pref === "sunrise" || pref === "golden") && sun.sunrise && sun.goldenHourEnd) {
-    out.push([new Date(sun.sunrise.getTime() - SUNRISE_LEAD), sun.goldenHourEnd]);
+  const morningEnd = sun.goldenHourEnd ?? sun.solarNoon;
+  const eveningStart = sun.goldenHour ?? sun.solarNoon;
+  if ((pref === "sunrise" || pref === "golden") && sun.sunrise && morningEnd) {
+    out.push([new Date(sun.sunrise.getTime() - SUNRISE_LEAD), morningEnd]);
   }
-  if ((pref === "sunset" || pref === "golden") && sun.goldenHour && sun.sunset) {
-    out.push([sun.goldenHour, new Date(sun.sunset.getTime() + SUNSET_TAIL)]);
+  if ((pref === "sunset" || pref === "golden") && eveningStart && sun.sunset) {
+    out.push([eveningStart, new Date(sun.sunset.getTime() + SUNSET_TAIL)]);
   }
   return out;
 }
@@ -111,7 +115,7 @@ export function describeLightHint(
     windows.find(([s, e]) => arrival.getTime() + stop.dwellMinutes * MS_MIN >= s.getTime() && arrival.getTime() <= e.getTime()) ??
     windows[0]!;
   return {
-    text: `${label} window ${clockRange(hit[0], hit[1], timeZone, timeFormat)} · arrive ${formatClock(arrival, timeZone, timeFormat)}`,
+    text: `${label} ${clockRange(hit[0], hit[1], timeZone, timeFormat)} · arrive ${formatClock(arrival, timeZone, timeFormat)}`,
     met: true,
   };
 }

@@ -67,12 +67,24 @@ describe("TripPlanList", () => {
       />,
     );
     const [met, missed, plain] = screen.getAllByTestId("best-time");
-    expect(met.textContent).toMatch(/^Sunset window .* · arrive /);
+    expect(met.textContent).toMatch(/^Sunset .* · arrive /);
     expect(met.getAttribute("data-light-met")).toBe("true");
     expect(missed.textContent).toMatch(/^Misses sunset by /);
     expect(missed.className).toContain("text-sand");
     expect(missed.className).not.toContain("text-danger");
     expect(plain.textContent).toBe("No daylight"); // any: unchanged best-time line
+  });
+
+  it("shows where the sun is at each stop's arrival", () => {
+    render(
+      <TripPlanList
+        stops={[stop("a", "Noon", { lat: 0, lng: 0 })]}
+        bestTimes={[null]}
+        arrivals={[new Date("2026-03-20T12:07:00Z")]}
+        optimized {...handlers}
+      />,
+    );
+    expect(screen.getByTestId("sun-position").textContent).toMatch(/^Sun [NESW]+, \d+° high$/);
   });
 
   it("renders numbered rows with best time", () => {

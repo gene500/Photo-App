@@ -11,7 +11,7 @@ export function stopPhotoKey(stop: Pick<Stop, "lat" | "lng" | "name">): string {
   return `stop:${stop.lat.toFixed(5)},${stop.lng.toFixed(5)}:${stop.name}`;
 }
 
-const TILE = "h-10 w-10 shrink-0 rounded-xl";
+const TILE = "h-16 w-16 shrink-0 rounded-xl";
 
 /** The Stops-row thumbnail: the stop's own upload, else the place's photo (fetched once on screen), else a placeholder. */
 export function StopPhoto({ stop }: { stop: PhotoStop }) {

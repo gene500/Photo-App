@@ -79,4 +79,10 @@ describe("settings versioning", () => {
     expect(parseStoredSettings(serializeSettings({ ...DEFAULT_SETTINGS, distanceUnit: "km" })).distanceUnit).toBe("km");
     expect(JSON.parse(serializeSettings(DEFAULT_SETTINGS)).version).toBe(SETTINGS_VERSION);
   });
+
+  it("defaults the optimize focus to priority and rejects unknown values", () => {
+    expect(parseSettings({}).optimizeFocus).toBe("priority");
+    expect(parseSettings({ optimizeFocus: "time" }).optimizeFocus).toBe("time");
+    expect(parseSettings({ optimizeFocus: "fastest" }).optimizeFocus).toBe("priority");
+  });
 });

@@ -149,9 +149,9 @@ body {
 
 /* Map tiles are the "quiet light-gray" backdrop; dim them a little in dark mode. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .mapboxgl-canvas { filter: brightness(0.85); }
+  :root:not([data-theme="light"]) .mapboxgl-canvas { filter: brightness(0.72) contrast(1.12); }
 }
-:root[data-theme="dark"] .mapboxgl-canvas { filter: brightness(0.85); }
+:root[data-theme="dark"] .mapboxgl-canvas { filter: brightness(0.72) contrast(1.12); }
 
 /* Photo popup over a suggestion dot: the card itself is styled with tokens in suggestion-popup.ts; here we
    strip Mapbox's default bubble. It never takes the pointer, so moving off the dot always closes it. */

@@ -403,6 +403,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         stops: before.map((s) => ({ lightPref: s.lightPref, priority: s.priority, dwellMinutes: s.dwellMinutes })),
         plannedDate: trip.plannedDate,
         ...(previousDepartAt ? { departAt: previousDepartAt } : {}),
+        focus: settings.optimizeFocus,
       });
       if (
         idsKeyRef.current !== startKey ||

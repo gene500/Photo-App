@@ -150,6 +150,8 @@ export const optimizeRequestSchema = z
     plannedDate: dateOnlySchema.optional(),
     /** The trip's saved start time; it wins ties against equally good departures. */
     departAt: departAtSchema.optional(),
+    /** What to weigh first: priority stops (default) or the shortest route. */
+    focus: z.enum(["priority", "time"]).optional(),
   })
   .refine((o) => !o.stops || o.stops.length === o.coordinates.length, {
     path: ["stops"],

@@ -10,9 +10,9 @@ import { MAX_DWELL_MINUTES } from "@/lib/validation";
 import type { Settings } from "@/lib/settings";
 import { useSettings } from "./SettingsProvider";
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, children, id }: { title: string; children: ReactNode; id?: string }) {
   return (
-    <section className={`space-y-5 p-5 ${card}`}>
+    <section id={id} className={`scroll-mt-4 space-y-5 p-5 ${card}`}>
       <h2 className="text-base font-semibold">{title}</h2>
       {children}
     </section>
@@ -146,6 +146,17 @@ export function SettingsView({ email, hasPassword = true }: { email: string | nu
           onChange={(suggestionLightPref) => update({ suggestionLightPref })}
           options={[{ value: "auto", label: "Automatic" }, { value: "any", label: "Any light" }]}
           hint="Automatic picks golden hour for viewpoints and peaks and any light for everything else."
+        />
+      </Section>
+
+      <Section title="Optimize route" id="optimize">
+        <Segmented
+          legend="What Optimize puts first"
+          name="optimizeFocus"
+          value={settings.optimizeFocus}
+          onChange={(optimizeFocus) => update({ optimizeFocus })}
+          options={[{ value: "priority", label: "Priority focus" }, { value: "time", label: "Time priority" }]}
+          hint="Priority focus fits in as many High and Must stops (in their best light) as it can, even if the drive gets longer. Time priority treats every stop alike, so drive time and missed light decide the route. Takes effect the next time you optimize."
         />
       </Section>
 

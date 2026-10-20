@@ -64,7 +64,7 @@ export const api = {
   removePhoto: (stopId: string) => request<{ stop: Stop }>(`/api/stops/${stopId}/photo`, send("DELETE")),
   directions: (coordinates: LngLat[]) =>
     request<{ route: RouteResult }>("/api/directions", send("POST", { coordinates })),
-  optimizeOrder: (coordinates: LngLat[], light?: { stops: { lightPref: LightPref; priority?: StopPriority; dwellMinutes: number }[]; plannedDate: string; departAt?: string }) =>
+  optimizeOrder: (coordinates: LngLat[], light?: { stops: { lightPref: LightPref; priority?: StopPriority; dwellMinutes: number }[]; plannedDate: string; departAt?: string; focus?: "priority" | "time" }) =>
     request<{ order: number[]; complete?: boolean; departAt?: string | null; misses?: { stopIndex: number; minutes: number; priority?: StopPriority }[] }>(
       "/api/optimize",
       send("POST", { coordinates, ...light }),

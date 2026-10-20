@@ -24,7 +24,7 @@ type Props = {
 
 const item = "block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent-strong";
 
-/** "Export" button with a small menu: GPX download, PDF itinerary download and Google / Apple Maps directions. Needs 2+ stops. */
+/** "Export" button with a small menu: PDF itinerary download, GPX download and Apple / Google Maps directions. Needs 2+ stops. */
 export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Props) {
   const { open, setOpen, close, toggle, rootRef, triggerRef, panelRef, panelId } = usePopover();
   const { settings } = useSettings();
@@ -80,18 +80,18 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
       <DownloadDialog download={download} />
       {open && enough && (
         <div ref={panelRef} id={panelId} role="group" aria-label="Export trip" className={`absolute right-0 top-full z-20 mt-1 w-56 max-w-full p-1 ${card}`}>
-          <button type="button" onClick={downloadGpx} className={item}>Download GPX</button>
           {pdf && (
             <button type="button" onClick={downloadPdf} className={item}>Download PDF</button>
           )}
-          {google?.map((g) => (
-            <a key={g.url} href={g.url} onClick={() => close()} target="_blank" rel="noopener noreferrer" className={item}>
-              Open in Google Maps{g.label && ` (${g.label})`}
-            </a>
-          ))}
+          <button type="button" onClick={downloadGpx} className={item}>Download GPX</button>
           {apple?.map((a) => (
             <a key={a.url} href={a.url} onClick={() => close()} target="_blank" rel="noopener noreferrer" className={item}>
               Open in Apple Maps{a.label && ` (${a.label})`}
+            </a>
+          ))}
+          {google?.map((g) => (
+            <a key={g.url} href={g.url} onClick={() => close()} target="_blank" rel="noopener noreferrer" className={item}>
+              Open in Google Maps{g.label && ` (${g.label})`}
             </a>
           ))}
         </div>

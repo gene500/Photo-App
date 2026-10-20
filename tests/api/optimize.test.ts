@@ -32,6 +32,13 @@ describe("POST /api/optimize", () => {
     expect((await post([[0, 0], [0, 1], [200, 2]])).status).toBe(400);
   });
 
+  it("accepts the focus setting and rejects unknown values", async () => {
+    const line = [[0, 0], [0, 3], [0, 1], [0, 2]];
+    expect((await post(line, { focus: "time" })).status).toBe(200);
+    expect((await post(line, { focus: "priority" })).status).toBe(200);
+    expect((await post(line, { focus: "bogus" })).status).toBe(400);
+  });
+
   it("returns indices that sort a shuffled line, keeping the start first", async () => {
     // lat 0, 3, 1, 2 along one meridian
     const res = await post([[0, 0], [0, 3], [0, 1], [0, 2]]);

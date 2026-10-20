@@ -18,6 +18,8 @@ export const DISTANCE_UNITS = ["km", "mi"] as const;
 export const TIME_FORMATS = ["auto", "12h", "24h"] as const;
 export const MAP_STYLES = ["beige", "standard"] as const;
 export const SUGGESTION_LIGHT_PREFS = ["auto", "any"] as const;
+/** What Optimize weighs first: priority stops (may cost a longer drive) or the shortest route. */
+export const OPTIMIZE_FOCUSES = ["priority", "time"] as const;
 
 export type Theme = (typeof THEMES)[number];
 export type TextSize = (typeof TEXT_SIZES)[number];
@@ -25,6 +27,7 @@ export type DistanceUnit = (typeof DISTANCE_UNITS)[number];
 export type TimeFormat = (typeof TIME_FORMATS)[number];
 export type MapStyle = (typeof MAP_STYLES)[number];
 export type SuggestionLightPref = (typeof SUGGESTION_LIGHT_PREFS)[number];
+export type OptimizeFocus = (typeof OPTIMIZE_FOCUSES)[number];
 
 export type Settings = {
   theme: Theme;
@@ -37,6 +40,7 @@ export type Settings = {
   /** Minutes for a new stop. */
   defaultDwellMinutes: number;
   suggestionLightPref: SuggestionLightPref;
+  optimizeFocus: OptimizeFocus;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -48,6 +52,7 @@ export const DEFAULT_SETTINGS: Settings = {
   mapStyle: "beige",
   defaultDwellMinutes: 30,
   suggestionLightPref: "auto",
+  optimizeFocus: "priority",
 };
 
 function pick<T extends string>(allowed: readonly T[], value: unknown, fallback: T): T {
@@ -70,6 +75,7 @@ export function parseSettings(raw: unknown): Settings {
     mapStyle: pick(MAP_STYLES, o.mapStyle, d.mapStyle),
     defaultDwellMinutes: dwell,
     suggestionLightPref: pick(SUGGESTION_LIGHT_PREFS, o.suggestionLightPref, d.suggestionLightPref),
+    optimizeFocus: pick(OPTIMIZE_FOCUSES, o.optimizeFocus, d.optimizeFocus),
   };
 }
 

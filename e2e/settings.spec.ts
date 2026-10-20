@@ -25,7 +25,7 @@ test("settings: theme, text size, units and reset persist per device", async ({ 
     }).observe(document, { childList: true, subtree: true });
   });
 
-  await page.getByRole("link", { name: "Settings" }).click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByText(/Signed in as/)).toContainText("e2e-settings-main-");
 
@@ -65,7 +65,7 @@ test("settings: theme, text size, units and reset persist per device", async ({ 
   await expect(page.getByTestId("route-status")).not.toContainText(/\d mi\b/);
 
   // Reset restores everything.
-  await page.getByRole("link", { name: "Settings" }).click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Reset to defaults" }).click();
   await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.*/);
   await expect(page.locator("html")).not.toHaveAttribute("data-text-size", /.*/);

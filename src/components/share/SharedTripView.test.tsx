@@ -168,4 +168,18 @@ describe("SharedTripView Download PDF", () => {
     expect((await screen.findByRole("alertdialog")).textContent).toContain("Could not create the PDF. Try again.");
     expect(saveBlob).not.toHaveBeenCalled();
   });
+
+  it("offers Apple Maps and Google Maps links for the route", () => {
+    render(<SharedTripView trip={trip} />);
+    const apple = screen.getByRole("link", { name: /open in apple maps/i }) as HTMLAnchorElement;
+    const google = screen.getByRole("link", { name: /open in google maps/i }) as HTMLAnchorElement;
+    expect(apple.href).toContain("maps.apple.com");
+    expect(google.href).toContain("google.com/maps");
+    expect(apple.rel).toContain("noopener");
+  });
+
+  it("shows no map links with fewer than two stops", () => {
+    render(<SharedTripView trip={{ ...trip, stops: trip.stops.slice(0, 1) }} />);
+    expect(screen.queryByRole("link", { name: /open in/i })).toBeNull();
+  });
 });

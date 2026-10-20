@@ -29,6 +29,17 @@ describe("priority", () => {
     expect(r.misses.map((m) => m.stopIndex)).toEqual([0]);
   });
 
+  it("with time priority, a stop's priority no longer changes which stop misses its light", () => {
+    const d = flat(2, 2700);
+    const run = (a: StopPriority, b: StopPriority, focus?: "priority" | "time") =>
+      optimizeSchedule({ durations: d, stops: [withPriority("sunrise", a), withPriority("sunset", b)], plannedDate: DATE, defaultDeparture, focus }).misses.map((m) => m.stopIndex);
+    expect(run("must", "normal", "time")).toEqual(run("normal", "must", "time"));
+    // Priority focus (and no focus at all) still lets the must-have stop win.
+    expect(run("must", "normal", "priority")).toEqual([1]);
+    expect(run("normal", "must", "priority")).toEqual([0]);
+    expect(run("must", "normal")).toEqual([1]);
+  });
+
   it("defaults a stop without a priority to normal", () => {
     const d = flat(2, 2700);
     const r = optimizeSchedule({ durations: d, stops: [stop("sunrise"), stop("sunset")], plannedDate: DATE, defaultDeparture });

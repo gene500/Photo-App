@@ -39,19 +39,19 @@ const ARROW_FRACTION = 0.45;
 
 /** A solid up-pointing arrowhead in `color`, registered as a map image so the sky layer can rotate it. */
 function arrowImage(color: string): ImageData {
-  const size = 32;
+  const size = 48;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext("2d")!;
   ctx.beginPath();
-  ctx.moveTo(size / 2, 2);
-  ctx.lineTo(size - 5, size - 4);
-  ctx.lineTo(size / 2, size - 11);
-  ctx.lineTo(5, size - 4);
+  ctx.moveTo(size / 2, 3);
+  ctx.lineTo(size - 7, size - 6);
+  ctx.lineTo(size / 2, size - 16);
+  ctx.lineTo(7, size - 6);
   ctx.closePath();
   ctx.fillStyle = color;
   ctx.fill();
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 3;
   ctx.strokeStyle = "#ffffff";
   ctx.lineJoin = "round";
   ctx.stroke();

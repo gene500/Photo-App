@@ -165,6 +165,28 @@ describe("optimizeSchedule", () => {
   });
 });
 
+describe("fixed departure", () => {
+  const d = flat(3, 3600);
+  const stops = [stop("any"), stop("sunrise"), stop("sunrise")];
+  // A mid-afternoon start the search would otherwise move to the early morning to catch the sunrise stop.
+  const afternoon = new Date(defaultDeparture.getTime() + 9 * 3_600_000);
+
+  it("keeps the given start and orders the stops for it", () => {
+    const free = optimizeSchedule({ durations: d, stops, plannedDate: DATE, defaultDeparture, preferredDeparture: afternoon });
+    expect(free.departAt.getTime()).not.toBe(afternoon.getTime());
+    const fixed = optimizeSchedule({ durations: d, stops, plannedDate: DATE, defaultDeparture, preferredDeparture: afternoon, fixedDeparture: true });
+    expect(fixed.departAt.getTime()).toBe(afternoon.getTime());
+    expect(fixed.timed).toBe(true);
+    // The sunrise stops cannot be met from an afternoon start, and the result says so instead of moving the start.
+    expect(fixed.misses.length).toBeGreaterThan(0);
+  });
+
+  it("falls back to the default start when none is given", () => {
+    const fixed = optimizeSchedule({ durations: d, stops, plannedDate: DATE, defaultDeparture, fixedDeparture: true });
+    expect(fixed.departAt.getTime()).toBe(defaultDeparture.getTime());
+  });
+});
+
 describe("daylight", () => {
   const anyStops = (n: number, dwell: number, over: Partial<typeof base> = {}) => Array.from({ length: n }, () => stop("any", dwell, over));
   const lateStart = new Date(defaultDeparture.getTime() + 15 * 3600_000); // about 9 pm, after sunset

@@ -152,6 +152,8 @@ export const optimizeRequestSchema = z
     departAt: departAtSchema.optional(),
     /** What to weigh first: priority stops (default) or the shortest route. */
     focus: z.enum(["priority", "time"]).optional(),
+    /** Keep `departAt` as the start and only order the stops (a trip already under way). */
+    fixDeparture: z.boolean().optional(),
   })
   .refine((o) => !o.stops || o.stops.length === o.coordinates.length, {
     path: ["stops"],

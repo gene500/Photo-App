@@ -16,7 +16,7 @@ export const POST = handle(async (req: Request) => {
   // The concurrency slot comes first: a busy 503 must neither call Mapbox nor use up the user's per-minute allowance.
   return withOptimizeSlot(async () => {
     await enforcePaidLimit("optimize", userId);
-    const { coordinates, stops: prefs, plannedDate, departAt, focus } = optimizeRequestSchema.parse(await readJson(req));
+    const { coordinates, stops: prefs, plannedDate, departAt, focus, fixDeparture } = optimizeRequestSchema.parse(await readJson(req));
     try {
       const durations = await getDurationMatrix(coordinates);
       const date = plannedDate ?? new Date().toISOString().slice(0, 10);
@@ -36,6 +36,7 @@ export const POST = handle(async (req: Request) => {
           defaultDeparture: departureTime(stops[0]!, date),
           preferredDeparture: departAt ? new Date(departAt) : undefined,
           focus,
+          fixedDeparture: fixDeparture,
         },
         { budgetMs: optimizeBudgetMs() },
       );

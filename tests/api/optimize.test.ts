@@ -53,6 +53,27 @@ describe("POST /api/optimize", () => {
     expect((await post([[0, 0], [0, 1], [0, 2]], { plannedDate: "soon" })).status).toBe(400);
   });
 
+  it("rejects a fixDeparture that is not a boolean", async () => {
+    expect((await post([[0, 0], [0, 1], [0, 2]], { fixDeparture: "yes" })).status).toBe(400);
+  });
+
+  it("keeps the given start when asked to fix the departure", async () => {
+    const coords = [[-119.6, 37.7], [-119.6, 38.7], [-119.6, 39.7]];
+    const departAt = "2026-07-01T22:00:00.000Z";
+    const res = await post(coords, {
+      plannedDate: "2026-07-01",
+      departAt,
+      fixDeparture: true,
+      stops: [
+        { lightPref: "any", dwellMinutes: 30 },
+        { lightPref: "sunrise", dwellMinutes: 30 },
+        { lightPref: "sunset", dwellMinutes: 30 },
+      ],
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).departAt).toBe(departAt);
+  });
+
   it("returns a departure and misses when stops have light preferences", async () => {
     // Yosemite-ish; 1 degree of latitude is ~1.2 h at the fake speed.
     const coords = [[-119.6, 37.7], [-119.6, 38.7], [-119.6, 39.7]];

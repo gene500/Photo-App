@@ -815,6 +815,50 @@ describe("TripEditor", () => {
     expect(await screen.findByText("Late")).toBeTruthy();
   });
 
+  it("keeps the around-the-stop list when a route search the owner started answers late, after the stops dropped to one", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.mocked(api.deleteStop).mockResolvedValue(undefined as never);
+    let resolveRoute!: (v: { suggestions: import("@/lib/types").Suggestion[] }) => void;
+    vi.mocked(api.suggestions).mockImplementationOnce(() => new Promise((r) => { resolveRoute = r; }));
+    vi.mocked(api.suggestions).mockResolvedValueOnce({ suggestions: [{ osmId: "node/5", name: "Around A", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+    await openMyTrip();
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/\d mi\b/));
+    await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+    await openStops();
+    await userEvent.click(screen.getByRole("button", { name: "Delete B" }));
+    await confirmDeleteStop();
+    await userEvent.click(await screen.findByRole("tab", { name: /^Suggestions/ }));
+    expect(await screen.findByText("Around A")).toBeTruthy();
+    await act(async () => { resolveRoute({ suggestions: [{ osmId: "node/6", name: "Corridor spot", lat: 37.8, lng: -119.6, kind: "viewpoint" }] }); });
+    expect(screen.getByText("Around A")).toBeTruthy();
+    expect(screen.queryByText("Corridor spot")).toBeNull();
+  });
+
+  it("does not stay on Searching when the stops drop to one and then to none while a route search is in flight", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.mocked(api.deleteStop).mockResolvedValue(undefined as never);
+    let resolveRoute!: (v: { suggestions: import("@/lib/types").Suggestion[] }) => void;
+    vi.mocked(api.suggestions).mockImplementationOnce(() => new Promise((r) => { resolveRoute = r; }));
+    vi.mocked(api.suggestions).mockImplementationOnce(() => new Promise(() => {})); // the lone-stop search never answers
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+    await openMyTrip();
+    await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/\d mi\b/));
+    await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
+    await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+    await openStops();
+    await userEvent.click(screen.getByRole("button", { name: "Delete B" }));
+    await confirmDeleteStop();
+    await waitFor(() => expect(screen.getAllByTestId("stop-row")).toHaveLength(1));
+    await userEvent.click(screen.getByRole("button", { name: "Delete A" }));
+    await confirmDeleteStop();
+    await waitFor(() => expect(screen.queryAllByTestId("stop-row")).toHaveLength(0));
+    await act(async () => { resolveRoute({ suggestions: [] }); });
+    await userEvent.click(screen.getByRole("tab", { name: /^Suggestions/ }));
+    await waitFor(() => expect(screen.queryByText("Searching…")).toBeNull());
+  });
+
   it("does not stay on Searching when the stops change and revert while a search is in flight", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     let resolveSearch!: (v: { suggestions: import("@/lib/types").Suggestion[] }) => void;
@@ -952,6 +996,8 @@ describe("TripEditor", () => {
       await user.click(screen.getByRole("button", { name: "Optimize route" }));
       const sent = vi.mocked(api.optimizeOrder).mock.calls[0]!;
       expect(sent[0]).toEqual(four.slice(1).map((x) => [x.lng, x.lat]));
+      // The trip is under way, so the optimizer is told to keep the start rather than search for a better one.
+      expect(sent[1]).toMatchObject({ fixDeparture: true });
       await waitFor(() => expect(api.reorderStops).toHaveBeenCalledWith("t1", ["a", "b", "d", "c"]));
       // The trip has started: its start time is not moved by the re-plan.
       await waitFor(() => expect(api.updateTrip).toHaveBeenCalled());

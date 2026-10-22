@@ -244,19 +244,24 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     const have = suggestionsStateRef.current;
     if (have?.status === "done" && (JSON.parse(have.key) as LngLat[]).some(([x, y]) => haversineMeters({ lat, lng }, { lat: y, lng: x }) < SAME_AREA_M)) return;
     let cancelled = false;
+    // This search replaces any the owner asked for along the route: a late answer from that one must not overwrite this list.
+    const prevSeq = suggestionsSeq.current;
+    const seq = ++suggestionsSeq.current;
     api.suggestions({ around: [lng, lat] }, { enrich: false }).then(
       ({ suggestions: found }) => {
-        if (cancelled) return;
+        if (cancelled || seq !== suggestionsSeq.current) return;
         const items = found.filter((s) => haversineMeters({ lat, lng }, s) >= ALREADY_A_STOP_M);
         setSuggestionsState({ key: waypointKey, items, status: "done", error: null, shown: POPULARITY_BATCH });
       },
       (e: unknown) => {
-        if (cancelled) return;
+        if (cancelled || seq !== suggestionsSeq.current) return;
         setSuggestionsState({ key: waypointKey, items: [], status: "error", error: errorMessage(e, "Couldn't load suggestions. Please retry.") });
       },
     );
     return () => {
       cancelled = true;
+      // Cancelled before anyone replaced it: give the number back, so the search it displaced can still write (else "Searching…" sticks).
+      if (suggestionsSeq.current === seq) suggestionsSeq.current = prevSeq;
     };
   }, [waypointKey]);
 
@@ -443,7 +448,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const tail = before.slice(anchor);
       // Leaving the last visited stop: when the current route says the owner got there, plus the time spent there.
       const anchorArrival = done > 1 ? arrivals[anchor] : null;
-      const planFrom = anchorArrival ? new Date(anchorArrival.getTime() + before[anchor].dwellMinutes * 60_000).toISOString() : previousDepartAt;
+      const planFrom = anchorArrival ? new Date(anchorArrival.getTime() + before[anchor].dwellMinutes * 60_000).toISOString() : (previousDepartAt ?? (done > 0 ? departAt : null));
       // Two stops have nothing to reorder (the optimizer needs three), so Optimize only records the state.
       if (tail.length < 3) {
         await saveTrip({ routeOptimizedFor: routeSignature(trip.plannedDate, before) });
@@ -454,6 +459,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         plannedDate: trip.plannedDate,
         ...(planFrom ? { departAt: planFrom } : {}),
         focus: settings.optimizeFocus,
+        // A trip under way keeps its start: the order and the notes are worked out for the time that will actually apply.
+        ...(done > 0 ? { fixDeparture: true } : {}),
       });
       if (
         idsKeyRef.current !== startKey ||

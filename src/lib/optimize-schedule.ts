@@ -85,6 +85,8 @@ type ScheduleInput = {
   preferredDeparture?: Date;
   /** "priority" (default) weighs High and Must stops heavily; "time" weighs every stop alike. */
   focus?: "priority" | "time";
+  /** Leave at `preferredDeparture` (else the default) and search only the order: for a trip already under way, whose start cannot move. */
+  fixedDeparture?: boolean;
 };
 
 function plannedSearch(input: ScheduleInput):
@@ -93,7 +95,7 @@ function plannedSearch(input: ScheduleInput):
   const { durations, stops, defaultDeparture, preferredDeparture } = input;
   const n = stops.length;
   const d = sanitised(durations);
-  const ctx = new Evaluator(d, stops, defaultDeparture.getTime(), preferredDeparture?.getTime(), input.focus);
+  const ctx = new Evaluator(d, stops, defaultDeparture.getTime(), preferredDeparture?.getTime(), input.focus, input.fixedDeparture);
   if (n < 2) return { done: { order: optimizeOrder(durations), departAt: defaultDeparture, misses: [], dark: [], timed: false } };
   if (stops.every((s) => s.lightPref === "any")) {
     // Nothing to weigh but driving and darkness: when the shortest order is in daylight at the start in use, it is the answer.
@@ -120,13 +122,13 @@ const sanitised = (durations: number[][]) => durations.map((row) => row.map((v) 
 
 /** The objective optimizeSchedule minimises, for a given order and departure (for comparing searches). */
 export function scheduleCost(input: ScheduleInput, order: number[], departAt: Date): number {
-  const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus);
+  const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus, input.fixedDeparture);
   return ctx.cost(order, departAt.getTime());
 }
 
 /** Reference search over every order: slow beyond 8 stops (n! x departures), meant for checking the heuristic in tests. */
 export function optimizeScheduleExact(input: ScheduleInput): Schedule {
-  const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus);
+  const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus, input.fixedDeparture);
   const { order, departMs } = exactSearch(ctx, input.stops.length);
   return { order, departAt: new Date(departMs), misses: ctx.misses(order, departMs), dark: ctx.darkVisits(order, departMs), timed: true };
 }
@@ -149,10 +151,11 @@ class Evaluator {
     defaultMs: number,
     preferredMs?: number,
     focus: "priority" | "time" = "priority",
+    fixed = false,
   ) {
-    // First wins ties: the preferred departure, then the default, then the grid around the default.
-    this.candidates = preferredMs !== undefined && preferredMs !== defaultMs ? [preferredMs, defaultMs] : [defaultMs];
-    for (let t = defaultMs - 3_600_000; t <= defaultMs + 14 * 3_600_000; t += STEP_MS) {
+    // First wins ties: the preferred departure, then the default, then the grid around the default. A fixed start is the only one.
+    this.candidates = fixed ? [preferredMs ?? defaultMs] : preferredMs !== undefined && preferredMs !== defaultMs ? [preferredMs, defaultMs] : [defaultMs];
+    for (let t = defaultMs - 3_600_000; !fixed && t <= defaultMs + 14 * 3_600_000; t += STEP_MS) {
       if (t !== defaultMs && t !== preferredMs) this.candidates.push(t);
     }
     this.windowCache = stops.map(() => new Map());

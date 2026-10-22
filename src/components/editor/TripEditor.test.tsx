@@ -1169,7 +1169,7 @@ describe("TripEditor", () => {
         render(<TripEditor initialTrip={trip2(null)} />);
         await openMyTrip();
         await user.click(screen.getByRole("button", { name: "Optimize route" }));
-        await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("No sunrise or sunset that day at B, so no daylight rule applies there"));
+        await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("No sunrise or sunset that day at B, so no daylight rule applies there."));
       });
 
       it("treats a searched start as light-aware when the answer carries a departure", async () => {

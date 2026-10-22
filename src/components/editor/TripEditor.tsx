@@ -57,7 +57,7 @@ const errorMessage = (e: unknown, fallback: string) => (e instanceof Error ? e.m
 /** Sentences joined by ". ", without doubling a full stop that one of them already ends with; the last one keeps its own. */
 function joinNotes(parts: (string | null)[]): string {
   const kept = parts.filter((t): t is string => !!t);
-  return kept.map((t, i) => (i < kept.length - 1 ? t.replace(/\.$/, "") : t)).join(". ");
+  return kept.map((t, i) => (i < kept.length - 1 ? t.replace(/\.$/, "") : t.replace(/\.?$/, "."))).join(". ");
 }
 
 /** True when both are the same moment (or both absent), whatever their ISO spelling. */

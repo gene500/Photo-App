@@ -184,6 +184,14 @@ describe("POST /api/optimize", () => {
       expect(body.departAt).toBeNull();
     });
 
+    it("does not move the start for polar stops that ask for sunrise or sunset light", async () => {
+      const arctic = [[15, 78], [15, 78.5], [15, 79]];
+      const lit = anyStops.map((s) => ({ ...s, lightPref: "sunset" }));
+      const body = await (await post(arctic, { plannedDate: "2026-06-21", stops: lit, departAt: night })).json();
+      expect(body.polar).toEqual([0, 1, 2]);
+      expect(body.departAt).toBeNull();
+    });
+
     it("leaves polar empty and the start untouched for an ordinary daylight trip", async () => {
       const body = await (await post(coords, { plannedDate: "2026-07-01", stops: anyStops })).json();
       expect(body.polar).toEqual([]);

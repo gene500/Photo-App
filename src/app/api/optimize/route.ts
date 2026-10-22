@@ -23,7 +23,8 @@ export const POST = handle(async (req: Request) => {
       const stops = coordinates.map(([lng, lat], i) => ({
         lat,
         lng,
-        lightPref: prefs?.[i]?.lightPref ?? ("any" as const),
+        // A stop with no sunrise or sunset that day has no light to chase, so it must not make the start time move.
+        lightPref: daylightInterval(lat, lng, date) ? (prefs?.[i]?.lightPref ?? ("any" as const)) : ("any" as const),
         dwellMinutes: prefs?.[i]?.dwellMinutes ?? 30,
         priority: prefs?.[i]?.priority ?? ("normal" as const),
       }));

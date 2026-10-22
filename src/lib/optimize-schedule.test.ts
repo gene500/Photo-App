@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { departureTime, getSunWindows } from "./best-time";
+import { daylightInterval, departureTime, getSunWindows } from "./best-time";
 import { lightWindows } from "./light-windows";
 import { optimizeOrder } from "./optimize-order";
 import { optimizeSchedule, optimizeScheduleAsync, isExactOptimization, optimizeScheduleExact, scheduleCost } from "./optimize-schedule";
@@ -49,7 +49,7 @@ describe("priority", () => {
 
 describe("optimizeSchedule", () => {
   it("matches optimizeOrder and keeps the default departure when every stop is any", () => {
-    const stops = [0, 3, 1, 2].map((lat) => stop("any", 30, { lat }));
+    const stops = [0, 3, 1, 2].map((i) => stop("any", 30, { lat: base.lat + i * 0.01 }));
     const d = [0, 1, 2, 3].map((i) => [0, 1, 2, 3].map((j) => Math.abs(i - j) * 600));
     const r = optimizeSchedule({ durations: d, stops, plannedDate: DATE, defaultDeparture });
     expect(r.order).toEqual(optimizeOrder(d));
@@ -153,13 +153,83 @@ describe("optimizeSchedule", () => {
   });
 
   it("puts sunrise stops before sunset stops when a day of stops lies between them", () => {
-    // Short drives and long stays at the unconstrained stops fill the day, so driving overnight cannot be cheaper.
+    // Short drives and long stays at the unconstrained stops fill the day (but still fit in its daylight), so driving overnight cannot be cheaper.
     const kinds: LightPref[] = ["any", "sunrise", "any", "sunset", "sunrise", "any", "sunset", "any", "any", "sunrise", "any", "sunset"];
-    const stops = kinds.map((k, i) => stop(k, i === 0 ? 10 : k === "any" ? 150 : 20, { lat: base.lat + i * 0.01 }));
+    const stops = kinds.map((k, i) => stop(k, i === 0 ? 10 : k === "any" ? 140 : 20, { lat: base.lat + i * 0.01 }));
     const r = optimizeSchedule({ durations: flat(12, 300), stops, plannedDate: DATE, defaultDeparture });
     const pos = (p: LightPref) => r.order.map((i, k) => (stops[i]!.lightPref === p ? k : -1)).filter((k) => k >= 0);
-    expect(r.misses).toEqual([]);
+    // Leaving before dawn would have met every sunrise window but put the first stop in the dark, so a few minutes of light are traded for daylight.
+    expect(r.dark).toEqual([]);
+    expect(Math.max(...r.misses.map((m) => m.minutes))).toBeLessThan(60);
     expect(Math.max(...pos("sunrise"))).toBeLessThan(Math.min(...pos("sunset")));
+  });
+});
+
+describe("daylight", () => {
+  const anyStops = (n: number, dwell: number, over: Partial<typeof base> = {}) => Array.from({ length: n }, () => stop("any", dwell, over));
+  const lateStart = new Date(defaultDeparture.getTime() + 15 * 3600_000); // about 9 pm, after sunset
+
+  it("keeps the shortest order at the default start, and says nothing is dark, when every visit is in daylight", () => {
+    const stops = anyStops(4, 30);
+    const d = [0, 1, 2, 3].map((i) => [0, 1, 2, 3].map((j) => Math.abs(i - j) * 600));
+    const r = optimizeSchedule({ durations: d, stops, plannedDate: DATE, defaultDeparture });
+    expect(r.order).toEqual(optimizeOrder(d));
+    expect(r.dark).toEqual([]);
+    expect(r.timed).toBe(false);
+    expect(r.departAt).toEqual(defaultDeparture);
+  });
+
+  it("moves a start that would put visits in the dark, even when no stop has a light preference", () => {
+    const input = { durations: flat(3, 1800), stops: anyStops(3, 30), plannedDate: DATE, defaultDeparture, preferredDeparture: lateStart };
+    const r = optimizeSchedule(input);
+    expect(r.timed).toBe(true);
+    expect(r.dark).toEqual([]);
+    expect(r.departAt.getTime()).toBeLessThan(lateStart.getTime());
+    const [rise, set] = daylightInterval(base.lat, base.lng, DATE)!;
+    expect(r.departAt.getTime()).toBeGreaterThanOrEqual(rise.getTime() - 3600_000);
+    expect(r.departAt.getTime() + 3600_000 + 2 * 1800_000).toBeLessThanOrEqual(set.getTime());
+  });
+
+  it("with the time focus only reports the dark visits: the order and start stay as they were", () => {
+    const input = { durations: flat(3, 1800), stops: anyStops(3, 30), plannedDate: DATE, defaultDeparture, preferredDeparture: lateStart, focus: "time" as const };
+    const r = optimizeSchedule(input);
+    expect(r.order).toEqual(optimizeOrder(input.durations));
+    expect(r.timed).toBe(false);
+    expect(r.dark.map((m) => m.stopIndex).sort()).toEqual([0, 1, 2]);
+    expect(r.dark.every((m) => m.minutes > 0 && m.priority === "normal")).toBe(true);
+  });
+
+  it("does not call a visit dark while it touches the stop's own preferred light", () => {
+    const [rise] = daylightInterval(base.lat, base.lng, DATE)!;
+    const preferredDeparture = new Date(rise.getTime() - 8 * 60_000); // inside the 20 min before sunrise that a sunrise shot starts in; the next stop is reached as the sun comes up
+    const r = optimizeSchedule({ durations: flat(2, 60), stops: [stop("sunrise", 5), stop("any", 5)], plannedDate: DATE, defaultDeparture, preferredDeparture });
+    expect(r.misses).toEqual([]);
+    expect(r.dark.map((m) => m.stopIndex)).toEqual([]);
+    expect(r.departAt).toEqual(preferredDeparture);
+  });
+
+  it("applies no daylight rule where the sun does not rise or set that day (polar day and night)", () => {
+    const polar = { lat: 78, lng: 15 };
+    for (const date of ["2026-06-21", "2026-12-21"]) {
+      const dep = departureTime(polar, date);
+      const r = optimizeSchedule({ durations: flat(3, 1800), stops: anyStops(3, 600, polar), plannedDate: date, defaultDeparture: dep, preferredDeparture: new Date(dep.getTime() + 15 * 3600_000) });
+      expect(r.dark, date).toEqual([]);
+      expect(r.timed, date).toBe(false);
+    }
+  });
+
+  it("at high latitude in midwinter, fits visits in the few hours of light and reports the ones that cannot", () => {
+    const fairbanks = { lat: 64.8, lng: -147.7 };
+    const date = "2026-12-21";
+    const dep = departureTime(fairbanks, date);
+    const fits = optimizeSchedule({ durations: flat(3, 1800), stops: anyStops(3, 30, fairbanks), plannedDate: date, defaultDeparture: dep });
+    expect(fits.dark).toEqual([]);
+    expect(fits.timed).toBe(false);
+    // Two 2 h drives and three stays need over 5 h of the ~3.7 h of light: something is left in the dark, and it is reported rather than dropped.
+    const tooLong = optimizeSchedule({ durations: flat(3, 7200), stops: anyStops(3, 30, fairbanks), plannedDate: date, defaultDeparture: dep });
+    expect(tooLong.dark.length).toBeGreaterThan(0);
+    expect(tooLong.dark.every((m) => m.minutes > 0 && m.stopIndex >= 0 && m.stopIndex < 3)).toBe(true);
+    expect([...tooLong.order].sort()).toEqual([0, 1, 2]);
   });
 });
 

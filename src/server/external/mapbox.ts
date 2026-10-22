@@ -61,6 +61,7 @@ const matrixCache = new TtlCache<number[][]>(LOOKUP_TTL_MS, 100);
 export function clearMapboxCaches(): void {
   directionsCache.clear();
   geocodeCache.clear();
+  areaCache.clear();
   reverseCache.clear();
   searchCache.clear();
   retrieveCache.clear();
@@ -168,6 +169,42 @@ export async function geocode(query: string, options: GeocodeOptions = {}, fetch
     }));
   geocodeCache.set(cacheKey, places);
   return places;
+}
+
+/** A place or region the map can frame: its centre and, for areas, the box around it ([west, south, east, north]). */
+export type Area = { lat: number; lng: number; bbox?: [number, number, number, number] };
+type AreaResponse = { features?: { geometry?: { coordinates?: unknown }; bbox?: unknown; properties?: { bbox?: unknown } }[] };
+const areaCache = new TtlCache<Area | null>(LOOKUP_TTL_MS, 300);
+const isBbox = (b: unknown): b is [number, number, number, number] =>
+  Array.isArray(b) && b.length === 4 && b.every((n) => typeof n === "number" && Number.isFinite(n)) && b[0] >= -180 && b[2] <= 180 && b[1] >= -90 && b[3] <= 90 && b[0] < b[2] && b[1] < b[3];
+
+/**
+ * Where a trip name points: a city or locality first ("LA" is Los Angeles, not Louisiana), then a district, region or
+ * country ("Yosemite", "Utah"). null when nothing matches, so the caller leaves the map alone.
+ */
+export async function locateArea(query: string, fetchImpl: typeof fetch = fetch): Promise<Area | null> {
+  const q = query.trim();
+  if (isFakeExternal()) {
+    const p = fakeGeocode(q)[0];
+    return p ? { lat: p.lat, lng: p.lng } : null;
+  }
+  const key = q.toLowerCase();
+  const cached = areaCache.get(key);
+  if (cached !== undefined) return cached;
+  for (const types of ["place,locality,neighborhood", "district,region,country"]) {
+    const url = `${MAPBOX_BASE}/search/geocode/v6/forward?q=${encodeURIComponent(q)}&types=${types}&limit=1&autocomplete=true&language=en&access_token=${encodeURIComponent(token())}`;
+    const { ok, body } = await getJson<AreaResponse>(url, fetchImpl, "Couldn't reach the place search service");
+    if (!ok || !body?.features) throw new ExternalServiceError("Place search failed. Please try again.");
+    const f = body.features[0];
+    if (f && isLngLat(f.geometry?.coordinates)) {
+      const bbox = [f.bbox, f.properties?.bbox].find(isBbox);
+      const area: Area = { lng: f.geometry.coordinates[0], lat: f.geometry.coordinates[1], ...(bbox ? { bbox } : {}) };
+      areaCache.set(key, area);
+      return area;
+    }
+  }
+  areaCache.set(key, null);
+  return null;
 }
 
 type SearchBoxSuggestion = {

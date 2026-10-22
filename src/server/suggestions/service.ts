@@ -7,6 +7,7 @@ import { createRingTester } from "./places-grid";
 import { clearCellCache, localPlacesAround, localPlacesInRing, localPlacesInRingPartial } from "./local-places";
 import { fetchOverpass } from "./overpass";
 import { parseOverpassResponse, SUGGESTION_CAP } from "./parse";
+import { sharedCacheDisabled, sharedGet, sharedPut } from "./shared-cache";
 import { enrichPopularity, POPULARITY_MAX_CANDIDATES, resetSharedCounter } from "./popularity";
 
 type LngLatLiteral = { lat: number; lng: number };
@@ -23,6 +24,19 @@ const cache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS, 100, () => Dat
 /** Background refreshes underway for stale entries. */
 const refreshing = new Set<string>();
 const rawCache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS, 100, () => Date.now());
+
+/** Remembers an Overpass answer in memory and for the other instances (a local-copy answer is quick to rebuild, so it stays in memory only). */
+function keepRaw(key: string, parsed: Suggestion[], deps: Deps): void {
+  rawCache.set(key, parsed);
+  persist(key, "raw", parsed, deps);
+}
+
+/** Writes to the shared store without making the search wait; kept alive past the response where the route allows it. */
+function persist(key: string, kind: "enriched" | "raw", value: Suggestion[], deps: Deps): void {
+  if (sharedCacheDisabled()) return;
+  const write = sharedPut(key, kind, value);
+  deps.defer?.(write);
+}
 
 /** Most Overpass calls kept running in the background per instance after a thin local answer was shown. */
 const MAX_LATE_ASKS = 10;
@@ -93,7 +107,7 @@ async function loadRaw(key: string, buildQuery: () => string, local: () => Promi
   if (!nearby?.length) {
     const { parsed, truncated } = await asked;
     // A truncated answer is shown, but not remembered as the whole corridor.
-    if (!truncated) rawCache.set(key, parsed);
+    if (!truncated) keepRaw(key, parsed, deps);
     return { parsed, degraded: truncated };
   }
   // Something local to show: don't make the first page wait out a slow or failing Overpass.
@@ -108,7 +122,7 @@ async function loadRaw(key: string, buildQuery: () => string, local: () => Promi
       // Overpass is still working: remember its answer if it comes, so the next search is complete.
       if (!lateAsks.has(key)) {
         lateAsks.set(key, asked);
-        const settle = asked.then((a) => { if (!a.truncated) rawCache.set(key, a.parsed); }, () => undefined).finally(() => {
+        const settle = asked.then((a) => { if (!a.truncated) keepRaw(key, a.parsed, deps); }, () => undefined).finally(() => {
           if (lateAsks.get(key) === asked) lateAsks.delete(key);
         });
         deps.defer?.(settle);
@@ -116,7 +130,7 @@ async function loadRaw(key: string, buildQuery: () => string, local: () => Promi
       // A thin answer shown only because Overpass was slow must not be remembered as the real result.
       return { parsed: thin, degraded: true };
     }
-    if (!won.truncated) rawCache.set(key, won.parsed);
+    if (!won.truncated) keepRaw(key, won.parsed, deps);
     return { parsed: won.parsed, degraded: won.truncated };
   } catch {
     return { parsed: thin, degraded: true };
@@ -131,6 +145,20 @@ async function runSearch(key: string, buildQuery: () => string, local: () => Pro
   if (done) {
     deps.onResult?.({ degraded: false });
     return done;
+  }
+  // Another instance may already have built it: take its result instead of searching again.
+  const shared = await sharedGet(key, SUGGESTION_CACHE_TTL_MS);
+  if (shared.raw && !rawCache.get(key)) rawCache.set(key, shared.raw.value);
+  if (shared.enriched) {
+    cache.set(key, shared.enriched.value);
+    if (enrich) {
+      deps.onResult?.({ degraded: false });
+      return shared.enriched.value;
+    }
+  }
+  if (!enrich && shared.raw) {
+    deps.onResult?.({ degraded: false });
+    return shared.raw.value;
   }
   if (enrich) {
     // Stale-while-revalidate: a result past its TTL is still far better than making the user wait, so show it now and
@@ -176,7 +204,10 @@ async function compute(key: string, buildQuery: () => string, local: () => Promi
   // Cache only a reasonably complete enrichment: a half-finished one would be served for the whole TTL.
   const head = Math.min(suggestions.length, POPULARITY_MAX_CANDIDATES);
   const counted = suggestions.filter((s) => s.popularity !== undefined).length;
-  if (!degraded && (head === 0 || counted * 2 >= head)) cache.set(key, suggestions);
+  if (!degraded && (head === 0 || counted * 2 >= head)) {
+    cache.set(key, suggestions);
+    persist(key, "enriched", suggestions, deps);
+  }
   return suggestions;
 }
 

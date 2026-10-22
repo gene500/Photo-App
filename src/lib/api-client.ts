@@ -65,7 +65,7 @@ export const api = {
   directions: (coordinates: LngLat[]) =>
     request<{ route: RouteResult }>("/api/directions", send("POST", { coordinates })),
   optimizeOrder: (coordinates: LngLat[], light?: { stops: { lightPref: LightPref; priority?: StopPriority; dwellMinutes: number }[]; plannedDate: string; departAt?: string; focus?: "priority" | "time" }) =>
-    request<{ order: number[]; complete?: boolean; departAt?: string | null; misses?: { stopIndex: number; minutes: number; priority?: StopPriority }[] }>(
+    request<{ order: number[]; complete?: boolean; departAt?: string | null; misses?: { stopIndex: number; minutes: number; priority?: StopPriority }[]; dark?: { stopIndex: number; minutes: number; priority?: StopPriority }[]; polar?: number[] }>(
       "/api/optimize",
       send("POST", { coordinates, ...light }),
     ),
@@ -84,6 +84,9 @@ export const api = {
     request<{ place: Place }>(`/api/geocode/retrieve?id=${encodeURIComponent(id)}&session=${session}`),
   reverseGeocode: (lat: number, lng: number) =>
     request<{ place: Place }>(`/api/reverse-geocode?lat=${lat.toFixed(6)}&lng=${lng.toFixed(6)}`),
+  /** Where a trip name points (a city, park region or state), or null. */
+  locate: (q: string) =>
+    request<{ area: { lat: number; lng: number; bbox?: [number, number, number, number] } | null }>(`/api/locate?q=${encodeURIComponent(q)}`),
   placePhoto: (p: { name: string; lat: number; lng: number }) =>
     request<{ photo: PlacePhoto | null }>(
       `/api/place-photo?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}&name=${encodeURIComponent(p.name)}`,

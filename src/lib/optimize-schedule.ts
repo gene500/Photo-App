@@ -1,4 +1,4 @@
-import { getSunWindows } from "./best-time";
+import { daylightInterval, getSunWindows } from "./best-time";
 import { lightWindows } from "./light-windows";
 import { EXACT_MAX, optimizeOrder } from "./optimize-order";
 import type { LightPref, StopPriority } from "./types";
@@ -13,8 +13,14 @@ export type ScheduleMiss = {
   priority: StopPriority;
 };
 
-/** `complete` is false when the time budget ended the search early, so the order is good but not necessarily the best the search could find. */
-export type Schedule = { order: number[]; departAt: Date; misses: ScheduleMiss[]; complete?: boolean };
+/** A stop whose whole visit falls outside daylight (and outside its own preferred light); `minutes` is the gap to the nearest daylight. */
+export type ScheduleDark = { stopIndex: number; minutes: number; priority: StopPriority };
+
+/**
+ * `dark` lists the visits that miss daylight; `timed` is true when the departure was searched (so `departAt` is a
+ * real answer), false when the shortest order at the default start was kept as it was.
+ * `complete` is false when the time budget ended the search early, so the order is good but not necessarily the best the search could find. */
+export type Schedule = { order: number[]; departAt: Date; misses: ScheduleMiss[]; dark: ScheduleDark[]; timed: boolean; complete?: boolean };
 
 /** One minute of missed light costs as much as this many seconds of driving. */
 const MISS_WEIGHT_SECONDS_PER_MIN = 3 * 60;
@@ -37,8 +43,9 @@ type Interval = [number, number];
 
 /**
  * Pick the visiting order (stop 0 stays first) and the departure time that minimise
- * drive seconds + 3 x 60 x minutes of missed preferred light.
- * With no light preferences this is exactly the shortest-drive order at the default departure.
+ * drive seconds + 3 x 60 x minutes of missed preferred light or of a visit in the dark.
+ * With no light preferences and no visit in the dark this is exactly the shortest-drive order at the default departure.
+ * Under the time focus darkness is only reported, never traded against driving.
  */
 export function optimizeSchedule(input: ScheduleInput): Schedule {
   const plan = plannedSearch(input);
@@ -85,11 +92,17 @@ function plannedSearch(input: ScheduleInput):
   | { steps: (over: () => boolean) => Generator<void, Solution>; finish: (sol: Solution) => Schedule } {
   const { durations, stops, defaultDeparture, preferredDeparture } = input;
   const n = stops.length;
-  if (stops.every((s) => s.lightPref === "any") || n < 2) {
-    return { done: { order: optimizeOrder(durations), departAt: defaultDeparture, misses: [] } };
-  }
   const d = sanitised(durations);
   const ctx = new Evaluator(d, stops, defaultDeparture.getTime(), preferredDeparture?.getTime(), input.focus);
+  if (n < 2) return { done: { order: optimizeOrder(durations), departAt: defaultDeparture, misses: [], dark: [], timed: false } };
+  if (stops.every((s) => s.lightPref === "any")) {
+    // Nothing to weigh but driving and darkness: when the shortest order is in daylight at the start in use, it is the answer.
+    const order = optimizeOrder(durations);
+    const startMs = ctx.candidates[0]!;
+    if (input.focus === "time" || !ctx.anyDark(order, startMs)) {
+      return { done: { order, departAt: defaultDeparture, misses: [], dark: ctx.darkVisits(order, startMs), timed: false } };
+    }
+  }
   return {
     steps: (over) => (n - 1 <= EXACT_MAX_STOPS ? exactSteps(ctx, n, over) : localSteps(ctx, n, over)),
     finish: ({ order, departMs }) => ({
@@ -97,6 +110,8 @@ function plannedSearch(input: ScheduleInput):
       departAt:
         departMs === preferredDeparture?.getTime() ? preferredDeparture : departMs === defaultDeparture.getTime() ? defaultDeparture : new Date(departMs),
       misses: ctx.misses(order, departMs),
+      dark: ctx.darkVisits(order, departMs),
+      timed: true,
     }),
   };
 }
@@ -113,14 +128,19 @@ export function scheduleCost(input: ScheduleInput, order: number[], departAt: Da
 export function optimizeScheduleExact(input: ScheduleInput): Schedule {
   const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus);
   const { order, departMs } = exactSearch(ctx, input.stops.length);
-  return { order, departAt: new Date(departMs), misses: ctx.misses(order, departMs) };
+  return { order, departAt: new Date(departMs), misses: ctx.misses(order, departMs), dark: ctx.darkVisits(order, departMs), timed: true };
 }
 
 class Evaluator {
   readonly candidates: number[];
-  private readonly windowCache: Map<number, Interval[]>[];
+  private readonly windowCache: Map<number, { light: Interval[]; daylight: Interval | null }>[];
+  /** The last day looked up per stop, which nearly every following lookup repeats. */
+  private readonly lastDay: number[];
+  private readonly lastSun: ({ light: Interval[]; daylight: Interval | null } | undefined)[];
   private readonly constrained: boolean[];
   private readonly weight: number[];
+  /** Weight of a minute in the dark per stop: its priority weight, none under the time focus (darkness is then only reported). */
+  private readonly darkWeight: number[];
   private readonly arrivalOffsets: Float64Array;
 
   constructor(
@@ -136,9 +156,12 @@ class Evaluator {
       if (t !== defaultMs && t !== preferredMs) this.candidates.push(t);
     }
     this.windowCache = stops.map(() => new Map());
+    this.lastDay = stops.map(() => NaN);
+    this.lastSun = stops.map(() => undefined);
     this.constrained = stops.map((s) => s.lightPref !== "any");
     const weights = focus === "time" ? FLAT_WEIGHT : PRIORITY_WEIGHT;
     this.weight = stops.map((s) => weights[s.priority ?? "normal"]);
+    this.darkWeight = focus === "time" ? stops.map(() => 0) : this.weight;
     this.arrivalOffsets = new Float64Array(stops.length);
   }
 
@@ -160,18 +183,27 @@ class Evaluator {
     return off;
   }
 
-  /** Light windows (epoch ms) of stop `i` on the solar day containing `arrivalMs`; cached per day. */
-  private windows(i: number, arrivalMs: number): Interval[] {
+  /** Light windows and daylight (epoch ms) of stop `i` on the solar day containing `arrivalMs`; cached per day. */
+  private sunDay(i: number, arrivalMs: number): { light: Interval[]; daylight: Interval | null } {
     const s = this.stops[i]!;
     const day = Math.floor((arrivalMs + s.lng * 240_000) / DAY_MS);
+    if (day === this.lastDay[i]) return this.lastSun[i]!;
     const cache = this.windowCache[i]!;
     let w = cache.get(day);
     if (!w) {
       const date = new Date(day * DAY_MS).toISOString().slice(0, 10);
-      w = lightWindows(s.lightPref, getSunWindows(s.lat, s.lng, date)).map(([a, b]) => [a.getTime(), b.getTime()] as Interval);
+      const light = lightWindows(s.lightPref, getSunWindows(s.lat, s.lng, date)).map(([a, b]) => [a.getTime(), b.getTime()] as Interval);
+      const dl = daylightInterval(s.lat, s.lng, date);
+      w = { light, daylight: dl ? [dl[0].getTime(), dl[1].getTime()] : null };
       cache.set(day, w);
     }
+    this.lastDay[i] = day;
+    this.lastSun[i] = w;
     return w;
+  }
+
+  private windows(i: number, arrivalMs: number): Interval[] {
+    return this.sunDay(i, arrivalMs).light;
   }
 
   private missAt(i: number, arrivalMs: number): number {
@@ -186,12 +218,36 @@ class Evaluator {
     return best / 60_000;
   }
 
+  /**
+   * Minutes between a visit and the nearest daylight (sunrise to sunset, or the stop's own preferred light), 0 when the
+   * visit touches either. A day without sunrise or sunset has no daylight rule.
+   */
+  private darkAt(i: number, arrivalMs: number): number {
+    const { light, daylight } = this.sunDay(i, arrivalMs);
+    if (!daylight) return 0;
+    const end = arrivalMs + this.stops[i]!.dwellMinutes * 60_000;
+    if (end >= daylight[0] && arrivalMs <= daylight[1]) return 0;
+    let best = end < daylight[0] ? daylight[0] - end : arrivalMs - daylight[1];
+    for (const [a, b] of light) {
+      if (end >= a && arrivalMs <= b) return 0;
+      best = Math.min(best, end < a ? a - end : arrivalMs - b);
+    }
+    return best / 60_000;
+  }
+
+  /** Whether any visit of `order` falls wholly in the dark when leaving at `departMs`. */
+  anyDark(order: number[], departMs: number): boolean {
+    const off = this.offsets(order);
+    return order.some((i, k) => this.darkAt(i, departMs + off[k]!) > 0);
+  }
+
   /** Total missed minutes for `order` when leaving at `departMs`, each stop counted by its priority weight. */
   missTotal(order: number[], departMs: number, off = this.offsets(order)): number {
     let total = 0;
     for (let k = 0; k < order.length; k++) {
       const i = order[k]!;
       if (this.constrained[i]) total += this.weight[i]! * this.missAt(i, departMs + off[k]!);
+      if (this.darkWeight[i]) total += this.darkWeight[i]! * this.darkAt(i, departMs + off[k]!);
     }
     return total;
   }
@@ -223,6 +279,17 @@ class Evaluator {
       if (!this.constrained[i]) return;
       const minutes = this.missAt(i, departMs + off[k]!);
       if (minutes > 0) out.push({ stopIndex: i, minutes, pref: this.stops[i]!.lightPref, priority: this.stops[i]!.priority ?? "normal" });
+    });
+    return out;
+  }
+
+  /** The visits of `order` that fall wholly in the dark when leaving at `departMs`. */
+  darkVisits(order: number[], departMs: number): ScheduleDark[] {
+    const off = this.offsets(order);
+    const out: ScheduleDark[] = [];
+    order.forEach((i, k) => {
+      const minutes = this.darkAt(i, departMs + off[k]!);
+      if (minutes > 0) out.push({ stopIndex: i, minutes, priority: this.stops[i]!.priority ?? "normal" });
     });
     return out;
   }
@@ -279,6 +346,10 @@ function drain<T>(g: Generator<void, T>): T {
 }
 
 const MAX_ROUNDS = 25;
+/** Fractions along the departure grid that the seeded descents also start from. */
+const SPREAD_DEPARTURES = [0.25, 0.5, 0.75];
+/** Larger trips already spend their time budget on the seeded descents and restarts. */
+const SPREAD_MAX_STOPS = 12;
 
 /**
  * Extra perturbed restarts after the seeded descents. A fixed count per size so the answer is the same on every machine
@@ -298,6 +369,18 @@ function* localSteps(ctx: Evaluator, n: number, over: () => boolean): Generator<
     const sol = improve(ctx, seed);
     if (!best || sol.cost < best.cost - EPS) best = sol;
     yield;
+  }
+  // Darkness makes the best departure hard to reach from the default one, so small trips also descend from a few evenly spaced others.
+  if (n <= SPREAD_MAX_STOPS) {
+    for (const f of SPREAD_DEPARTURES) {
+      const at = ctx.candidates[Math.floor(f * (ctx.candidates.length - 1))]!;
+      for (const seed of seeds) {
+        const sol = improve(ctx, seed, at);
+        if (sol.cost < best!.cost - EPS) best = sol;
+        yield;
+      }
+      if (over()) return best!;
+    }
   }
   let state = 0x9e3779b9;
   const rand = (max: number) => {

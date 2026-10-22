@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decideFit, routeKey } from "./map-fit";
+import { decideFit, routeKey, selectionPadding } from "./map-fit";
 
 const base = { prevCount: 0, count: 2, route: null as string | null, fittedRoute: null as string | null, fitted: false };
 
@@ -33,5 +33,18 @@ describe("decideFit (route)", () => {
   it("frames a new route (re-Optimize or Undo) but not the same one again", () => {
     expect(decideFit({ ...base, prevCount: 2, fitted: true, route: "r2", fittedRoute: "r1" })).toBe("route");
     expect(decideFit({ ...base, prevCount: 2, fitted: true, route: "r1", fittedRoute: "r1" })).toBeNull();
+  });
+});
+
+describe("selectionPadding", () => {
+  const base = { top: 72, right: 64, bottom: 64, left: 400 };
+  it("keeps the base padding when no drawer covers the map", () => {
+    expect(selectionPadding(base, 0)).toEqual(base);
+  });
+  it("adds the docked Edit drawer's width on the right", () => {
+    expect(selectionPadding(base, 448)).toEqual({ ...base, right: 464 });
+  });
+  it("never shrinks an already larger right padding", () => {
+    expect(selectionPadding({ ...base, right: 500 }, 40)).toEqual({ ...base, right: 500 });
   });
 });

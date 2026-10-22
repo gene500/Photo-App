@@ -46,7 +46,7 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, trip, sug
   const open = snap !== "collapsed";
   const tabClass = (t: Tab) =>
     `min-h-9 flex-1 rounded-lg px-3 py-1.5 text-center text-sm transition ${tab === t ? "bg-surface font-medium text-foreground shadow-sm" : "text-muted hover:text-foreground"}`;
-  const arrowClass = "flex h-9 w-9 items-center justify-center rounded-full bg-hover text-base text-foreground ring-1 ring-border transition hover:bg-border focus-visible:outline-2 focus-visible:outline-accent-strong";
+  const arrowClass = "flex h-9 w-9 items-center justify-center rounded-full bg-hover text-2xl leading-none text-foreground ring-1 ring-border transition hover:bg-border focus-visible:outline-2 focus-visible:outline-accent-strong";
 
   return (
     <aside

@@ -8,8 +8,9 @@ import { cellRuns, cellsForCircle, cellsForRing, createRingTester, pointInRing }
 export type PlaceRow = { id: string; name: string; kind: string; lat: number; lng: number };
 
 /**
- * The local copy only holds the United States (the 50 states and DC). Anywhere else, or too near a border to be sure
- * nothing lies across it, the public Overpass servers are asked instead.
+ * The local copy holds the United States (the 50 states and DC), Canada, Mexico, South Korea and Japan. Anywhere else, the public Overpass
+ * servers are asked instead. Alaska west of its Canadian border, the Aleutians and Hawaii are boxes (the sea around
+ * them is Russia, Canada or open water); the rest is one ring.
  */
 const US_BOXES = [
   { minLat: 51, maxLat: 71.6, minLng: -168.2, maxLng: -141.2 }, // Alaska mainland, west to Cape Prince of Wales (Chukotka and Wrangel Island lie beyond, in Russia)
@@ -19,22 +20,44 @@ const US_BOXES = [
 ];
 
 /**
- * The lower 48, drawn a little inside the Canadian and Mexican borders (about 25 km, more near the Great Lakes), so a
- * point near a border is sent to Overpass rather than answered from US-only data. Coasts run out into the sea.
- * Points are [lng, lat].
+ * Mainland North America from the Yukon border to the Guatemala and Belize borders: the lower 48, Canada south of 76°N
+ * (the high Arctic islands go to Overpass), the Alaska panhandle and Mexico. Coasts run out into the sea, clear of
+ * Greenland, the Bahamas, Cuba and Central America. Points are [lng, lat].
  */
-const LOWER_48: LngLat[] = [
-  [-124.9, 48.45], [-123.9, 48.25], [-123.2, 48.2], [-123.0, 48.6], [-95.3, 48.6], [-94.5, 48.4], [-92.0, 48.0], [-89.9, 47.8], [-88.0, 47.6],
-  [-85.2, 46.6], [-84.8, 46.1], [-84.0, 45.5], [-83.9, 43.5], [-83.9, 41.7], [-83.0, 41.7], [-82.55, 41.72], [-82.5, 41.9], [-81.0, 42.0],
-  [-79.8, 42.1], [-77.5, 43.4], [-76.0, 43.6], [-74.8, 44.5], [-71.5, 44.6], [-70.9, 45.3], [-69.0, 46.0],
-  [-67.9, 45.1], [-66.5, 44.5], [-66.5, 43.0], [-69.0, 40.0], [-73.5, 38.5], [-75.0, 35.0], [-79.0, 31.0],
-  [-79.5, 25.5], [-80.0, 24.4], [-83.0, 24.3], [-87.0, 27.0], [-93.0, 28.0], [-96.9, 26.1], [-97.9, 26.4],
-  [-99.3, 28.0], [-101.0, 29.9], [-103.2, 29.6], [-104.5, 30.2], [-106.2, 32.2], [-108.2, 31.9],
-  [-111.1, 31.9], [-114.7, 32.9], [-117.3, 32.6], [-121.0, 32.6], [-124.9, 34.0],
+const NORTH_AMERICA: LngLat[] = [
+  [-141, 76], [-73, 76], [-66, 71], [-60, 66], [-58, 60.5], [-54, 55], [-51.5, 52], [-51.5, 46.5], [-58.5, 44.0], [-66.5, 43.0],
+  [-69.0, 40.0], [-73.5, 38.5], [-75.0, 35.0], [-79.0, 31.0], [-79.5, 25.5], [-80.0, 24.4], [-83.0, 24.3], [-87.0, 27.0],
+  [-93.0, 28.0], [-96.9, 26.1], [-97.0, 23.0], [-96.0, 20.0], [-92.0, 20.5], [-90.0, 22.0], [-86.3, 21.8], [-86.3, 18.5],
+  [-88.3, 18.45], [-88.9, 17.9], [-89.15, 17.81], [-90.98, 17.81], [-90.98, 17.25], [-91.4, 16.1], [-92.2, 15.2], [-92.2, 14.55],
+  [-93.0, 14.0], [-95.0, 15.5], [-99.5, 16.3], [-102.5, 17.3], [-106.5, 19.0], [-107.5, 21.0], [-112.0, 22.0], [-118.0, 28.0],
+  [-125.0, 34.0], [-125.5, 40.0], [-131.5, 48.0], [-141.0, 54.0],
+];
+
+/**
+ * South Korea with Jeju, the Marado and Ulleungdo/Dokdo, and the western islands up to Baengnyeongdo. The northern edge
+ * follows the DMZ roughly; North Korea (Pyongyang and Kaesong) lies north of it. Points are [lng, lat].
+ */
+const SOUTH_KOREA: LngLat[] = [
+  [124.5, 38.1], [126.7, 37.95], [128.0, 38.35], [128.5, 38.65], [131.0, 38.1], [132.2, 37.2], [130.6, 35.0], [129.8, 34.5],
+  [128.0, 33.8], [127.4, 32.9], [126.0, 32.9], [125.0, 33.9], [124.6, 35.5], [124.5, 37.0],
+];
+
+/**
+ * Japan from Hokkaido (Cape Soya, 45.5°N) to the Yaeyama islands (Yonaguni) and Ogasawara, including Tsushima. The north edge
+ * stays south of Sakhalin (45.9°N) and the Kurils; the west edge keeps clear of Taiwan, China and Korea. Points are [lng, lat].
+ */
+const JAPAN: LngLat[] = [
+  [142.4, 45.65], [146.0, 44.6], [146.0, 23.8], [122.8, 23.8], [122.8, 26.0], [127.5, 29.5], [128.2, 32.0], [128.8, 34.0],
+  [129.0, 34.9], [129.7, 35.5], [133.0, 37.8], [137.5, 39.0], [139.0, 43.0], [140.8, 45.65],
 ];
 
 export function inLocalCoverage(lat: number, lng: number): boolean {
-  return US_BOXES.some((b) => lat >= b.minLat && lat <= b.maxLat && lng >= b.minLng && lng <= b.maxLng) || pointInRing(lng, lat, LOWER_48);
+  return (
+    US_BOXES.some((b) => lat >= b.minLat && lat <= b.maxLat && lng >= b.minLng && lng <= b.maxLng) ||
+    pointInRing(lng, lat, NORTH_AMERICA) ||
+    pointInRing(lng, lat, SOUTH_KOREA) ||
+    pointInRing(lng, lat, JAPAN)
+  );
 }
 
 /** Rows of consecutive cells are read with one `cell BETWEEN a AND b` term each; a statement carries at most this many terms. */
@@ -133,14 +156,15 @@ export async function localPlacesInRing(ring: LngLat[], read: CellReader = readC
 }
 
 /**
- * For a corridor the covered-area check refused (a park on the border, the Alaska panhandle): whatever US places the local
- * copy holds there. Never complete (the rest may lie across the border), so the caller shows it only as a fallback while
- * Overpass is asked; a corridor wholly abroad simply finds nothing.
+ * For a corridor the covered-area check refused (a route running out to sea or on into Central America): whatever places the
+ * local copy holds there. Never complete, so the caller shows it only as a fallback while Overpass is asked; a corridor
+ * wholly abroad simply finds nothing.
  */
 export async function localPlacesInRingPartial(ring: LngLat[], read: CellReader = readCells, holes: LngLat[][] = []): Promise<unknown[] | null> {
   if (ring.length < 3) return null;
-  // Cheap geographic filter: a corridor nowhere near North America has no US places to find (and must not flush the cell cache).
-  if (!ring.some(([lng, lat]) => lat >= 17 && lat <= 72 && lng >= -180 && lng <= -64)) return null;
+  // Cheap geographic filter: a corridor nowhere near North America, Korea or Japan has no local places to find (and must not flush the cell cache).
+  const nearCoverage = ([lng, lat]: LngLat) => (lat >= 14 && lat <= 77 && lng >= -180 && lng <= -50) || (lat >= 23 && lat <= 46 && lng >= 122 && lng <= 147);
+  if (!ring.some(nearCoverage)) return null;
   return ringRows(ring, read, holes);
 }
 

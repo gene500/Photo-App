@@ -16,7 +16,7 @@ vi.mock("@/lib/itinerary-download", () => ({
 }));
 
 const stop = (order: number, name: string, extra: Partial<PublicTrip["stops"][number]> = {}): PublicTrip["stops"][number] => ({
-  order, name, lat: 36 + order * 0.3, lng: -120, source: "manual", visited: false, lightPref: "any", dwellMinutes: 30,
+  order, name, lat: 36 + order * 0.3, lng: -120, source: "manual", lightPref: "any", dwellMinutes: 30,
   shotNotes: null, shotChecklist: [], priority: "normal", ...extra,
 });
 

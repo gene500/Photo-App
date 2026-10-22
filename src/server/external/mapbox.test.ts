@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearMapboxCaches, ExternalServiceError, geocode, getDirections, getDurationMatrix, retrievePlace, reverseGeocode, searchPlaces } from "./mapbox";
+import { clearMapboxCaches, ExternalServiceError, geocode, getDirections, getDurationMatrix, locateArea, retrievePlace, reverseGeocode, searchPlaces } from "./mapbox";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const okRoute = {
@@ -405,5 +405,44 @@ describe("mapbox malformed upstream data", () => {
       expect(r[0].subtitle).toBeUndefined();
       expect(r[1].subtitle!.length).toBeLessThanOrEqual(120);
     });
+  });
+});
+
+describe("locateArea", () => {
+  beforeEach(() => {
+    process.env.MAPBOX_TOKEN = "test-token";
+    delete process.env.EXTERNAL_APIS_FAKE;
+    clearMapboxCaches();
+  });
+  afterEach(() => {
+    delete process.env.MAPBOX_TOKEN;
+  });
+
+  it("prefers a city, returns its box, and caches the answer", async () => {
+    const fetchImpl = vi.fn(async () => json({ features: [{ geometry: { coordinates: [-118.24, 34.05] }, bbox: [-118.67, 33.7, -118.15, 34.34], properties: {} }] }));
+    expect(await locateArea("LA", fetchImpl)).toEqual({ lng: -118.24, lat: 34.05, bbox: [-118.67, 33.7, -118.15, 34.34] });
+    const url = new URL((fetchImpl.mock.calls[0] as unknown as [string])[0]);
+    expect(url.searchParams.get("types")).toBe("place,locality,neighborhood");
+    await locateArea("la", fetchImpl);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to regions, ignores a bad box, and returns null when nothing matches", async () => {
+    const calls: string[] = [];
+    const fetchImpl = vi.fn(async (u: unknown) => {
+      const url = new URL(String(u));
+      calls.push(url.searchParams.get("types")!);
+      return json(url.searchParams.get("types")!.startsWith("place")
+        ? { features: [] }
+        : { features: [{ geometry: { coordinates: [-119.5, 37.8] }, bbox: [10, 10, 5, 5], properties: {} }] });
+    });
+    expect(await locateArea("Yosemite", fetchImpl)).toEqual({ lng: -119.5, lat: 37.8 });
+    expect(calls).toEqual(["place,locality,neighborhood", "district,region,country"]);
+    clearMapboxCaches();
+    expect(await locateArea("qqqq", vi.fn(async () => json({ features: [] })))).toBeNull();
+  });
+
+  it("raises ExternalServiceError when the service fails", async () => {
+    await expect(locateArea("LA", vi.fn(async () => json({}, 500)))).rejects.toBeInstanceOf(ExternalServiceError);
   });
 });

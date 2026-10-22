@@ -9,7 +9,7 @@ import { bearingEndpoint, wrapLng } from "@/lib/geo";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { applyMapTheme } from "@/lib/map-theme";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
-import { decideFit, routeKey } from "./map-fit";
+import { decideFit, routeKey, selectionPadding } from "./map-fit";
 import { STOP_MARKER_CLASS, stopColor } from "@/lib/stop-style";
 import type { LngLat, Suggestion } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
@@ -114,7 +114,7 @@ function isDarkNow(): boolean {
 }
 
 export default function MapPanel({
-  stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, flyTo, readOnly, sky,
+  stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, flyTo, readOnly, sky, drawerOpen,
   onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange,
 }: MapViewProps) {
   const { settings } = useSettings();
@@ -122,6 +122,10 @@ export default function MapPanel({
   const mapStyleRef = useRef(settings.mapStyle);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  const userMovedRef = useRef(false);
+  /** Zoom floor for the next stop re-centre: set by a fly-to so the list's zoom-in survives it. */
+  /** A fly-to asks the selection re-centre (same commit) to keep its zoom-in; the request lapses after a second so a later marker click keeps the current zoom. */
+  const minZoomRef = useRef({ zoom: 0, until: 0 });
   const stopMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
   const draggingRef = useRef<Set<string>>(new Set());
   const stopIdsRef = useRef<Set<string>>(new Set());
@@ -154,6 +158,10 @@ export default function MapPanel({
       logoPosition: "top-right",
     });
     // Top-right (offset below the search bar on phones, see globals.css) so the bottom sheet never covers them.
+    // Set by a drag, scroll or pinch of the viewer's own (those events carry `originalEvent`), never by a flyTo.
+    for (const type of ["dragstart", "zoomstart", "rotatestart"] as const) {
+      map.on(type, (e) => { if ((e as { originalEvent?: unknown }).originalEvent) userMovedRef.current = true; });
+    }
     map.addControl(new mapboxgl.NavigationControl(), "top-right");
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), "top-right");
     const reportCenter = () => {
@@ -408,9 +416,36 @@ export default function MapPanel({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !flyTo) return;
+    if (flyTo.area) {
+      // A trip name's place only replaces the world view; it never undoes where the viewer has moved to.
+      if (userMovedRef.current) return;
+      const b = flyTo.area.bbox;
+      if (b) map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: viewPadding(readOnly), maxZoom: 11 });
+      else map.flyTo({ center: [flyTo.lng, flyTo.lat], zoom: 10, padding: viewPadding(readOnly) });
+      return;
+    }
+    minZoomRef.current = { zoom: 12, until: Date.now() + 1000 };
     map.flyTo({ center: [flyTo.lng, flyTo.lat], zoom: Math.max(map.getZoom(), 12), padding: viewPadding(readOnly) });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the request nonce only
   }, [flyNonce]);
+
+  // Selecting a stop (or opening/closing its drawer) centres it, and the arrows around it, in the uncovered part of the map.
+  // Runs after the fly-to effect so a stop opened from the list keeps that zoom-in; a plain marker click keeps the zoom.
+  const skyLat = sky?.lat;
+  const skyLng = sky?.lng;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !loaded || skyLat === undefined || skyLng === undefined) return;
+    const phone = window.matchMedia("(max-width: 1023px)").matches;
+    const drawer = phone ? null : document.querySelector<HTMLElement>('[role="dialog"][aria-label^="Edit "]');
+    map.easeTo({
+      center: [skyLng, skyLat],
+      zoom: Math.max(map.getZoom(), Date.now() <= minZoomRef.current.until ? minZoomRef.current.zoom : 0),
+      padding: selectionPadding(viewPadding(readOnly), drawer?.offsetWidth ?? 0),
+    });
+    minZoomRef.current = { zoom: 0, until: 0 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-centre per selected stop and drawer state only
+  }, [loaded, skyLat, skyLng, drawerOpen]);
 
   // mapbox-gl.css sets `.mapboxgl-map { position: relative }` on the container, which beats Tailwind's
   // `absolute` and collapses it to zero height. The wrapper does the positioning; the container just fills it.

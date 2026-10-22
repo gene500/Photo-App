@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <ul>
         <li><strong>Account:</strong> your email address and a salted hash of your password (never the password itself).</li>
         <li><strong>Your trips:</strong> trip names, dates, stops and their coordinates, notes, shot lists, and the photos you upload to a stop.</li>
-        <li><strong>Share links:</strong> if you create a share link, anyone who has it can see that trip&apos;s stops with their exact locations, times and light preferences, visited progress, and each stop&apos;s shot notes and shot checklist including which items are ticked (but not photos or your private stop notes) until you turn the link off.</li>
+        <li><strong>Share links:</strong> if you create a share link, anyone who has it can see that trip&apos;s stops with their exact locations, times and light preferences, and each stop&apos;s shot notes and shot checklist including which items are ticked (but not photos or your private stop notes) until you turn the link off.</li>
         <li><strong>Settings:</strong> display preferences such as theme, text size and time format.</li>
       </ul>
 
@@ -27,7 +27,7 @@ export default function PrivacyPage() {
       <p>To do its job the app sends limited data to these providers. We do not sell your data or use it for advertising.</p>
       <ul>
         <li><strong>Hosting and database</strong> (Vercel, Turso) store the account and trip data above. <strong>Vercel Blob</strong> stores uploaded photos.</li>
-        <li><strong>Mapbox</strong> draws the map and provides routes and place search. It receives the map areas you view, coordinates for directions and search text, and your browser&apos;s IP address.</li>
+        <li><strong>Mapbox</strong> draws the map and provides routes and place search. It receives the map areas you view, coordinates for directions, search text, the name of a trip that has no stops yet (to centre the map on it), and your browser&apos;s IP address.</li>
         <li><strong>Open-Meteo</strong> provides weather. It receives the coordinates (to about 1 km) of stops and suggested places you view, and the dates involved; for dates far ahead it is asked about the same date in past years.</li>
         <li><strong>OpenStreetMap / Overpass</strong> and <strong>Wikimedia Commons</strong> (and Flickr, if enabled) supply nearby places and photo counts. They receive the area being searched, not your identity.</li>
         <li><strong>Wikimedia Commons, Wikipedia</strong> (and Flickr, if enabled) also find a photo for each place you add or pick from the suggestions. They receive the name and coordinates of that place (typically not for a dropped pin that is only a street address or coordinates), and no account details.</li>

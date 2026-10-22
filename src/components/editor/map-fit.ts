@@ -28,3 +28,14 @@ export function decideFit({ prevCount, count, route, fittedRoute, fitted }: {
   if (count < 2) return null;
   return !fitted || prevCount < 2 ? "stops" : null;
 }
+
+export type Padding = { top?: number; right?: number; bottom?: number; left?: number };
+
+/**
+ * Padding that centres a selected stop (and its sunrise/sunset arrows) in the part of the map nobody is covering.
+ * `base` already clears the trip panel / bottom sheet; the Edit stop drawer docks on the right, so its width
+ * (0 when closed or when it is a full-screen sheet on phones) is added on that side.
+ */
+export function selectionPadding<P extends Padding>(base: P, drawerWidth: number): P {
+  return drawerWidth > 0 ? { ...base, right: Math.max(base.right ?? 0, Math.round(drawerWidth) + 16) } : base;
+}

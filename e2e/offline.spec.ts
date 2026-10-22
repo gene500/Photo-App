@@ -16,7 +16,7 @@ test("a trip opened online is readable from the saved copy while offline, and si
   await expect(page.getByText(/^Spot .* \(fake\)$/)).toBeVisible();
   await page.getByRole("button", { name: "Add stop" }).click();
   await expect(page.getByTestId("stop-row")).toHaveCount(1);
-  const stopName = (await page.getByTestId("stop-row").locator("button.truncate").innerText()).replace(/^\d+\.\s*/, "");
+  const stopName = (await page.getByTestId("stop-row").locator("button.break-words").innerText()).replace(/^\d+\.\s*/, "");
 
   // The copy is saved a moment after the last change.
   await expect

@@ -19,7 +19,7 @@ test("share a trip read-only, open it logged out, revoke it", async ({ page, bro
     await page.getByRole("button", { name: "Add stop" }).click();
     await expect(rows).toHaveCount(i);
   }
-  const names = await rows.locator("button.truncate").allInnerTexts();
+  const names = await rows.locator("button.break-words").allInnerTexts();
   expect(names).toHaveLength(2);
 
   await page.getByRole("button", { name: "Share", exact: true }).click();

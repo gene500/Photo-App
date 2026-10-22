@@ -85,7 +85,7 @@ function StopRow({ stop, index, onDelete, onSelect }: Handlers & { stop: Stop; i
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`group relative flex items-center gap-3 rounded-xl px-1 py-1.5 text-foreground ${isDragging ? "z-10 bg-surface opacity-70 shadow-lg" : ""}`}
     >
-      <button type="button" onClick={() => onSelect(stop.id)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline">
+      <button type="button" onClick={() => onSelect(stop.id)} className="min-w-0 flex-1 break-words text-left text-sm font-medium hover:underline">
         <span className="sr-only">{index + 1}.</span>{" "}{stop.name}
       </button>
       <div className={`flex shrink-0 items-center transition-opacity ${REVEAL}`}>

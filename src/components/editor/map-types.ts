@@ -12,10 +12,12 @@ export type MapViewProps = {
   suggestions?: Suggestion[];
   highlightedSuggestionId?: string | null;
   selectedId?: string | null;
-  /** Fly to a point; a new `nonce` re-triggers the move. */
-  flyTo?: (LatLng & { nonce: number }) | null;
+  /** Fly to a point; a new `nonce` re-triggers the move. With `area` (a trip name's place) the map frames its box, and only if the viewer has not moved the map yet. */
+  flyTo?: (LatLng & { nonce: number; area?: { bbox?: [number, number, number, number] } }) | null;
   /** The selected stop with its sunrise/sunset compass bearings (degrees clockwise from north); null draws no lines. */
   sky?: { lat: number; lng: number; sunrise: number | null; sunset: number | null } | null;
+  /** The Edit stop drawer is open: the selected stop is re-centred clear of it. */
+  drawerOpen?: boolean;
   onMapClick: (p: LatLng) => void;
   onStopClick: (stopId: string) => void;
   onStopMove?: (stopId: string, p: LatLng) => void;

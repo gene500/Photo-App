@@ -19,6 +19,7 @@ import { fromTimeValue, toTimeValue } from "./StartTimeControl";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useOfflineCopy } from "@/lib/use-offline-copy";
 import { isExactOptimization } from "@/lib/optimize-schedule";
+import { leadingVisited, visitedChanges } from "@/lib/visited-run";
 import { routeSignature } from "@/lib/route-signature";
 import { defaultLightPref } from "@/lib/light-windows";
 import { formatDistance, formatDuration } from "@/lib/format";
@@ -40,6 +41,8 @@ import { TripHeader } from "./TripHeader";
 
 /** Hide suggestions that sit on top of an existing stop. */
 const ALREADY_A_STOP_M = 100;
+/** A lone stop within this distance of an earlier search point is already covered by that search's suggestions. */
+const SAME_AREA_M = 15_000;
 /** Alternatives for a stop are local: a tighter circle than the first-stop suggestions, and a short list. */
 const ALTERNATIVES_RADIUS_KM = 10;
 const MAX_ALTERNATIVES = 8;
@@ -50,6 +53,12 @@ type Pending = LatLng & { name: string; source: StopSource; osmId?: string; ligh
 
 const NO_SUGGESTIONS: Suggestion[] = [];
 const errorMessage = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
+
+/** Sentences joined by ". ", without doubling a full stop that one of them already ends with; the last one keeps its own. */
+function joinNotes(parts: (string | null)[]): string {
+  const kept = parts.filter((t): t is string => !!t);
+  return kept.map((t, i) => (i < kept.length - 1 ? t.replace(/\.$/, "") : t)).join(". ");
+}
 
 /** True when both are the same moment (or both absent), whatever their ISO spelling. */
 function sameInstant(a: string | null, b: string | null): boolean {
@@ -71,7 +80,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const [adding, setAdding] = useState(false);
   const [cardId, setCardId] = useState<string | null>(null);
   const [drawerId, setDrawerId] = useState<string | null>(null);
-  const [flyTo, setFlyTo] = useState<(LatLng & { nonce: number }) | null>(null);
+  const [flyTo, setFlyTo] = useState<(LatLng & { nonce: number; area?: { bbox?: [number, number, number, number] } }) | null>(null);
   // Tagged with the waypoints they were found for, like routeResult: a change of stops
   // makes them stale, so they are simply not shown (and a late response is dropped).
   const [suggestionsState, setSuggestionsState] = useState<{ key: string; items: Suggestion[]; status: SuggestionsStatus; error: string | null; shown?: number } | null>(null);
@@ -109,6 +118,24 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     centerRef.current = c;
   }, []);
 
+  // A trip with no stops opens on the world view; its name ("LA", "Yosemite") says where it is, so look it up once per
+  // name and frame that place. The map itself ignores this once the viewer has moved it, and any stop takes over.
+  const nameLocatedRef = useRef<string | null>(null);
+  const noStops = stops.length === 0;
+  useEffect(() => {
+    const name = trip.name.trim();
+    if (!noStops || name.length < 2 || nameLocatedRef.current === name) return;
+    let live = true;
+    const timer = setTimeout(() => {
+      nameLocatedRef.current = name;
+      api.locate(name).then(
+        ({ area }) => { if (live && area) setFlyTo({ lat: area.lat, lng: area.lng, nonce: Date.now(), area: { bbox: area.bbox } }); },
+        () => { nameLocatedRef.current = null; }, // a failed lookup may be retried; it never shows an error
+      );
+    }, 700);
+    return () => { live = false; clearTimeout(timer); };
+  }, [trip.name, noStops]);
+
   // Route through the stops in order. A string key so edits that don't move anything
   // (visited, notes) don't refetch. Fewer than 2 stops means no route at all.
   const waypointKey = JSON.stringify(stops.map((s) => [s.lng, s.lat]));
@@ -127,8 +154,20 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   useEffect(() => {
     prefsKeyRef.current = prefsKey;
   }, [prefsKey]);
-  const freshSuggestions = suggestionsState?.key === waypointKey ? suggestionsState : null;
-  const allSuggestions = freshSuggestions?.items ?? NO_SUGGESTIONS;
+  // Generated suggestions stay on the page whatever happens to the stops (the tag only says which search made them);
+  // a new search happens when the owner asks, or when a lone stop moves somewhere the list does not cover.
+  const freshSuggestions = suggestionsState;
+  const suggestionsStateRef = useRef(suggestionsState);
+  useEffect(() => {
+    suggestionsStateRef.current = suggestionsState;
+  }, [suggestionsState]);
+  // A place that is now a stop is not suggested again.
+  const allSuggestions = useMemo(() => {
+    const items = freshSuggestions?.items;
+    if (!items) return NO_SUGGESTIONS;
+    const kept = items.filter((x) => !stops.some((st) => haversineMeters(st, x) < ALREADY_A_STOP_M));
+    return kept.length === items.length ? items : kept;
+  }, [freshSuggestions?.items, stops]);
   // Only the first chunk is shown at first; the rest is revealed 5 at a time as popularity ranks it (undefined = all).
   const shownCount = freshSuggestions?.shown;
   const suggestions = useMemo(() => (shownCount === undefined ? allSuggestions : allSuggestions.slice(0, shownCount)), [allSuggestions, shownCount]);
@@ -201,6 +240,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     const coordinates = JSON.parse(waypointKey) as LngLat[];
     if (coordinates.length !== 1) return;
     const [lng, lat] = coordinates[0];
+    // A finished list that already covers this stop stays; only a stop that moved out of its reach searches again.
+    const have = suggestionsStateRef.current;
+    if (have?.status === "done" && (JSON.parse(have.key) as LngLat[]).some(([x, y]) => haversineMeters({ lat, lng }, { lat: y, lng: x }) < SAME_AREA_M)) return;
     let cancelled = false;
     api.suggestions({ around: [lng, lat] }, { enrich: false }).then(
       ({ suggestions: found }) => {
@@ -343,7 +385,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     const placed = await addStop({ name: pending.name, lat: pending.lat, lng: pending.lng, source: pending.source, lightPref: pending.lightPref });
     setAdding(false);
     if (!placed) return;
-    if (pending.osmId) takeSuggestion(pending.osmId, placed);
+    if (pending.osmId) takeSuggestion(pending.osmId);
     // Only close the card we added from; the user may have opened another meanwhile.
     const added = pending;
     setPending((cur) => (cur === added ? null : cur));
@@ -394,15 +436,23 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     setOptimizing(true);
     setOptimizeNote(null);
     try {
+      // Visited stops are behind the owner: they stay where they are, and the last of them is the fixed start of the re-plan.
+      const done = leadingVisited(before);
+      const anchor = Math.max(done - 1, 0);
+      const head = before.slice(0, anchor);
+      const tail = before.slice(anchor);
+      // Leaving the last visited stop: when the current route says the owner got there, plus the time spent there.
+      const anchorArrival = done > 1 ? arrivals[anchor] : null;
+      const planFrom = anchorArrival ? new Date(anchorArrival.getTime() + before[anchor].dwellMinutes * 60_000).toISOString() : previousDepartAt;
       // Two stops have nothing to reorder (the optimizer needs three), so Optimize only records the state.
-      if (before.length < 3) {
+      if (tail.length < 3) {
         await saveTrip({ routeOptimizedFor: routeSignature(trip.plannedDate, before) });
         return;
       }
-      const result = await api.optimizeOrder(before.map((s): LngLat => [s.lng, s.lat]), {
-        stops: before.map((s) => ({ lightPref: s.lightPref, priority: s.priority, dwellMinutes: s.dwellMinutes })),
+      const result = await api.optimizeOrder(tail.map((s): LngLat => [s.lng, s.lat]), {
+        stops: tail.map((s) => ({ lightPref: s.lightPref, priority: s.priority, dwellMinutes: s.dwellMinutes })),
         plannedDate: trip.plannedDate,
-        ...(previousDepartAt ? { departAt: previousDepartAt } : {}),
+        ...(planFrom ? { departAt: planFrom } : {}),
         focus: settings.optimizeFocus,
       });
       if (
@@ -413,26 +463,33 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         setStopsError("Your stops changed while optimizing, so the result was discarded. Try again.");
         return;
       }
-      const ids = result.order.map((i) => before[i].id);
-      const missed = (result.misses ?? []).flatMap((m) => (before[m.stopIndex] ? [{ name: before[m.stopIndex].name, must: m.priority === "must" }] : []));
+      const ids = [...head, ...result.order.map((i) => tail[i])].map((s) => s.id);
+      const missed = (result.misses ?? []).flatMap((m) => (tail[m.stopIndex] ? [{ name: tail[m.stopIndex].name, must: m.priority === "must" }] : []));
       const misses = missed.map((m) => m.name);
       const mustMisses = missed.filter((m) => m.must).map((m) => m.name);
       const missNote = misses.length
         ? `Can't fit ${misses.length} ${misses.length === 1 ? "stop in its light" : "stops in their light"}: ${misses.join(", ")}.` +
           (mustMisses.length ? ` ${mustMisses.join(", ")} ${mustMisses.length === 1 ? "is a must-have" : "are must-haves"}: try fewer stops or a different order.` : "")
         : null;
-      // null means no stop has a light preference: leave the departure alone.
+      // Stops visited wholly in the dark (leaving out the ones already reported for their light), and stops with no sunrise or sunset that day.
+      const darkNames = (result.dark ?? []).flatMap((m) => (tail[m.stopIndex] && !misses.includes(tail[m.stopIndex].name) ? [tail[m.stopIndex].name] : []));
+      const darkNote = darkNames.length ? `Can't fit ${darkNames.length} ${darkNames.length === 1 ? "stop" : "stops"} in daylight: ${darkNames.join(", ")}` : null;
+      const polarNames = (result.polar ?? []).flatMap((i) => (tail[i] ? [tail[i].name] : []));
+      const polarNote = polarNames.length ? `No sunrise or sunset that day at ${polarNames.join(", ")}, so no daylight rule applies there` : null;
+      const notes = [missNote, darkNote, polarNote];
+      // null means the departure was not searched (no light preference and no dark visit): leave it alone.
       // The optimizer's pick is kept on the planned solar day too (at the first stop of the new order, as the server checks it): the trips API refuses a start time on a neighbouring day.
-      const nextDepartAt = result.departAt ? clampToSolarDay(new Date(result.departAt), trip.plannedDate, before[result.order[0] ?? 0].lng).toISOString() : previousDepartAt;
+      // With visited stops the trip has already started, so its start time is left alone.
+      const nextDepartAt = result.departAt && done === 0 ? clampToSolarDay(new Date(result.departAt), trip.plannedDate, before[result.order[0] ?? 0].lng).toISOString() : previousDepartAt;
       const orderChanged = ids.join(",") !== startKey;
       const departChanged = !sameInstant(nextDepartAt, previousDepartAt);
       // Marks the trip optimized for the new order, in the same save as the departure.
       const optimizedFor = routeSignature(trip.plannedDate, ids.map((id) => before.find((s) => s.id === id)!));
       if (!orderChanged && !departChanged) {
         await saveTrip({ routeOptimizedFor: optimizedFor });
-        const usesLight = before.some((s) => s.lightPref !== "any");
-        const verdict = isExactOptimization(before.length, usesLight) && result.complete !== false ? "Already the fastest order" : "No faster order found";
-        setOptimizeNote({ text: [verdict, missNote].filter(Boolean).join(". "), idsKey: startKey });
+        const usesLight = tail.some((s) => s.lightPref !== "any") || result.departAt != null;
+        const verdict = isExactOptimization(tail.length, usesLight) && result.complete !== false ? "Already the fastest order" : "No faster order found";
+        setOptimizeNote({ text: joinNotes([verdict, ...notes]), idsKey: startKey });
         return;
       }
       const previousIds = before.map((s) => s.id);
@@ -446,8 +503,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       }
       setUndo({ previousIds, appliedIds: ids, previousDepartAt, appliedDepartAt, previousOptimizedFor });
       // Say so when the start time moved, so the change in the Start time field is not a surprise.
-      const moveNote = !sameInstant(appliedDepartAt, previousDepartAt) && appliedDepartAt ? `Start time moved to ${formatClock(new Date(appliedDepartAt), undefined, settings.timeFormat)} so stops land in their light` : null;
-      const note = [moveNote, missNote].filter(Boolean).join(". ");
+      const moveNote = !sameInstant(appliedDepartAt, previousDepartAt) && appliedDepartAt ? `Start time moved to ${formatClock(new Date(appliedDepartAt), undefined, settings.timeFormat)} so stops land in good light` : null;
+      const note = joinNotes([moveNote, ...notes]);
       if (note) setOptimizeNote({ text: note, idsKey: ids.join(",") });
     } catch (e) {
       setStopsError(errorMessage(e, "Couldn't optimize the route"));
@@ -513,6 +570,12 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     } catch (e) {
       setStopsError(errorMessage(e, "Couldn't update the stop"));
     }
+  }
+
+  /** Checking a stop checks every earlier one and unchecking it unchecks every later one, so the checks stay one run from the start. */
+  async function toggleVisited(id: string, visited: boolean) {
+    const ids = visitedChanges(stops, id, visited);
+    await Promise.all(ids.map((sid) => patchStop(sid, { visited })));
   }
 
   /** Marker drag: move optimistically, revert on failure. */
@@ -605,23 +668,14 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     setSuggestionsState((prev) => (prev ? { ...prev, items: prev.items.filter((s) => s.osmId !== osmId) } : prev));
   }
 
-  /** An accepted suggestion adds a stop, which changes the waypoints. Remove it and keep
-   *  the rest valid by re-tagging them with the key that now includes the new stop. */
-  function takeSuggestion(osmId: string, added: Stop) {
-    setSuggestionsState((prev) => {
-      if (!prev) return prev;
-      const items = prev.items.filter((s) => s.osmId !== osmId);
-      const key = JSON.stringify([...(JSON.parse(prev.key) as LngLat[]), [added.lng, added.lat]]);
-      // Re-tag only suggestions that were current just before this stop was added
-      // (the ref may or may not have caught up with the new stop yet).
-      const wasCurrent = prev.key === waypointKeyRef.current || key === waypointKeyRef.current;
-      return { ...prev, key: wasCurrent ? key : prev.key, items };
-    });
+  /** An accepted suggestion becomes a stop, so it leaves the list; the rest stay as they are. */
+  function takeSuggestion(osmId: string) {
+    setSuggestionsState((prev) => (prev ? { ...prev, items: prev.items.filter((s) => s.osmId !== osmId) } : prev));
   }
 
   async function acceptSuggestion(s: Suggestion) {
     const added = await addStop({ name: s.name, lat: s.lat, lng: s.lng, source: "suggested", lightPref: defaultLightPref(s.kind, settings.suggestionLightPref) });
-    if (added) takeSuggestion(s.osmId, added);
+    if (added) takeSuggestion(s.osmId);
   }
 
   // --- Alternatives ----------------------------------------------------------
@@ -714,6 +768,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         highlightedSuggestionId={highlightedId}
         selectedId={cardId}
         sky={sky}
+        drawerOpen={drawerStop !== null}
         flyTo={flyTo}
         onMapClick={(p) => void pickPoint(p)}
         onStopClick={clickMarker}
@@ -748,7 +803,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
               stop={cardStop}
               bestTime={bestTimes[cardIndex] ?? null}
               arrival={arrivals[cardIndex] ?? null}
-              onToggleVisited={(visited) => void patchStop(cardStop.id, { visited })}
+              onToggleVisited={(visited) => void toggleVisited(cardStop.id, visited)}
               onOpenDetails={() => setDrawerId(cardStop.id)}
               onClose={() => setCardId(null)}
             />
@@ -831,7 +886,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                 optimized={optimized}
                 bestTimes={bestTimes}
                 arrivals={arrivals}
-                onToggleVisited={(id, visited) => void patchStop(id, { visited })}
+                onToggleVisited={(id, visited) => void toggleVisited(id, visited)}
                 onPriorityChange={(id, priority) => patchStop(id, { priority })}
                 onSelect={openFromList}
               />

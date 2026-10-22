@@ -103,7 +103,7 @@ function TripRow({ stop, index, first, last, optimized, bestTime, arrival, role,
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
-          <button type="button" onClick={() => onSelect(stop.id)} className="block min-h-7 min-w-0 truncate text-left text-sm font-medium leading-7 hover:underline">
+          <button type="button" onClick={() => onSelect(stop.id)} className="block min-h-7 min-w-0 break-words text-left text-sm font-medium leading-7 hover:underline">
             <span className="sr-only">{index + 1}.</span>{" "}{stop.name}
           </button>
           {role && <span data-testid="stop-role" className="shrink-0 rounded-md bg-hover px-1.5 py-px text-xs font-medium text-muted">{role}</span>}

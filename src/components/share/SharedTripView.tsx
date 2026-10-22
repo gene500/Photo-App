@@ -27,9 +27,9 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
   const tf = settings.timeFormat;
   const [selected, setSelected] = useState<string | null>(null);
 
-  // The map takes Stop objects; the keys are made from the order, never from database ids.
+  // The map takes Stop objects (a shared trip is a plan: nothing is visited); the keys are made from the order, never from database ids.
   const mapStops: Stop[] = useMemo(
-    () => trip.stops.map((s) => ({ ...s, id: `stop-${s.order}`, tripId: "", notes: null, photoUrl: null })),
+    () => trip.stops.map((s) => ({ ...s, id: `stop-${s.order}`, tripId: "", notes: null, photoUrl: null, visited: false })),
     [trip.stops],
   );
   // The page fetches the real driving route on the server; without one (routing down) the line is straight and the times are estimated from distance.
@@ -126,7 +126,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
                 return (
                   <li key={s.id} data-testid="shared-stop" className={`flex items-start gap-3 rounded-xl p-2 ${s.id === selected ? "bg-hover" : ""}`}>
                     <span
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${s.visited ? "text-black/75" : "text-white"}`}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
                       style={{ background: stopColor(s) }}
                     >
                       {i + 1}
@@ -134,7 +134,6 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
                     <div className="min-w-0 flex-1 space-y-0.5">
                       <button type="button" onClick={() => setSelected(s.id === selected ? null : s.id)} className="block w-full text-left text-sm font-medium leading-7 hover:underline">
                         {s.name}
-                        {s.visited && <span className="ml-2 text-xs font-normal text-muted">Visited</span>}
                       </button>
                       {mounted && (
                         <p className="text-xs text-muted" data-testid="shared-time">

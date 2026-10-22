@@ -43,7 +43,7 @@ describe("POST /api/optimize", () => {
     // lat 0, 3, 1, 2 along one meridian
     const res = await post([[0, 0], [0, 3], [0, 1], [0, 2]]);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ order: [0, 2, 3, 1], complete: true, departAt: null, misses: [] });
+    expect(await res.json()).toEqual({ order: [0, 2, 3, 1], complete: true, departAt: null, misses: [], dark: [], polar: [] });
   });
 
   it("rejects a stops list whose length differs from the coordinates", async () => {
@@ -133,6 +133,42 @@ describe("POST /api/optimize", () => {
     const body = await res.json();
     expect(body.misses.length).toBeGreaterThan(0);
     expect(body.misses[0]).toEqual({ stopIndex: expect.any(Number), minutes: expect.any(Number), priority: "normal" });
+  });
+
+  describe("daylight", () => {
+    const coords = [[-119.6, 37.7], [-119.6, 38.7], [-119.6, 39.7]];
+    const anyStops = [0, 1, 2].map(() => ({ lightPref: "any", dwellMinutes: 30 }));
+    const night = "2026-07-01T09:00:00.000Z"; // 1 am solar time at the first stop
+
+    it("moves the start so no visit is in the dark, even when no stop has a light preference", async () => {
+      const body = await (await post(coords, { plannedDate: "2026-07-01", stops: anyStops, departAt: night })).json();
+      expect(typeof body.departAt).toBe("string");
+      expect(body.departAt).not.toBe(night);
+      expect(body.dark).toEqual([]);
+    });
+
+    it("only reports the dark visits under the time focus, and leaves the start alone", async () => {
+      const body = await (await post(coords, { plannedDate: "2026-07-01", stops: anyStops, departAt: night, focus: "time" })).json();
+      expect(body.departAt).toBeNull();
+      expect(body.order).toEqual([0, 1, 2]);
+      expect(body.dark.length).toBeGreaterThan(0);
+      expect(body.dark[0]).toEqual({ stopIndex: expect.any(Number), minutes: expect.any(Number), priority: "normal" });
+    });
+
+    it("names the stops where the sun neither rises nor sets that day, and applies no daylight rule to them", async () => {
+      const arctic = [[15, 78], [15, 78.5], [15, 79]];
+      const body = await (await post(arctic, { plannedDate: "2026-06-21", stops: anyStops, departAt: night })).json();
+      expect(body.polar).toEqual([0, 1, 2]);
+      expect(body.dark).toEqual([]);
+      expect(body.departAt).toBeNull();
+    });
+
+    it("leaves polar empty and the start untouched for an ordinary daylight trip", async () => {
+      const body = await (await post(coords, { plannedDate: "2026-07-01", stops: anyStops })).json();
+      expect(body.polar).toEqual([]);
+      expect(body.dark).toEqual([]);
+      expect(body.departAt).toBeNull();
+    });
   });
 
   it("returns 502 with the user-safe message when Mapbox fails", async () => {

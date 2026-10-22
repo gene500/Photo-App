@@ -97,3 +97,15 @@ model PendingPhotoDeletion {
   attempts  Int      @default(0)
   createdAt DateTime @default(now())
 }
+
+/// Suggestion results shared between serverless instances (an in-memory copy sits in front). `kind` is "enriched"
+/// (ranked by popularity) or "raw" (the place list an Overpass answer produced); `createdAt` is epoch milliseconds.
+model SuggestionCache {
+  key       String
+  kind      String
+  data      String
+  createdAt BigInt
+
+  @@id([key, kind])
+  @@index([createdAt])
+}

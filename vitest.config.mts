@@ -15,6 +15,7 @@ export default defineConfig({
       DATABASE_URL: `file:./${testDb}`,
       UPLOAD_DIR: ".test-uploads",
       NEXTAUTH_SECRET: "test-secret",
+      SUGGESTION_SHARED_CACHE_DISABLED: "1", // results are shared through the database; tests must not see each other's
       RATE_LIMIT_DISABLED: "1", // the limiter has its own tests that switch it on
       SIGNUP_MIN_SECONDS: "0",
       TRUST_PROXY_HEADERS: "1", // tests simulate client addresses with x-forwarded-for; clientIp has its own tests for every trust mode

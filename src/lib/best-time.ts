@@ -61,6 +61,15 @@ export function getSunWindows(lat: number, lng: number, plannedDate: string): Su
 }
 
 /**
+ * Sunrise to sunset of the solar day `plannedDate` at the spot, or null when the sun does not rise and set that day
+ * (polar day or night), where no daylight rule applies.
+ */
+export function daylightInterval(lat: number, lng: number, plannedDate: string): [Date, Date] | null {
+  const { sunrise, sunset } = getSunWindows(lat, lng, plannedDate);
+  return sunrise && sunset && !Number.isNaN(sunrise.getTime()) && !Number.isNaN(sunset.getTime()) ? [sunrise, sunset] : null;
+}
+
+/**
  * D1: pick the shooting window from the estimated arrival time.
  *   before morning golden hour ends -> sunrise
  *   before evening golden hour      -> midday

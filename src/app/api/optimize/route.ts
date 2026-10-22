@@ -1,5 +1,5 @@
 import { enforcePaidLimit } from "@/server/shared-limit";
-import { clampToSolarDay, departureTime } from "@/lib/best-time";
+import { clampToSolarDay, daylightInterval, departureTime } from "@/lib/best-time";
 import { optimizeScheduleAsync } from "@/lib/optimize-schedule";
 import { optimizeRequestSchema } from "@/lib/validation";
 import { ExternalServiceError, getDurationMatrix } from "@/server/external/mapbox";
@@ -9,7 +9,7 @@ import { handle, HttpError, readJson, requireUserId } from "@/server/http";
 /**
  * Best visiting order for the submitted coordinates; the first one stays the start.
  * With per-stop light preferences it also picks the departure time (`departAt`) and
- * lists the stops whose light cannot be met (`misses`, by submitted index).
+ * lists the stops whose light cannot be met (`misses`, by submitted index) and the ones visited in the dark (`dark`).
  */
 export const POST = handle(async (req: Request) => {
   const userId = await requireUserId();
@@ -27,7 +27,6 @@ export const POST = handle(async (req: Request) => {
         dwellMinutes: prefs?.[i]?.dwellMinutes ?? 30,
         priority: prefs?.[i]?.priority ?? ("normal" as const),
       }));
-      const usesLight = stops.some((s) => s.lightPref !== "any");
       // Yields to other requests while it works, and stops at a time budget.
       const result = await optimizeScheduleAsync(
         {
@@ -44,7 +43,7 @@ export const POST = handle(async (req: Request) => {
       const keptSaved = departAt !== undefined && result.departAt.getTime() === new Date(departAt).getTime();
       const departMs = keptSaved ? result.departAt.getTime() : Math.floor(result.departAt.getTime() / 60_000) * 60_000;
       // The trip refuses a start time that is not on its planned (solar) day, so the answer never leaves it (checked at the first stop of the new order).
-      const answerDepartAt = usesLight ? clampToSolarDay(new Date(departMs), date, stops[result.order[0] ?? 0]!.lng).toISOString() : null;
+      const answerDepartAt = result.timed ? clampToSolarDay(new Date(departMs), date, stops[result.order[0] ?? 0]!.lng).toISOString() : null;
       return Response.json({
         order: result.order,
         complete: result.complete !== false,
@@ -52,6 +51,11 @@ export const POST = handle(async (req: Request) => {
         misses: result.misses
           .map((m) => ({ stopIndex: m.stopIndex, minutes: Math.round(m.minutes), priority: m.priority }))
           .filter((m) => m.minutes > 0),
+        dark: result.dark
+          .map((m) => ({ stopIndex: m.stopIndex, minutes: Math.round(m.minutes), priority: m.priority }))
+          .filter((m) => m.minutes > 0),
+        // Stops where the sun does not rise and set on that date: no daylight rule applies to them.
+        polar: stops.flatMap((s, i) => (daylightInterval(s.lat, s.lng, date) ? [] : [i])),
       });
     } catch (e) {
       if (e instanceof ExternalServiceError) throw new HttpError(502, e.message);

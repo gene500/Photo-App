@@ -155,6 +155,14 @@ chooses the visiting order *and* the departure time (`src/lib/optimize-schedule.
   from 1 h before it to 14 h after it. Up to 7 free stops (8 total) the search is
   exact over all orders (8 stops held the server for about a second per request); above that it is a deterministic local search (swap,
   2-opt, or-opt) seeded from nearest-neighbour and sunrise-first/sunset-last orders.
+- **Daylight.** A visit that falls wholly in the dark (outside sunrise to sunset and outside the stop's own
+  preferred light) is penalised like a missed window, weighted by the stop's priority, so the departure moves to keep
+  stops lit. Under Time priority dark visits are only reported, not penalised. The result names them ("Can't fit 2 stops
+  in daylight: ..."). A stop with no sunrise or sunset that day (polar day or night) gets no daylight rule and is named
+  in the note ("No sunrise or sunset that day at ..., so no daylight rule applies there."); it also does not make the
+  start move, even when it asks for sunrise or sunset light. A visit is checked against the solar day it arrives on.
+- **Visited stops.** Once stops are marked visited, Optimize re-plans only the stops after the last visited one and
+  keeps the start time the editor shows (`fixDeparture: true` in the request); it does not search for a new start.
 - With no preferences it is exactly the shortest-drive order and the departure
   stays at sunrise.
 
@@ -299,6 +307,25 @@ on the suggestion card and popup.
 The Mapbox `light-v11` basemap is recoloured to the beige theme at runtime (a slightly darker palette with clearer roads and paths since 2026-10-19; dark mode dims the canvas with a CSS filter)
 (`src/lib/map-theme.ts`, applied on style load); our own `route*` layers are
 never touched.
+
+### Suggestion sources and local places
+
+Suggestions come from three layers (`src/server/suggestions/service.ts`), tried in order:
+
+1. **Local copy.** The `Place` table holds viewpoints, peaks and attractions imported from OpenStreetMap, looked up by
+   a global grid (`places-grid.ts`). It covers the lower 48 states, Alaska, Canada south of 76 N, Mexico, South Korea
+   and Japan (the rings in `src/server/suggestions/local-places.ts`). A query with fewer than 5 local places, or one
+   outside the rings, falls through.
+2. **Overpass.** The public OpenStreetMap API: slow outside the local copy (tens of seconds) and it can fail with a
+   502 "Couldn't load suggestions".
+3. **Caches.** Overpass answers are cached in memory (30 min, served stale for up to 6 h more) and in the
+   `SuggestionCache` table, shared by every server instance (a slow read falls back to Overpass after 800 ms). The
+   daily cron (`/api/cron/photo-cleanup`) drops entries too old to serve.
+
+Import places with `node scripts/import-places.mjs <dir>` (upserts by id; it writes to Turso when `TURSO_DATABASE_URL`
+and `TURSO_AUTH_TOKEN` are set). The extracts are built by `scripts/build-places-intl.sh` (Canada, Mexico) and
+`scripts/build-places-asia.sh` (South Korea, Japan) into the git-ignored `data/` folder. Import into Turso **before**
+deploying a change to the coverage rings, or those areas will fall back to Overpass until it is done.
 
 ## Weather and light-window forecast
 

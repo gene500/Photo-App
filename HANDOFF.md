@@ -9,13 +9,12 @@ and `PROGRESS.md` over memory. The sections after "Current work" are history exc
 Statuses: pending, in progress, completed, blocked, removed. Exactly one item is in progress at a time.
 Visibility rule (owner, 2026-10-16): the task chart is shown in the terminal at the end of every reply, always.
 Ordering rule (owner, 2026-10-16): anything added goes toward the end of the list, in the order asked; the list order is: owner work items, then the bug sweeps (H rows), then the final row; the absolute final row of every list is always one combined row: a full codebase check (Opus), then merge, push, and confirmation that Vercel and CI succeeded; nothing goes after it.
-Last updated 2026-10-22. Est = rough working time for Claude, excluding deploy waits and your review time. Use = rough token usage (Light, Medium, Heavy). Within each group (work, then sweeps) rows are sorted Light to Heavy; the FINAL row stays last.
+Last updated 2026-10-22
 
 ### Open tasks
 
 | # | Task | Status | Est | Use | Notes |
 |---|---|---|---|---|---|
-| B9 | FINAL: Opus check, merge, push, Vercel and CI | pending | 30 min | Heavy | standing last row |
 
 ### Archive (completed and removed tasks)
 
@@ -36,7 +35,8 @@ Last updated 2026-10-22. Est = rough working time for Claude, excluding deploy w
 | A31 | Optimize keeps every stop visit in daylight: no arrival or dwell falls between dusk and dawn, for all stops including those with no light preference | completed | 2026-10-21: daylight = sunrise to sunset of the stop's solar day, or the stop's own preferred light window (a visit that touches either counts as lit; only a fully dark visit is dark). `Evaluator.darkAt` in `src/lib/optimize-schedule.ts` adds dark minutes to the cost like missed light, weighted by the stop's priority (same weight as a minute of missed light); under the time focus the weight is 0, so darkness is only reported and never reorders the route. Trips with no light preference keep the shortest order and the saved start when nothing is dark (`timed: false`); otherwise the departure is searched too. No sunrise or sunset that day (polar day or night) means no daylight rule, and the editor says so. `/api/optimize` gains `dark` (stopIndex, minutes, priority) and `polar` (indices); the editor note adds "Can't fit N stops in daylight: ..." (skipping stops already listed for their light) and "No sunrise or sunset that day at ..., so no daylight rule applies there". Local search also descends from three spread departures on trips of 12 stops or fewer, because darkness made the best start hard to reach (one seeded 9-stop case was 1.6x off exact; all now match). Known limits: a visit is checked only against the solar day it arrives on; the optimizer may pick its own start inside a visited-stop tail (see A24). Timing tests in `optimize-schedule.test.ts` and `tests/api/optimize.test.ts` can flake when the machine is loaded |
 | A34 | Re-plan after visited stops keeps the given start time fixed | completed | 2026-10-22: `/api/optimize` takes `fixDeparture`; the optimizer then searches only the order at the given start (`fixedDeparture` in `optimize-schedule.ts`); the editor sets it when stops are visited, so the order and the light and daylight notes match the start that stays saved. Tests in `optimize-schedule.test.ts`, `tests/api/optimize.test.ts`, `TripEditor.test.tsx` |
 | A35 | Old route suggestion search can overwrite the lone-stop list | completed | 2026-10-22: the lone-stop auto search now takes a new `suggestionsSeq` and only the latest search may write the list, so a route search still running when the stops drop to one no longer overwrites the around-the-stop list. Regression tests in `TripEditor.test.tsx` (fail without the fix), incl. the Opus B9 finding that a cancelled lone-stop search left "Searching…" stuck: the search now gives its number back when cancelled before being replaced. A34 also sends the start the editor shows when no start is saved. Still open for the owner: A20/A21/A24/A25 not yet seen in a real browser |
-| A37 | Polar stops with a light preference moved the start time | completed | 2026-10-22, found by the live QA run: `/api/optimize` treats a stop with no sunrise or sunset that day as `any`, so a polar-only trip is not timed and no "Start time moved" note appears. Test in `tests/api/optimize.test.ts` (fails without the fix). Not yet pushed |
+| B9 | FINAL: Opus check, merge, push, Vercel and CI | completed | 2026-10-22: fresh Opus check GO; pushed `d4fec42` (A34, A35) and `f289298` (A37 plus note full stop) to main; Vercel photo-app-pi2o success, CI check and e2e success for both. Live QA (10 testers, 8 local and 2 production) found only the A37 bug. Owner follow-ups: delete prod QA account qa-a25-1022@example.com (+ trip QA-A25) by hand; confirm qa-local-places-a28@example.com is gone; look at A20/A21/A24/A25 in a real browser |
+| A37 | Polar stops with a light preference moved the start time | completed | 2026-10-22, found by the live QA run: `/api/optimize` treats a stop with no sunrise or sunset that day as `any`, so a polar-only trip is not timed and no "Start time moved" note appears. Test in `tests/api/optimize.test.ts` (fails without the fix). Pushed as f289298 |
 | A36 | Upgrade Next.js 16.4.0 to 16.4.2 (critical advisory fails CI) | completed | 2026-10-22: `next` and `eslint-config-next` pinned to 16.4.2; `npm audit --omit=dev --audit-level=high` now 0 vulnerabilities (the 10 left are dev-only); tsc, eslint, 1573 tests and `next build` (exit 0) pass |
 | A33 | Local places copy for South Korea and Japan | completed | 2026-10-21: SOUTH_KOREA and JAPAN coverage rings in `local-places.ts`, lng prefilter widened for east longitudes; 50,310 places (`data/places-asia/`, `scripts/build-places-asia.sh`) imported into the local dev DB and production Turso (no `--replace`); Turso Place table now 203,679 rows (regional extracts overlap, so slightly fewer than the sum). Data is live, so the coverage code is safe to push. Full suite 160 files, 1572 tests passed |
 | A28 | Widen the local places copy beyond the US so more searches skip Overpass | completed | 2026-10-21: one NORTH_AMERICA coverage ring in `local-places.ts` (lower 48, Canada, Alaska panhandle, Mexico; Greenland, Bahamas, Cuba, Central America stay on Overpass). 40,488 Canada and Mexico places (`data/places-intl/`, built by `scripts/build-places-intl.sh`) imported into the local dev DB and into production Turso (no `--replace`); Turso Place table now 153,763 rows. Data is already live, so the coverage code is safe to push. Full suite 160 files, 1557 tests passed |
@@ -132,15 +132,16 @@ Known gaps:
 - Routes that wind more than 360 degrees round a pole get the 400 "too complex" answer. Places already imported at exactly lng 180.0 sit in an unreachable grid column until `import-places` is re-run (new imports wrap to column 0).
 - Skills in `.agents/skills` (in git) and `.claude/skills` (local copy, gitignored) reference plugin commands that are not installed.
 
-## Current work: local UI batch and sweeps (2026-10-19)
+## Current work: everything pushed (2026-10-22)
 
-**Goal:** the Task board above. The PDF itinerary (2026-10-16) and the C1-C6 UI batch are merged and pushed (`7a46785`).
-The A-batch (A4-A9, A11, A12, A14-A18, A6) is done and tested locally but **not committed or pushed**: it goes out with
-the FINAL row (B7), after the sweeps (H rows), triage (H7) and `/security-review` (H8). Do not push until the owner says "push".
+**Goal:** the Task board above. Nothing is open: the UI batches, the sweeps, the map/suggestions/optimizer batch and the
+FINAL row are all pushed to `main` and deployed (last push `f289298`; Vercel `photo-app-pi2o` and CI `check` and `e2e` succeeded).
+See the Archive and `PROGRESS.md`. Owner follow-ups are listed in the B9 archive row and in `PROGRESS.md` (2026-10-22).
 
-**Where the code is:** branch `main` in `/Users/genestone/road-trip-photo-planner` with uncommitted changes. Sweep agents
+**Where the code is:** branch `main` in `/Users/genestone/road-trip-photo-planner`, clean after the docs push. Sweep agents
 are read-only and write reports to the session scratchpad. Never push a non-`main` branch (Preview builds hold the Turso
-credentials, see the deploy caution below).
+credentials, see the deploy caution below). Live QA: use a local server with `E2E_PORT=3200 node scripts/e2e-server.mjs`
+(throwaway database, fake map and externals); testers share one Playwright MCP browser, so give each its own headless context.
 
 **Owner's standing rules (also in memory and `CLAUDE.md`):**
 - "push" means push to `main` of `gene500/Photo-App`; never push other branches.
@@ -352,14 +353,16 @@ passed. See `PROGRESS.md`. The sections above are historical context for the bui
 
 ## Local map data (photo-spot suggestions)
 
-Suggestions are answered from a `Place` table (a copy of OpenStreetMap viewpoints, named peaks and attractions for the 50 states + DC),
-not from the public Overpass servers, which often return 504/429. Overpass is only asked when the search is outside the US boxes
-(`inLocalCoverage` in `src/server/suggestions/local-places.ts`), or the local copy returns fewer than `MIN_LOCAL_PLACES` (5) places;
-if Overpass then fails, the thin local answer is used.
+Suggestions are answered from a `Place` table (a copy of OpenStreetMap viewpoints, named peaks and attractions for the lower 48, Alaska,
+Hawaii, Canada south of 76 N, Mexico, South Korea and Japan), not from the public Overpass servers, which often return 504/429 and take
+25-60 s outside the local copy. Overpass is only asked when the search is outside the rings (`inLocalCoverage` in
+`src/server/suggestions/local-places.ts`), or the local copy returns fewer than `MIN_LOCAL_PLACES` (5) places;
+if Overpass then fails, the thin local answer is used. Overpass answers are also kept in the shared `SuggestionCache` table (A27).
+Turso `Place` holds 203,679 rows (US, Canada, Mexico, South Korea, Japan). Import to Turso **before** pushing a coverage change.
 
 - Build the data: `scripts/build-places.sh` (about 1 hour, 10 GB of downloads, needs `uv`) writes `data/places/*.jsonl` (git-ignored).
 - Load it: `node scripts/import-places.mjs data/places --replace` (set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` to load the live DB, otherwise `DATABASE_URL`).
 - The table is created by migration `20261011120000_local_places`; until it is filled, searches behave exactly as before (Overpass).
 - Refresh every few months. Relations (rare multipolygon attractions) are not included; ways use the centroid of their nodes.
-- Known gap: just inside the US border a search reaching across it (e.g. San Diego near Tijuana) shows only the US side.
+- Other regions: `scripts/build-places-intl.sh` (Canada, Mexico) and `scripts/build-places-asia.sh` (South Korea, Japan), then `node scripts/import-places.mjs <dir>` (no `--replace`; upserts by id).
 - Query shape (2026-10-09): a search is one database round trip however long the route. Cells are merged into runs read as `cell BETWEEN a AND b` terms (at most 100 per statement, extra statements run in parallel), corner cells outside a circle are skipped, and every cell read is remembered in memory for 30 minutes (`createCellReader`), so a nearby second search needs only the new cells. After a re-import a long-lived server may serve old cells for up to 30 minutes. Around-point results are ranked kind tier, named, then nearest first (routes: kind, named, id).

@@ -3,6 +3,18 @@
 Running record of what's happened on this project. Updated
 periodically as work proceeds — newest entries on top.
 
+## 2026-10-22 (map, suggestions and optimizer batch, live)
+
+Pushed and deployed (Vercel `photo-app-pi2o` success, CI `check` and `e2e` success): `633b653` (trip-name panning and stop
+centring clear of the drawer, visited stops cascade, suggestions stay put, a shared Turso suggestion cache, local places
+for Canada, Mexico, South Korea and Japan, and the daylight-aware optimizer), `503ad3f` (Next.js 16.4.2, which clears a
+critical advisory that failed the CI audit), `d4fec42` (Optimize keeps the shown start once stops are visited;
+"Searching..." no longer sticks when the stops drop to one) and `f289298` (polar stops no longer move the start; the last
+optimize note ends with a full stop). Turso `Place` holds 203,679 rows. A final Opus review said GO. Ten testers (8 on a
+local fake-externals server, 2 on production) found only the polar bug. Not seen on a real map: panning and centring. Open
+for the owner: delete the production QA account `qa-a25-1022@example.com` (and its trip) and check that
+`qa-local-places-a28@example.com` is gone. Board and rules are in `HANDOFF.md` and `CLAUDE.md`.
+
 ## 2026-10-19 (UI batch A, local; sweeps queued)
 
 Done and tested locally (typecheck, lint, 1526 unit tests), **not committed or pushed**, not yet seen on the real Mapbox map: bigger

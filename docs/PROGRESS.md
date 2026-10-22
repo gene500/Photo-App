@@ -13,7 +13,7 @@ critical advisory that failed the CI audit), `d4fec42` (Optimize keeps the shown
 optimize note ends with a full stop). Turso `Place` holds 203,679 rows. A final Opus review said GO. Ten testers (8 on a
 local fake-externals server, 2 on production) found only the polar bug. Not seen on a real map: panning and centring. Open
 for the owner: delete the production QA account `qa-a25-1022@example.com` (and its trip) and check that
-`qa-local-places-a28@example.com` is gone. Board and rules are in `HANDOFF.md` and `CLAUDE.md`.
+`qa-local-places-a28@example.com` is gone. Board and rules are in `docs/HANDOFF.md` and `CLAUDE.md`.
 
 ## 2026-10-19 (UI batch A, local; sweeps queued)
 
@@ -23,7 +23,7 @@ stop row; larger trip title; darker arrival/weather text; Optimize route sits be
 PDF, GPX, Apple Maps, Google Maps; light hint on one line; selection tabs without dead space; per-stop sun position line;
 Optimize priority setting (`optimizeFocus`: priority or time) with a gear link to Settings. Earlier, 2026-10-16 to 18: sky and
 weather warning, PDF itinerary, the C1-C6 UI batch (all pushed, `7a46785`). Next: bug sweeps H3-H2, triage, `/security-review`,
-then the FINAL row. Board and rules are in `HANDOFF.md` and `CLAUDE.md`.
+then the FINAL row. Board and rules are in `docs/HANDOFF.md` and `CLAUDE.md`.
 
 ## 2026-10-08 (light-aware route optimization, branch `light-aware`)
 
@@ -147,7 +147,7 @@ controls overlapped the search bar, and fitted points hid under the sheet.
 Deviations/notes: add-stop and stop details are React cards under the search
 bar, not anchored Mapbox popups (same on real and offline maps, unit-testable).
 The final whole-branch review was run on Opus, which contradicts the standing
-"Sonnet only" rule in HANDOFF.md; the controller did it by mistake and is
+"Sonnet only" rule in docs/HANDOFF.md; the controller did it by mistake and is
 disclosing it here. Playwright runs Desktop Chrome at 1280x720 on the fake map, so the desktop layout
 is covered there; only the desktop view on the real Mapbox map is unverified.
 Not verified in a real browser: failed-drag revert, suggestion markers on the real map, landmark click names
@@ -263,7 +263,7 @@ Mapbox token. Nothing has been deployed.
 ## 2026-10-07 (final whole-branch review: ready to merge)
 
 All 24 tasks of the implementation plan are complete and reviewed-approved
-(per-task history in `HISTORY.md`, full detail in the SDD ledger). Dispatched
+(per-task history in `docs/HISTORY.md`, full detail in the SDD ledger). Dispatched
 the final whole-branch code review per `superpowers:subagent-driven-development`
 (Sonnet, per standing policy) across the full branch diff (58 commits, 134
 files, ~18,250 insertions since diverging from `main`).
@@ -373,7 +373,7 @@ Notable along the way: the `tdd-guard` plugin malfunctioned repeatedly
 (confirmed via direct SDK probe to be a plugin reliability issue, not a
 config problem) and was disabled for Tasks 4 onward — TDD discipline is
 still required by every task brief and independently checked by each task
-reviewer against real RED/GREEN evidence. Full detail in `HANDOFF.md` and
+reviewer against real RED/GREEN evidence. Full detail in `docs/HANDOFF.md` and
 the SDD ledger. Remote pushed to https://github.com/gene500/Photo-App.git
 (branches `main` and `worktree-road-trip-photo-planner`).
 

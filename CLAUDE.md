@@ -18,13 +18,13 @@ A push is not finished until Vercel reports the deployment as done. After every 
    - Still `pending` after 10 minutes: say so and give the `target_url`; do not guess.
 
 Notes:
-- Only the `photo-app-pi2o` project is the real site. Vercel also reports a `photo-app` project for each push; it is a duplicate empty project (see `HANDOFF.md`) and its status can be ignored.
+- Only the `photo-app-pi2o` project is the real site. Vercel also reports a `photo-app` project for each push; it is a duplicate empty project (see `docs/HANDOFF.md`) and its status can be ignored.
 - If nothing is reported for the commit at all, the push may not have triggered a deploy; say that rather than assuming success.
 - A push to a branch other than `main` creates a preview deployment, not the live site. Say which one it is.
 
-## Keep the to-do list in HANDOFF.md and update it as you go
+## Keep the to-do list in docs/HANDOFF.md and update it as you go
 
-The single to-do list and handoff file is `HANDOFF.md` (its "Task board"); there is no separate `TODO.md`.
+The single to-do list and handoff file is `docs/HANDOFF.md` (its "Task board"); there is no separate `TODO.md`.
 
 For any job with more than one step, add the tasks to the Task board before starting work.
 
@@ -35,7 +35,7 @@ For any job with more than one step, add the tasks to the Task board before star
 5. Do not drop rows silently. If the user changes the plan, mark the old rows removed and add the new ones.
 6. Whenever you report progress, the board is the source of truth: say which rows are done, which is in progress, and what is left. Write it so a different Claude session or machine can resume from the file alone.
 7. Ordering: the list runs owner work items, then the bug sweeps (H rows), then the final row. New owner work items go after the existing work items but before the bug sweeps, in the order asked (then sorted Light to Heavy by Use within the work group and within the sweep group; the FINAL row stays last), never ahead of work already queued (the one item in progress finishes first). The absolute final row of any list is always one combined row: a **full codebase check (run on Opus), then merge, push to `main`, and confirmation that both Vercel and CI succeeded**. Nothing is ever placed after it. When new work is added, insert it above that final row and keep it last. The list is finished only when that row is complete.
-8. Visibility and progress prints: the task table must always be visible in the terminal. Print it at the end of every reply to the owner (even a short answer or a one-line status) and again each time a task is completed during a batch, in the item 10 format, kept in sync with `HANDOFF.md`. One exception: if the table is already the most recent thing printed, do not print it again.
-9. Archive: the moment a task is completed or removed, move its row from "Open tasks" to the "Archive" section of `HANDOFF.md` in the same update. The task table shown at the end of each reply lists open tasks only (the standing final row stays until its run completes).
+8. Visibility and progress prints: the task table must always be visible in the terminal. Print it at the end of every reply to the owner (even a short answer or a one-line status) and again each time a task is completed during a batch, in the item 10 format, kept in sync with `docs/HANDOFF.md`. One exception: if the table is already the most recent thing printed, do not print it again.
+9. Archive: the moment a task is completed or removed, move its row from "Open tasks" to the "Archive" section of `docs/HANDOFF.md` in the same update. The task table shown at the end of each reply lists open tasks only (the standing final row stays until its run completes).
 10. Task table format (end of every reply): a bordered markdown table with columns ID, Task, Status, Est, Use, and no emoji (emoji break the borders in the terminal). Task names at most about 45 characters; status one word (pending, active, paused, blocked); Est is Claude's rough working time like `15 min` (excluding deploy waits and owner review); Use is Light, Medium or Heavy token usage. Rows are grouped work, then sweeps, then FINAL, sorted Light to Heavy within work and sweeps. Put any longer note in a line under the table. Open tasks only.
 11. Parallel work: before starting a batch of tasks, check which ones could run in parallel (different files, no shared interface, read-only sweeps) and tell the owner which ones and why. Ask before running anything in parallel, and never start parallel agents without a yes. Without a yes, run one at a time.

@@ -2,7 +2,7 @@
 
 The one file that tracks the work and lets another Claude session or machine pick it up. It replaces the old
 `TODO.md`. **Update the Task board below the moment any status changes** (and commit it), then trust it, `git log`
-and `PROGRESS.md` over memory. The sections after "Current work" are history except "Claude Code setup".
+and `docs/PROGRESS.md` over memory. The sections after "Current work" are history except "Claude Code setup".
 
 ## Task board
 
@@ -20,6 +20,7 @@ Last updated 2026-10-22
 
 | # | Task | Status | Notes |
 |---|---|---|---|
+| A38 | Tidy repo root and reformat README | completed | 2026-10-22: HANDOFF, PROGRESS, HISTORY moved to `docs/` (config files stay at the root; tools expect them there); README given a contents list, shorter bullets, same facts. Uncommitted until owner says push |
 | A29 | Prefetch suggestions for the next likely area | removed | 2026-10-21 by owner: already covered by the route prewarm, lone-stop auto search and the 30 min server cache |
 | A24 | Visited checkbox, re-optimize stops after it | completed | 2026-10-21: the My trip dot-checkbox already existed. Added `src/lib/visited-run.ts` (cascade: check = all earlier, uncheck = all later; `leadingVisited`), `toggleVisited` in TripEditor, and Optimize now sends only [last visited stop, ...rest] (last visited is the fixed start; earlier visited stay put) and leaves the trip start time alone once anything is visited; departure from the anchor = route arrival there + dwell, else the saved start. Share link no longer carries or shows `visited` (PublicStop, mapper, SharedTripView, privacy text); share DTO test updated. Known limit: the optimizer may still pick its own start inside the tail, which is not saved. Full vitest 1551 passed. Not seen in a browser. Uncommitted |
 | A25 | Generated suggestions stay on the page, no refetching | completed | 2026-10-21: root cause = `freshSuggestions` only showed a list whose search key equalled the current stop coordinates, so reorder/move/delete/optimize hid it (and `takeSuggestion` re-tagged keys, re-running popularity). Now the list shows whatever the stops do (places that became stops are filtered out), accept just removes the item, and the lone-stop auto search skips when a finished list already covers the stop (within 15 km). Refetch only on Find or when a lone stop moves out of coverage. Regression test added; the old 'clears suggestions' test rewritten. Uncommitted |
@@ -56,7 +57,7 @@ Last updated 2026-10-22
 | A1 | Sunrise/sunset map lines get an arrowhead pointing toward the stop | completed | pushed `7a46785`; not yet seen on the real Mapbox map |
 | A2 | Stray thin line above "No trips yet" after deleting all trips | removed | owner dropped it 2026-10-19; never reproduced in Chromium (suspected Safari paint from `.lift`/`anim-rise` on trip cards) |
 | A3 | Search bar back to its pre-C3 look (arrow kept) | completed | pushed `7a46785` |
-| A10 | Add the exact Claude Code setup to HANDOFF.md | completed | 2026-10-19: new "Claude Code setup" section; fixed outdated plugin/tdd-guard text |
+| A10 | Add the exact Claude Code setup to docs/HANDOFF.md | completed | 2026-10-19: new "Claude Code setup" section; fixed outdated plugin/tdd-guard text |
 | A13 | Fix the formatting in the screenshot (the end-of-reply task table broke mid-table in the terminal; not an app screen) | completed | 2026-10-19: tables now use short task names and one-word statuses so rows never wrap; rule added to `CLAUDE.md` item 8 and memory |
 | A4 | Make the sunrise/sunset map arrow more defined (a little bigger) | completed | 2026-10-19: edited and verified by typecheck, lint and 1517 unit tests; local only (not committed, not pushed, not yet seen in a browser) |
 | A8 | Make the title text larger (see screenshot) | completed | 2026-10-19: edited and verified by typecheck, lint and 1517 unit tests; local only (not committed, not pushed, not yet seen in a browser) |
@@ -136,7 +137,7 @@ Known gaps:
 
 **Goal:** the Task board above. Nothing is open: the UI batches, the sweeps, the map/suggestions/optimizer batch and the
 FINAL row are all pushed to `main` and deployed (last push `f289298`; Vercel `photo-app-pi2o` and CI `check` and `e2e` succeeded).
-See the Archive and `PROGRESS.md`. Owner follow-ups are listed in the B9 archive row and in `PROGRESS.md` (2026-10-22).
+See the Archive and `docs/PROGRESS.md`. Owner follow-ups are listed in the B9 archive row and in `docs/PROGRESS.md` (2026-10-22).
 
 **Where the code is:** branch `main` in `/Users/genestone/road-trip-photo-planner`, clean after the docs push. Sweep agents
 are read-only and write reports to the session scratchpad. Never push a non-`main` branch (Preview builds hold the Turso
@@ -169,7 +170,7 @@ Second feature round: the app is now map-first (see
 `docs/superpowers/specs/2026-10-07-map-first-ui-design.md` and the plan next to
 it). Built on branch `map-first-ui` (since merged and deleted; follow-up fixes landed via a `final-fixes` branch), ledger at
 `.superpowers/sdd/2026-10-07-map-first-ui/progress.md` (git-ignored; recover
-from `git log` if gone). Status is in `PROGRESS.md`. Merging to `main`
+from `git log` if gone). Status is in `docs/PROGRESS.md`. Merging to `main`
 auto-deploys to Vercel and applies the Turso migration, so: do not push the
 feature branch (Preview builds hold the Turso credentials), re-count live trips
 before merging (the migration drops trip start/end), and smoke-test the live
@@ -215,10 +216,10 @@ repo, `npm install`, and see `README.md` for setup.
 There is no worktree any more; work in the main checkout of the repo
 (`/Users/genestone/road-trip-photo-planner`, branch `main`, or a fix branch off it).
 
-1. Read `PROGRESS.md` (newest entry first) for the latest state.
-2. `HISTORY.md` (committed, durable) has per-task completion facts for the
+1. Read `docs/PROGRESS.md` (newest entry first) for the latest state.
+2. `docs/HISTORY.md` (committed, durable) has per-task completion facts for the
    original 24-task build. The SDD ledgers under `.superpowers/sdd/` are local
-   and git-ignored; they may be gone, so trust `git log` and `PROGRESS.md`.
+   and git-ignored; they may be gone, so trust `git log` and `docs/PROGRESS.md`.
 3. For new work, branch off `main`, use
    `superpowers:subagent-driven-development`, and follow the standing rules
    below. Never push a non-`main` branch (see the deploy caution above).
@@ -239,7 +240,7 @@ There is no worktree any more; work in the main checkout of the repo
 - The D1-D9 open decisions table in the plan was presented to the human
   partner and not objected to — treat all nine defaults as confirmed, not
   as still-open questions.
-- Keep `PROGRESS.md` (project root, both checkouts conceptually share one
+- Keep `docs/PROGRESS.md` (project root, both checkouts conceptually share one
   log, but it physically only exists where last committed) updated at
   phase-level checkpoints — this is a standing preference, not specific to
   this project.
@@ -348,7 +349,7 @@ are managed in Vercel; set them with `vercel env add NAME env --value ...`
 (not via stdin, not by pasting into the web form: both caused stray
 whitespace). Remaining: restrict the Mapbox token to the site URL. The
 map-first UI is merged and deployed (2026-10-07) and the live smoke test
-passed. See `PROGRESS.md`. The sections above are historical context for the build.
+passed. See `docs/PROGRESS.md`. The sections above are historical context for the build.
 
 
 ## Local map data (photo-spot suggestions)

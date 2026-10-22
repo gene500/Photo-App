@@ -1,12 +1,25 @@
 # Photo Op Planner
 
-## 1. What it is
+A web app for planning photo ops: plot a route, discover and curate scenic/photo-worthy stops along it, and see the best time of day to shoot each one.
 
-A web app for planning photo ops: plot a
-route, discover and curate scenic/photo-worthy stops along it, and see
-the best time of day to shoot each one.
+Live site: <https://photo-app-pi2o.vercel.app>
 
-## 2. Setup
+## Contents
+
+- [Setup](#setup)
+- [Offline mode and offline copies](#offline-mode-and-offline-copies)
+- [Text, photo and search rules](#text-photo-and-search-rules)
+- [Scripts](#scripts)
+- [Optimize route](#optimize-route)
+- [Trip tools](#trip-tools): shot list, alternatives, settings, sharing, export
+- [Photos and suggestions](#photos-and-suggestions)
+- [Weather and light-window forecast](#weather-and-light-window-forecast)
+- [Privacy policy and terms](#privacy-policy-and-terms)
+- [How best time is computed](#how-best-time-is-computed)
+- [Tunables](#tunables)
+- [Deploying to Vercel](#deploying-to-vercel)
+
+## Setup
 
 ```bash
 npm install
@@ -15,17 +28,13 @@ cp .env.example .env
 
 Fill in `.env`:
 
-- `NEXTAUTH_SECRET` — generate one with `openssl rand -base64 32`.
-- `NEXT_PUBLIC_MAPBOX_TOKEN` and `MAPBOX_TOKEN` — create a Mapbox
-  account and token at [account.mapbox.com](https://account.mapbox.com).
-  `NEXT_PUBLIC_MAPBOX_TOKEN` is the public `pk.*` token used by the
-  browser map; `MAPBOX_TOKEN` is used server-side for Directions, the
-  Matrix API (route optimization) and Geocoding (it can be the same `pk.*` token).
-- `FLICKR_API_KEY` — **optional**, server-only secret. Without it the app
-  uses Wikimedia Commons + Wikipedia only (see "Photo sources" below).
-  Flickr now restricts API keys to Pro accounts, so expect to leave it unset.
-- `DATABASE_URL` and `NEXTAUTH_URL` already have working local defaults
-  in `.env.example`.
+| Variable | Notes |
+| --- | --- |
+| `NEXTAUTH_SECRET` | Generate one with `openssl rand -base64 32`. |
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | The public `pk.*` token used by the browser map. Create a Mapbox account and token at [account.mapbox.com](https://account.mapbox.com). |
+| `MAPBOX_TOKEN` | Used server-side for Directions, the Matrix API (route optimization) and Geocoding. It can be the same `pk.*` token. |
+| `FLICKR_API_KEY` | **Optional**, server-only secret. Without it the app uses Wikimedia Commons + Wikipedia only (see [Photo sources](#photo-sources-attribution-and-licensing)). Flickr now restricts API keys to Pro accounts, so expect to leave it unset. |
+| `DATABASE_URL`, `NEXTAUTH_URL` | Already have working local defaults in `.env.example`. |
 
 Then set up the database and start the dev server:
 
@@ -34,64 +43,84 @@ npx prisma migrate dev
 npm run dev
 ```
 
-## 3. Offline mode
+## Offline mode and offline copies
 
-Run against canned data with no network calls to Mapbox or Overpass
-(no tokens required):
+### Offline mode (canned data)
+
+Run against canned data with no network calls to Mapbox or Overpass (no tokens required):
 
 ```bash
 EXTERNAL_APIS_FAKE=1 NEXT_PUBLIC_MAP_FAKE=1 npm run dev
 ```
 
-`EXTERNAL_APIS_FAKE=1` swaps in canned Mapbox Directions/Matrix/Geocoding and
-Overpass responses server-side; `NEXT_PUBLIC_MAP_FAKE=1` swaps the
-Mapbox GL map for an offline preview panel client-side.
+- `EXTERNAL_APIS_FAKE=1` swaps in canned Mapbox Directions/Matrix/Geocoding and Overpass responses server-side.
+- `NEXT_PUBLIC_MAP_FAKE=1` swaps the Mapbox GL map for an offline preview panel client-side.
 
 ### Offline copies of trips (PWA)
 
-Open a trip while online and a read-only copy is kept in this browser (localStorage, the 20 most recent trips,
-saved shortly after each change; the share token and uploaded photo URLs are never stored). Without a connection,
-open `/offline` to browse the saved trips: stops, notes, shot lists, planned date and each stop's best light
-window. There is no map offline (Mapbox terms forbid storing tiles) and no drive times (they need the routing API).
-Copies are cleared on sign-out and whenever a different user signs in on the device. They are stored as plaintext
-in localStorage until then (anyone with access to the browser profile can read them), so sign out on a shared device;
-sign-out also switches saving off so a pending autosave cannot bring a copy back, and the login page wipes any leftovers.
-Sign-out is refused while the device is offline (with a message to reconnect first), because it could not end the session on the server; nothing is cleared in that case. The same holds when the server does not confirm the sign-out (an error answer): the copies stay and the button can be pressed again. Delete account, sign out on all devices and change password finish with the same awaited sign-out and show an error with a retry if it fails.
-A save that does not fit the browser's storage first measures the free room and only then drops the oldest other copies it needs; if even that cannot make room, nothing is deleted.
+Open a trip while online and a read-only copy is kept in this browser.
 
-`public/sw.js` is a minimal service worker (registered at scope `/` in production builds, or in dev with
-`NEXT_PUBLIC_SW=1`, which the e2e server sets). It caches only the `/offline` page (a dynamic route now: it is rendered per request so it carries the CSP nonce, and the worker caches that rendered copy) and `/_next/static` and
-`/icons` assets; it never touches `/api/*` or `/s/*` and never stores authenticated pages. A failed navigation falls
-back to `/offline`. `src/app/manifest.ts` makes the app installable; the icons in `public/icons` are generated by
-`node scripts/generate-icons.mjs` (no dependencies).
+- **What is kept:** localStorage, the 20 most recent trips, saved shortly after each change. The share token and uploaded photo URLs are never stored.
+- **What you can browse offline:** open `/offline` to see the saved trips: stops, notes, shot lists, planned date and each stop's best light window.
+- **What is missing offline:** there is no map (Mapbox terms forbid storing tiles) and no drive times (they need the routing API).
+- **Clearing:** copies are cleared on sign-out and whenever a different user signs in on the device. Until then they are stored as plaintext in localStorage (anyone with access to the browser profile can read them), so sign out on a shared device.
+- **Sign-out details:**
+  - Sign-out also switches saving off so a pending autosave cannot bring a copy back, and the login page wipes any leftovers.
+  - Sign-out is refused while the device is offline (with a message to reconnect first), because it could not end the session on the server. Nothing is cleared in that case.
+  - The same holds when the server does not confirm the sign-out (an error answer): the copies stay and the button can be pressed again.
+  - Delete account, sign out on all devices and change password finish with the same awaited sign-out and show an error with a retry if it fails.
+- **Storage full:** a save that does not fit the browser's storage first measures the free room and only then drops the oldest other copies it needs. If even that cannot make room, nothing is deleted.
+
+**Service worker.** `public/sw.js` is a minimal service worker (registered at scope `/` in production builds, or in dev with `NEXT_PUBLIC_SW=1`, which the e2e server sets).
+
+- It caches only the `/offline` page and `/_next/static` and `/icons` assets. `/offline` is a dynamic route: it is rendered per request so it carries the CSP nonce, and the worker caches that rendered copy.
+- It never touches `/api/*` or `/s/*` and never stores authenticated pages.
+- A failed navigation falls back to `/offline`.
+- `src/app/manifest.ts` makes the app installable. The icons in `public/icons` are generated by `node scripts/generate-icons.mjs` (no dependencies).
+
+## Text, photo and search rules
 
 ### Name and notes characters
 
-Trip names, stop names and shot-list items are one line: a tab or newline becomes a single space, and other control
-characters (C0, DEL, C1), bidi marks/overrides/isolates (LRM, RLM, ALM, ...) and U+2028/U+2029 are removed (not
-rejected) on the server, and a name must keep at least one visible character (zero-width characters alone do
-not count). Notes and shot notes keep newlines and tabs but lose other control characters. Names that come from
-OpenStreetMap or Mapbox are cleaned the same way and cut to the limit without splitting a surrogate pair (an emoji ZWJ sequence can still be cut between its parts). Because the text is
-cleaned rather than refused, an older stored value with such a character never blocks an unrelated edit. Helpers live in
-`src/lib/text.ts`.
+- Trip names, stop names and shot-list items are one line: a tab or newline becomes a single space.
+- Other control characters (C0, DEL, C1), bidi marks/overrides/isolates (LRM, RLM, ALM, ...) and U+2028/U+2029 are removed (not rejected) on the server.
+- A name must keep at least one visible character (zero-width characters alone do not count).
+- Notes and shot notes keep newlines and tabs but lose other control characters.
+- Names that come from OpenStreetMap or Mapbox are cleaned the same way and cut to the limit without splitting a surrogate pair (an emoji ZWJ sequence can still be cut between its parts).
+- Because the text is cleaned rather than refused, an older stored value with such a character never blocks an unrelated edit.
+- Helpers live in `src/lib/text.ts`.
 
 ### Reference photo uploads
 
-The server walks each JPEG, PNG or WebP file (`src/server/photo-sanitize.ts`, no image library): the contents must match
-the declared type and have a valid structure, and a side over 30000 px or more than 50 megapixels is refused. Metadata is
-dropped before the file is stored: EXIF (including GPS), XMP, IPTC, comments (also those between progressive scans), PNG text/time chunks, unknown WebP chunks (only VP8/VP8L/VP8X/ALPH/ANIM/ANMF/ICCP are kept) and anything after the
-end of the image (a JPEG is cut at its first end-of-image, so an appended second image or a motion-photo video is gone). Pixels are copied, not re-encoded. A JPEG keeps only its EXIF orientation so a rotated phone photo still
-shows upright.
+The server walks each JPEG, PNG or WebP file (`src/server/photo-sanitize.ts`, no image library).
+
+- The contents must match the declared type and have a valid structure.
+- A side over 30000 px or more than 50 megapixels is refused.
+- Metadata is dropped before the file is stored:
+  - EXIF (including GPS), XMP, IPTC, comments (also those between progressive scans), PNG text/time chunks.
+  - Unknown WebP chunks (only VP8/VP8L/VP8X/ALPH/ANIM/ANMF/ICCP are kept).
+  - Anything after the end of the image (a JPEG is cut at its first end-of-image, so an appended second image or a motion-photo video is gone).
+- Pixels are copied, not re-encoded. A JPEG keeps only its EXIF orientation so a rotated phone photo still shows upright.
 
 ### Place search
 
-The search bar finds landmarks, viewpoints and other points of interest by name ("Horseshoe Bend", "Griffith Observatory"), plus towns and addresses. It uses the Mapbox Search Box API: `GET /api/geocode?q&session[&proximity]` calls `suggest` (5 results, `types=poi,address,place,locality,neighborhood`) and answers `{ suggestions: [{ name, subtitle?, mapboxId?, lat?, lng? }] }`, points of interest first (stable, Mapbox's order is kept within a group). Suggestions carry no coordinates, so picking one calls `GET /api/geocode/retrieve?id&session`, which answers `{ place }` named like "Horseshoe Bend, Page, Arizona". The client makes one uuid `session` per search (shared by every suggest and the retrieve, which Mapbox bills as one) and renews it after a pick or when the search is cleared. If `suggest` fails, the old v6 forward geocoder answers instead and its rows already carry `lat`/`lng`, so no retrieve is needed. Both routes need sign-in, are rate limited (`geocode`, `geocode-retrieve`, 60/min) and cache for 10 minutes. In fake mode `suggest` returns canned landmarks that match the query plus the old fake address.
+The search bar finds landmarks, viewpoints and other points of interest by name ("Horseshoe Bend", "Griffith Observatory"), plus towns and addresses. It uses the Mapbox Search Box API.
+
+- `GET /api/geocode?q&session[&proximity]` calls `suggest` (5 results, `types=poi,address,place,locality,neighborhood`) and answers `{ suggestions: [{ name, subtitle?, mapboxId?, lat?, lng? }] }`, points of interest first (stable: Mapbox's order is kept within a group).
+- Suggestions carry no coordinates, so picking one calls `GET /api/geocode/retrieve?id&session`, which answers `{ place }` named like "Horseshoe Bend, Page, Arizona".
+- The client makes one uuid `session` per search (shared by every suggest and the retrieve, which Mapbox bills as one) and renews it after a pick or when the search is cleared.
+- If `suggest` fails, the old v6 forward geocoder answers instead. Its rows already carry `lat`/`lng`, so no retrieve is needed.
+- Both routes need sign-in, are rate limited (`geocode`, `geocode-retrieve`, 60/min) and cache for 10 minutes.
+- In fake mode `suggest` returns canned landmarks that match the query plus the old fake address.
 
 ### Confirm dialogs
 
-Deleting a trip or a stop asks through an in-app, themed dialog (`src/components/ui/Dialog.tsx`, `useConfirm` in `ConfirmDialog.tsx`), not the browser's `window.confirm`: Cancel is focused first, Tab stays inside, Escape or a press on the backdrop cancels, and focus returns to the button that opened it. Only one confirm is open at a time.
+Deleting a trip or a stop asks through an in-app, themed dialog (`src/components/ui/Dialog.tsx`, `useConfirm` in `ConfirmDialog.tsx`), not the browser's `window.confirm`.
 
-## 4. Scripts
+- Cancel is focused first, Tab stays inside, Escape or a press on the backdrop cancels, and focus returns to the button that opened it.
+- Only one confirm is open at a time.
+
+## Scripts
 
 | Script | Command | Purpose |
 | --- | --- | --- |
@@ -103,296 +132,284 @@ Deleting a trip or a stop asks through an in-app, themed dialog (`src/components
 | `typecheck` | `next typegen && tsc --noEmit` | Type-check the codebase |
 | `db:migrate` | `prisma migrate dev` | Apply/create Prisma migrations |
 
-## 5. Optimize route
+## Optimize route
 
-The **Optimize route** button (on the **My trip** tab; 2+ stops) reorders the stops for the shortest
-total drive time. The first stop stays the starting point and the last stop is
-free (an open path, not a round trip). The server (`POST /api/optimize`) asks the
-Mapbox Matrix API (`directions-matrix/v1/mapbox/driving`, `annotations=duration`)
-for pairwise drive times, then solves the order in `src/lib/optimize-order.ts`:
-exact (Held-Karp) for up to 9 stops, nearest-neighbour plus 2-opt/or-opt above that. The
-Matrix API allows at most 25 coordinates per request, which matches the app's
-25-stop limit. **Undo** restores the previous order until the stops change again. With exactly
-2 stops there is nothing to reorder, so Optimize only marks the trip optimized.
+The **Optimize route** button (on the **My trip** tab; 2+ stops) reorders the stops for the shortest total drive time.
+
+- The first stop stays the starting point and the last stop is free (an open path, not a round trip).
+- The server (`POST /api/optimize`) asks the Mapbox Matrix API (`directions-matrix/v1/mapbox/driving`, `annotations=duration`) for pairwise drive times, then solves the order in `src/lib/optimize-order.ts`: exact (Held-Karp) for up to 9 stops, nearest-neighbour plus 2-opt/or-opt above that.
+- The Matrix API allows at most 25 coordinates per request, which matches the app's 25-stop limit.
+- **Undo** restores the previous order until the stops change again.
+- With exactly 2 stops there is nothing to reorder, so Optimize only marks the trip optimized.
 
 ### The My trip tab
 
 The panel has three tabs: **Stops** (the places to go), **My trip** and **Suggestions**.
-A Stops row shows only a small rounded photo (your upload, else the place's photo, loaded when the row scrolls into view, else a
-placeholder), the name, the drag handle and Delete; Visited, times and weather are on My trip. A swap's "Swapped X for Y" note with
-**Undo swap** shows on both Stops and My trip.
-My trip holds the start time, **Optimize route** and Undo, the route totals
-(`62 mi · 1 h 0 min`) and the itinerary: one row per stop with its number (the Visited
-toggle), name, Start/End badge and, for a stop with a best light, the **Priority** pill
-(Normal / High / Must). Once the route is optimized each row also shows the light
-window or arrival, the weather and any poor-light warning. Before that the totals
-read "Optimize the route to see drive times and the route line"; if the stops or their
-settings changed since, "Your stops changed. Optimize again to see the route." The
-panel's collapsed one-liner shows the stop count and drive time only while optimized.
-The editor map draws no route line until the trip is optimized (Export still uses the real
-route); before that the stops are bold numbered discs (`STOP_MARKER_CLASS`), clearly unlike
-the small faded suggestion dots, and the map frames the stops. The public share page keeps
-its line: it is rendered fresh on every load from the saved stop order, so it always follows
-the owner's latest Optimize (it does not auto-refresh; reload to see a change).
+
+**Stops tab**
+
+- A row shows only a small rounded photo (your upload, else the place's photo loaded when the row scrolls into view, else a placeholder), the name, the drag handle and Delete.
+- Visited, times and weather are on My trip.
+- A swap's "Swapped X for Y" note with **Undo swap** shows on both Stops and My trip.
+
+**My trip tab**
+
+- It holds the start time, **Optimize route** and Undo, the route totals (`62 mi · 1 h 0 min`) and the itinerary.
+- The itinerary has one row per stop with its number (the Visited toggle), name, Start/End badge and, for a stop with a best light, the **Priority** pill (Normal / High / Must).
+- Once the route is optimized each row also shows the light window or arrival, the weather and any poor-light warning.
+- Before that the totals read "Optimize the route to see drive times and the route line". If the stops or their settings changed since, it reads "Your stops changed. Optimize again to see the route."
+- The panel's collapsed one-liner shows the stop count and drive time only while optimized.
+
+**Map**
+
+- The editor map draws no route line until the trip is optimized (Export still uses the real route).
+- Before that the stops are bold numbered discs (`STOP_MARKER_CLASS`), clearly unlike the small faded suggestion dots, and the map frames the stops.
+- The public share page keeps its line: it is rendered fresh on every load from the saved stop order, so it always follows the owner's latest Optimize (it does not auto-refresh; reload to see a change).
 
 ### Light-aware optimization
 
-Each stop has a **Best light** (Any, Sunrise, Golden hour, Sunset; default Any) and
-a **Time here** in minutes (0-480, default 30), both edited in the stop drawer. Escape closes the drawer; with unsaved edits it asks first (Discard edits / Keep editing) instead of throwing them away.
-Stops added from a viewpoint or peak suggestion start as Golden hour; attractions
-and manual stops start as Any. When any stop has a preference, **Optimize route**
-chooses the visiting order *and* the departure time (`src/lib/optimize-schedule.ts`):
+Each stop has a **Best light** (Any, Sunrise, Golden hour, Sunset; default Any) and a **Time here** in minutes (0-480, default 30), both edited in the stop drawer. Escape closes the drawer; with unsaved edits it asks first (Discard edits / Keep editing) instead of throwing them away.
 
-- A stop's good light is a window on the solar day it is reached: Sunrise = 20 min
-  before sunrise until the end of morning golden hour; Sunset = start of evening
-  golden hour until 20 min after sunset; Golden hour = both. In polar day or night
-  there is no window and no constraint.
-- Score = total drive seconds + 3 x 60 x minutes of missed light (one missed
-  minute costs as much as three minutes of driving). A visit counts as met if
-  `[arrival, arrival + time here]` overlaps a window; otherwise the miss is the
-  gap to the nearest window.
-- Departures tried: the default (sunrise at the first stop) plus every 15 minutes
-  from 1 h before it to 14 h after it. Up to 7 free stops (8 total) the search is
-  exact over all orders (8 stops held the server for about a second per request); above that it is a deterministic local search (swap,
-  2-opt, or-opt) seeded from nearest-neighbour and sunrise-first/sunset-last orders.
-- **Daylight.** A visit that falls wholly in the dark (outside sunrise to sunset and outside the stop's own
-  preferred light) is penalised like a missed window, weighted by the stop's priority, so the departure moves to keep
-  stops lit. Under Time priority dark visits are only reported, not penalised. The result names them ("Can't fit 2 stops
-  in daylight: ..."). A stop with no sunrise or sunset that day (polar day or night) gets no daylight rule and is named
-  in the note ("No sunrise or sunset that day at ..., so no daylight rule applies there."); it also does not make the
-  start move, even when it asks for sunrise or sunset light. A visit is checked against the solar day it arrives on.
-- **Visited stops.** Once stops are marked visited, Optimize re-plans only the stops after the last visited one and
-  keeps the start time the editor shows (`fixDeparture: true` in the request); it does not search for a new start.
-- With no preferences it is exactly the shortest-drive order and the departure
-  stays at sunrise.
+Stops added from a viewpoint or peak suggestion start as Golden hour; attractions and manual stops start as Any. When any stop has a preference, **Optimize route** chooses the visiting order *and* the departure time (`src/lib/optimize-schedule.ts`):
 
-The chosen departure is saved on the trip (`departAt`); the panel shows
-"Starts 5:42 PM" with **Reset to sunrise**. A start time you already saved is
-kept when it costs nothing (it is tried first and wins ties); the search window
-still follows sunrise. The result (moved start time, stops that cannot be fitted)
-is announced to screen readers only; nothing shows under the button. **Undo**
-restores the previous order and departure. Each row shows the window and arrival,
-or "Misses sunset by 40 min".
+- **Light windows.** A stop's good light is a window on the solar day it is reached.
+  - Sunrise = 20 min before sunrise until the end of morning golden hour.
+  - Sunset = start of evening golden hour until 20 min after sunset.
+  - Golden hour = both.
+  - In polar day or night there is no window and no constraint.
+- **Score.** Total drive seconds + 3 x 60 x minutes of missed light (one missed minute costs as much as three minutes of driving). A visit counts as met if `[arrival, arrival + time here]` overlaps a window; otherwise the miss is the gap to the nearest window.
+- **Search.**
+  - Departures tried: the default (sunrise at the first stop) plus every 15 minutes from 1 h before it to 14 h after it.
+  - Up to 7 free stops (8 total) the search is exact over all orders (8 stops held the server for about a second per request).
+  - Above that it is a deterministic local search (swap, 2-opt, or-opt) seeded from nearest-neighbour and sunrise-first/sunset-last orders.
+- **Daylight.**
+  - A visit that falls wholly in the dark (outside sunrise to sunset and outside the stop's own preferred light) is penalised like a missed window, weighted by the stop's priority, so the departure moves to keep stops lit.
+  - Under Time priority dark visits are only reported, not penalised.
+  - The result names them ("Can't fit 2 stops in daylight: ...").
+  - A stop with no sunrise or sunset that day (polar day or night) gets no daylight rule and is named in the note ("No sunrise or sunset that day at ..., so no daylight rule applies there."). It also does not make the start move, even when it asks for sunrise or sunset light.
+  - A visit is checked against the solar day it arrives on.
+- **Visited stops.** Once stops are marked visited, Optimize re-plans only the stops after the last visited one and keeps the start time the editor shows (`fixDeparture: true` in the request). It does not search for a new start.
+- **No preferences.** It is exactly the shortest-drive order and the departure stays at sunrise.
 
-**Optimize focus (Settings, per device).** Settings has an "Optimize route" section (`/settings#optimize`, also reached by the gear
-button beside Optimize route) with **Priority focus** (default) and **Time priority**. Priority focus weights missed light by each
-stop's priority (Normal 1, High 8, Must 1000), so the route may be longer to fit in higher-priority stops; Time priority weights every
-stop the same, so the shortest schedule wins. The choice is sent as `focus` to `POST /api/optimize`. It only matters for stops with a
-best-light preference.
+**Start time and results**
 
-**Sun position.** Once a stop has an arrival time, My trip shows a line such as "Sun SW, 34° high" (`describeSunPosition` in
-`src/lib/sky.ts`), or "Sun below the horizon". The light hint reads like "Sunset 6:10-7:40 PM · arrive 6:25 PM", wrapping on narrow screens.
+- The chosen departure is saved on the trip (`departAt`); the panel shows "Starts 5:42 PM" with **Reset to sunrise**.
+- A start time you already saved is kept when it costs nothing (it is tried first and wins ties); the search window still follows sunrise.
+- The result (moved start time, stops that cannot be fitted) is announced to screen readers only; nothing shows under the button.
+- **Undo** restores the previous order and departure.
+- Each row shows the window and arrival, or "Misses sunset by 40 min".
+
+**Optimize focus (Settings, per device).** Settings has an "Optimize route" section (`/settings#optimize`, also reached by the gear button beside Optimize route) with **Priority focus** (default) and **Time priority**.
+
+- Priority focus weights missed light by each stop's priority (Normal 1, High 8, Must 1000), so the route may be longer to fit in higher-priority stops.
+- Time priority weights every stop the same, so the shortest schedule wins.
+- The choice is sent as `focus` to `POST /api/optimize`. It only matters for stops with a best-light preference.
+
+**Sun position.** Once a stop has an arrival time, My trip shows a line such as "Sun SW, 34° high" (`describeSunPosition` in `src/lib/sky.ts`), or "Sun below the horizon". The light hint reads like "Sunset 6:10-7:40 PM · arrive 6:25 PM", wrapping on narrow screens.
+
+## Trip tools
 
 ### Shot list per stop
 
-The stop drawer has a **Shot list** section: free-text **Shot notes** (up to 2000
-characters) and a checklist of up to 20 shots (1 to 120 characters each). Type a
-shot and press Enter to add it, tick it off, or delete it with the x. It saves with
-the rest of the drawer (only changed fields are sent). The selected-stop card shows
-"2/5 shots" when the list is not empty. The uploaded stop photo is the **Reference
-photo**. Stored as `shotNotes` and a JSON `shotChecklist` column (additive migration).
+The stop drawer has a **Shot list** section: free-text **Shot notes** (up to 2000 characters) and a checklist of up to 20 shots (1 to 120 characters each).
+
+- Type a shot and press Enter to add it, tick it off, or delete it with the x.
+- It saves with the rest of the drawer (only changed fields are sent).
+- The selected-stop card shows "2/5 shots" when the list is not empty.
+- The uploaded stop photo is the **Reference photo**.
+- Stored as `shotNotes` and a JSON `shotChecklist` column (additive migration).
 
 ### Alternative stops
 
-Open a stop's details and press "Find alternatives" to list up to 8 photo spots within 10 km of it
-(same ranking, popularity caption and thumbnail as suggestions; spots within 100 m of any current stop
-are left out). "Swap in" replaces the stop's name and place in place: its order, notes and shot list
-are kept, while it becomes unvisited, `suggested`, and loses its uploaded reference photo (that file is
-deleted, as the old photo no longer matches the place). The route, arrival times and weather refresh.
-A "Swapped A for B · Undo swap" row appears in the stop list; undo restores the previous name, place,
-source and visited flag (not the deleted photo) and is forgotten on reload or when the stop moves.
-`POST /api/suggestions` accepts an optional `radiusKm` (1 to 30, with `around` only).
+Open a stop's details and press "Find alternatives" to list up to 8 photo spots within 10 km of it (same ranking, popularity caption and thumbnail as suggestions; spots within 100 m of any current stop are left out).
+
+- "Swap in" replaces the stop's name and place in place. Its order, notes and shot list are kept, while it becomes unvisited, `suggested`, and loses its uploaded reference photo (that file is deleted, as the old photo no longer matches the place).
+- The route, arrival times and weather refresh.
+- A "Swapped A for B · Undo swap" row appears in the stop list. Undo restores the previous name, place, source and visited flag (not the deleted photo) and is forgotten on reload or when the stop moves.
+- `POST /api/suggestions` accepts an optional `radiusKm` (1 to 30, with `around` only).
 
 ### Settings (per device)
-`/settings` (login required; gear icon in the trips/editor header) stores display preferences in this browser's localStorage under `rtpp.settings.v1` (never sent to the server, no DB change; the app works with storage blocked, changes then last for the visit). Theme (System/Light/Dark), text size (Default/Large 112.5%/Extra large 125% of the root font size), reduce motion (the device's own preference is always honoured too), distance (km/mi), time format (device default = the en-US 12-hour clock as before, 12h, 24h), map style (beige recolour or the stock Mapbox style; read when the map loads), minutes for a new stop (0-480) and whether suggested stops get an automatic best light or "any". Also: clear saved offline copies, the signed-in email, sign out, reset to defaults. An inline script in the root layout `<head>` (constant string) sets `data-theme`, `data-text-size` and `data-reduce-motion` on `<html>` before first paint, so every page including `/s/*`, `/offline` and `/login` honours them; `globals.css` lets an explicit `data-theme` beat the OS colour scheme (and Tailwind's `dark:` variant follows it). Changes made in another tab apply live.
+
+`/settings` (login required; gear icon in the trips/editor header) stores display preferences in this browser's localStorage under `rtpp.settings.v1`. They are never sent to the server and need no DB change. The app works with storage blocked; changes then last for the visit.
+
+- **Theme:** System / Light / Dark.
+- **Text size:** Default / Large (112.5%) / Extra large (125% of the root font size).
+- **Reduce motion:** the device's own preference is always honoured too.
+- **Distance:** km / mi.
+- **Time format:** device default (the en-US 12-hour clock as before), 12h, 24h.
+- **Map style:** beige recolour or the stock Mapbox style (read when the map loads).
+- **New stops:** minutes for a new stop (0-480) and whether suggested stops get an automatic best light or "any".
+- **Account:** clear saved offline copies, the signed-in email, sign out, reset to defaults.
+
+How it applies:
+
+- An inline script in the root layout `<head>` (constant string) sets `data-theme`, `data-text-size` and `data-reduce-motion` on `<html>` before first paint, so every page including `/s/*`, `/offline` and `/login` honours them.
+- `globals.css` lets an explicit `data-theme` beat the OS colour scheme (and Tailwind's `dark:` variant follows it).
+- Changes made in another tab apply live.
 
 ### Read-only share link
 
-The **Share** button in the trip header creates a link (`/s/<token>`) anyone can open
-without an account: the map with numbered pins and a straight route line, and the stops
-with their shot notes and shot checklists, ticked items included (these ARE visible to anyone with the link; the private stop notes are not) and estimated arrival/light hints. **Revoke link** kills it at
-once (the URL then 404s); sharing again issues a new token. The token is 32 random
-bytes (43 base64url chars) stored in `Trip.shareToken` (nullable, unique; additive
-migration `20261010120000_share_token`). The public page reads a dedicated sanitized
-DTO (`toPublicTripDto`): no email, user id, database ids, uploaded photos or stop notes (shot notes and the shot checklist, with ticks, are shared and visible to anyone with the link; the private `notes` are omitted from the page and its PDF), and it is
-`noindex, nofollow` with `referrer: no-referrer`. `/api/directions` stays login-only, but
-the share page fetches the real driving route on the server (`routeFor` in
-`src/app/s/[token]/page.tsx`); straight lines and distance-based time estimates are only
-the fallback when routing is unavailable. Owner-only API:
-`POST /api/trips/[id]/share` (create or return the existing token) and `DELETE` (revoke).
+The **Share** button in the trip header creates a link (`/s/<token>`) anyone can open without an account.
+
+**What the page shows**
+
+- The map with numbered pins and a straight route line.
+- The stops with their shot notes and shot checklists, ticked items included (these ARE visible to anyone with the link; the private stop notes are not).
+- Estimated arrival and light hints.
+
+**Links**
+
+- **Revoke link** kills it at once (the URL then 404s); sharing again issues a new token.
+- The token is 32 random bytes (43 base64url chars) stored in `Trip.shareToken` (nullable, unique; additive migration `20261010120000_share_token`).
+- Owner-only API: `POST /api/trips/[id]/share` (create or return the existing token) and `DELETE` (revoke).
+
+**What is hidden**
+
+- The public page reads a dedicated sanitized DTO (`toPublicTripDto`): no email, user id, database ids, uploaded photos or stop notes.
+- Shot notes and the shot checklist (with ticks) are shared and visible to anyone with the link; the private `notes` are omitted from the page and its PDF.
+- The page is `noindex, nofollow` with `referrer: no-referrer`.
+
+**Route**
+
+- `/api/directions` stays login-only, but the share page fetches the real driving route on the server (`routeFor` in `src/app/s/[token]/page.tsx`).
+- Straight lines and distance-based time estimates are only the fallback when routing is unavailable.
 
 ### Login lockout
 
-Failed logins are counted per email and hashed client address (8 per 15 minutes), so someone guessing a victim's
-password locks out only their own address; the owner can still sign in from elsewhere. A per-IP limit (30 attempts
-per 15 minutes) still applies, and after 50 failures per hour per email only addresses that already failed for it are
-refused. Guesses against one account are therefore bounded by the per-IP limit plus a hard ceiling: at 200 failures per
-hour an email refuses every address (the owner included) until the window clears. That trade-off lets a determined
-distributed attacker lock the owner out of password login for as long as they keep spending about 200 failures per hour (the window is fixed, so they can renew it every hour; Google sign-in is unaffected), in return for
-a firm bound on guessing. The client address comes from proxy headers only where they can be trusted (see "Client address
-and proxies" under Deploying); elsewhere all clients share one address key. Counting happens before the bcrypt check; bodies over 16 KB are refused.
+Failed logins are counted per email and hashed client address (8 per 15 minutes), so someone guessing a victim's password locks out only their own address; the owner can still sign in from elsewhere.
+
+- A per-IP limit (30 attempts per 15 minutes) still applies.
+- After 50 failures per hour per email only addresses that already failed for it are refused.
+- Guesses against one account are therefore bounded by the per-IP limit plus a hard ceiling: at 200 failures per hour an email refuses every address (the owner included) until the window clears.
+- **Trade-off:** a determined distributed attacker can lock the owner out of password login for as long as they keep spending about 200 failures per hour (the window is fixed, so they can renew it every hour; Google sign-in is unaffected), in return for a firm bound on guessing.
+- The client address comes from proxy headers only where they can be trusted (see [Client address and proxies](#cautions)); elsewhere all clients share one address key.
+- Counting happens before the bcrypt check; bodies over 16 KB are refused.
 
 ### Export and navigation links
 
-The **Export** menu in the trip header (enabled with 2+ stops) downloads a GPX 1.1 file
-(a waypoint per stop with its notes, plus a track along the driven route when one is
-loaded) and opens the trip in Google Maps or Apple Maps. It is all built in the browser
-from the loaded stops (`src/lib/export.ts`), no server route. Google allows 11 points per
-link, so longer trips get "Part 1/2", "Part 2/2" links that share an end point. User text
-is XML-escaped and stripped of characters illegal in XML 1.0; the file name is reduced to
-`[A-Za-z0-9_-]`; URLs use `URLSearchParams` only.
+The **Export** menu in the trip header (enabled with 2+ stops) downloads a GPX 1.1 file and opens the trip in Google Maps or Apple Maps.
 
-**Download PDF** (editor Export menu and the public share page) builds a printable
-itinerary in the browser with jsPDF 4.2.1, loaded only when the button is clicked. It has a
-trip summary, a Mapbox Static Images map (route and numbered pins; it uses the public
-`NEXT_PUBLIC_MAPBOX_TOKEN`, one request per download, so it counts toward your Mapbox
-usage) and a stop schedule with arrival time, best light, weather (editor only) and notes.
-With no token, in fake-map mode, or when the map request fails (8 s timeout), a drawn
-fallback map is used instead. The PDF embeds Noto Sans (SIL OFL, `public/fonts/OFL.txt`; about 0.6 MB transferred, fetched only when you click Download PDF), so Latin
-(including Latin Extended and Vietnamese), Cyrillic and Greek names and notes print correctly. Other scripts (Chinese, Japanese, Korean,
-Arabic, Hebrew, Devanagari, Thai, emoji and so on) are not in the font: each run of such characters prints as a single "?". If the font cannot
-be fetched (offline), the PDF is still produced with the built-in fonts, where anything outside Western European alphabets is "?".
-A URL-restricted public token may make the share page's static-map request fail (the page
-sends no Referer); the PDF then falls back to the drawn map. The static map was verified
-against real Mapbox on 2026-10-16 from the editor and the share page with an unrestricted
-token.
+- The GPX has a waypoint per stop with its notes, plus a track along the driven route when one is loaded.
+- It is all built in the browser from the loaded stops (`src/lib/export.ts`), no server route.
+- Google allows 11 points per link, so longer trips get "Part 1/2", "Part 2/2" links that share an end point.
+- User text is XML-escaped and stripped of characters illegal in XML 1.0; the file name is reduced to `[A-Za-z0-9_-]`; URLs use `URLSearchParams` only.
+
+**Download PDF** (editor Export menu and the public share page) builds a printable itinerary in the browser with jsPDF 4.2.1, loaded only when the button is clicked.
+
+- **Contents:** a trip summary, a Mapbox Static Images map (route and numbered pins) and a stop schedule with arrival time, best light, weather (editor only) and notes.
+- **Map token:** it uses the public `NEXT_PUBLIC_MAPBOX_TOKEN`, one request per download, so it counts toward your Mapbox usage.
+- **Fallback map:** with no token, in fake-map mode, or when the map request fails (8 s timeout), a drawn fallback map is used instead. A URL-restricted public token may make the share page's static-map request fail (the page sends no Referer); the PDF then falls back to the drawn map.
+- **Fonts:**
+  - The PDF embeds Noto Sans (SIL OFL, `public/fonts/OFL.txt`; about 0.6 MB transferred, fetched only when you click Download PDF), so Latin (including Latin Extended and Vietnamese), Cyrillic and Greek names and notes print correctly.
+  - Other scripts (Chinese, Japanese, Korean, Arabic, Hebrew, Devanagari, Thai, emoji and so on) are not in the font: each run of such characters prints as a single "?".
+  - If the font cannot be fetched (offline), the PDF is still produced with the built-in fonts, where anything outside Western European alphabets is "?".
+- The static map was verified against real Mapbox on 2026-10-16 from the editor and the share page with an unrestricted token.
+
+## Photos and suggestions
 
 ### Photo popups and beige map
 
-With a single stop, suggestions within about 15 miles (24 km) of it load automatically; from
-two stops on they follow the route and are found with "Find photo spots".
+- With a single stop, suggestions within about 15 miles (24 km) of it load automatically; from two stops on they follow the route and are found with "Find photo spots".
+- Hovering (or keyboard-focusing) a suggestion dot on the map, or hovering its card in the panel, shows a popup with a photo of the place. Picking a suggestion shows the same photo (with its credit) in the place card.
+- On touch devices there is no hover popup (it would make iOS swallow the first tap); tap a dot to open the card.
+- The Mapbox `light-v11` basemap is recoloured to the beige theme at runtime (`src/lib/map-theme.ts`, applied on style load). Since 2026-10-19 it uses a slightly darker palette with clearer roads and paths; dark mode dims the canvas with a CSS filter. Our own `route*` layers are never touched.
 
-Hovering (or keyboard-focusing) a suggestion dot on the map, or hovering its card
-in the panel, shows a popup with a photo of the place; picking a suggestion shows
-the same photo (with its credit) in the place card. On touch devices there is no
-hover popup (it would make iOS swallow the first tap); tap a dot to open the card.
+### Photo sources, attribution and licensing
 
-#### Photo sources, attribution and licensing
+`GET /api/place-photo` -> `src/server/external/place-photo.ts` tries providers in order and the first hit wins:
 
-`GET /api/place-photo` -> `src/server/external/place-photo.ts` tries providers in
-order and the first hit wins:
+1. **Flickr** (only if `FLICKR_API_KEY` is set): `flickr.photos.search` within 300 m, most "interesting" first, restricted to Creative Commons / public-domain licences (ids 1,2,3,4,5,6,9,10; note 1-3 are NonCommercial variants, fine for a personal non-commercial project). Credit: `Photo: {owner} via Flickr (CC BY 2.0)`. Only https images on `*.staticflickr.com` are passed on.
+2. **Wikimedia Commons** file geosearch (300 m): featured/quality/valued images first, then name match, then nearest; only jpeg/png/webp. Credit: author and licence from the file metadata, e.g. `Photo: Jane Doe via Wikimedia Commons (CC BY-SA 3.0)`.
+3. **Wikipedia** article image (name match, else nearest within 300 m). Credit: `Photo: Wikipedia`.
 
-1. **Flickr** (only if `FLICKR_API_KEY` is set): `flickr.photos.search` within
-   300 m, most "interesting" first, restricted to Creative Commons / public-domain
-   licences (ids 1,2,3,4,5,6,9,10; note 1-3 are NonCommercial variants, fine for
-   a personal non-commercial project). Credit: `Photo: {owner} via Flickr (CC BY 2.0)`.
-   Only https images on `*.staticflickr.com` are passed on.
-2. **Wikimedia Commons** file geosearch (300 m): featured/quality/valued images
-   first, then name match, then nearest; only jpeg/png/webp. Credit: author and
-   licence from the file metadata, e.g. `Photo: Jane Doe via Wikimedia Commons (CC BY-SA 3.0)`.
-3. **Wikipedia** article image (name match, else nearest within 300 m).
-   Credit: `Photo: Wikipedia`.
+Notes:
 
-No key means Commons + Wikipedia only. Every photo is shown with its plain-text
-credit; any failure just means no photo. Results are cached on the server
-(500 entries LRU, 6 h for hits, 15 min for misses, concurrent lookups shared) and
-in the browser; browser failures are remembered for 60 s. Names are matched
-strictly (an "Eagle Peak" never matches "Eagle Rock").
-The lookup sends the stop's name and coordinates to these providers (no account details);
-the Stops-row thumbnail skips it for a dropped pin named only by coordinates or a street
-address (`isAddressOrCoordsName`) and shows the placeholder.
+- No key means Commons + Wikipedia only.
+- Every photo is shown with its plain-text credit; any failure just means no photo.
+- Results are cached on the server (500 entries LRU, 6 h for hits, 15 min for misses, concurrent lookups shared) and in the browser; browser failures are remembered for 60 s.
+- Names are matched strictly (an "Eagle Peak" never matches "Eagle Rock").
+- The lookup sends the stop's name and coordinates to these providers (no account details).
+- The Stops-row thumbnail skips it for a dropped pin named only by coordinates or a street address (`isAddressOrCoordsName`) and shows the placeholder.
 
-#### Popularity ranking
+### Popularity ranking
 
-After OpenStreetMap candidates are ranked and capped, the first 40 are enriched
-(5 at a time, 5 s timeout each, failures ignored) with a "photos nearby" count and
-re-ranked within each kind (viewpoint / peak / attraction) by it. The count is
-the Flickr `photos.total` within 250 m when `FLICKR_API_KEY` is set, otherwise
-the number of geotagged Wikimedia Commons files within 250 m (capped at 50, shown
-as "50+"; a weaker signal than Flickr). The route takes at most 5 places per request and 10 requests per minute per
-user; Flickr calls (counts and place photos) share an app-wide budget of 3000 per hour (`flickr-app`), after which
-counts come from Commons and place photos skip Flickr, without an error. It shows as a muted "≈N photos nearby" caption
-on the suggestion card and popup.
+After OpenStreetMap candidates are ranked and capped, the first 40 are enriched (5 at a time, 5 s timeout each, failures ignored) with a "photos nearby" count and re-ranked within each kind (viewpoint / peak / attraction) by it.
 
-The Mapbox `light-v11` basemap is recoloured to the beige theme at runtime (a slightly darker palette with clearer roads and paths since 2026-10-19; dark mode dims the canvas with a CSS filter)
-(`src/lib/map-theme.ts`, applied on style load); our own `route*` layers are
-never touched.
+- **Count source:** the Flickr `photos.total` within 250 m when `FLICKR_API_KEY` is set, otherwise the number of geotagged Wikimedia Commons files within 250 m (capped at 50, shown as "50+"; a weaker signal than Flickr).
+- **Limits:** the route takes at most 5 places per request and 10 requests per minute per user. Flickr calls (counts and place photos) share an app-wide budget of 3000 per hour (`flickr-app`), after which counts come from Commons and place photos skip Flickr, without an error.
+- **Display:** a muted "≈N photos nearby" caption on the suggestion card and popup.
 
 ### Suggestion sources and local places
 
 Suggestions come from three layers (`src/server/suggestions/service.ts`), tried in order:
 
-1. **Local copy.** The `Place` table holds viewpoints, peaks and attractions imported from OpenStreetMap, looked up by
-   a global grid (`places-grid.ts`). It covers the lower 48 states, Alaska, Canada south of 76 N, Mexico, South Korea
-   and Japan (the rings in `src/server/suggestions/local-places.ts`). A query with fewer than 5 local places, or one
-   outside the rings, falls through.
-2. **Overpass.** The public OpenStreetMap API: slow outside the local copy (tens of seconds) and it can fail with a
-   502 "Couldn't load suggestions".
-3. **Caches.** Overpass answers are cached in memory (30 min, served stale for up to 6 h more) and in the
-   `SuggestionCache` table, shared by every server instance (a slow read falls back to Overpass after 800 ms). The
-   daily cron (`/api/cron/photo-cleanup`) drops entries too old to serve.
+1. **Local copy.** The `Place` table holds viewpoints, peaks and attractions imported from OpenStreetMap, looked up by a global grid (`places-grid.ts`). It covers the lower 48 states, Alaska, Canada south of 76 N, Mexico, South Korea and Japan (the rings in `src/server/suggestions/local-places.ts`). A query with fewer than 5 local places, or one outside the rings, falls through.
+2. **Overpass.** The public OpenStreetMap API: slow outside the local copy (tens of seconds) and it can fail with a 502 "Couldn't load suggestions".
+3. **Caches.** Overpass answers are cached in memory (30 min, served stale for up to 6 h more) and in the `SuggestionCache` table, shared by every server instance (a slow read falls back to Overpass after 800 ms). The daily cron (`/api/cron/photo-cleanup`) drops entries too old to serve.
 
-Import places with `node scripts/import-places.mjs <dir>` (upserts by id; it writes to Turso when `TURSO_DATABASE_URL`
-and `TURSO_AUTH_TOKEN` are set). The extracts are built by `scripts/build-places-intl.sh` (Canada, Mexico) and
-`scripts/build-places-asia.sh` (South Korea, Japan) into the git-ignored `data/` folder. Import into Turso **before**
-deploying a change to the coverage rings, or those areas will fall back to Overpass until it is done.
+Importing places:
+
+- Run `node scripts/import-places.mjs <dir>` (upserts by id; it writes to Turso when `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are set).
+- The extracts are built by `scripts/build-places-intl.sh` (Canada, Mexico) and `scripts/build-places-asia.sh` (South Korea, Japan) into the git-ignored `data/` folder.
+- Import into Turso **before** deploying a change to the coverage rings, or those areas will fall back to Overpass until it is done.
 
 ## Weather and light-window forecast
 
-Every stop with an estimated arrival shows a small line icon for the sky (clear,
-partly cloudy, mostly cloudy, overcast, rain likely; drawn in the theme's muted or
-sand colour, never an emoji) and the temperature (e.g. "18°C"; °F when distances are
-in miles). Snow, fog, storm and wind icons would need weather codes the forecast does
-not carry yet. The line sits under the stop's row on My trip (once the route is
-optimized) and on the selected-stop card. A stop with a preferred light (sunrise, golden hour, sunset)
-is read at the middle of its light window (the window the visit is in, else the
-nearest); other stops at their arrival. Hovering shows the words ("mostly
-cloudy, 15% rain"), and the colour turns red when the weather is poor for the
-chosen light. The add-place card and every suggestion card show the evening
-golden-hour weather for the trip date.
+Every stop with an estimated arrival shows a small line icon for the sky and the temperature.
 
-Data comes from Open-Meteo (free, no key). Forecasts (`api.open-meteo.com`) reach
-about 16 days ahead through the signed-in-only `GET /api/weather?lat&lng&date`,
-cached 30 minutes per ~1 km and day (failures 60 s); each request covers the day
-before to the day after. Later dates (up to about two years ahead) show
-**typical** weather, labelled "Typical 18°C" beside the sky icon: averages of the same calendar
-date (plus or minus 3 days) over the previous 3 years from the Open-Meteo archive
-(`archive-api.open-meteo.com`), with "rain on ~N% of days" as the rain figure.
-Typical answers are cached 24 hours. Suggestion cards use
-`POST /api/weather/batch` (up to 10 places per request, one upstream request per
-batch, 30 requests a minute per user). Dates further out, or already past, show
-nothing; a failed lookup shows nothing.
+- **Icons:** clear, partly cloudy, mostly cloudy, overcast, rain likely; drawn in the theme's muted or sand colour, never an emoji. Snow, fog, storm and wind icons would need weather codes the forecast does not carry yet.
+- **Temperature:** e.g. "18°C"; °F when distances are in miles.
+- **Where:** under the stop's row on My trip (once the route is optimized) and on the selected-stop card.
+- **Which time is read:** a stop with a preferred light (sunrise, golden hour, sunset) is read at the middle of its light window (the window the visit is in, else the nearest); other stops at their arrival.
+- **Hover and colour:** hovering shows the words ("mostly cloudy, 15% rain"), and the colour turns red when the weather is poor for the chosen light.
+- **Cards:** the add-place card and every suggestion card show the evening golden-hour weather for the trip date.
 
-**Weather is the last thing fetched.** The client holds every weather request
-(`holdWeather` in `src/lib/weather-cache.ts`) while suggestions are being found
-or ranked by popularity, and suggestion weather is requested only once all the suggestions are loaded and ranked
-finishes, then goes down the list from the top five places at a time (one batch after another, so the best cards fill in first). A hold that is never released lets go by itself after 45 s. Open-Meteo
-labels hours in the location's local time, so `src/lib/weather.ts` converts
-with `utc_offset_seconds` before matching them to arrival instants. The
-public share page does not show weather. Offline mode returns canned data.
-No new environment variables.
+### Data sources and limits
+
+Data comes from Open-Meteo (free, no key).
+
+- **Forecasts** (`api.open-meteo.com`) reach about 16 days ahead through the signed-in-only `GET /api/weather?lat&lng&date`. They are cached 30 minutes per ~1 km and day (failures 60 s); each request covers the day before to the day after.
+- **Typical weather** is shown for later dates (up to about two years ahead), labelled "Typical 18°C" beside the sky icon. These are averages of the same calendar date (plus or minus 3 days) over the previous 3 years from the Open-Meteo archive (`archive-api.open-meteo.com`), with "rain on ~N% of days" as the rain figure. Typical answers are cached 24 hours.
+- **Suggestion cards** use `POST /api/weather/batch` (up to 10 places per request, one upstream request per batch, 30 requests a minute per user).
+- Dates further out, or already past, show nothing; a failed lookup shows nothing.
+
+### Weather is the last thing fetched
+
+- The client holds every weather request (`holdWeather` in `src/lib/weather-cache.ts`) while suggestions are being found or ranked by popularity.
+- Suggestion weather is requested only once all the suggestions are loaded and ranked, then goes down the list from the top, five places at a time (one batch after another, so the best cards fill in first).
+- A hold that is never released lets go by itself after 45 s.
+- Open-Meteo labels hours in the location's local time, so `src/lib/weather.ts` converts with `utc_offset_seconds` before matching them to arrival instants.
+- The public share page does not show weather. Offline mode returns canned data.
+- No new environment variables.
 
 ## Privacy policy and terms
 
-`/privacy` and `/terms` are public pages (`src/app/privacy`, `src/app/terms`),
-linked from sign-up, log-in and Settings. They describe what is actually stored
-and which providers receive data; update them (and their date in
-`src/components/legal/LegalPage.tsx`) when that changes. They have not had
-legal review, and contact goes through the GitHub issues link in `CONTACT_URL`;
-replace it with a proper contact address before relying on them.
-Account deletion is `DELETE /api/account` (password-confirmed, 5 tries per 15
-minutes), reachable from Settings. A Google-only account has no password, so it
-confirms by typing its email address (never shown in the prompt) and must have
-signed in within the last 5 minutes; otherwise the prompt offers "Sign in with
-Google again" (Google's account chooser) and the user retries.
+`/privacy` and `/terms` are public pages (`src/app/privacy`, `src/app/terms`), linked from sign-up, log-in and Settings.
 
-## 6. How best time is computed
+- They describe what is actually stored and which providers receive data; update them (and their date in `src/components/legal/LegalPage.tsx`) when that changes.
+- They have not had legal review, and contact goes through the GitHub issues link in `CONTACT_URL`; replace it with a proper contact address before relying on them.
+- **Account deletion** is `DELETE /api/account` (password-confirmed, 5 tries per 15 minutes), reachable from Settings.
+- A Google-only account has no password, so it confirms by typing its email address (never shown in the prompt) and must have signed in within the last 5 minutes. Otherwise the prompt offers "Sign in with Google again" (Google's account chooser) and the user retries.
 
-Each stop's best shooting window is derived, not stored. The trip's
-departure time is assumed to be sunrise at the first stop on the
-trip's planned date unless the trip has a chosen departure (`departAt`,
-set by light-aware optimization; the API refuses a changed one that is not on the planned day at the first stop; a value that equals the stored one, is on the stored one's day, or equals the server's shift of it on a date change is accepted so old off-day rows stay editable, except that a PATCH which also changes the planned date takes only the server's own shift of the stored value or a time on the new day); estimated arrival at each stop is that
-departure plus the cumulative Mapbox Directions leg durations and the
-"time here" minutes (default 30) of every earlier stop. The arrival time is then bucketed
-against that stop's own sunrise/golden-hour/sunset times (computed
-from its coordinates via `suncalc`, for the local solar day the arrival
-falls on, so a trip spanning several days is judged day by day): before
-morning golden hour ends → *sunrise*, before evening golden hour
-starts → *midday*, before sunset → *golden hour*, after sunset →
-*sunset* (the window just missed). With fewer than two stops (so no route), the
-display defaults to evening golden hour. See `src/lib/best-time.ts`.
+## How best time is computed
 
-## 7. Tunables
+Each stop's best shooting window is derived, not stored.
+
+1. **Departure.** The trip's departure time is assumed to be sunrise at the first stop on the trip's planned date, unless the trip has a chosen departure (`departAt`, set by light-aware optimization).
+   - The API refuses a changed `departAt` that is not on the planned day at the first stop.
+   - It accepts a value that equals the stored one, is on the stored one's day, or equals the server's shift of it on a date change, so old off-day rows stay editable.
+   - A PATCH which also changes the planned date takes only the server's own shift of the stored value or a time on the new day.
+2. **Arrival.** The estimated arrival at each stop is that departure plus the cumulative Mapbox Directions leg durations and the "time here" minutes (default 30) of every earlier stop.
+3. **Bucket.** The arrival time is bucketed against that stop's own sunrise/golden-hour/sunset times (computed from its coordinates via `suncalc`, for the local solar day the arrival falls on, so a trip spanning several days is judged day by day):
+   - before morning golden hour ends: *sunrise*
+   - before evening golden hour starts: *midday*
+   - before sunset: *golden hour*
+   - after sunset: *sunset* (the window just missed)
+4. **No route.** With fewer than two stops (so no route), the display defaults to evening golden hour.
+
+See `src/lib/best-time.ts`.
+
+## Tunables
 
 | Constant | File | Meaning |
 | --- | --- | --- |
@@ -404,17 +421,14 @@ display defaults to evening golden hour. See `src/lib/best-time.ts`.
 | `OVERPASS_TIMEOUT_MS` | `src/server/suggestions/overpass.ts` | Per-attempt timeout for Overpass API requests |
 | `MAX_PHOTO_BYTES` | `src/lib/photo-rules.ts` | Max reference-photo upload size (4 MB: Vercel caps request bodies at 4.5 MB), enforced client- and server-side |
 
-## 8. Deploying to Vercel
+## Deploying to Vercel
 
-The app runs on Vercel with a Turso database (hosted SQLite) and a Vercel
-Blob store for photos. Locally nothing changes.
+The app runs on Vercel with a Turso database (hosted SQLite) and a Vercel Blob store for photos. Locally nothing changes.
 
-1. **Turso:** create a free account at turso.tech, then
-   `turso db create photo-app`, `turso db show photo-app --url`, and
-   `turso db tokens create photo-app`.
-2. **Vercel:** import this GitHub repo at vercel.com/new. In the project,
-   open Storage, create a **Blob** store (set to Private) and connect it;
-   this adds `BLOB_READ_WRITE_TOKEN` automatically.
+### Steps
+
+1. **Turso:** create a free account at turso.tech, then `turso db create photo-app`, `turso db show photo-app --url`, and `turso db tokens create photo-app`.
+2. **Vercel:** import this GitHub repo at vercel.com/new. In the project, open Storage, create a **Blob** store (set to Private) and connect it; this adds `BLOB_READ_WRITE_TOKEN` automatically.
 3. Add these Environment Variables in Vercel:
 
    | Variable | Value |
@@ -426,75 +440,42 @@ Blob store for photos. Locally nothing changes.
    | `NEXT_PUBLIC_MAPBOX_TOKEN` | Mapbox `pk.*` token |
    | `MAPBOX_TOKEN` | same token |
 
-4. Deploy. The build command (`npm run vercel-build`) applies database
-   migrations to Turso, then builds. Every push to `main` redeploys.
+4. Deploy. The build command (`npm run vercel-build`) applies database migrations to Turso, then builds. Every push to `main` redeploys.
 
-The Mapbox token is visible in the browser by design; in the Mapbox
-dashboard, restrict it to your site's URL.
+The Mapbox token is visible in the browser by design; in the Mapbox dashboard, restrict it to your site's URL.
 
-Tip: when setting variables from the CLI, use
-`vercel env add NAME production --value "..." --type secret --yes`.
-Piping values through stdin or pasting into the web form can add stray
-whitespace, which shows up as a Turso `401` during the build.
+Tip: when setting variables from the CLI, use `vercel env add NAME production --value "..." --type secret --yes`. Piping values through stdin or pasting into the web form can add stray whitespace, which shows up as a Turso `401` during the build.
 
-**Cautions**
+### Cautions
 
-- Scope `TURSO_*` and `BLOB_READ_WRITE_TOKEN` to **Production only**. Preview
-  builds also run `vercel-build`, which migrates the database named by
-  `TURSO_*`, so a preview build would change the production database.
-- `vercel-build` migrates the database **before** `next build`. A build that
-  fails after the migration step still leaves the database migrated. Each
-  migration runs in one transaction with its bookkeeping row, so a failed
-  migration applies nothing. Write migrations so the previous app version still
-  works against the new schema (add columns and tables first, remove old ones in a
-  later release).
-- Turso keeps point-in-time restore for your database: before a risky migration,
-  note the time (or create a branch/fork of the database in the Turso dashboard) so
-  you can restore if needed.
-- **Maintenance cron.** `vercel.json` schedules `/api/cron/photo-cleanup` daily. It
-  retries photo-file deletions that failed earlier and clears expired rate-limit
-  counters. Set `CRON_SECRET` (any long random string) in Vercel; without it the
-  route answers 404 and does nothing.
-- **Rate limits** for login, signup, password change, account deletion and every
-  route that spends paid-service quota (geocoding, retrieve and reverse geocoding, directions, optimize,
-  popularity/Flickr, place photos, and the app-wide Flickr budget) are counted in the
-  database, so they hold across serverless instances. The paid routes fail closed: if
-  the database cannot be reached they answer 503 with `Retry-After` instead of letting
-  requests through. The cheap limits (suggestions, weather, trip writes, photo reads,
-  uploads, the `/s/[token]` page render limit of 300/min per address) stay per instance;
-  put Vercel's WAF rate limiting in front if you need exact global limits.
-  The one exception among paid calls is the driving route the public share page fetches
-  on the server: it is limited per share token and per owner (`directions` and
-  `share-directions`), both in memory per instance, so it is a cap per instance, not exact.
-- **What the rate-limit rows store.** The shared counters (table `RateLimitCounter`) are
-  keyed by account id, email or client address, and live only until their window ends
-  (swept by the daily cron and opportunistically). Client addresses appear there as the
-  limiter sees them: IPv4 as is, IPv6 cut to its /64; login-failure keys hold only a
-  truncated SHA-256 of the address next to the email. The in-memory limiter holds the
-  same keys and is lost on restart.
-- **First Node proxy deploy.** `src/proxy.ts` runs on the Node runtime (Next 16), not
-  the edge. The first deploy that includes it changes how every page request is routed
-  and every page becomes dynamic (the CSP nonce is per request): watch the first
-  production deploy, check a page's response headers for the nonce policy, and have the
-  previous deployment ready to promote back if pages fail to render.
-- **Client address and proxies.** Per-IP limits (signup, login, share page) key on the
-  client address, which is only read from headers a trusted proxy sets:
-  - On Vercel (the `VERCEL` variable is set) the address is `x-vercel-forwarded-for`,
-    else the last `x-forwarded-for` entry. `x-real-ip` and the first entry are never used.
-  - Elsewhere set `TRUST_PROXY_HEADERS=1` only if every request really passes through
-    your own reverse proxy; the address is then the `x-forwarded-for` entry
-    `TRUSTED_PROXY_DEPTH` places from the right (default 1 = the address your proxy
-    appended; use 2 behind two proxies).
-  - Otherwise (the default) every client header is ignored and all clients share one
-    address key, so the per-IP limits become global ones: safe, but one busy client can
-    use them up for everybody.
-- **Optimize load.** `/api/optimize` runs at most 2 optimizations at once per server
-  instance (`OPTIMIZE_MAX_CONCURRENT`); more get 503 with `Retry-After` and the editor
-  shows "The route optimizer is busy right now". A solve yields to other requests as it
-  works and stops improving after `OPTIMIZE_BUDGET_MS` (default 1000), returning the
-  best order found so far.
-- **CI** (`.github/workflows/ci.yml`) runs type-check, lint, unit tests, build,
-  `npm audit` (high and above, production dependencies) and the Playwright suite on every push and pull request.
-- A local `.env.local` created by `vercel env pull` makes `npm run dev` use the
-  production Turso database and Blob store. Remove `TURSO_*` and
-  `BLOB_READ_WRITE_TOKEN` from it (or do not pull them) for local work.
+- **Scope.** Scope `TURSO_*` and `BLOB_READ_WRITE_TOKEN` to **Production only**. Preview builds also run `vercel-build`, which migrates the database named by `TURSO_*`, so a preview build would change the production database.
+- **Migrations.**
+  - `vercel-build` migrates the database **before** `next build`. A build that fails after the migration step still leaves the database migrated.
+  - Each migration runs in one transaction with its bookkeeping row, so a failed migration applies nothing.
+  - Write migrations so the previous app version still works against the new schema (add columns and tables first, remove old ones in a later release).
+- **Restore.** Turso keeps point-in-time restore for your database: before a risky migration, note the time (or create a branch/fork of the database in the Turso dashboard) so you can restore if needed.
+- **Maintenance cron.** `vercel.json` schedules `/api/cron/photo-cleanup` daily. It retries photo-file deletions that failed earlier and clears expired rate-limit counters. Set `CRON_SECRET` (any long random string) in Vercel; without it the route answers 404 and does nothing.
+- **Rate limits.**
+  - Limits for login, signup, password change, account deletion and every route that spends paid-service quota (geocoding, retrieve and reverse geocoding, directions, optimize, popularity/Flickr, place photos, and the app-wide Flickr budget) are counted in the database, so they hold across serverless instances.
+  - The paid routes fail closed: if the database cannot be reached they answer 503 with `Retry-After` instead of letting requests through.
+  - The cheap limits (suggestions, weather, trip writes, photo reads, uploads, the `/s/[token]` page render limit of 300/min per address) stay per instance; put Vercel's WAF rate limiting in front if you need exact global limits.
+  - The one exception among paid calls is the driving route the public share page fetches on the server: it is limited per share token and per owner (`directions` and `share-directions`), both in memory per instance, so it is a cap per instance, not exact.
+- **What the rate-limit rows store.**
+  - The shared counters (table `RateLimitCounter`) are keyed by account id, email or client address, and live only until their window ends (swept by the daily cron and opportunistically).
+  - Client addresses appear there as the limiter sees them: IPv4 as is, IPv6 cut to its /64; login-failure keys hold only a truncated SHA-256 of the address next to the email.
+  - The in-memory limiter holds the same keys and is lost on restart.
+- **First Node proxy deploy.** `src/proxy.ts` runs on the Node runtime (Next 16), not the edge. The first deploy that includes it changes how every page request is routed and every page becomes dynamic (the CSP nonce is per request). Watch the first production deploy, check a page's response headers for the nonce policy, and have the previous deployment ready to promote back if pages fail to render.
+- **Client address and proxies.** Per-IP limits (signup, login, share page) key on the client address, which is only read from headers a trusted proxy sets:
+  - On Vercel (the `VERCEL` variable is set) the address is `x-vercel-forwarded-for`, else the last `x-forwarded-for` entry. `x-real-ip` and the first entry are never used.
+  - Elsewhere set `TRUST_PROXY_HEADERS=1` only if every request really passes through your own reverse proxy; the address is then the `x-forwarded-for` entry `TRUSTED_PROXY_DEPTH` places from the right (default 1 = the address your proxy appended; use 2 behind two proxies).
+  - Otherwise (the default) every client header is ignored and all clients share one address key, so the per-IP limits become global ones: safe, but one busy client can use them up for everybody.
+- **Optimize load.** `/api/optimize` runs at most 2 optimizations at once per server instance (`OPTIMIZE_MAX_CONCURRENT`); more get 503 with `Retry-After` and the editor shows "The route optimizer is busy right now". A solve yields to other requests as it works and stops improving after `OPTIMIZE_BUDGET_MS` (default 1000), returning the best order found so far.
+- **CI** (`.github/workflows/ci.yml`) runs type-check, lint, unit tests, build, `npm audit` (high and above, production dependencies) and the Playwright suite on every push and pull request.
+- **Local env.** A local `.env.local` created by `vercel env pull` makes `npm run dev` use the production Turso database and Blob store. Remove `TURSO_*` and `BLOB_READ_WRITE_TOKEN` from it (or do not pull them) for local work.
+
+## Project files
+
+- `docs/HANDOFF.md`: the task board and handoff notes.
+- `docs/PROGRESS.md`: dated progress log.
+- `docs/HISTORY.md`: project history.
+- `docs/superpowers/`: design specs and implementation plans.

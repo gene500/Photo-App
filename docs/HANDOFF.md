@@ -17,7 +17,7 @@ Last updated 2026-10-26
 
 | # | Task | Status | Est | Use | Notes |
 |---|---|---|---|---|---|
-| FINAL | Full codebase check (Opus), merge, push, confirm Vercel and CI | active | 40 min | Heavy | Always last Status 2026-10-26: Opus check done, F3 fixes done and browser-verified (Back/Forward, 8/8 on dev and prod). All checks green (vitest 1687, typecheck, lint, e2e 31/31). Waiting for the owner to say "push"; then commit, push to main, check Vercel photo-app-pi2o and CI check+e2e. |
+| FINAL | Full codebase check (Opus), merge, push, confirm Vercel and CI | blocked | 40 min | Heavy | Pushed f3dbd51 (Vercel and CI e2e succeeded). CI check failed at npm audit (undici, fast-uri, nested zod under @vercel/cli-config). Fix is in the working tree, uncommitted: npm audit fix plus package.json overrides {"@vercel/cli-config": {"zod": "^4.6.7"}}; audit now 0 vulnerabilities; vitest 1687, typecheck, lint, e2e 31/31 pass. Next: owner says "push", then commit, push, confirm Vercel photo-app-pi2o and CI check+e2e. |
 
 ### Archive (completed and removed tasks)
 

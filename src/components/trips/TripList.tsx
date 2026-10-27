@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { isKnownFresh } from "@/components/RefreshWhenStale";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { ApiError, api } from "@/lib/api-client";
 import { pruneTripCopies, removeTripCopy } from "@/lib/offline-store";
 import { focusFirst, softDisabled } from "@/lib/focus";
 import type { TripSummary } from "@/lib/types";
 
-export function TripList({ trips }: { trips: TripSummary[] }) {
+export function TripList({ trips, renderedAt }: { trips: TripSummary[]; /** The page render this list came from; copies are pruned only when it is known to be current. Omitted: always current. */ renderedAt?: number }) {
   const router = useRouter();
   const { confirm, dialog } = useConfirm();
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +24,11 @@ export function TripList({ trips }: { trips: TripSummary[] }) {
 
   // Offline copies of trips that no longer exist (deleted here or elsewhere) must not stay readable.
   const idsKey = trips.map((t) => t.id).join(",");
-  useEffect(() => pruneTripCopies(idsKey ? idsKey.split(",") : []), [idsKey]);
+  // Only on a render known to be fresh: Back first shows a cached list that lacks trips made since, and pruning by it would delete their copies.
+  useEffect(() => {
+    if (renderedAt !== undefined && !isKnownFresh(renderedAt)) return;
+    pruneTripCopies(idsKey ? idsKey.split(",") : []);
+  }, [idsKey, renderedAt]);
 
   async function remove(trip: TripSummary) {
     if (inFlight.current.has(trip.id)) return;
@@ -38,6 +43,7 @@ export function TripList({ trips }: { trips: TripSummary[] }) {
         if (!(e instanceof ApiError && e.status === 404)) throw e; // already deleted elsewhere: same end result
       }
       removeTripCopy(trip.id);
+      try { window.localStorage.removeItem(`autoFirstStop:${trip.id}`); } catch { /* storage unavailable */ }
       // The row is about to go: keep keyboard focus on the next row, else the previous one, else the page heading.
       const at = trips.findIndex((t) => t.id === trip.id);
       const near = [trips[at + 1], trips[at - 1]].map((t) => (t ? listRef.current?.querySelector<HTMLElement>(`[data-trip-link="${t.id}"]`) : null));

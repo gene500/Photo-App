@@ -209,3 +209,61 @@ describe("DeleteAccountButton and ChangePasswordButton finish with the awaited s
     expect(assign).not.toHaveBeenCalled();
   });
 });
+
+describe("Settings submit buttons keep keyboard focus while busy", () => {
+  beforeEach(() => {
+    deleteAccount.mockReset();
+    changePassword.mockReset();
+    signOutEverywhere.mockReset();
+  });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it("change password: the submit button is aria-disabled, not disabled, while pending, and ignores a second press", async () => {
+    changePassword.mockReturnValue(new Promise(() => {}));
+    render(<ChangePasswordButton />);
+    await userEvent.click(screen.getByRole("button", { name: /Change password/ }));
+    await userEvent.type(screen.getByLabelText("Current password"), "oldpassword");
+    await userEvent.type(screen.getByLabelText("New password"), "newpassword1");
+    const submit = screen.getByRole("button", { name: "Change password" });
+    submit.focus();
+    await userEvent.keyboard("{Enter}");
+    const busy = screen.getByRole("button", { name: "Changing…" });
+    expect(busy.hasAttribute("disabled")).toBe(false);
+    expect(busy.getAttribute("aria-disabled")).toBe("true");
+    expect(document.activeElement).toBe(busy);
+    await userEvent.keyboard("{Enter}");
+    expect(changePassword).toHaveBeenCalledTimes(1);
+  });
+
+  it("delete account: not disabled while the password is empty, and empty submits do nothing", async () => {
+    render(<DeleteAccountButton />);
+    await userEvent.click(screen.getByRole("button", { name: /Delete account/ }));
+    const submit = screen.getByRole("button", { name: "Delete my account" });
+    expect(submit.hasAttribute("disabled")).toBe(false);
+    expect(submit.getAttribute("aria-disabled")).toBe("true");
+    await userEvent.click(submit);
+    expect(deleteAccount).not.toHaveBeenCalled();
+  });
+
+  it("sign out everywhere: keeps focus while busy", async () => {
+    signOutEverywhere.mockReturnValue(new Promise(() => {}));
+    render(<SignOutEverywhereButton />);
+    const b = screen.getByRole("button", { name: "Sign out on all devices" });
+    b.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(b.hasAttribute("disabled")).toBe(false);
+    expect(b.getAttribute("aria-disabled")).toBe("true");
+    expect(document.activeElement).toBe(b);
+  });
+
+  it("change password: a new password under 8 characters gets an inline reason and sends nothing", async () => {
+    changePassword.mockReset();
+    render(<ChangePasswordButton />);
+    await userEvent.click(screen.getByRole("button", { name: /Change password/ }));
+    await userEvent.type(screen.getByLabelText("Current password"), "oldpassword");
+    await userEvent.type(screen.getByLabelText("New password"), "short");
+    await userEvent.click(screen.getByRole("button", { name: "Change password" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("at least 8 characters");
+    expect(changePassword).not.toHaveBeenCalled();
+  });
+});

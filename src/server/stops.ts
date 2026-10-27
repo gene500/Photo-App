@@ -78,19 +78,44 @@ export async function getOwnedStop(userId: string, stopId: string): Promise<Stop
   return row ? toStopDto(row) : null;
 }
 
-export async function updateStop(
-  userId: string,
-  stopId: string,
-  patch: StopUpdate,
-): Promise<Stop | null> {
-  if (!(await getOwnedStop(userId, stopId))) return null;
+export type StopUpdateResult = { stop: Stop; /** Other stops whose visited flag changed to keep the checks one run from the start. */ cascaded: Stop[] };
+
+/**
+ * Updates a stop. Visited stops always form one run from the start of the trip, so a visited change is applied
+ * together with its cascade in one transaction (checking a stop checks every earlier one, unchecking it unchecks
+ * every later one). Enforced here so a stale tab cannot leave a gap.
+ */
+export async function updateStopCascade(userId: string, stopId: string, patch: StopUpdate): Promise<StopUpdateResult | null> {
   try {
-    return toStopDto(await prisma.stop.update({ where: { id: stopId }, data: toStopData(patch) }));
+    return await prisma.$transaction(async (tx) => {
+      const row = await tx.stop.findFirst({ where: { id: stopId, trip: { userId } } });
+      if (!row) return null;
+      const updated = await tx.stop.update({ where: { id: stopId }, data: toStopData(patch) });
+      const cascaded: Stop[] = [];
+      if (patch.visited !== undefined) {
+        const visited = patch.visited;
+        const others = await tx.stop.findMany({
+          where: visited
+            ? { tripId: row.tripId, order: { lt: updated.order }, visited: false }
+            : { tripId: row.tripId, order: { gt: updated.order }, visited: true },
+          orderBy: { order: "asc" },
+        });
+        if (others.length > 0) {
+          await tx.stop.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data: { visited } });
+          for (const o of others) cascaded.push(toStopDto({ ...o, visited }));
+        }
+      }
+      return { stop: toStopDto(updated), cascaded };
+    });
   } catch (e) {
     // Deleted between the ownership check and the update (Prisma "record not found").
     if (typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2025") return null;
     throw e;
   }
+}
+
+export async function updateStop(userId: string, stopId: string, patch: StopUpdate): Promise<Stop | null> {
+  return (await updateStopCascade(userId, stopId, patch))?.stop ?? null;
 }
 
 export type PhotoSwap =

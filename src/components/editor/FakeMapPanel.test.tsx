@@ -104,7 +104,7 @@ describe("FakeMapPanel", () => {
     const onSuggestionClick = vi.fn();
     const onMapClick = vi.fn();
     render(<FakeMapPanel {...base} pending={{ lat: 37.5, lng: -119 }} suggestions={[suggestion]} onSuggestionClick={onSuggestionClick} onMapClick={onMapClick} />);
-    expect(screen.getByLabelText("Selected place")).toBeTruthy();
+    expect(screen.getByLabelText("Selected place on the map")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Suggestion: Fake Viewpoint" }));
     expect(onSuggestionClick).toHaveBeenCalledWith("node/1");
     expect(onMapClick).not.toHaveBeenCalled();
@@ -207,5 +207,23 @@ describe("FakeMapPanel sky lines", () => {
     expect(screen.queryByTestId("sky-line-sunset")).toBeNull();
     rerender(<FakeMapPanel {...base} />);
     expect(screen.queryByTestId("sky-line-sunset")).toBeNull();
+  });
+
+  it("marks the selected stop marker with aria-pressed and the pending pin as an image", () => {
+    const stops = [{ ...stop, id: "s1", name: "A" }, { ...stop, id: "s2", name: "B", order: 1, lat: 37.1, lng: -119.1 }];
+    render(<FakeMapPanel {...base} stops={stops} selectedId="s2" pending={{ lat: 37.5, lng: -119 }} />);
+    expect(screen.getByRole("button", { name: "Stop 1: A" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "Stop 2: B" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("img", { name: "Selected place on the map" })).toBeTruthy();
+  });
+
+  it("Escape dismisses the suggestion popup shown on keyboard focus", () => {
+    loadPlacePhoto.mockResolvedValue(null);
+    render(<FakeMapPanel {...base} suggestions={[suggestion]} />);
+    const dot = screen.getByRole("button", { name: "Suggestion: Fake Viewpoint" });
+    fireEvent.focus(dot);
+    expect(screen.queryByText("Fake Viewpoint")).toBeTruthy();
+    fireEvent.keyDown(dot, { key: "Escape" });
+    expect(screen.queryByText("Fake Viewpoint")).toBeNull();
   });
 });

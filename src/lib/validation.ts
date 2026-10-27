@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isDateOnly } from "./dates";
 import { haversineMeters } from "./geo";
-import { stripNameChars, stripTextChars } from "./text";
+import { hasContent, stripNameChars, stripTextChars } from "./text";
 
 // Zod otherwise probes `new Function("")` to JIT its parsers, which a CSP without unsafe-eval reports as a violation
 // in the browser console. In the browser the interpreter path is plenty fast for these small forms.
@@ -13,8 +13,6 @@ export const MAX_DWELL_MINUTES = 480;
 const lat = z.number().min(-90).max(90);
 const lng = z.number().min(-180).max(180);
 
-// Zero-width characters are legal inside a name (joiners in emoji and some scripts) but do not count as content.
-const ZERO_WIDTH = /[\u200B-\u200D\u2060\uFEFF]/g;
 
 /**
  * A trimmed one-line name: required (zero-width characters do not count) and at most `max` characters.
@@ -24,7 +22,7 @@ const nameText = (label: string, max: number) =>
   z.string().transform(stripNameChars).pipe(
     z.string().trim()
       .min(1, `${label} is required`)
-      .refine((v) => v.replace(ZERO_WIDTH, "").trim().length > 0, `${label} is required`)
+      .refine(hasContent, `${label} is required`)
       .max(max),
   );
 

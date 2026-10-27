@@ -67,7 +67,8 @@ describe("SearchBar", () => {
     render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
     await userEvent.type(input(), "Hor");
     await vi.waitFor(() => expect(api.geocode).toHaveBeenCalledTimes(1));
-    await userEvent.keyboard("{Escape}");
+    await screen.findByRole("option");
+    await userEvent.keyboard("{Escape}{Escape}");
     await userEvent.type(input(), "Bend");
     await vi.waitFor(() => expect(api.geocode).toHaveBeenCalledTimes(2));
     await userEvent.clear(input());
@@ -185,12 +186,32 @@ describe("SearchBar", () => {
     expect(await screen.findByText("Place search failed. Please try again.")).toBeTruthy();
   });
 
-  it("clears on Escape", async () => {
+  it("first Escape closes the list and keeps the text; typing reopens it", async () => {
     vi.mocked(api.geocode).mockResolvedValue({ suggestions: [fresno] });
     render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
     await userEvent.type(input(), "Fres");
     await screen.findByRole("option", { name: "Fresno, California" });
     await userEvent.keyboard("{Escape}");
+    expect((input() as HTMLInputElement).value).toBe("Fres");
+    expect(screen.queryByRole("option")).toBeNull();
+    expect(input().getAttribute("aria-expanded")).toBe("false");
+    await userEvent.type(input(), "n");
+    expect(await screen.findByRole("option", { name: "Fresno, California" })).toBeTruthy();
+  });
+
+  it("says the session expired when the search is refused with 401", async () => {
+    vi.mocked(api.geocode).mockRejectedValue(new Error("Your session has expired. Log in again to keep working."));
+    render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
+    await userEvent.type(input(), "Fres");
+    expect(await screen.findByText("Your session has expired. Log in again to keep working.")).toBeTruthy();
+  });
+
+  it("clears on a second Escape", async () => {
+    vi.mocked(api.geocode).mockResolvedValue({ suggestions: [fresno] });
+    render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
+    await userEvent.type(input(), "Fres");
+    await screen.findByRole("option", { name: "Fresno, California" });
+    await userEvent.keyboard("{Escape}{Escape}");
     expect((input() as HTMLInputElement).value).toBe("");
     expect(screen.queryByRole("option", { name: "Fresno, California" })).toBeNull();
   });
@@ -241,5 +262,22 @@ describe("SearchBar", () => {
     await userEvent.type(input(), "zzz");
     await screen.findByText("No matches found");
     expect(screen.getByRole("status").textContent).toBe("No matches found");
+  });
+
+  it("limits the text to 200 characters", () => {
+    render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
+    expect(input().getAttribute("maxlength")).toBe("200");
+  });
+
+  it("ArrowDown brings the list back after Escape closed it", async () => {
+    vi.mocked(api.geocode).mockResolvedValue({ suggestions: [fresno] });
+    render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
+    await userEvent.type(input(), "Fres");
+    await screen.findByRole("option", { name: "Fresno, California" });
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(screen.getByRole("listbox")).toBeTruthy();
+    expect(input().getAttribute("aria-activedescendant")).toBe("place-option-0");
   });
 });

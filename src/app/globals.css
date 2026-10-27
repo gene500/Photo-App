@@ -154,6 +154,12 @@ body {
 }
 :root[data-theme="dark"] .map-marker:focus-visible { outline: 2px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 2px #1f1a12; }
 
+/* A selected marker keeps its route-colored ring on focus: the focus box-shadow above would replace Tailwind's ring, so stack it. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .map-marker.ring-route:focus-visible { box-shadow: 0 0 0 2px #1f1a12, 0 0 0 4px var(--route); }
+}
+:root[data-theme="dark"] .map-marker.ring-route:focus-visible { box-shadow: 0 0 0 2px #1f1a12, 0 0 0 4px var(--route); }
+
 /* Map tiles are the "quiet light-gray" backdrop; dim them a little in dark mode (0.8 now that the palette itself is a step darker). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .mapboxgl-canvas { filter: brightness(0.8) contrast(1.12); }
@@ -221,3 +227,21 @@ body {
    button draws none, and the unfiltered control around it shows the ring; Mapbox's blue focus shadow is reset too. */
 :root .mapboxgl-map .mapboxgl-ctrl-attrib-button:focus { box-shadow: none; outline: none; }
 :root .mapboxgl-map .mapboxgl-ctrl-attrib:has(.mapboxgl-ctrl-attrib-button:focus-visible) { outline: 2px solid var(--accent-strong); }
+
+/* Print: always dark ink on white, whatever the theme (a dark-theme print would otherwise use the dark background and pale text). */
+@media print {
+  :root, :root:not([data-theme="light"]), :root[data-theme="dark"], :root[data-theme="light"] {
+    color-scheme: light !important;
+    --background: #fff !important;
+    --surface: #fff !important;
+    --foreground: #000 !important;
+    --muted: #444 !important;
+    --border: rgb(0 0 0 / 0.2) !important;
+    --accent-soft: #fff !important;
+    --accent-foreground: #000 !important;
+    --accent-strong: #000 !important;
+    --danger: #a82a1e !important;
+    --hover: transparent !important;
+  }
+  body { background: #fff !important; color: #000 !important; }
+}

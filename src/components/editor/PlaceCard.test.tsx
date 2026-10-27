@@ -105,4 +105,22 @@ describe("PlaceCard", () => {
     await userEvent.keyboard("{Escape}");
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("clamps a very long name to three lines and keeps the full name as a tooltip", () => {
+    const name = "Long ".repeat(80).trim();
+    render(<PlaceCard name={name} resolving={false} busy={false} onAdd={vi.fn()} onClose={vi.fn()} />);
+    const p = screen.getByText(name);
+    expect(p.className).toContain("line-clamp-3");
+    expect(p.getAttribute("title")).toBe(name);
+  });
+
+  it("turns Add stop off and says why when the trip is full", async () => {
+    const onAdd = vi.fn();
+    render(<PlaceCard name="X" resolving={false} busy={false} full onAdd={onAdd} onClose={vi.fn()} />);
+    const add = screen.getByRole("button", { name: "Add stop" });
+    expect(add.getAttribute("aria-disabled")).toBe("true");
+    await userEvent.click(add);
+    expect(onAdd).not.toHaveBeenCalled();
+    expect(screen.getByTestId("place-full").textContent).toContain("maximum of 25 stops");
+  });
 });

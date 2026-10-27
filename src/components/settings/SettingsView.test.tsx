@@ -116,4 +116,10 @@ describe("time format labels", () => {
     expect(screen.queryByText("Device default")).toBeNull();
     expect(screen.getByText("Default (12-hour)")).toBeTruthy();
   });
+
+  it("has a skip link to the main content", async () => {
+    await setup();
+    expect(screen.getByRole("link", { name: "Skip to content" }).getAttribute("href")).toBe("#main-content");
+    expect(screen.getByRole("main").id).toBe("main-content");
+  });
 });

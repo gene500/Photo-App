@@ -17,7 +17,7 @@ type Handlers = {
   onSelect: (stopId: string) => void;
 };
 
-type Props = Handlers & { stops: Stop[]; onReorder: (stopIds: string[]) => void };
+type Props = Handlers & { stops: Stop[]; onReorder: (stopIds: string[], movedId?: string) => void };
 
 export function reorderIds(ids: string[], activeId: string, overId: string): string[] | null {
   const from = ids.indexOf(activeId);
@@ -51,16 +51,25 @@ export function StopList({ stops, onReorder, ...handlers }: Props) {
 
   if (stops.length === 0) return <div ref={rootRef} tabIndex={-1} className="outline-none"><p className="text-sm text-muted">No stops yet.</p></div>;
 
+  // dnd-kit's default announcements read out database ids; the app announces the result itself ("Moved X to position N of M"), so only the pick-up is spoken here, by name.
+  const nameOf = (id: string | number) => stops.find((s) => s.id === String(id))?.name ?? "stop";
+  const announcements = {
+    onDragStart: ({ active }: { active: { id: string | number } }) => `Picked up ${nameOf(active.id)}.`,
+    onDragOver: () => undefined,
+    onDragEnd: () => undefined,
+    onDragCancel: ({ active }: { active: { id: string | number } }) => `Reordering ${nameOf(active.id)} cancelled.`,
+  };
+
   function handleDragEnd({ active, over }: DragEndEvent) {
     if (!over) return;
     const next = reorderIds(ids, String(active.id), String(over.id));
-    if (next) onReorder(next);
+    if (next) onReorder(next, String(active.id));
   }
 
   return (
     <div ref={rootRef} tabIndex={-1} className="outline-none">
     {/* A stable id avoids dnd-kit's SSR aria-describedby hydration mismatch. */}
-    <DndContext id="stop-list" sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext id="stop-list" accessibility={{ announcements }} sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         <ol>
           {stops.map((s, i) => (

@@ -38,10 +38,23 @@ describe("OfflineView", () => {
     expect(await screen.findByText(/No trips are saved on this device yet/)).toBeTruthy();
   });
 
+  it("does not say you are offline while the browser is online, and has a skip link", async () => {
+    saveTripCopy(trip, new Date("2026-06-20T12:00:00Z"));
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    render(<OfflineView />);
+    expect(screen.getByRole("link", { name: "Skip to content" }).getAttribute("href")).toBe("#main-content");
+    expect(document.getElementById("main-content")).toBeTruthy();
+    await userEvent.click(await screen.findByRole("button", { name: /Yosemite loop/ }));
+    expect(screen.getByRole("status").textContent).toMatch(/^Showing your saved copy from /);
+    vi.restoreAllMocks();
+  });
+
   it("lists saved trips and opens one read-only with the banner, notes, shot list and dwell", async () => {
     saveTripCopy(trip, new Date("2026-06-20T12:00:00Z"));
+    const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     render(<OfflineView />);
     await userEvent.click(await screen.findByRole("button", { name: /Yosemite loop/ }));
+    onLine.mockRestore();
     expect(screen.getByRole("heading", { name: "Yosemite loop" })).toBeTruthy();
     expect(screen.getByRole("status").textContent).toMatch(/^You're offline - showing your saved copy from /);
     const rows = screen.getAllByTestId("offline-stop");

@@ -11,8 +11,8 @@ export default async function TripsLayout({ children }: LayoutProps<"/trips">) {
   return (
     <div className="flex min-h-screen flex-col">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:ring-2 focus:ring-accent-strong">Skip to content</a>
-      <header className="flex min-h-12 items-center justify-between gap-2 bg-surface px-4 shadow-sm">
-        <Link href="/trips" className="min-w-0 truncate text-sm font-semibold tracking-tight">Photo Op Planner</Link>
+      <header className="flex min-h-12 items-center justify-between gap-2 bg-surface px-4 py-1 shadow-sm">
+        <Link href="/trips" className="min-w-0 break-words text-sm font-semibold tracking-tight">Photo Op Planner</Link>
         <div className="flex shrink-0 items-center">
           <Link href="/settings" aria-label="Settings" title="Settings" className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted transition hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-strong">
             <svg aria-hidden viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">

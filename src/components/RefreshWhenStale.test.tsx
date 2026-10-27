@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
-import { RefreshWhenStale } from "./RefreshWhenStale";
+import { isKnownFresh, RefreshWhenStale, WRITE_LANDED_EVENT } from "./RefreshWhenStale";
 
 let stamp = 1_000;
 const fresh = () => ++stamp;
@@ -44,5 +44,15 @@ describe("RefreshWhenStale", () => {
     vi.spyOn(performance, "getEntriesByType").mockReturnValue([{ type: "back_forward" } as PerformanceNavigationTiming]);
     render(<RefreshWhenStale renderedAt={fresh()} />);
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes when a write lands after the editor was left, and reports which stamps are known fresh", () => {
+    const s = fresh();
+    render(<RefreshWhenStale renderedAt={s} />);
+    expect(isKnownFresh(s)).toBe(true);
+    window.dispatchEvent(new Event(WRITE_LANDED_EVENT));
+    expect(refresh).toHaveBeenCalledTimes(1);
+    render(<RefreshWhenStale renderedAt={s} />); // the same stamp shown again is a cached copy
+    expect(isKnownFresh(s)).toBe(false);
   });
 });

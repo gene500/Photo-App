@@ -102,6 +102,13 @@ describe("SharedTripView Download PDF", () => {
     expect(screen.queryByRole("button", { name: "Download PDF" })).toBeNull();
   });
 
+  it("is hidden when printed, like the map links", async () => {
+    render(<SharedTripView trip={trip} />);
+    expect((await screen.findByRole("button", { name: "Download PDF" })).className).toContain("print:hidden");
+    const links = screen.queryByTestId("open-in-maps");
+    if (links) expect(links.className).toContain("print:hidden");
+  });
+
   it("builds the PDF without weather and saves it", async () => {
     const blob = new Blob(["x"]);
     vi.mocked(createItineraryPdf).mockResolvedValue(blob);
@@ -181,5 +188,14 @@ describe("SharedTripView Download PDF", () => {
   it("shows no map links with fewer than two stops", () => {
     render(<SharedTripView trip={{ ...trip, stops: trip.stops.slice(0, 1) }} />);
     expect(screen.queryByRole("link", { name: /open in/i })).toBeNull();
+  });
+
+  it("prints as a plain list of every stop: no map, no fixed-height scroll panel", () => {
+    const { container } = render(<SharedTripView trip={trip} />);
+    expect(container.querySelector("main")!.className).toContain("print:overflow-visible");
+    expect(container.querySelector("aside")!.className).toContain("print:static");
+    expect(container.querySelector("aside")!.className).toContain("print:h-auto");
+    expect(container.querySelector("ol")!.className).toContain("print:overflow-visible");
+    expect(container.querySelector("main > div")!.className).toContain("print:hidden");
   });
 });

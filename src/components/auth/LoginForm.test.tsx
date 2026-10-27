@@ -48,6 +48,13 @@ describe("LoginForm", () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it("calls an unreadable (non-JSON) server answer a server problem, not a network one", async () => {
+    vi.mocked(signIn).mockRejectedValue(new SyntaxError("Unexpected token < in JSON"));
+    render(<LoginForm />);
+    await submit();
+    expect((await screen.findByRole("alert")).textContent).toBe("The server had a problem. Try again in a moment.");
+  });
+
   it("navigates to /trips on success", async () => {
     vi.mocked(signIn).mockResolvedValue({ error: undefined, ok: true, status: 200, url: "/trips" } as never);
     render(<LoginForm />);

@@ -50,7 +50,9 @@ export function OfflineView() {
   const copy = useMemo(() => (openId ? loadTripCopy(openId) : null), [openId]);
 
   return (
-    <main className="mx-auto w-full max-w-2xl space-y-4 px-4 py-8">
+    <>
+    <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:ring-2 focus:ring-accent-strong">Skip to content</a>
+    <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-2xl space-y-4 px-4 py-8 outline-none">
       <header className="space-y-1">
         <h1 className="break-words text-2xl font-semibold">{copy && access === "show" ? copy.trip.name : "Saved trips"}</h1>
       </header>
@@ -61,7 +63,7 @@ export function OfflineView() {
       </div>
 
       {!mounted || access !== "show" ? null : copy ? (
-        <TripCopyView copy={copy} onBack={() => setOpenId(null)} />
+        <TripCopyView copy={copy} onBack={() => setOpenId(null)} online={backOnline || navigator.onLine} />
       ) : summaries.length === 0 ? (
         <p className={`${card} p-4 text-sm text-muted`}>
           No trips are saved on this device yet. Open a trip while you are online and a read-only copy is kept here.
@@ -87,10 +89,11 @@ export function OfflineView() {
         </>
       )}
     </main>
+    </>
   );
 }
 
-function TripCopyView({ copy, onBack }: { copy: NonNullable<ReturnType<typeof loadTripCopy>>; onBack: () => void }) {
+function TripCopyView({ copy, onBack, online }: { copy: NonNullable<ReturnType<typeof loadTripCopy>>; onBack: () => void; online: boolean }) {
   const { trip } = copy;
   const { settings } = useSettings();
   const tf = settings.timeFormat;
@@ -102,7 +105,7 @@ function TripCopyView({ copy, onBack }: { copy: NonNullable<ReturnType<typeof lo
     <div className="space-y-4">
       <button type="button" onClick={onBack} className={btnGhost}>‹ All saved trips</button>
       <p role="status" className="rounded-xl bg-accent-soft px-4 py-3 text-sm text-accent-foreground dark:text-foreground">
-        You&apos;re offline - showing your saved copy from {formatSavedAt(copy.savedAt, tf)}
+        {online ? "Showing your saved copy from " : "You're offline - showing your saved copy from "}{formatSavedAt(copy.savedAt, tf)}
       </p>
       <p className="text-sm text-muted">
         Planned for {trip.plannedDate}

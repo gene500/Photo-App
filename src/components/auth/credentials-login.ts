@@ -22,7 +22,9 @@ export async function signInWithCredentials(email: string, password: string): Pr
   let res: Awaited<ReturnType<typeof signIn>>;
   try {
     res = await signIn("credentials", { email, password, redirect: false });
-  } catch {
+  } catch (e) {
+    // The server answered, but with a body next-auth could not parse (a text page): that is a server problem, not a network one.
+    if (e instanceof SyntaxError) return { ok: false, kind: "server", message: SERVER };
     return { ok: false, kind: "network", message: NETWORK };
   }
   if (!res) return { ok: false, kind: "server", message: SERVER };

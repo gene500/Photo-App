@@ -3,6 +3,7 @@
 import { signIn, signOut } from "next-auth/react";
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api-client";
+import { softDisabled } from "@/lib/focus";
 import { clearAllCopies, disableOfflineSaving } from "@/lib/offline-store";
 
 const SIGN_OUT_FAILED = "Couldn't sign out. Check your connection and try again.";
@@ -61,6 +62,7 @@ export function SignOutEverywhereButton({ className }: { className?: string }) {
   const [revoked, setRevoked] = useState(false);
   const deviceSignOut = useDeviceSignOut();
   async function run() {
+    if (pending) return; // the button stays focusable while busy (softDisabled), so a second press lands here
     setPending(true);
     setError(null);
     if (!revoked) {
@@ -79,7 +81,7 @@ export function SignOutEverywhereButton({ className }: { className?: string }) {
   }
   return (
     <div className="space-y-2">
-      <button type="button" disabled={pending} onClick={() => void run()} className={className}>
+      <button type="button" {...softDisabled(pending)} onClick={() => void run()} className={`${className ?? ""} aria-disabled:opacity-50`}>
         {revoked && deviceSignOut.error ? "Try again" : "Sign out on all devices"}
       </button>
       {(error ?? deviceSignOut.error) && <p role="alert" className="text-sm text-danger">{error ?? deviceSignOut.error}</p>}
@@ -109,6 +111,7 @@ export function DeleteAccountButton({ className, hasPassword = true }: { classNa
   const [deleted, setDeleted] = useState(false);
   const deviceSignOut = useDeviceSignOut();
   async function run() {
+    if (pending || password === "") return;
     setPending(true);
     setError(null);
     setNeedsReauth(false);
@@ -142,7 +145,7 @@ export function DeleteAccountButton({ className, hasPassword = true }: { classNa
         <input type={hasPassword ? "password" : "email"} required autoFocus autoComplete={hasPassword ? "current-password" : "off"} value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1 block w-full max-w-xs rounded-lg border border-border bg-surface px-3 py-2 text-sm" />
       </label>
       <div className="flex gap-2">
-        <button type="submit" disabled={pending || password === ""} className="inline-flex min-h-9 items-center rounded-lg bg-danger px-3 text-sm text-white disabled:opacity-50">
+        <button type="submit" {...softDisabled(pending || password === "")} className="inline-flex min-h-9 items-center rounded-lg bg-danger px-3 text-sm text-white aria-disabled:opacity-50">
           {pending ? "Deleting…" : deleted ? "Try again" : "Delete my account"}
         </button>
         <button type="button" disabled={pending} onClick={() => { setOpen(false); setPassword(""); setError(null); setNeedsReauth(false); }} className={className}>
@@ -170,6 +173,11 @@ export function ChangePasswordButton({ className }: { className?: string }) {
   const [changed, setChanged] = useState(false);
   const deviceSignOut = useDeviceSignOut();
   async function run() {
+    if (pending || current === "") return;
+    if (next.length < 8) {
+      setError("The new password must be at least 8 characters.");
+      return;
+    }
     setPending(true);
     setError(null);
     if (!changed) {
@@ -201,11 +209,11 @@ export function ChangePasswordButton({ className }: { className?: string }) {
       </label>
       <label className="block text-sm">
         <span className="text-muted">New password</span>
-        <input type="password" required minLength={8} autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} className={field} />
+        <input type="password" required autoComplete="new-password" value={next} onChange={(e) => { setNext(e.target.value); setError(null); }} className={field} />
       </label>
       <p className="text-xs text-muted">At least 8 characters. You will be signed out everywhere and asked to sign in again.</p>
       <div className="flex gap-2">
-        <button type="submit" disabled={pending || current === "" || next.length < 8} className={className}>
+        <button type="submit" {...softDisabled(pending || current === "")} className={`${className ?? ""} aria-disabled:opacity-50`}>
           {pending ? "Changing…" : changed ? "Try again" : "Change password"}
         </button>
         <button type="button" disabled={pending} onClick={() => { setOpen(false); setCurrent(""); setNext(""); setError(null); }} className={className}>

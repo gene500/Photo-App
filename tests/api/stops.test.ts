@@ -37,6 +37,19 @@ describe("stop routes", () => {
     expect([a.stop.order, b.stop.order]).toEqual([0, 1]);
   });
 
+  it("PATCH visited cascades on the server and reports the other stops that changed", async () => {
+    const a = (await add("A")).stop, b = (await add("B")).stop, c = (await add("C")).stop;
+    const res = await PATCH(jsonRequest("PATCH", `/api/stops/${c.id}`, { visited: true }), idParams(c.id));
+    const body = await res.json();
+    expect(body.stop).toMatchObject({ id: c.id, visited: true });
+    expect(body.stops.map((x: { id: string }) => x.id)).toEqual([a.id, b.id]);
+    const res2 = await PATCH(jsonRequest("PATCH", `/api/stops/${a.id}`, { visited: false }), idParams(a.id));
+    expect((await res2.json()).stops.map((x: { id: string }) => x.id)).toEqual([b.id, c.id]);
+    expect((await getTrip(userId, tripId))!.stops.map((x) => x.visited)).toEqual([false, false, false]);
+    const plain = await PATCH(jsonRequest("PATCH", `/api/stops/${a.id}`, { notes: "x" }), idParams(a.id));
+    expect(await plain.json()).not.toHaveProperty("stops");
+  });
+
   it("rejects a stop beyond the route waypoint limit with 400", async () => {
     for (let i = 0; i < MAX_ROUTE_WAYPOINTS; i++) expect((await add(`Stop ${i}`)).res.status).toBe(201);
     const { res } = await add("One too many");

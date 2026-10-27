@@ -41,6 +41,7 @@ vi.mock("./StopList", async (importOriginal) => {
     return (
       <>
         <button type="button" onClick={() => props.onReorder([...props.stops].reverse().map((s) => s.id))}>reorder</button>
+        <button type="button" onClick={() => { const ids = props.stops.map((s) => s.id); [ids[1], ids[2]] = [ids[2], ids[1]]; props.onReorder(ids, props.stops[2].id); }}>move third up</button>
         <actual.StopList {...props} />
       </>
     );
@@ -62,6 +63,24 @@ const route = { geometry: [[-119.79, 36.74], [-119.12, 37.96]] as [number, numbe
 const newStop = (over: Partial<Stop>): Stop => ({
   id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37.5, lng: -119.5, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], ...over,
 });
+/** What the server does for a stop update: applies the patch, and for a visited change also the cascade (earlier stops checked, later ones unchecked). */
+function serverUpdate(list: Stop[]) {
+  const rows = list.map((x) => ({ ...x }));
+  return async (id: string, patch: Partial<Stop>) => {
+    const at = rows.findIndex((x) => x.id === id);
+    Object.assign(rows[at], patch);
+    const changed: Stop[] = [];
+    if (patch.visited !== undefined) {
+      rows.forEach((x, i) => {
+        if (i !== at && (patch.visited ? i < at : i > at) && x.visited !== patch.visited) {
+          x.visited = patch.visited!;
+          changed.push({ ...x });
+        }
+      });
+    }
+    return { stop: { ...rows[at] }, ...(changed.length ? { stops: changed } : {}) };
+  };
+}
 const seed = [
   newStop({ id: "a", order: 0, name: "A", lat: 36.74, lng: -119.79 }),
   newStop({ id: "b", order: 1, name: "B", lat: 37.96, lng: -119.12 }),
@@ -810,10 +829,11 @@ describe("TripEditor", () => {
   it("checking a stop checks every earlier one, and unchecking it unchecks every later one", async () => {
     vi.mocked(api.directions).mockResolvedValue({ route });
     const four = ["a", "b", "c", "d"].map((id, order) => newStop({ id, order, name: id.toUpperCase(), lat: 36 + order, lng: -119 }));
-    vi.mocked(api.updateStop).mockImplementation(async (id, patch) => ({ stop: { ...four.find((x) => x.id === id)!, ...patch } }));
+    vi.mocked(api.updateStop).mockImplementation(serverUpdate(four));
     render(<TripEditor initialTrip={withStops(four)} />);
     await openMyTrip();
     await userEvent.click(screen.getByLabelText("Visited: C"));
+    await waitFor(() => expect(api.updateStop).toHaveBeenCalledTimes(1)); // one request: the server applies the cascade
     await waitFor(() => expect((screen.getByLabelText("Visited: A") as HTMLInputElement).checked).toBe(true));
     expect((screen.getByLabelText("Visited: B") as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText("Visited: C") as HTMLInputElement).checked).toBe(true);
@@ -835,15 +855,13 @@ describe("TripEditor", () => {
 
     it("Visited unticked in the drawer unchecks the later stops, like the list", async () => {
       vi.mocked(api.directions).mockResolvedValue({ route });
-      vi.mocked(api.updateStop).mockImplementation(async (id, patch) => ({ stop: { ...four.find((x) => x.id === id)!, ...patch } }));
+      vi.mocked(api.updateStop).mockImplementation(serverUpdate(four));
       render(<TripEditor initialTrip={withStops(four)} />);
       const dialog = await openFirstDrawer();
       await userEvent.click(within(dialog).getByLabelText("Visited"));
       await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-      await waitFor(() => expect(api.updateStop).toHaveBeenCalledWith("d", { visited: false }));
-      expect(api.updateStop).toHaveBeenCalledWith("a", { visited: false });
-      expect(api.updateStop).toHaveBeenCalledWith("b", { visited: false });
-      expect(api.updateStop).toHaveBeenCalledWith("c", { visited: false });
+      await waitFor(() => expect(api.updateStop).toHaveBeenCalledWith("a", { visited: false }));
+      expect(api.updateStop).toHaveBeenCalledTimes(1);
       await openMyTrip();
       await waitFor(() => expect((screen.getByLabelText("Visited: D") as HTMLInputElement).checked).toBe(false));
       expect((screen.getByLabelText("Visited: B") as HTMLInputElement).checked).toBe(false);
@@ -1554,5 +1572,101 @@ describe("TripEditor with saved settings", () => {
     await userEvent.click(screen.getByText("drop pin"));
     await userEvent.click(await screen.findByRole("button", { name: "Add stop" }));
     expect(freshApi.addStop).toHaveBeenCalledWith("t1", { dwellMinutes: 90, name: "Tunnel View", lat: 37.5, lng: -119.5, source: "manual" });
+  });
+
+  describe("F5 fixes", () => {
+    const four = ["a", "b", "c", "d"].map((id, order) => newStop({ id, order, name: id.toUpperCase(), lat: 36 + order, lng: -119 }));
+
+    it("Escape closes the place card even when focus is on the page, not in the card", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      await userEvent.click(screen.getByRole("button", { name: "drop pin" }));
+      await screen.findByRole("region", { name: "Selected place" });
+      (document.activeElement as HTMLElement | null)?.blur();
+      fireEvent.keyDown(document.body, { key: "Escape" });
+      await waitFor(() => expect(screen.queryByRole("region", { name: "Selected place" })).toBeNull());
+    });
+
+    it("Escape in another text field leaves the place card alone", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      await userEvent.click(screen.getByRole("button", { name: "drop pin" }));
+      await screen.findByRole("region", { name: "Selected place" });
+      const field = document.createElement("input");
+      document.body.appendChild(field);
+      fireEvent.keyDown(field, { key: "Escape" });
+      expect(screen.getByRole("region", { name: "Selected place" })).toBeTruthy();
+      field.remove();
+    });
+
+    it("an error banner clears after the next successful action", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.addStop).mockRejectedValueOnce(new Error("You appear to be offline")).mockResolvedValueOnce({ stop: newStop({ id: "c", order: 2, name: "Fresno, California" }) });
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      await userEvent.click(screen.getByRole("button", { name: "pick place" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Add stop" }));
+      expect((await screen.findByRole("alert")).textContent).toContain("offline");
+      await userEvent.click(screen.getByRole("button", { name: "Add stop" }));
+      await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    });
+
+    it("does not show the same error twice", async () => {
+      vi.mocked(api.directions).mockRejectedValue(new Error("You appear to be offline"));
+      vi.mocked(api.reorderStops).mockRejectedValue(new Error("You appear to be offline"));
+      render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+      await screen.findByRole("alert");
+      await openStops();
+      await userEvent.click(screen.getByRole("button", { name: "reorder" }));
+      await waitFor(() => expect(screen.getAllByRole("alert").map((a) => a.textContent).filter((t) => t?.includes("offline"))).toHaveLength(1));
+    });
+
+    it("a keyboard move of one place up names the stop that moved, not its neighbour", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.reorderStops).mockImplementation(async (_t, ids) => ({ stops: ids.map((id, order) => ({ ...four.find((x) => x.id === id)!, order })) }));
+      render(<TripEditor initialTrip={withStops(four)} />);
+      await openStops();
+      await userEvent.click(screen.getByRole("button", { name: "move third up" }));
+      await waitFor(() => expect(screen.getByTestId("announcer").textContent).toBe("Moved C to position 2 of 4."));
+    });
+
+    it("Optimize with every stop visited says there is nothing to reorder", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      render(<TripEditor initialTrip={withStops(seed.map((x) => ({ ...x, visited: true })))} />);
+      await openMyTrip();
+      await userEvent.click(screen.getByRole("button", { name: "Optimize route" }));
+      await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("already visited"));
+    });
+
+    it("turns Add stop off at 25 stops", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      const many = Array.from({ length: 25 }, (_, i) => newStop({ id: `s${i}`, order: i, name: `S${i}`, lat: 30 + i * 0.1, lng: -119 }));
+      render(<TripEditor initialTrip={withStops(many)} />);
+      await userEvent.click(screen.getByRole("button", { name: "drop pin" }));
+      const add = await screen.findByRole("button", { name: "Add stop" });
+      expect(add.getAttribute("aria-disabled")).toBe("true");
+      await userEvent.click(add);
+      expect(api.addStop).not.toHaveBeenCalled();
+    });
+
+    it("Undo swap ticks the later visited stops again, and a stop deleted elsewhere gets a friendly message", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/1", name: "Glacier Point", lat: 37.73, lng: -119.57, kind: "viewpoint", tags: {}, score: 1 } as never] });
+      const visited = four.map((x) => ({ ...x, visited: true }));
+      render(<TripEditor initialTrip={withStops(visited)} />);
+      await userEvent.click(screen.getByRole("button", { name: "click first marker" }));
+      await userEvent.click(within(await screen.findByRole("region", { name: "Selected stop" })).getByRole("button", { name: "Open details" }));
+      const dialog = await screen.findByRole("dialog", { name: "Edit A" });
+      await userEvent.click(within(dialog).getByRole("button", { name: "Find alternatives" }));
+      vi.mocked(api.updateStop).mockResolvedValueOnce({
+        stop: { ...visited[0], name: "Glacier Point", lat: 37.73, lng: -119.57, source: "suggested", visited: false, photoUrl: null },
+        stops: visited.slice(1).map((x) => ({ ...x, visited: false })),
+      });
+      await userEvent.click(await within(dialog).findByRole("button", { name: "Swap in Glacier Point" }));
+      await openMyTrip();
+      const note = await screen.findByTestId("swap-note");
+      vi.mocked(api.updateStop).mockResolvedValueOnce({ stop: { ...visited[0], visited: true } }).mockResolvedValueOnce({ stop: { ...visited[3], visited: true }, stops: visited.slice(0, 3) });
+      await userEvent.click(within(note).getByRole("button", { name: "Undo swap" }));
+      await waitFor(() => expect(api.updateStop).toHaveBeenLastCalledWith("d", { visited: true }));
+    });
   });
 });

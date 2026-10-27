@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
 import { installMemoryStorage, type MemoryStorage } from "../../tests/helpers/memory-storage";
-import { MAX_COPIES, claimOwner, clearAllCopies, enableOfflineSaving, pruneTripCopies, removeTripCopy, listTripCopies, loadTripCopy, saveTripCopy } from "./offline-store";
+import { MAX_COPIES, claimOwner, clearAllCopies, disableOfflineSaving, enableOfflineSaving, offlineSavingDisabled, pruneTripCopies, removeTripCopy, listTripCopies, loadTripCopy, saveTripCopy } from "./offline-store";
 import type { Stop, TripWithStops } from "./types";
 
 const stop = (i: number): Stop => ({
@@ -167,6 +167,28 @@ describe("offline-store", () => {
     expect(saveTripCopy(trip("a"))).toBe(false);
     enableOfflineSaving();
     expect(saveTripCopy(trip("a"))).toBe(true);
+  });
+
+  it("resumes saving when another tab signs out and back in as the same user, but not as someone else", () => {
+    enableOfflineSaving();
+    claimOwner("u1");
+    window.dispatchEvent(new StorageEvent("storage", { key: "rtpp.offline.signedout", newValue: "1" }));
+    expect(saveTripCopy(trip("a"))).toBe(false);
+    window.dispatchEvent(new StorageEvent("storage", { key: "rtpp.offline.owner", newValue: "u2" })); // a different user
+    expect(offlineSavingDisabled()).toBe(true);
+    window.dispatchEvent(new StorageEvent("storage", { key: "rtpp.offline.owner", newValue: "u1" })); // the same user again
+    expect(offlineSavingDisabled()).toBe(false);
+    mem.setItem("rtpp.offline.owner", "u1");
+    expect(saveTripCopy(trip("a"))).toBe(true);
+  });
+
+  it("does not resume after this tab itself signed out, even if the same user signs in elsewhere", () => {
+    enableOfflineSaving();
+    claimOwner("u1");
+    disableOfflineSaving();
+    window.dispatchEvent(new StorageEvent("storage", { key: "rtpp.offline.owner", newValue: "u1" }));
+    expect(offlineSavingDisabled()).toBe(true);
+    enableOfflineSaving();
   });
 
   it("keeps saving here when another tab only clears the copies (owner removed)", () => {

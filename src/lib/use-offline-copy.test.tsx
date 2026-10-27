@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMemoryStorage } from "../../tests/helpers/memory-storage";
-import { clearAllCopies, disableOfflineSaving, enableOfflineSaving, listTripCopies, loadTripCopy, saveTripCopy } from "./offline-store";
+import { claimOwner, clearAllCopies, disableOfflineSaving, enableOfflineSaving, listTripCopies, loadTripCopy, saveTripCopy } from "./offline-store";
 import type { Stop, Trip } from "./types";
 import { useOfflineCopy } from "./use-offline-copy";
 
@@ -85,6 +85,59 @@ describe("useOfflineCopy", () => {
     window.dispatchEvent(new StorageEvent("storage", { key: "rtpp.offline.signedout", newValue: "1" }));
     const t2 = { ...trip, id: "t2" };
     renderHook(() => useOfflineCopy(t2, stops, "u1"));
+    vi.advanceTimersByTime(2000);
+    expect(listTripCopies().map((e) => e.id)).toEqual(["t1"]);
+  });
+
+  describe("verify against the server", () => {
+    it("saves only a state the server confirms", async () => {
+      const verify = vi.fn().mockResolvedValue("fresh");
+      renderHook(() => useOfflineCopy(trip, stops, "u1", 1500, verify));
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(verify).toHaveBeenCalledTimes(1);
+      expect(loadTripCopy("t1")).not.toBeNull();
+    });
+
+    it("does not write a state known to be stale or unverifiable, so a stale tab cannot overwrite the copy", async () => {
+      saveTripCopy({ ...trip, name: "Server version", stops: [] });
+      for (const state of ["stale", "unknown"] as const) {
+        const verify = vi.fn().mockResolvedValue(state);
+        renderHook(() => useOfflineCopy({ ...trip, name: "Old tab" }, stops, "u1", 1500, verify));
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(verify).toHaveBeenCalled();
+      }
+      expect(loadTripCopy("t1")!.trip.name).toBe("Server version");
+    });
+
+    it("saves nothing for a trip deleted elsewhere and drops its old copy", async () => {
+      saveTripCopy({ ...trip, stops: [] });
+      renderHook(() => useOfflineCopy(trip, stops, "u1", 1500, vi.fn().mockResolvedValue("gone")));
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(listTripCopies()).toEqual([]);
+    });
+
+    it("drops a verified save when saving was switched off while the check was running", async () => {
+      let release!: (f: "fresh") => void;
+      const verify = vi.fn(() => new Promise<"fresh">((r) => { release = r; }));
+      renderHook(() => useOfflineCopy(trip, stops, "u1", 1500, verify));
+      await vi.advanceTimersByTimeAsync(2000);
+      disableOfflineSaving();
+      release("fresh");
+      await vi.advanceTimersByTimeAsync(10);
+      expect(listTripCopies()).toEqual([]);
+    });
+  });
+
+  it("saves again when the same user signs back in elsewhere after another tab signed out", () => {
+    enableOfflineSaving();
+    claimOwner("u1");
+    renderHook(() => useOfflineCopy(trip, stops, "u1"));
+    window.dispatchEvent(new StorageEvent("storage", { key: "rtpp.offline.signedout", newValue: "1" }));
+    vi.advanceTimersByTime(2000);
+    expect(listTripCopies()).toEqual([]);
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: "rtpp.offline.owner", newValue: "u1" }));
+    });
     vi.advanceTimersByTime(2000);
     expect(listTripCopies().map((e) => e.id)).toEqual(["t1"]);
   });

@@ -76,8 +76,9 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
   }
 
   return (
-    <main className="relative h-dvh overflow-hidden">
-      <div className="absolute inset-0">
+    // print: the map and fixed-height panel give way to a plain page that lists every stop.
+    <main className="relative h-dvh overflow-hidden print:h-auto print:overflow-visible">
+      <div className="absolute inset-0 print:hidden">
         <MapView
           readOnly
           stops={mapStops}
@@ -88,12 +89,12 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
         />
       </div>
 
-      <aside className={`absolute inset-x-0 bottom-0 z-10 flex h-[55dvh] flex-col overflow-hidden rounded-b-none rounded-t-2xl lg:inset-x-auto lg:bottom-3 lg:left-3 lg:top-3 lg:h-auto lg:w-[23.75rem] lg:rounded-2xl ${card}`}>
+      <aside className={`absolute inset-x-0 bottom-0 z-10 flex h-[55dvh] flex-col overflow-hidden rounded-b-none rounded-t-2xl lg:inset-x-auto lg:bottom-3 lg:left-3 lg:top-3 lg:h-auto lg:w-[23.75rem] lg:rounded-2xl print:static print:h-auto print:w-auto print:overflow-visible print:rounded-none print:border-0 print:shadow-none ${card}`}>
         <header className="space-y-0.5 px-4 pb-2 pt-3">
           <div className="flex flex-wrap items-start justify-between gap-x-2">
             <h1 className="min-w-0 max-w-full flex-1 basis-28 break-words text-lg font-semibold">{trip.name}</h1>
             {canDownload && (
-              <button type="button" onClick={downloadPdf} className={`${btnGhost} shrink-0`}>Download PDF</button>
+              <button type="button" onClick={downloadPdf} className={`${btnGhost} shrink-0 print:hidden`}>Download PDF</button>
             )}
           </div>
           <p className="text-sm text-muted">
@@ -101,7 +102,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
             {mounted && trip.departAt && <> · Starts {formatClock(new Date(trip.departAt), undefined, tf)}</>}
           </p>
           {mapLinks.apple.length > 0 && (
-            <p className="flex flex-wrap gap-x-3 gap-y-1 pt-1 text-sm" data-testid="open-in-maps">
+            <p className="flex flex-wrap gap-x-3 gap-y-1 pt-1 text-sm print:hidden" data-testid="open-in-maps">
               {mapLinks.apple.map((a) => (
                 <a key={a.url} href={a.url} target="_blank" rel="noopener noreferrer" className="font-medium underline underline-offset-2 hover:text-accent-strong">
                   Open in Apple Maps{a.label && ` (${a.label})`}
@@ -119,12 +120,12 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
           <p className="px-4 pb-4 text-sm text-muted">No stops yet.</p>
         ) : (
           <>
-            <ol className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-2">
+            <ol className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-2 print:overflow-visible">
               {mapStops.map((s, i) => {
                 const hint = mounted ? describeLightHint(s, arrivals[i] ?? null, undefined, tf) : null;
                 const arrival = arrivals[i] ?? null;
                 return (
-                  <li key={s.id} data-testid="shared-stop" className={`flex items-start gap-3 rounded-xl p-2 ${s.id === selected ? "bg-hover" : ""}`}>
+                  <li key={s.id} data-testid="shared-stop" className={`print:break-inside-avoid flex items-start gap-3 rounded-xl p-2 ${s.id === selected ? "bg-hover" : ""}`}>
                     <span
                       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
                       style={{ background: stopColor(s) }}

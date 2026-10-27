@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { notFound, redirect } from "next/navigation";
 import { preconnect } from "react-dom";
 import { RefreshWhenStale } from "@/components/RefreshWhenStale";
@@ -17,14 +16,12 @@ export default async function TripPage({ params }: PageProps<"/trips/[id]">) {
   const trip = await getTrip(userId, id);
   if (!trip) notFound();
   const renderedAt = renderStamp();
-  // Back/Forward can restore a cached copy of this page; RefreshWhenStale then fetches a fresh one. The editor reads
-  // initialTrip only on mount, so it is keyed on the trip's content: it remounts (rebuilding the map) only when the
-  // refreshed data really differs, never just because the render was repeated.
-  const version = createHash("sha1").update(JSON.stringify(trip)).digest("hex");
+  // Back/Forward can restore a cached copy of this page; RefreshWhenStale then fetches a fresh one. The editor stays mounted
+  // and merges the fresher data into its live state (see TripEditor), so typed text, open forms and requests in flight survive.
   return (
     <>
       <RefreshWhenStale renderedAt={renderedAt} />
-      <TripEditor key={version} initialTrip={trip} userId={userId} />
+      <TripEditor initialTrip={trip} userId={userId} />
     </>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { softDisabled } from "@/lib/focus";
 
 type Props = {
@@ -14,6 +14,8 @@ type Props = {
     undoing: boolean;
     disabled: boolean;
     status: string;
+    /** Why Optimize is unavailable (read out with the button), when that is not just "busy". */
+    reason?: string;
   };
   routeStatus: string;
   swapNote: ReactNode;
@@ -22,18 +24,23 @@ type Props = {
 
 /** Layout of the My trip tab: start time, then Optimize, Undo and the route totals on one row, then the itinerary. */
 export function TripPlan({ startTime, optimize, routeStatus, swapNote, list }: Props) {
+  const optimizeRef = useRef<HTMLButtonElement>(null);
+  const reason = optimize.disabled ? optimize.reason : undefined;
   return (
     <>
       {startTime}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <button
           type="button"
+          ref={optimizeRef}
+          aria-describedby={reason ? "optimize-reason" : undefined}
           {...softDisabled(optimize.disabled)}
           onClick={optimize.disabled ? undefined : optimize.onOptimize}
           className="inline-flex min-h-9 items-center rounded-full bg-ink px-4 text-sm font-medium text-ink-foreground transition hover:opacity-85 aria-disabled:opacity-40"
         >
           {optimize.busy ? "Optimizing…" : "Optimize route"}
         </button>
+        {reason && <span id="optimize-reason" className="sr-only">{reason}</span>}
         <Link
           href="/settings#optimize"
           aria-label="Optimize settings"
@@ -49,8 +56,16 @@ export function TripPlan({ startTime, optimize, routeStatus, swapNote, list }: P
           <button
             type="button"
             {...softDisabled(optimize.undoing)}
-            onClick={optimize.undoing ? undefined : optimize.onUndo}
-            className="inline-flex min-h-9 items-center rounded-full bg-hover px-4 text-sm font-medium text-foreground ring-1 ring-border transition active:scale-[0.97] hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
+            onClick={
+              optimize.undoing
+                ? undefined
+                : () => {
+                    optimize.onUndo?.();
+                    // The Undo button leaves once it has run: hand focus to the button that makes sense next.
+                    optimizeRef.current?.focus();
+                  }
+            }
+            className="inline-flex min-h-9 items-center rounded-full bg-hover px-4 text-sm font-medium text-foreground ring-1 ring-border transition active:scale-[0.97] hover:bg-border aria-disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
           >
             Undo
           </button>
@@ -59,7 +74,7 @@ export function TripPlan({ startTime, optimize, routeStatus, swapNote, list }: P
         <p
           role="status"
           data-testid="optimize-status"
-          className={optimize.status ? "order-last basis-full rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent-foreground ring-1 ring-border" : "sr-only"}
+          className={optimize.status ? "order-last basis-full rounded-lg bg-accent-soft px-3 py-2 text-sm min-w-0 max-w-full [overflow-wrap:anywhere] text-accent-foreground dark:text-foreground ring-1 ring-border" : "sr-only"}
         >
           {optimize.status}
         </p>

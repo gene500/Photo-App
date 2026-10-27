@@ -21,10 +21,16 @@ export type TripCopy = { savedAt: string; trip: TripWithStops };
 // Sign-out switches saving off for the rest of this page's life: a debounced save that is still pending (or an
 // in-flight autosave) must not re-create a copy after clearAllCopies() ran during the async signOut. Login re-enables it.
 let savingDisabled = false;
+/** True when saving was switched off only because another tab signed out (this tab did not sign out itself). */
+let disabledByOtherTab = false;
+/** The user this tab last claimed the copies for; another tab signing back in as the same user lets this tab save again. */
+let knownOwner: string | null = null;
 const disableListeners = new Set<() => void>();
+const enableListeners = new Set<() => void>();
 
 export function disableOfflineSaving(): void {
   savingDisabled = true;
+  disabledByOtherTab = false;
   disableListeners.forEach((cb) => cb());
   try {
     storage()?.setItem(SIGNED_OUT_KEY, "1");
@@ -34,6 +40,8 @@ export function disableOfflineSaving(): void {
 }
 export function enableOfflineSaving(): void {
   savingDisabled = false;
+  disabledByOtherTab = false;
+  enableListeners.forEach((cb) => cb());
 }
 export const offlineSavingDisabled = () => savingDisabled;
 /** Called when saving is switched off (so pending timers can be cancelled). */
@@ -42,13 +50,23 @@ export function onOfflineSavingDisabled(cb: () => void): () => void {
   return () => void disableListeners.delete(cb);
 }
 
+/** Called when saving is switched back on (so a save that was cancelled can be scheduled again). */
+export function onOfflineSavingEnabled(cb: () => void): () => void {
+  enableListeners.add(cb);
+  return () => void enableListeners.delete(cb);
+}
+
 // Another tab signing out must stop this tab saving too. Merely clearing the copies (Settings) removes the owner key
 // but is not a sign-out: this tab re-claims the owner on its next save (see useOfflineCopy).
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (e) => {
     if (e.key === null || (e.key === SIGNED_OUT_KEY && e.newValue !== null)) {
+      if (!savingDisabled) disabledByOtherTab = true;
       savingDisabled = true;
       disableListeners.forEach((cb) => cb());
+    } else if (e.key === OWNER_KEY && e.newValue !== null && disabledByOtherTab && e.newValue === knownOwner) {
+      // The same user signed back in in another tab: this tab's session is theirs again, so saving resumes.
+      enableOfflineSaving();
     }
   });
 }
@@ -337,6 +355,7 @@ export function pruneTripCopies(existingIds: string[]): void {
 
 /** Records whose copies these are; if a different user is signed in now, the old user's copies are wiped first. */
 export function claimOwner(userId: string): void {
+  if (!savingDisabled) knownOwner = userId;
   const s = storage();
   if (!s || savingDisabled) return;
   try {

@@ -69,7 +69,9 @@ export function SearchBar({ getProximity, onSelect, inputRef }: Props) {
   const [active, setActive] = useState(-1);
   const options = shown?.suggestions ?? [];
   const activeIndex = active >= 0 && active < options.length ? active : -1;
-  const listOpen = options.length > 0;
+  // Escape with the list open only closes it (the text stays); it opens again when the text changes. A second Escape clears.
+  const [closedFor, setClosedFor] = useState<string | null>(null);
+  const listOpen = options.length > 0 && closedFor !== query;
   const message = pickError ?? shown?.error ?? "";
 
   function clear() {
@@ -125,6 +127,7 @@ export function SearchBar({ getProximity, onSelect, inputRef }: Props) {
         aria-activedescendant={listOpen && activeIndex >= 0 ? `place-option-${activeIndex}` : undefined}
         aria-label="Search for a place"
         autoComplete="off"
+        maxLength={200}
         value={text}
         onChange={(e) => {
           pickSeq.current++;
@@ -132,12 +135,21 @@ export function SearchBar({ getProximity, onSelect, inputRef }: Props) {
           setPicking(null);
           setPickError(null);
           setActive(-1);
+          setClosedFor(null);
           if (e.target.value === "") sessionRef.current = newSessionId();
           setText(e.target.value);
         }}
         onKeyDown={(e) => {
-          if (e.key === "Escape") clear();
-          else if (e.key === "ArrowDown" && listOpen) {
+          if (e.key === "Escape") {
+            if (listOpen) setClosedFor(query);
+            else clear();
+          }
+          else if (e.key === "ArrowDown" && !listOpen && options.length > 0) {
+            // The list was closed with Escape: ArrowDown brings it back.
+            e.preventDefault();
+            setClosedFor(null);
+            setActive(0);
+          } else if (e.key === "ArrowDown" && listOpen) {
             e.preventDefault();
             setActive(activeIndex + 1 >= options.length ? 0 : activeIndex + 1);
           } else if (e.key === "ArrowUp" && listOpen) {

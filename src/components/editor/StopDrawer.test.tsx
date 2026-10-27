@@ -65,6 +65,27 @@ describe("StopDrawer", () => {
     expect(onSave).toHaveBeenCalledWith({ notes: "Golden light at 7" });
   });
 
+  it("shows a Visited tick made on the stop card while the drawer is open, and saves nothing for it", async () => {
+    const onSave = vi.fn(async () => {});
+    const { rerender } = render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    expect((screen.getByLabelText("Visited") as HTMLInputElement).checked).toBe(false);
+    rerender(<StopDrawer plannedDate="2026-07-01" stop={{ ...stop, visited: true }} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    expect((screen.getByLabelText("Visited") as HTMLInputElement).checked).toBe(true);
+    await userEvent.type(screen.getByLabelText("Notes"), "x");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({ notes: "x" });
+  });
+
+  it("treats a zero-width-space shot as blank, like names", async () => {
+    const onSave = vi.fn(async () => {});
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    const input = screen.getByLabelText("Add a shot");
+    await userEvent.type(input, "\u200B\u200B{Enter}");
+    expect(screen.queryByLabelText(/Delete shot/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   it("saves a changed best light and time here", async () => {
     const onSave = vi.fn(async () => {});
     render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
@@ -318,5 +339,15 @@ describe("StopDrawer sky card", () => {
     await userEvent.click(screen.getByRole("button", { name: "Remove photo" }));
     finish();
     await vi.waitFor(() => expect(screen.getByRole("dialog").contains(document.activeElement)).toBe(true));
+  });
+
+  it("treats notes and shot notes holding only zero-width characters as empty", async () => {
+    const onSave = vi.fn(async () => {});
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText("Notes"), "\u200B\u200B");
+    await userEvent.type(screen.getByLabelText("Shot notes"), "\u200B");
+    await userEvent.click(screen.getByLabelText("Visited"));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({ visited: true });
   });
 });

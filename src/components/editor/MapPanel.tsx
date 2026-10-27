@@ -321,10 +321,12 @@ export default function MapPanel({
         el.classList.toggle("text-white", !s.visited);
         el.style.background = stopColor(s);
         el.setAttribute("aria-label", label);
+        el.setAttribute("aria-pressed", String(selected));
         el.title = label;
       } else if (addSet.has(s.id)) {
         const el = markerElement(`${STOP_MARKER_CLASS} ${textClass(s.visited)} ${selected ? "ring-2 ring-route" : ""}`, label, String(i + 1));
         el.style.background = stopColor(s);
+        el.setAttribute("aria-pressed", String(selected));
         const id = s.id;
         el.addEventListener("click", () => handlersRef.current.onStopClick(id));
         const marker = new mapboxgl.Marker({ element: el, draggable: !readOnly }).setLngLat([s.lng, s.lat]).addTo(map);
@@ -395,6 +397,7 @@ export default function MapPanel({
       // Pointer events, ignoring touch: a hover-added popup makes iOS WebKit swallow the tap's click.
       el.addEventListener("pointerenter", (e) => isHoverPointer(e) && showPopup(s));
       el.addEventListener("focus", () => showPopup(s));
+      el.addEventListener("keydown", (e) => { if (e.key === "Escape") hidePopup(); });
       el.addEventListener("pointerleave", hidePopup);
       el.addEventListener("blur", hidePopup);
       return new mapboxgl.Marker({ element: el }).setLngLat([s.lng, s.lat]).addTo(map);
@@ -407,7 +410,7 @@ export default function MapPanel({
     if (!map) return;
     pendingMarkerRef.current?.remove();
     pendingMarkerRef.current = pending
-      ? new mapboxgl.Marker({ element: markerElement(PENDING_CLASS, "Selected place") }).setLngLat([pending.lng, pending.lat]).addTo(map)
+      ? new mapboxgl.Marker({ element: markerElement(PENDING_CLASS, "Selected place on the map") }).setLngLat([pending.lng, pending.lat]).addTo(map)
       : null;
   }, [pending]);
 

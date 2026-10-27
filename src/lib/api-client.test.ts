@@ -145,4 +145,35 @@ describe("api client", () => {
     fetchMock.mockResolvedValue(Response.json({ error: "Not signed in" }, { status: 401 }));
     await expect(api.geocode("abc", SESSION)).rejects.toThrow(/session has expired.*log in/i);
   });
+
+  describe("malformed answers", () => {
+    const bad = (body: BodyInit | null, status = 200) => fetchMock.mockResolvedValue(new Response(body, { status }));
+
+    it("turns an unreadable or wrongly shaped 200 into a clean ApiError, never a raw TypeError", async () => {
+      for (const body of ["{}", "null", "<html>portal</html>", '{"stop":null}', '{"stop":{}}']) {
+        bad(body);
+        await expect(api.addStop("t1", { name: "x", lat: 1, lng: 2, source: "manual" })).rejects.toMatchObject({ name: "ApiError", message: expect.stringContaining("could not read") });
+      }
+      bad("{}");
+      await expect(api.updateTrip("t1", { name: "x" })).rejects.toBeInstanceOf(ApiError);
+      await expect(api.reorderStops("t1", ["a"])).rejects.toBeInstanceOf(ApiError);
+      await expect(api.getTrip("t1")).rejects.toBeInstanceOf(ApiError);
+      await expect(api.directions([[0, 0], [1, 1]])).rejects.toBeInstanceOf(ApiError);
+      await expect(api.optimizeOrder([[0, 0], [1, 1]])).rejects.toBeInstanceOf(ApiError);
+    });
+
+    it("does not treat a 200 with a body as a successful delete", async () => {
+      bad("<html>portal</html>");
+      await expect(api.deleteStop("s1")).rejects.toBeInstanceOf(ApiError);
+      await expect(api.deleteTrip("t1")).rejects.toBeInstanceOf(ApiError);
+      await expect(api.revokeShare("t1")).rejects.toBeInstanceOf(ApiError);
+    });
+
+    it("accepts the cascaded stops of a visited change and a well-formed trip", async () => {
+      fetchMock.mockResolvedValue(Response.json({ stop: { id: "s2" }, stops: [{ id: "s1" }] }));
+      expect((await api.updateStop("s2", { visited: true })).stops).toHaveLength(1);
+      fetchMock.mockResolvedValue(Response.json({ trip: { id: "t1", stops: [{ id: "s1" }] } }));
+      expect((await api.getTrip("t1")).trip.id).toBe("t1");
+    });
+  });
 });

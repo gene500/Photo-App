@@ -75,7 +75,9 @@ export function SettingsView({ email, hasPassword = true }: { email: string | nu
   }
 
   return (
-    <main className="mx-auto max-w-2xl space-y-5 px-4 py-8">
+    <>
+    <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:ring-2 focus:ring-accent-strong">Skip to content</a>
+    <main id="main-content" tabIndex={-1} className="mx-auto max-w-2xl space-y-5 px-4 py-8 outline-none">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Settings</h1>
         <Link href="/trips" onClick={goBack} className="inline-flex min-h-9 items-center rounded-lg px-2 text-sm text-muted hover:bg-hover hover:text-foreground">‹ Back</Link>
@@ -201,5 +203,6 @@ export function SettingsView({ email, hasPassword = true }: { email: string | nu
       </div>
       <LegalLinks />
     </main>
+    </>
   );
 }

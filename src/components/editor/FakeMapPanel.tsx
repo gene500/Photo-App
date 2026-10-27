@@ -102,6 +102,7 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
             key={s.id}
             type="button"
             aria-label={`Stop ${i + 1}: ${s.name}`}
+            aria-pressed={s.id === selectedId}
             title={s.name}
             className={`map-marker absolute -translate-x-1/2 -translate-y-1/2 ${STOP_MARKER_CLASS} ${s.visited ? "text-black/75" : "text-white"} ${
               s.id === selectedId ? "ring-2 ring-route" : ""
@@ -130,6 +131,7 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
           onFocus={() => setHoveredId(s.osmId)}
           onPointerLeave={() => setHoveredId(null)}
           onBlur={() => setHoveredId(null)}
+          onKeyDown={(e) => { if (e.key === "Escape") setHoveredId(null); }}
           onClick={(e) => {
             e.stopPropagation();
             setHoveredId(null);
@@ -140,7 +142,8 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
       {popupSuggestion && <SuggestionPopup suggestion={popupSuggestion} left={pos(popupSuggestion).left} top={pos(popupSuggestion).top} />}
       {pending && (
         <span
-          aria-label="Selected place"
+          role="img"
+          aria-label="Selected place on the map"
           className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#3b3226] shadow-md"
           style={{ left: `${pos(pending).left}%`, top: `${pos(pending).top}%` }}
         />

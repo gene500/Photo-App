@@ -1,4 +1,5 @@
-import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, SearchSuggestion, Stop, StopPriority, Suggestion, Trip, TripSummary, WeatherForecast } from "./types";
+import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, SearchSuggestion, Stop, StopPriority, Suggestion, Trip, TripSummary, TripWithStops, WeatherForecast } from "./types";
+import { shapes } from "./api-shapes";
 import type { NewStopInput, StopPatch, TripCreateInput, TripPatch } from "./validation";
 
 export class ApiError extends Error {
@@ -29,7 +30,13 @@ function fallbackMessage(status: number): string {
   return `Request failed (${status})`;
 }
 
-async function request<T>(url: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+const BAD_ANSWER = "The server sent an answer the app could not read. Try again.";
+
+/**
+ * `check` validates the body of a successful answer (a wrong shape is an ApiError, never a raw TypeError later);
+ * `check: "empty"` is for calls that answer 204 with no body: a 200 with a body (a captive portal page) is not a success.
+ */
+async function request<T>(url: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS, check?: ((body: unknown) => boolean) | "empty"): Promise<T> {
   const isForm = init.body instanceof FormData;
   const controller = new AbortController();
   let timedOut = false;
@@ -56,9 +63,11 @@ async function request<T>(url: string, init: RequestInit = {}, timeoutMs = DEFAU
       throw e;
     }
     if (res.status === 204) return undefined as T;
+    if (check === "empty" && res.ok) throw new ApiError(502, BAD_ANSWER);
     const body = (await res.json().catch(() => null)) as { error?: string; reason?: string } | null;
     if (timedOut) throw new ApiError(0, TIMEOUT_MESSAGE);
     if (!res.ok) throw new ApiError(res.status, (res.status === 401 ? SESSION_EXPIRED : body?.error) ?? fallbackMessage(res.status), body?.reason);
+    if (typeof check === "function" && !check(body)) throw new ApiError(502, BAD_ANSWER);
     return body as T;
   } finally {
     clearTimeout(timer);
@@ -77,35 +86,37 @@ export const api = {
   /** Permanently deletes the signed-in account and everything in it; the password confirms it. */
   changePassword: (currentPassword: string, newPassword: string) => request<void>("/api/account/password", send("POST", { currentPassword, newPassword })),
   deleteAccount: (proof: { password?: string; confirmEmail?: string }) => request<void>("/api/account", send("DELETE", proof)),
-  listTrips: () => request<{ trips: TripSummary[] }>("/api/trips"),
-  createTrip: (input: TripCreateInput) => request<{ trip: Trip }>("/api/trips", send("POST", input)),
-  updateTrip: (id: string, patch: TripPatch) => request<{ trip: Trip }>(`/api/trips/${id}`, send("PATCH", patch)),
-  deleteTrip: (id: string) => request<void>(`/api/trips/${id}`, send("DELETE")),
-  createShare: (tripId: string) => request<{ shareToken: string }>(`/api/trips/${tripId}/share`, send("POST")),
-  revokeShare: (tripId: string) => request<void>(`/api/trips/${tripId}/share`, send("DELETE")),
+  listTrips: () => request<{ trips: TripSummary[] }>("/api/trips", {}, DEFAULT_TIMEOUT_MS, shapes.tripList),
+  createTrip: (input: TripCreateInput) => request<{ trip: Trip }>("/api/trips", send("POST", input), DEFAULT_TIMEOUT_MS, shapes.trip),
+  updateTrip: (id: string, patch: TripPatch) => request<{ trip: Trip }>(`/api/trips/${id}`, send("PATCH", patch), DEFAULT_TIMEOUT_MS, shapes.trip),
+  getTrip: (id: string) => request<{ trip: TripWithStops }>(`/api/trips/${id}`, {}, DEFAULT_TIMEOUT_MS, shapes.tripWithStops),
+  deleteTrip: (id: string) => request<void>(`/api/trips/${id}`, send("DELETE"), DEFAULT_TIMEOUT_MS, "empty"),
+  createShare: (tripId: string) => request<{ shareToken: string }>(`/api/trips/${tripId}/share`, send("POST"), DEFAULT_TIMEOUT_MS, shapes.shareToken),
+  revokeShare: (tripId: string) => request<void>(`/api/trips/${tripId}/share`, send("DELETE"), DEFAULT_TIMEOUT_MS, "empty"),
   addStop: (tripId: string, input: NewStopInput) =>
-    request<{ stop: Stop }>(`/api/trips/${tripId}/stops`, send("POST", input)),
-  updateStop: (id: string, patch: StopPatch) => request<{ stop: Stop }>(`/api/stops/${id}`, send("PATCH", patch)),
-  deleteStop: (id: string) => request<void>(`/api/stops/${id}`, send("DELETE")),
+    request<{ stop: Stop }>(`/api/trips/${tripId}/stops`, send("POST", input), DEFAULT_TIMEOUT_MS, shapes.stop),
+  updateStop: (id: string, patch: StopPatch) => request<{ stop: Stop; /** Other stops whose visited flag changed with this one. */ stops?: Stop[] }>(`/api/stops/${id}`, send("PATCH", patch), DEFAULT_TIMEOUT_MS, shapes.stop),
+  deleteStop: (id: string) => request<void>(`/api/stops/${id}`, send("DELETE"), DEFAULT_TIMEOUT_MS, "empty"),
   reorderStops: (tripId: string, stopIds: string[]) =>
-    request<{ stops: Stop[] }>(`/api/trips/${tripId}/stops/order`, send("PUT", { stopIds })),
+    request<{ stops: Stop[] }>(`/api/trips/${tripId}/stops/order`, send("PUT", { stopIds }), DEFAULT_TIMEOUT_MS, shapes.stops),
   uploadPhoto: (stopId: string, file: File) => {
     const form = new FormData();
     form.append("photo", file);
-    return request<{ stop: Stop }>(`/api/stops/${stopId}/photo`, { method: "POST", body: form }, LONG_TIMEOUT_MS);
+    return request<{ stop: Stop }>(`/api/stops/${stopId}/photo`, { method: "POST", body: form }, LONG_TIMEOUT_MS, shapes.stop);
   },
-  removePhoto: (stopId: string) => request<{ stop: Stop }>(`/api/stops/${stopId}/photo`, send("DELETE")),
+  removePhoto: (stopId: string) => request<{ stop: Stop }>(`/api/stops/${stopId}/photo`, send("DELETE"), DEFAULT_TIMEOUT_MS, shapes.stop),
   directions: (coordinates: LngLat[]) =>
-    request<{ route: RouteResult }>("/api/directions", send("POST", { coordinates })),
+    request<{ route: RouteResult }>("/api/directions", send("POST", { coordinates }), DEFAULT_TIMEOUT_MS, shapes.route),
   optimizeOrder: (coordinates: LngLat[], light?: { stops: { lightPref: LightPref; priority?: StopPriority; dwellMinutes: number }[]; plannedDate: string; departAt?: string; focus?: "priority" | "time"; fixDeparture?: boolean }) =>
     request<{ order: number[]; complete?: boolean; departAt?: string | null; misses?: { stopIndex: number; minutes: number; priority?: StopPriority }[]; dark?: { stopIndex: number; minutes: number; priority?: StopPriority }[]; polar?: number[] }>(
       "/api/optimize",
       send("POST", { coordinates, ...light }),
       LONG_TIMEOUT_MS,
+      shapes.order,
     ),
   /** The server may take about a minute outside the US, so this uses the long timeout. `enrich: false` answers as soon as places are found; popularity then arrives via `suggestionPopularity`. */
   suggestions: (route: LngLat[] | { around: LngLat; radiusKm?: number }, opts: { enrich?: boolean } = {}) =>
-    request<{ suggestions: Suggestion[]; degraded?: boolean }>("/api/suggestions", send("POST", { ...(Array.isArray(route) ? { coordinates: route } : route), ...opts }), LONG_TIMEOUT_MS),
+    request<{ suggestions: Suggestion[]; degraded?: boolean }>("/api/suggestions", send("POST", { ...(Array.isArray(route) ? { coordinates: route } : route), ...opts }), LONG_TIMEOUT_MS, shapes.suggestions),
   /** Photo-count popularity for up to 10 places; a null count means unknown. */
   suggestionPopularity: (places: { lat: number; lng: number; name?: string }[]) =>
     request<{ counts: (number | null)[]; notable?: (boolean | null)[] }>("/api/suggestions/popularity", send("POST", { places })),
@@ -113,11 +124,14 @@ export const api = {
   geocode: (q: string, session: string, proximity?: { lat: number; lng: number }) =>
     request<{ suggestions: SearchSuggestion[] }>(
       `/api/geocode?q=${encodeURIComponent(q)}&session=${session}${proximity ? `&proximity=${proximity.lng.toFixed(6)},${proximity.lat.toFixed(6)}` : ""}`,
+      {},
+      DEFAULT_TIMEOUT_MS,
+      shapes.suggestions,
     ),
   retrievePlace: (id: string, session: string) =>
-    request<{ place: Place }>(`/api/geocode/retrieve?id=${encodeURIComponent(id)}&session=${session}`),
+    request<{ place: Place }>(`/api/geocode/retrieve?id=${encodeURIComponent(id)}&session=${session}`, {}, DEFAULT_TIMEOUT_MS, shapes.place),
   reverseGeocode: (lat: number, lng: number) =>
-    request<{ place: Place }>(`/api/reverse-geocode?lat=${lat.toFixed(6)}&lng=${lng.toFixed(6)}`),
+    request<{ place: Place }>(`/api/reverse-geocode?lat=${lat.toFixed(6)}&lng=${lng.toFixed(6)}`, {}, DEFAULT_TIMEOUT_MS, shapes.place),
   /** Where a trip name points (a city, park region or state), or null. */
   locate: (q: string) =>
     request<{ area: { lat: number; lng: number; bbox?: [number, number, number, number] } | null; landmark?: { name: string; lat: number; lng: number } | null }>(`/api/locate?q=${encodeURIComponent(q)}`),

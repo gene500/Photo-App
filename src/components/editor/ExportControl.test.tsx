@@ -31,6 +31,27 @@ describe("ExportControl", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
+  it("keeps a tall menu inside the window: opens upward when there is more room above the button, else scrolls in the room below", async () => {
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(500);
+    const rect = (top: number) => ({ top, bottom: top + 36, left: 0, right: 0, width: 0, height: 36, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    const spy = vi.spyOn(HTMLButtonElement.prototype, "getBoundingClientRect");
+    window.innerHeight = 700;
+    spy.mockReturnValue(rect(500)); // 160 px below, 484 above
+    const { unmount } = render(<ExportControl tripName="T" stops={[stop(0), stop(1)]} route={null} />);
+    await userEvent.click(screen.getByRole("button", { name: "Export" }));
+    let menu = screen.getByRole("group", { name: "Export trip" });
+    expect(menu.style.maxHeight).toBe("484px");
+    expect(parseFloat(menu.style.top)).toBe(500 - 4 - 484);
+    unmount();
+    spy.mockReturnValue(rect(100)); // 548 below, 84 above: fits under the button when it is not taller than that
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(600);
+    render(<ExportControl tripName="T" stops={[stop(0), stop(1)]} route={null} />);
+    await userEvent.click(screen.getByRole("button", { name: "Export" }));
+    menu = screen.getByRole("group", { name: "Export trip" });
+    expect(menu.style.top).toBe("");
+    expect(menu.style.maxHeight).toBe("548px"); // 700 - 140 - 12
+  });
+
   it("moves the menu out of the clipped sheet on short (landscape) screens", async () => {
     render(<ExportControl tripName="T" stops={[stop(0), stop(1)]} route={null} />);
     await userEvent.click(screen.getByRole("button", { name: "Export" }));

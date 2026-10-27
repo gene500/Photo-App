@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { installMemoryStorage } from "../../../tests/helpers/memory-storage";
+import { RefreshWhenStale } from "@/components/RefreshWhenStale";
 import { listTripCopies, saveTripCopy } from "@/lib/offline-store";
 
 const refresh = vi.fn();
@@ -74,6 +75,21 @@ describe("TripList", () => {
     expect(listTripCopies()).toEqual([]);
   });
 
+  it("does not prune on a cached (stale) render that lacks a new trip, only once a fresh render arrives", () => {
+    saveTripCopy(copy("t1"));
+    const page = (stamp: number, trips: TripSummary[]) => (<><RefreshWhenStale renderedAt={stamp} /><TripList trips={trips} renderedAt={stamp} /></>);
+    render(page(9101, [trip])).unmount(); // the first, fresh render of /trips
+    saveTripCopy(copy("new")); // a trip created (and saved offline) since
+    // Back restores the cached render (same stamp, list without the new trip): nothing may be pruned.
+    const { rerender } = render(page(9101, [trip]));
+    expect(listTripCopies().map((e) => e.id).sort()).toEqual(["new", "t1"]);
+    // The refresh arrives with a new stamp and the real list: now the copies are reconciled.
+    rerender(page(9102, [trip, { ...trip, id: "new" }]));
+    expect(listTripCopies().map((e) => e.id).sort()).toEqual(["new", "t1"]);
+    rerender(page(9103, [trip]));
+    expect(listTripCopies().map((e) => e.id)).toEqual(["t1"]);
+  });
+
   it("shows an empty state", () => {
     render(<TripList trips={[]} />);
     expect(screen.getByText("No trips yet. Create one below.")).toBeTruthy();
@@ -122,5 +138,16 @@ describe("TripList", () => {
       await remove([trips[0]!], "Trip a");
       expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Your trips" }));
     });
+  });
+
+  it("removes the first-stop marker of a deleted trip from localStorage", async () => {
+    vi.mocked(api.deleteTrip).mockReset().mockResolvedValue(undefined);
+    localStorage.setItem("autoFirstStop:t1", "1");
+    localStorage.setItem("autoFirstStop:other", "1");
+    render(<TripList trips={[trip]} />);
+    await userEvent.click(screen.getByRole("button", { name: "Delete Sierra loop" }));
+    await confirmDelete();
+    expect(localStorage.getItem("autoFirstStop:t1")).toBeNull();
+    expect(localStorage.getItem("autoFirstStop:other")).toBe("1");
   });
 });

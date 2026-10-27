@@ -1,8 +1,10 @@
 "use client";
 
 import { StartTimeControl } from "./StartTimeControl";
+import { retickTarget } from "./swap-undo";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { WRITE_LANDED_EVENT } from "@/components/RefreshWhenStale";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { btnGhost } from "@/components/ui/styles";
@@ -17,16 +19,16 @@ import { clampToSolarDay, computeArrivals, computeBestTimes, formatClock } from 
 import { useMounted } from "@/lib/use-mounted";
 import { fromTimeValue, toTimeValue } from "./StartTimeControl";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
-import { useOfflineCopy } from "@/lib/use-offline-copy";
+import { useOfflineCopy, type Freshness } from "@/lib/use-offline-copy";
 import { isExactOptimization } from "@/lib/optimize-schedule";
-import { leadingVisited, visitedChanges } from "@/lib/visited-run";
+import { leadingVisited } from "@/lib/visited-run";
 import { routeSignature } from "@/lib/route-signature";
 import { defaultLightPref } from "@/lib/light-windows";
 import { formatDistance, formatDuration } from "@/lib/format";
 import { coordsLabel, haversineMeters } from "@/lib/geo";
 import { getSkyInfo } from "@/lib/sky";
 import type { LightPref, LngLat, Place, RouteResult, Stop, StopSource, Suggestion, Trip, TripWithStops } from "@/lib/types";
-import type { StopPatch, TripPatch } from "@/lib/validation";
+import { MAX_ROUTE_WAYPOINTS, type StopPatch, type TripPatch } from "@/lib/validation";
 import { MapView } from "./MapView";
 import { focusLost } from "@/lib/focus";
 import { PlaceCard } from "./PlaceCard";
@@ -61,6 +63,16 @@ function joinNotes(parts: (string | null)[]): string {
   return kept.map((t, i) => (i < kept.length - 1 ? t.replace(/\.$/, "") : t.replace(/\.?$/, "."))).join(". ");
 }
 
+const MAX_STOP_NAME = 200;
+const OPTIMIZED_ANNOUNCEMENT = "Route optimized. Undo is available.";
+
+/** JSON with sorted keys, so two copies of the same data compare equal whatever order their keys were built in. */
+function canon(v: unknown): string {
+  return JSON.stringify(v, (_k, val) =>
+    val && typeof val === "object" && !Array.isArray(val) ? Object.fromEntries(Object.entries(val as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : val,
+  );
+}
+
 /** True when both are the same moment (or both absent), whatever their ISO spelling. */
 function sameInstant(a: string | null, b: string | null): boolean {
   return a === b || (a !== null && b !== null && Date.parse(a) === Date.parse(b));
@@ -72,7 +84,102 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const { confirm, dialog } = useConfirm();
   const [trip, setTrip] = useState<Trip>(initialFields);
   const [stops, setStops] = useState<Stop[]>(initialStops);
-  useOfflineCopy(trip, stops, userId);
+  // --- Keeping local state and the server in step -----------------------------
+  // Writes in flight and a counter that moves when one starts or ends. A fresher copy of the trip from the server
+  // (the page refreshed itself after Back/Forward, a stale tab refetching) is merged into the live state only when no
+  // write overlapped the request that fetched it: otherwise it may predate that write and would undo it.
+  const writesRef = useRef(0);
+  const epochRef = useRef(0);
+  const staleRef = useRef(false);
+  const aliveRef = useRef(true);
+  const [idleTick, setIdleTick] = useState(0);
+  const latestRef = useRef({ trip, stops });
+  const adoptRef = useRef<(server: TripWithStops, epoch: number) => boolean>(() => false);
+  const refetchRef = useRef<() => Promise<void>>(async () => {});
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+  /** Runs a server write, counting it as in flight. A write that lands after the editor was left tells the list page to reload. */
+  async function tracked<T>(fn: () => Promise<T>): Promise<T> {
+    writesRef.current += 1;
+    epochRef.current += 1;
+    try {
+      return await fn();
+    } finally {
+      writesRef.current -= 1;
+      epochRef.current += 1;
+      if (writesRef.current === 0) {
+        if (aliveRef.current) setIdleTick((n) => n + 1);
+        else window.dispatchEvent(new Event(WRITE_LANDED_EVENT));
+      }
+    }
+  }
+  /** The server said this tab's view is out of date (409, or a stop that is gone): fetch the trip again once nothing is in flight. */
+  function markStale() {
+    staleRef.current = true;
+    setIdleTick((n) => n + 1);
+  }
+  const markStaleOn = (e: unknown) => {
+    const status = (e as { status?: unknown }).status;
+    if (status === 404 || status === 409) markStale();
+  };
+  function adopt(server: TripWithStops, epoch: number): boolean {
+    if (writesRef.current > 0 || epochRef.current !== epoch) return false;
+    const { stops: serverStops, ...fields } = server;
+    const sorted = [...serverStops].sort((a, b) => a.order - b.order);
+    if (canon([fields, sorted]) !== canon([latestRef.current.trip, latestRef.current.stops])) {
+      setTrip(fields);
+      setStops(sorted);
+    }
+    return true;
+  }
+  async function refetchTrip() {
+    const epoch = epochRef.current;
+    try {
+      const { trip: server } = await api.getTrip(trip.id);
+      if (!adopt(server, epoch)) markStale(); // a write overlapped: ask again when it is done
+    } catch {
+      /* offline, or the trip is gone: the earlier error message stands */
+    }
+  }
+  useEffect(() => {
+    latestRef.current = { trip, stops };
+    adoptRef.current = adopt;
+    refetchRef.current = refetchTrip;
+  });
+  useEffect(() => {
+    if (!staleRef.current || writesRef.current > 0) return;
+    staleRef.current = false;
+    void refetchRef.current();
+  }, [idleTick]);
+  // The page refreshed itself (Back/Forward showed a cached copy first): merge the fresh data instead of remounting, so typed
+  // text, an open Edit trip form and requests in flight survive. It was requested when this editor opened (epoch 0).
+  const incomingKey = useMemo(() => canon([initialFields, initialStops]), [initialTrip]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handledIncomingRef = useRef(incomingKey);
+  useEffect(() => {
+    if (handledIncomingRef.current === incomingKey) return;
+    handledIncomingRef.current = incomingKey;
+    if (!adoptRef.current(initialTrip, 0)) markStale();
+  });
+  /** Before an offline copy is stored: is what this tab shows what the server has? */
+  async function verifyCopy(): Promise<Freshness> {
+    if (writesRef.current > 0) return "unknown";
+    const epoch = epochRef.current;
+    try {
+      const { trip: server } = await api.getTrip(trip.id);
+      if (writesRef.current > 0 || epochRef.current !== epoch) return "unknown";
+      const { stops: serverStops, ...fields } = server;
+      if (canon([fields, serverStops]) === canon([trip, stops])) return "fresh";
+      adopt(server, epoch); // this tab is behind: catch up (the copy is then saved from the new state)
+      return "stale";
+    } catch (e) {
+      return (e as { status?: unknown }).status === 404 ? "gone" : "unknown";
+    }
+  }
+  useOfflineCopy(trip, stops, userId, undefined, verifyCopy);
   // The outcome of the last route fetch, tagged with the waypoints it was for so a
   // stale result is never shown for different stops.
   const [routeResult, setRouteResult] = useState<{ key: string; route: RouteResult | null; error: string | null; dismissed: boolean } | null>(null);
@@ -98,7 +205,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     appliedDepartAt: string | null;
     previousOptimizedFor: string | null;
   } | null>(null);
-  const [optimizeNote, setOptimizeNote] = useState<{ text: string; idsKey: string } | null>(null);
+  // The start-time move is kept as an instant and written out at render, so it follows the time-format setting.
+  const [optimizeNote, setOptimizeNote] = useState<{ moveAt: string | null; notes: (string | null)[]; idsKey: string } | null>(null);
   // Alternatives found for one stop, tagged with the stop and the waypoints they were found for (stale ones are not shown).
   const [alternativesState, setAlternativesState] = useState<{ stopId: string; key: string; items: Suggestion[]; status: SuggestionsStatus; error: string | null } | null>(null);
   const alternativesSeq = useRef(0);
@@ -112,6 +220,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     /** What the swap wrote; Undo is offered only while the stop still matches all of it, so it cannot overwrite newer edits. */
     applied: LatLng & { name: string; visited: boolean; source: StopSource };
     lostPhoto: boolean;
+    /** Later stops that were ticked visited and that the swap's visited:false unticked too; Undo ticks them again. */
+    cascadedIds: string[];
   } | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const centerRef = useRef<LatLng | null>(null);
@@ -119,6 +229,17 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const searchRef = useRef<HTMLInputElement>(null);
   const focusSearch = () => searchRef.current?.focus();
   const lookupSeq = useRef(0);
+  const refocusAfterAddRef = useRef(false);
+  const pendingRef = useRef<Pending | null>(null);
+  // After a successful add the place card (with the focused Add stop button) is gone: if focus fell to the page, the search box gets it.
+  // (Not if the user moved on while the add was in flight.)
+  useEffect(() => {
+    pendingRef.current = pending;
+    if (!refocusAfterAddRef.current) return;
+    refocusAfterAddRef.current = false;
+    if (pending) return; // another place card opened meanwhile: leave focus with it
+    if (focusLost()) focusSearch();
+  }, [pending]);
 
   const handleCenter = useCallback((c: LatLng) => {
     centerRef.current = c;
@@ -371,17 +492,26 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   );
 
   async function saveTrip(patch: TripPatch) {
-    const { trip: updated } = await api.updateTrip(trip.id, patch);
-    setTrip(updated);
+    await tracked(async () => {
+      const { trip: updated } = await api.updateTrip(trip.id, patch);
+      setTrip(updated);
+    });
   }
 
   async function addStop(input: { name: string; lat: number; lng: number; source: StopSource; lightPref?: LightPref }, quiet = false) {
+    return tracked(() => addStopInner(input, quiet));
+  }
+
+  async function addStopInner(input: { name: string; lat: number; lng: number; source: StopSource; lightPref?: LightPref }, quiet: boolean) {
     addsInFlightRef.current += 1;
     try {
       // Only a changed default is sent; otherwise the server's own default (30) applies, exactly as before.
       const dwell = settings.defaultDwellMinutes === DEFAULT_SETTINGS.defaultDwellMinutes ? {} : { dwellMinutes: settings.defaultDwellMinutes };
-      const { stop } = await api.addStop(trip.id, { ...dwell, ...input });
+      // The server refuses a name over 200 characters (a long search result); shorten it here instead of failing the add.
+      const name = input.name.length > MAX_STOP_NAME ? input.name.slice(0, MAX_STOP_NAME).trimEnd() : input.name;
+      const { stop } = await api.addStop(trip.id, { ...dwell, ...input, name });
       setStops((prev) => [...prev, stop]);
+      setStopsError(null);
       const count = stopCountRef.current + 1;
       setAnnouncement(`Added ${stop.name}. ${count} ${count === 1 ? "stop" : "stops"} in your trip.`);
       if (stops.length === 0 && trip.departAt === null && !firstStartSavedRef.current) {
@@ -460,8 +590,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     // Only close the card we added from; the user may have opened another meanwhile.
     const added = pending;
     setPending((cur) => (cur === added ? null : cur));
-    // Only if focus was lost with the card: the user may have moved on while the add was in flight.
-    if (focusLost()) focusSearch();
+    // The card unmounts on the next render, so the focus check waits for that (see the effect on `pending`).
+    refocusAfterAddRef.current = pendingRef.current === null || pendingRef.current === added;
   }
 
   // --- Stops -----------------------------------------------------------------
@@ -480,7 +610,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const reorderSeq = useRef(0);
 
   /** Resolves true when the new order was saved (false: reverted, error shown). */
-  async function reorder(ids: string[]): Promise<boolean> {
+  async function reorder(ids: string[], announce = false, movedId?: string): Promise<boolean> {
+    return tracked(() => reorderInner(ids, announce, movedId));
+  }
+
+  async function reorderInner(ids: string[], announce: boolean, movedId?: string): Promise<boolean> {
     const seq = ++reorderSeq.current;
     const previousOrderById = new Map(stops.map((s) => [s.id, s.order]));
     // Applied onto the latest state so an edit that landed since this render is never reverted.
@@ -488,14 +622,33 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     try {
       const { stops: reordered } = await api.reorderStops(trip.id, ids);
       // A newer drag has been sent since: its answer decides the order, not this one.
-      if (seq === reorderSeq.current) applyOrder(new Map(reordered.map((s) => [s.id, s.order])));
+      if (seq === reorderSeq.current) {
+        applyOrder(new Map(reordered.map((s) => [s.id, s.order])));
+        setStopsError(null);
+        if (announce) announceMove(previousOrderById, ids, movedId);
+      }
       return true;
     } catch (e) {
+      markStaleOn(e);
       if (seq !== reorderSeq.current) return false; // superseded: do not revert over the newer order
       applyOrder(previousOrderById);
       setStopsError(errorMessage(e, "Couldn't save the new order"));
       return false;
     }
+  }
+
+  /** Says which stop moved where (a drag or keyboard reorder changes nothing else a screen reader would hear). */
+  function announceMove(previous: Map<string, number>, ids: string[], movedId?: string) {
+    const before = [...previous.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id);
+    let first = 0;
+    while (first < ids.length && before[first] === ids[first]) first++;
+    if (first >= ids.length) return;
+    let last = ids.length - 1;
+    while (last > first && before[last] === ids[last]) last--;
+    // The stop the user moved is known from the drag; guessing from the order is ambiguous for a one-step move (two stops swap places).
+    const moved = movedId && ids.includes(movedId) ? movedId : before[first] === ids[last] ? ids[last] : ids[first];
+    const name = latestRef.current.stops.find((s) => s.id === moved)?.name ?? "Stop";
+    setAnnouncement(`Moved ${name} to position ${ids.indexOf(moved) + 1} of ${ids.length}.`);
   }
 
   /** `opts.departAt` is a start time just saved that this render may not show yet; it is used instead of `trip.departAt`. */
@@ -518,6 +671,10 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       // Leaving the last visited stop: when the current route says the owner got there, plus the time spent there.
       const anchorArrival = done > 1 ? arrivals[anchor] : null;
       const planFrom = anchorArrival ? new Date(anchorArrival.getTime() + before[anchor].dwellMinutes * 60_000).toISOString() : (previousDepartAt ?? (done > 0 ? departAt : null));
+      if (done >= before.length) {
+        setOptimizeNote({ moveAt: null, notes: ["Every stop is already visited, so there is nothing left to reorder"], idsKey: startKey });
+        return;
+      }
       // Two stops have nothing to reorder (the optimizer needs three), so Optimize only records the state.
       if (tail.length < 3) {
         await saveTrip({ routeOptimizedFor: routeSignature(trip.plannedDate, before) });
@@ -540,7 +697,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         return;
       }
       const ids = [...head, ...result.order.map((i) => tail[i])].map((s) => s.id);
-      const missed = (result.misses ?? []).flatMap((m) => (tail[m.stopIndex] ? [{ name: tail[m.stopIndex].name, must: m.priority === "must" }] : []));
+      const missed = (result.misses ?? []).flatMap((m) => (tail[m.stopIndex] && !tail[m.stopIndex].visited ? [{ name: tail[m.stopIndex].name, must: m.priority === "must" }] : []));
       const misses = missed.map((m) => m.name);
       const mustMisses = missed.filter((m) => m.must).map((m) => m.name);
       const missNote = misses.length
@@ -548,7 +705,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
           (mustMisses.length ? ` ${mustMisses.join(", ")} ${mustMisses.length === 1 ? "is a must-have" : "are must-haves"}: try fewer stops or a different order.` : "")
         : null;
       // Stops visited wholly in the dark (leaving out the ones already reported for their light), and stops with no sunrise or sunset that day.
-      const darkNames = (result.dark ?? []).flatMap((m) => (tail[m.stopIndex] && !misses.includes(tail[m.stopIndex].name) ? [tail[m.stopIndex].name] : []));
+      const darkNames = (result.dark ?? []).flatMap((m) => (tail[m.stopIndex] && !tail[m.stopIndex].visited && !misses.includes(tail[m.stopIndex].name) ? [tail[m.stopIndex].name] : []));
       const darkNote = darkNames.length ? `Can't fit ${darkNames.length} ${darkNames.length === 1 ? "stop" : "stops"} in daylight: ${darkNames.join(", ")}` : null;
       const polarNames = (result.polar ?? []).flatMap((i) => (tail[i] ? [tail[i].name] : []));
       const polarNote = polarNames.length ? `No sunrise or sunset that day at ${polarNames.join(", ")}, so no daylight rule applies there` : null;
@@ -565,7 +722,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         await saveTrip({ routeOptimizedFor: optimizedFor });
         const usesLight = tail.some((s) => s.lightPref !== "any") || result.departAt != null;
         const verdict = isExactOptimization(tail.length, usesLight) && result.complete !== false ? "Already the fastest order" : "No faster order found";
-        setOptimizeNote({ text: joinNotes([verdict, ...notes]), idsKey: startKey });
+        setOptimizeNote({ moveAt: null, notes: [verdict, ...notes], idsKey: startKey });
         return;
       }
       const previousIds = before.map((s) => s.id);
@@ -578,11 +735,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         setStopsError(errorMessage(e, "Couldn't save the route"));
       }
       setUndo({ previousIds, appliedIds: ids, previousDepartAt, appliedDepartAt, previousOptimizedFor });
-      setAnnouncement("Route optimized. Undo is available.");
-      // Say so when the start time moved, so the change in the Start time field is not a surprise.
-      const moveNote = !sameInstant(appliedDepartAt, previousDepartAt) && appliedDepartAt ? `Start time moved to ${formatClock(new Date(appliedDepartAt), undefined, settings.timeFormat)} so stops land in good light` : null;
-      const note = joinNotes([moveNote, ...notes]);
-      if (note) setOptimizeNote({ text: note, idsKey: ids.join(",") });
+      // Say so when the start time moved, so the change in the Start time field is not a surprise (written out when shown).
+      const moveAt = !sameInstant(appliedDepartAt, previousDepartAt) && appliedDepartAt ? appliedDepartAt : null;
+      // A note is read out by the notice's own live region; announcing here as well would say it twice.
+      setAnnouncement(moveAt || notes.some(Boolean) ? "" : OPTIMIZED_ANNOUNCEMENT);
+      if (moveAt || notes.some(Boolean)) setOptimizeNote({ moveAt, notes, idsKey: ids.join(",") });
     } catch (e) {
       setStopsError(errorMessage(e, "Couldn't optimize the route"));
     } finally {
@@ -609,7 +766,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }
 
   async function saveStartTime(departAt: string | null) {
-    const p = (async () => {
+    const p = tracked(async () => {
       try {
         const { trip: updated } = await api.updateTrip(trip.id, { departAt });
         setTrip(updated);
@@ -618,7 +775,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         setStopsError(errorMessage(e, "Couldn't save the start time"));
         return undefined;
       }
-    })();
+    });
     startSaveRef.current = p;
     try {
       await p;
@@ -653,7 +810,10 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const canUndo = undo !== null && undo.appliedIds.join(",") === idsKey && undo.appliedDepartAt === trip.departAt;
   // Once the list or start time has moved on, this Undo is retired for good: matching them again must not revive it.
   // (Not while the optimize or the undo itself is writing, when the state is only briefly in between.)
-  if (undo && !canUndo && !optimizing && !undoing) setUndo(null);
+  if (undo && !canUndo && !optimizing && !undoing) {
+    setUndo(null);
+    setAnnouncement((a) => (a === OPTIMIZED_ANNOUNCEMENT ? "" : a)); // "Undo is available" must not linger once it is not
+  }
 
   /** Copy only `keys` from the server's stop onto the latest local one, so a response
    *  that raced a reorder can't overwrite `order` (or anything else it didn't change). */
@@ -668,36 +828,53 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     );
   }
 
+  /** Applies the server's answer to a stop update: the stop itself (only the keys that were sent) and the other stops whose visited flag the server changed with it. */
+  function applyStopResult(res: { stop: Stop; stops?: Stop[] }, keys: (keyof Stop)[]) {
+    const cascade = new Map((res.stops ?? []).map((o) => [o.id, o.visited]));
+    setStops((prev) =>
+      prev.map((s) => {
+        if (s.id === res.stop.id) {
+          const next = { ...s };
+          for (const k of keys) (next as Record<string, unknown>)[k] = res.stop[k];
+          return next;
+        }
+        return cascade.has(s.id) ? { ...s, visited: cascade.get(s.id)! } : s;
+      }),
+    );
+  }
+
   async function patchStop(id: string, patch: StopPatch) {
-    try {
-      mergeStop((await api.updateStop(id, patch)).stop, Object.keys(patch) as (keyof Stop)[]);
-    } catch (e) {
-      setStopsError(errorMessage(e, "Couldn't update the stop"));
-    }
+    await tracked(async () => {
+      try {
+        applyStopResult(await api.updateStop(id, patch), Object.keys(patch) as (keyof Stop)[]);
+        setStopsError(null);
+      } catch (e) {
+        markStaleOn(e);
+        setStopsError(errorMessage(e, "Couldn't update the stop"));
+      }
+    });
   }
 
-  /** Checking a stop checks every earlier one and unchecking it unchecks every later one, so the checks stay one run from the start. */
+  /** Checking a stop checks every earlier one and unchecking it unchecks every later one. The server applies that in one step (so a stale tab cannot leave a gap) and answers with the stops it changed. */
   async function toggleVisited(id: string, visited: boolean) {
-    const ids = visitedChanges(stops, id, visited);
-    await Promise.all(ids.map((sid) => patchStop(sid, { visited })));
+    await patchStop(id, { visited });
   }
 
-  /** Save from the drawer. Visited cascades like the list (earlier stops checked, later ones unchecked); a stop deleted elsewhere is dropped. */
+  /** Save from the drawer. Visited cascades on the server like the list; a stop deleted elsewhere is dropped. */
   async function saveFromDrawer(id: string, patch: StopPatch) {
-    try {
-      mergeStop((await api.updateStop(id, patch)).stop, Object.keys(patch) as (keyof Stop)[]);
-    } catch (e) {
-      if ((e as { status?: unknown }).status !== 404) throw e;
-      setStops((prev) => prev.filter((s) => s.id !== id).map((s, order) => ({ ...s, order })));
-      setCardId((cur) => (cur === id ? null : cur));
-      setDrawerId((cur) => (cur === id ? null : cur));
-      setStopsError("This stop was deleted elsewhere, so it was removed from the list.");
-      return;
-    }
-    if (patch.visited !== undefined) {
-      const others = visitedChanges(stops, id, patch.visited).filter((sid) => sid !== id);
-      await Promise.all(others.map((sid) => patchStop(sid, { visited: patch.visited })));
-    }
+    await tracked(async () => {
+      try {
+        applyStopResult(await api.updateStop(id, patch), Object.keys(patch) as (keyof Stop)[]);
+        setStopsError(null);
+      } catch (e) {
+        if ((e as { status?: unknown }).status !== 404) throw e;
+        setStops((prev) => prev.filter((s) => s.id !== id).map((s, order) => ({ ...s, order })));
+        setCardId((cur) => (cur === id ? null : cur));
+        setDrawerId((cur) => (cur === id ? null : cur));
+        setStopsError("This stop was deleted elsewhere, so it was removed from the list.");
+        markStale();
+      }
+    });
   }
 
   /** Marker drag: move optimistically, revert on failure. */
@@ -706,32 +883,41 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     if (!before) return;
     const put = (at: LatLng) => setStops((cur) => cur.map((s) => (s.id === id ? { ...s, lat: at.lat, lng: at.lng } : s)));
     put(p);
-    try {
-      mergeStop((await api.updateStop(id, { lat: p.lat, lng: p.lng })).stop, ["lat", "lng"]);
-    } catch (e) {
-      put(before); // restores lat/lng only
-      setStopsError(errorMessage(e, "Couldn't move the stop"));
-    }
+    await tracked(async () => {
+      try {
+        mergeStop((await api.updateStop(id, { lat: p.lat, lng: p.lng })).stop, ["lat", "lng"]);
+        setStopsError(null);
+      } catch (e) {
+        markStaleOn(e);
+        put(before); // restores lat/lng only
+        setStopsError(errorMessage(e, "Couldn't move the stop"));
+      }
+    });
   }
 
   async function removeStop(id: string) {
     const name = stops.find((s) => s.id === id)?.name;
     if (name === undefined) return;
     if (!(await confirm({ title: "Delete stop?", message: `Delete "${name}" from this trip?`, confirmLabel: "Delete" }))) return;
-    try {
+    await tracked(async () => {
       try {
-        await api.deleteStop(id);
+        try {
+          await api.deleteStop(id);
+        } catch (e) {
+          // Already deleted elsewhere (another tab, or a repeated request): the stop is gone, which is what was asked for.
+          if ((e as { status?: unknown }).status !== 404) throw e;
+        }
+        const left = Math.max(stopCountRef.current - 1, 0);
+        setStops((prev) => prev.filter((s) => s.id !== id).map((s, order) => ({ ...s, order })));
+        setStopsError(null);
+        setAnnouncement(`Deleted ${name}. ${left} ${left === 1 ? "stop" : "stops"} left in your trip.`);
+        // The user may have opened something else while the delete was in flight.
+        setCardId((cur) => (cur === id ? null : cur));
+        setDrawerId((cur) => (cur === id ? null : cur));
       } catch (e) {
-        // Already deleted elsewhere (another tab, or a repeated request): the stop is gone, which is what was asked for.
-        if ((e as { status?: unknown }).status !== 404) throw e;
+        setStopsError(errorMessage(e, "Couldn't delete the stop"));
       }
-      setStops((prev) => prev.filter((s) => s.id !== id).map((s, order) => ({ ...s, order })));
-      // The user may have opened something else while the delete was in flight.
-      setCardId((cur) => (cur === id ? null : cur));
-      setDrawerId((cur) => (cur === id ? null : cur));
-    } catch (e) {
-      setStopsError(errorMessage(e, "Couldn't delete the stop"));
-    }
+    });
   }
 
   function openFromList(id: string) {
@@ -823,30 +1009,63 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
    *  matches the place, so the server clears it; waypointKey changes, which refreshes route, arrivals and weather. */
   async function swapStop(stop: Stop, alt: Suggestion) {
     const previous = { name: stop.name, lat: stop.lat, lng: stop.lng, source: stop.source, visited: stop.visited };
+    await tracked(async () => {
     try {
-      const { stop: saved } = await api.updateStop(stop.id, { name: alt.name, lat: alt.lat, lng: alt.lng, source: "suggested", visited: false, photoUrl: null });
-      mergeStop(saved, ["name", "lat", "lng", "source", "visited", "photoUrl"]);
+      // visited:false goes through the server's visited-run rule like any other visited change (later stops are unchecked too).
+      const wasVisited = new Set(stops.filter((s) => s.visited).map((s) => s.id));
+      const res = await api.updateStop(stop.id, { name: alt.name, lat: alt.lat, lng: alt.lng, source: "suggested", visited: false, photoUrl: null });
+      const saved = res.stop;
+      applyStopResult(res, ["name", "lat", "lng", "source", "visited", "photoUrl"]);
       alternativesSeq.current++;
       setAlternativesState(null);
-      setSwapNote({ stopId: stop.id, fromName: previous.name, toName: saved.name, previous, applied: { lat: saved.lat, lng: saved.lng, name: saved.name, visited: saved.visited, source: saved.source }, lostPhoto: stop.photoUrl !== null });
+      setSwapNote({ stopId: stop.id, fromName: previous.name, toName: saved.name, previous, applied: { lat: saved.lat, lng: saved.lng, name: saved.name, visited: saved.visited, source: saved.source }, lostPhoto: stop.photoUrl !== null, cascadedIds: (res.stops ?? []).filter((o) => !o.visited && o.id !== stop.id && wasVisited.has(o.id)).map((o) => o.id) });
       setDrawerId(null);
       setCardId((cur) => (cur === stop.id ? null : cur));
     } catch (e) {
+      markStaleOn(e);
       setStopsError(errorMessage(e, "Couldn't swap the stop"));
     }
+    });
   }
 
   async function undoSwap() {
     if (!swapNote) return;
+    await tracked(async () => {
     try {
-      mergeStop((await api.updateStop(swapNote.stopId, swapNote.previous)).stop, ["name", "lat", "lng", "source", "visited"]);
+      applyStopResult(await api.updateStop(swapNote.stopId, swapNote.previous), ["name", "lat", "lng", "source", "visited"]);
+      setStopsError(null);
       setSwapNote(null);
+      // The swap unticked the later visited stops with it; ticking the last of them ticks them all (and the swapped one) again.
+      if (swapNote.previous.visited && swapNote.cascadedIds.length > 0) {
+        const target = retickTarget(stops, swapNote.stopId, swapNote.cascadedIds);
+        if (!target) {
+          setStopsError("The swap was undone. The later stops were not marked visited again because the list changed.");
+        } else {
+          try {
+            applyStopResult(await api.updateStop(target, { visited: true }), ["visited"]);
+          } catch {
+            setStopsError("The swap was undone, but the later stops could not be marked visited again.");
+          }
+        }
+      }
       // An open drawer would keep showing the swapped place's fields; closing it (as a swap does) is the simple fix.
       setDrawerId((cur) => (cur === swapNote.stopId ? null : cur));
     } catch (e) {
-      setStopsError(errorMessage(e, "Couldn't undo the swap"));
+      markStaleOn(e);
+      if ((e as { status?: unknown }).status === 404) {
+        setSwapNote(null);
+        setStopsError("This stop was deleted elsewhere, so the swap can't be undone.");
+      } else {
+        setStopsError(errorMessage(e, "Couldn't undo the swap"));
+      }
     }
+    });
   }
+
+  const moveText = optimizeNote?.moveAt && sameInstant(trip.departAt, optimizeNote.moveAt)
+    ? `Start time moved to ${formatClock(new Date(optimizeNote.moveAt), undefined, settings.timeFormat)} so stops land in good light`
+    : null;
+  const optimizeStatus = optimizeNote?.idsKey === idsKey ? joinNotes([moveText, ...optimizeNote.notes]) : "";
 
   const swapped = swapNote ? stops.find((s) => s.id === swapNote.stopId) : undefined;
   const canUndoSwap = swapNote !== null && swapped !== undefined && swapped.lat === swapNote.applied.lat && swapped.lng === swapNote.applied.lng &&
@@ -855,6 +1074,26 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const cardIndex = stops.findIndex((s) => s.id === cardId);
   const cardStop = cardIndex >= 0 ? stops[cardIndex] : null;
   const drawerStop = stops.find((s) => s.id === drawerId) ?? null;
+
+  // Escape closes the place card / stop card from anywhere on the page (map, marker, body), not only while focus is inside the card.
+  // It stays out of the way of typing in other fields, dialogs, the drawer and open menus, which handle Escape themselves.
+  const cardOpen = pending !== null || cardStop !== null;
+  const drawerOpen = drawerStop !== null;
+  useEffect(() => {
+    if (!cardOpen || drawerOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const t = e.target instanceof Element ? e.target : null;
+      if (t?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [aria-modal="true"], [role="combobox"], section[aria-label="Selected place"], section[aria-label="Selected stop"]')) return;
+      if (document.querySelector('[role="dialog"], [aria-modal="true"], button[aria-expanded="true"]')) return;
+      lookupSeq.current++;
+      if (pending) setPending(null);
+      else setCardId(null);
+      focusSearch();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [cardOpen, drawerOpen, pending]);
   // Memoised: the real map redraws its sky lines whenever this object's identity changes.
   // The open drawer's stop wins over the map card's, so a stop opened from the list gets its lines too.
   const skyStop = drawerStop ?? cardStop;
@@ -910,6 +1149,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
               name={pending.name}
               resolving={pending.resolving}
               busy={adding}
+              full={stops.length >= MAX_ROUTE_WAYPOINTS}
               suggestion={pending.osmId ? { osmId: pending.osmId, lat: pending.lat, lng: pending.lng } : undefined}
               visit={{ lat: pending.lat, lng: pending.lng, plannedDate: trip.plannedDate }}
               onAdd={() => void addPending()}
@@ -942,7 +1182,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       )}
 
       <StopsPanel
-        header={<TripHeader trip={trip} onSave={saveTrip} onShareChange={(shareToken) => setTrip((t) => ({ ...t, shareToken }))} exportData={{
+        header={<TripHeader trip={trip} onSave={saveTrip} onShareChange={(shareToken) => void tracked(async () => setTrip((t) => ({ ...t, shareToken })))} exportData={{
           stops,
           route: activeRoute?.geometry ?? null,
           pdf: {
@@ -962,7 +1202,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
             <p className="text-sm text-muted">{stops.length} {stops.length === 1 ? "stop" : "stops"}</p>
             <ErrorBanner
               // The route is not drawn before Optimize, so a failure to fetch it is not worth a banner until then.
-              message={current?.dismissed || !(optimized || optimizing) ? null : activeRouteError}
+              message={current?.dismissed || !(optimized || optimizing) || activeRouteError === stopsError ? null : activeRouteError}
               onDismiss={() => setRouteResult((r) => (r ? { ...r, dismissed: true } : r))}
             />
             <ErrorBanner message={stopsError} onDismiss={() => setStopsError(null)} />
@@ -973,7 +1213,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
             {swapNoteEl}
             <StopList
               stops={stops}
-              onReorder={(ids) => void reorder(ids)}
+              onReorder={(ids, movedId) => void reorder(ids, true, movedId)}
               onDelete={(id) => void removeStop(id)}
               onSelect={openFromList}
             />
@@ -988,7 +1228,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
               busy: optimizing || optimizeWaiting,
               undoing,
               disabled: stops.length < 2 || optimizing || optimizeWaiting,
-              status: optimizeNote?.idsKey === idsKey ? optimizeNote.text : "",
+              status: optimizeStatus,
+              reason: stops.length < 2 ? "Optimize route needs 2 stops" : undefined,
             }}
             routeStatus={
               !enoughForRoute
@@ -1043,7 +1284,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
           onClose={() => setDrawerId((cur) => (cur === drawerStop.id ? null : cur))}
           onSave={(patch) => saveFromDrawer(drawerStop.id, patch)}
           onSaveError={(message) => setStopsError(message)}
-          onPhotoChange={(stop) => mergeStop(stop, ["photoUrl"])}
+          onPhotoChange={(stop) => void tracked(async () => mergeStop(stop, ["photoUrl"]))}
           alternatives={{
             status: freshAlternatives?.status ?? "idle",
             items: freshAlternatives?.items ?? NO_SUGGESTIONS,

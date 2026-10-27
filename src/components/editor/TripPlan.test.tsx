@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { TripPlan } from "./TripPlan";
 
@@ -36,5 +37,36 @@ describe("TripPlan", () => {
     screen.getByRole("button", { name: "Optimize route" }).focus();
     rerender(<TripPlan startTime={null} optimize={{ ...optimize, busy: true, disabled: true }} routeStatus="" swapNote={null} list={null} />);
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Optimizing…" }));
+  });
+
+  it("keeps the notice readable in dark mode and wraps long unbreakable names", () => {
+    render(<TripPlan startTime={null} optimize={{ ...optimize, status: "Can't fit 1 stop: " + "W".repeat(110) }} routeStatus="" swapNote={null} list={null} />);
+    const cls = screen.getByTestId("optimize-status").className;
+    expect(cls).toContain("dark:text-foreground");
+    expect(cls).toContain("[overflow-wrap:anywhere]");
+    expect(cls).toContain("min-w-0");
+    expect(cls).toContain("max-w-full");
+  });
+
+  it("explains why Optimize is unavailable, to screen readers, with the button", () => {
+    render(<TripPlan startTime={null} optimize={{ ...optimize, disabled: true, reason: "Optimize route needs 2 stops" }} routeStatus="" swapNote={null} list={null} />);
+    const button = screen.getByRole("button", { name: "Optimize route" });
+    expect(button.getAttribute("aria-disabled")).toBe("true");
+    expect(button.getAttribute("aria-describedby")).toBe("optimize-reason");
+    expect(document.getElementById("optimize-reason")?.textContent).toBe("Optimize route needs 2 stops");
+  });
+
+  it("moves focus to Optimize route when Undo is pressed (Undo leaves), and shows Undo's busy state", async () => {
+    const onUndo = vi.fn();
+    const { rerender } = render(<TripPlan startTime={null} optimize={{ ...optimize, onUndo }} routeStatus="" swapNote={null} list={null} />);
+    const undo = screen.getByRole("button", { name: "Undo" });
+    undo.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(onUndo).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Optimize route" }));
+    rerender(<TripPlan startTime={null} optimize={{ ...optimize, onUndo, undoing: true }} routeStatus="" swapNote={null} list={null} />);
+    const busy = screen.getByRole("button", { name: "Undo" });
+    expect(busy.getAttribute("aria-disabled")).toBe("true");
+    expect(busy.className).toContain("aria-disabled:opacity-40");
   });
 });

@@ -7,6 +7,7 @@ import { api } from "@/lib/api-client";
 import { focusLost, softDisabled } from "@/lib/focus";
 import { useWeatherLine } from "@/lib/use-weather";
 import { checkPhotoFile, PHOTO_TYPES } from "@/lib/photo-rules";
+import { hasContent } from "@/lib/text";
 import type { LightPref, ShotItem, Stop, Suggestion } from "@/lib/types";
 import { AlternativesPanel } from "./AlternativesPanel";
 import { SkyCard } from "./SkyCard";
@@ -42,7 +43,10 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
   const [initial] = useState({ name: stop.name, notes: stop.notes ?? null, visited: stop.visited, lightPref: stop.lightPref, dwellMinutes: stop.dwellMinutes, shotNotes: stop.shotNotes, shotChecklist: JSON.stringify(stop.shotChecklist) });
   const [name, setName] = useState(stop.name);
   const [notes, setNotes] = useState(stop.notes ?? "");
-  const [visited, setVisited] = useState(stop.visited);
+  // null until the box is touched here: until then it follows the stop (ticked on the card meanwhile), and only a touched box is saved.
+  const [visitedEdit, setVisitedEdit] = useState<boolean | null>(null);
+  const visited = visitedEdit ?? stop.visited;
+  const visitedChanged = visitedEdit !== null && visitedEdit !== stop.visited;
   const [lightPref, setLightPref] = useState<LightPref>(stop.lightPref);
   const weather = useWeatherLine(stop.lat, stop.lng, arrival ?? null, lightPref);
   const [dwell, setDwell] = useState(String(stop.dwellMinutes));
@@ -113,9 +117,9 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
 
   // Swapping replaces the stop and closes the drawer, which would silently throw typed edits away; so it waits for Save.
   const dirty =
-    name !== initial.name || (notes.trim() === "" ? null : notes) !== initial.notes || visited !== initial.visited || lightPref !== initial.lightPref ||
+    name !== initial.name || (notes.trim() === "" ? null : notes) !== initial.notes || visitedChanged || lightPref !== initial.lightPref ||
     dwell !== String(stop.dwellMinutes) || (shotNotes.trim() === "" ? null : shotNotes) !== initial.shotNotes ||
-    JSON.stringify(plain(shots)) !== initial.shotChecklist || newShot.trim() !== "";
+    JSON.stringify(plain(shots)) !== initial.shotChecklist || hasContent(newShot);
 
   async function save() {
     if (busy) return;
@@ -131,15 +135,15 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
       }
       const patch: StopPatch = {};
       if (name !== initial.name) patch.name = name;
-      const nextNotes = notes.trim() === "" ? null : notes;
+      const nextNotes = !hasContent(notes) ? null : notes;
       if (nextNotes !== initial.notes) patch.notes = nextNotes;
-      if (visited !== initial.visited) patch.visited = visited;
+      if (visitedChanged) patch.visited = visited;
       if (lightPref !== initial.lightPref) patch.lightPref = lightPref;
       if (dwellMinutes !== initial.dwellMinutes) patch.dwellMinutes = dwellMinutes;
-      const nextShotNotes = shotNotes.trim() === "" ? null : shotNotes;
+      const nextShotNotes = !hasContent(shotNotes) ? null : shotNotes;
       if (nextShotNotes !== initial.shotNotes) patch.shotNotes = nextShotNotes;
       // A shot typed but not yet confirmed with Enter is kept rather than silently dropped.
-      const pending = newShot.trim();
+      const pending = hasContent(newShot) ? newShot.trim() : "";
       const nextShots = plain(pending !== "" && shots.length < MAX_SHOT_ITEMS ? [...shots, { id: -1, text: pending.slice(0, MAX_SHOT_TEXT), done: false }] : shots);
       if (JSON.stringify(nextShots) !== initial.shotChecklist) patch.shotChecklist = nextShots;
       if (Object.keys(patch).length > 0) await onSave(patch);
@@ -161,7 +165,7 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
 
   function addShot() {
     const text = newShot.trim();
-    if (text === "" || shots.length >= MAX_SHOT_ITEMS) return;
+    if (!hasContent(newShot) || shots.length >= MAX_SHOT_ITEMS) return;
     setShots([...shots, { id: nextId.current++, text, done: false }]);
     setNewShot("");
   }
@@ -283,7 +287,7 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
         />
       </fieldset>
       <label className="flex min-h-9 items-center gap-2 text-sm">
-        <input type="checkbox" className="h-4 w-4 accent-accent-strong" checked={visited} onChange={(e) => setVisited(e.target.checked)} />
+        <input type="checkbox" className="h-4 w-4 accent-accent-strong" checked={visited} onChange={(e) => setVisitedEdit(e.target.checked)} />
         Visited
       </label>
       <div className="space-y-2">

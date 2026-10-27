@@ -77,4 +77,14 @@ describe("StopList", () => {
     rerender(<><input aria-label="other" /><StopList stops={[two[0]!]} {...handlers} /></>);
     expect(document.activeElement).toBe(screen.getByLabelText("other"));
   });
+
+  it("announces a keyboard pick-up by stop name, never by database id", async () => {
+    render(<StopList stops={[stop("cmvq1xyz", "Alpha"), stop("cmvq2xyz", "Beta")]} {...handlers} />);
+    screen.getByRole("button", { name: "Reorder Beta" }).focus();
+    await userEvent.keyboard(" ");
+    const live = document.querySelector('[role="status"][aria-live]');
+    expect(live?.textContent).toBe("Picked up Beta.");
+    await userEvent.keyboard("{Escape}");
+    expect(document.querySelector('[role="status"][aria-live]')?.textContent).not.toMatch(/cmvq/);
+  });
 });

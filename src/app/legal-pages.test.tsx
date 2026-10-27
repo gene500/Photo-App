@@ -17,4 +17,12 @@ describe("legal pages", () => {
     expect(html).toContain("Terms of Service");
     expect(html).toContain('href="/privacy"');
   });
+
+  it("both pages start with a skip link to the main content", () => {
+    for (const page of [<PrivacyPage key="p" />, <TermsPage key="t" />]) {
+      const html = renderToStaticMarkup(page);
+      expect(html).toContain('href="#main-content"');
+      expect(html).toContain('id="main-content"');
+    }
+  });
 });

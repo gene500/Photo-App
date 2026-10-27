@@ -6,7 +6,9 @@ export const CONTACT_URL = "https://github.com/gene500/Photo-App/issues";
 
 export function LegalPage({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-10">
+    <>
+    <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:ring-2 focus:ring-accent-strong">Skip to content</a>
+    <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-2xl px-4 py-10 outline-none">
       <nav className="mb-6 text-sm">
         <Link href="/" className="inline-flex min-h-6 items-center text-muted underline underline-offset-2">← Photo Op Planner</Link>
       </nav>
@@ -21,6 +23,7 @@ export function LegalPage({ title, children }: { title: string; children: ReactN
         <Link href="/terms" className="inline-flex min-h-6 items-center underline underline-offset-2">Terms</Link>
       </footer>
     </main>
+    </>
   );
 }
 

@@ -19,7 +19,7 @@ export default async function TripsPage() {
       <TripMapBackdrop />
       <main id="main-content" tabIndex={-1} className="outline-none mx-auto max-w-2xl space-y-8 px-4 py-10">
         <h1 tabIndex={-1} className="text-2xl font-semibold outline-none">Your trips</h1>
-        <TripList trips={trips} />
+        <TripList trips={trips} renderedAt={renderedAt} />
         <NewTripForm />
       </main>
     </div>

@@ -8,15 +8,18 @@ import { formatClock, getSunWindows } from "@/lib/best-time";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import { useWeatherLine } from "@/lib/use-weather";
 import { WeatherText } from "@/components/weather/WeatherIcon";
+import { MAX_ROUTE_WAYPOINTS } from "@/lib/validation";
 import type { PlacePhoto } from "@/lib/types";
 
 /** Set when the place came from a suggestion: its photo is looked up lazily (shared cache with the map popup). */
 type Source = { osmId: string; lat: number; lng: number };
 /** Where and on which day the place would be visited: its evening golden-hour forecast is shown. */
 type Visit = { lat: number; lng: number; plannedDate: string };
-type Props = { name: string; resolving: boolean; busy: boolean; suggestion?: Source; visit?: Visit; onAdd: () => void; onClose: () => void };
+type Props = { name: string; resolving: boolean; busy: boolean; suggestion?: Source; visit?: Visit; onAdd: () => void; onClose: () => void;
+  /** The trip is at its stop limit: Add stop is off and says why. */
+  full?: boolean };
 
-export function PlaceCard({ name, resolving, busy, suggestion, visit, onAdd, onClose }: Props) {
+export function PlaceCard({ name, resolving, busy, suggestion, visit, onAdd, onClose, full = false }: Props) {
   const { settings } = useSettings();
   const osmId = suggestion?.osmId;
   const lat = suggestion?.lat;
@@ -47,18 +50,19 @@ export function PlaceCard({ name, resolving, busy, suggestion, visit, onAdd, onC
         <img src={photo.url} alt={`Photo of ${name}`} width={64} height={64} referrerPolicy="no-referrer" onError={() => setFailedUrl(photo.url)} className="h-16 w-16 shrink-0 rounded-xl bg-hover object-cover" />
       )}
       <div className="min-w-0 flex-1">
-        <p className={`break-words text-sm font-medium ${resolving ? "text-muted" : ""}`}>{name}</p>
+        <p title={name} className={`line-clamp-3 break-words text-sm font-medium ${resolving ? "text-muted" : ""}`}>{name}</p>
         {golden && weather && (
           <p data-testid="place-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-sand" : "text-muted"}`}>
             Golden hour {formatClock(golden, undefined, settings.timeFormat)} · <WeatherText line={weather} />
           </p>
         )}
+        {full && <p data-testid="place-full" className="text-xs text-muted">This trip already has the maximum of {MAX_ROUTE_WAYPOINTS} stops.</p>}
         {photo && <p data-testid="photo-credit" className="text-xs text-muted">{photo.credit}</p>}
       </div>
       <button
         type="button"
-        {...softDisabled(resolving || busy)}
-        onClick={resolving || busy ? undefined : onAdd}
+        {...softDisabled(resolving || busy || full)}
+        onClick={resolving || busy || full ? undefined : onAdd}
         className={`${btnPrimary} shrink-0`}
       >
         Add stop

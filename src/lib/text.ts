@@ -16,3 +16,9 @@ export function clampText(s: string, max: number): string {
   const cut = s.charCodeAt(max - 1);
   return s.slice(0, cut >= 0xd800 && cut <= 0xdbff ? max - 1 : max);
 }
+
+/** Zero-width characters are legal inside a name (joiners in emoji and some scripts) but do not count as content. */
+export const ZERO_WIDTH = /[\u200B-\u200D\u2060\uFEFF]/g;
+
+/** True when the text holds something visible: zero-width characters and whitespace do not count (same rule as names). */
+export const hasContent = (s: string) => s.replace(ZERO_WIDTH, "").trim().length > 0;

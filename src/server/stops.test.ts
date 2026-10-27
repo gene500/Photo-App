@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "./db";
 import { createTrip, getTrip } from "./trips";
 import {
-  addStop, deleteStop, findStopByPhotoUrl, getOwnedStop, InvalidReorderError, reorderStops, StopsChangedError, updateStop,
+  addStop, deleteStop, findStopByPhotoUrl, getOwnedStop, InvalidReorderError, reorderStops, StopsChangedError, updateStop, updateStopCascade,
 } from "./stops";
 import { createTestUser, resetDb, sampleTripInput } from "../../tests/helpers/db";
 
@@ -141,5 +141,57 @@ describe("stops data access", () => {
     const { user, stops } = await tripWithStops(["a"]);
     const moved = await updateStop(user.id, stops[0].id, { lat: 38.25, lng: -118.5 });
     expect(moved).toMatchObject({ lat: 38.25, lng: -118.5, name: "a" });
+  });
+
+  describe("visited run rule", () => {
+    const flags = async (userId: string, tripId: string) => (await getTrip(userId, tripId))!.stops.map((s) => s.visited);
+
+    it("checking a stop checks every earlier one, in one update", async () => {
+      const { user, trip, stops } = await tripWithStops(["a", "b", "c", "d"]);
+      const res = await updateStopCascade(user.id, stops[2].id, { visited: true });
+      expect(res!.stop.visited).toBe(true);
+      expect(res!.cascaded.map((s) => s.name)).toEqual(["a", "b"]);
+      expect(await flags(user.id, trip.id)).toEqual([true, true, true, false]);
+    });
+
+    it("unchecking a stop unchecks every later one", async () => {
+      const { user, trip, stops } = await tripWithStops(["a", "b", "c", "d"]);
+      await updateStopCascade(user.id, stops[3].id, { visited: true });
+      const res = await updateStopCascade(user.id, stops[1].id, { visited: false });
+      expect(res!.cascaded.map((s) => s.name)).toEqual(["c", "d"]);
+      expect(await flags(user.id, trip.id)).toEqual([true, false, false, false]);
+    });
+
+    it("a stale client cannot leave a gap: unchecking from a view that shows less still clears every later stop", async () => {
+      const { user, trip, stops } = await tripWithStops(["a", "b", "c", "d", "e"]);
+      await updateStop(user.id, stops[2].id, { visited: true }); // another tab: a b c visited
+      await updateStop(user.id, stops[4].id, { visited: true }); // this tab checks e: everything before it follows
+      await updateStop(user.id, stops[0].id, { visited: false }); // the stale tab unchecks only a (it saw nothing else)
+      expect(await flags(user.id, trip.id)).toEqual([false, false, false, false, false]);
+    });
+
+    it("applies a swap-style patch (visited:false with other fields) through the same rule", async () => {
+      const { user, trip, stops } = await tripWithStops(["a", "b", "c"]);
+      await updateStop(user.id, stops[2].id, { visited: true });
+      const res = await updateStopCascade(user.id, stops[1].id, { name: "b2", visited: false });
+      expect(res!.stop).toMatchObject({ name: "b2", visited: false });
+      expect(await flags(user.id, trip.id)).toEqual([true, false, false]);
+    });
+
+    it("does not touch other trips or report anything when nothing else changes", async () => {
+      const { user, trip, stops } = await tripWithStops(["a", "b"]);
+      const other = await tripWithStops(["x", "y"]);
+      const res = await updateStopCascade(user.id, stops[0].id, { visited: true });
+      expect(res!.cascaded).toEqual([]);
+      await updateStopCascade(other.user.id, other.stops[1].id, { visited: true });
+      expect(await flags(user.id, trip.id)).toEqual([true, false]);
+    });
+
+    it("refuses a stop of another user and leaves the run alone", async () => {
+      const { user, trip, stops } = await tripWithStops(["a", "b"]);
+      const intruder = await createTestUser();
+      expect(await updateStopCascade(intruder.id, stops[1].id, { visited: true })).toBeNull();
+      expect(await flags(user.id, trip.id)).toEqual([false, false]);
+    });
   });
 });

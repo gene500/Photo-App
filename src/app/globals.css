@@ -147,11 +147,18 @@ body {
   font-family: var(--font-sans);
 }
 
-/* Map tiles are the "quiet light-gray" backdrop; dim them a little in dark mode. */
+/* Map markers: the page focus ring (--accent-strong) is a light tan in dark mode and vanishes on the map (1.07:1 to 1.39:1).
+   A white outline around a dark inner ring reads on both light and dark land. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .mapboxgl-canvas { filter: brightness(0.72) contrast(1.12); }
+  :root:not([data-theme="light"]) .map-marker:focus-visible { outline: 2px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 2px #1f1a12; }
 }
-:root[data-theme="dark"] .mapboxgl-canvas { filter: brightness(0.72) contrast(1.12); }
+:root[data-theme="dark"] .map-marker:focus-visible { outline: 2px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 2px #1f1a12; }
+
+/* Map tiles are the "quiet light-gray" backdrop; dim them a little in dark mode (0.8 now that the palette itself is a step darker). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mapboxgl-canvas { filter: brightness(0.8) contrast(1.12); }
+}
+:root[data-theme="dark"] .mapboxgl-canvas { filter: brightness(0.8) contrast(1.12); }
 
 /* Photo popup over a suggestion dot: the card itself is styled with tokens in suggestion-popup.ts; here we
    strip Mapbox's default bubble. It never takes the pointer, so moving off the dot always closes it. */
@@ -170,3 +177,47 @@ body {
     top: 4rem;
   }
 }
+
+/* Map controls (zoom, compass, info/attribution): the app's surface, border ring, radius, font and dark mode
+   via tokens. The `:root .mapboxgl-map` prefix outranks mapbox-gl.css, which loads after this file. Attribution and the Mapbox logo stay visible (Mapbox terms): restyled only, never hidden. */
+.mapboxgl-map { font-family: var(--font-sans); }
+:root .mapboxgl-map .mapboxgl-ctrl-group {
+  background: var(--surface);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 1px var(--border);
+  overflow: hidden;
+}
+:root .mapboxgl-map .mapboxgl-ctrl-group:not(:empty) { box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 1px var(--border); }
+:root .mapboxgl-map .mapboxgl-ctrl-group button {
+  background-color: transparent;
+  color: var(--foreground);
+}
+:root .mapboxgl-map .mapboxgl-ctrl-group button + button { border-top: 1px solid var(--border); }
+:root .mapboxgl-map .mapboxgl-ctrl-group button:not(:disabled):hover { background-color: var(--hover); }
+:root .mapboxgl-map .mapboxgl-ctrl-group button:focus:focus-visible { box-shadow: inset 0 0 0 2px var(--accent-strong); outline: none; }
+/* The control icons are black SVG backgrounds: invert them in dark mode so they read on the dark surface. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mapboxgl-ctrl-group button .mapboxgl-ctrl-icon { filter: invert(1) opacity(0.9); }
+}
+:root[data-theme="dark"] .mapboxgl-ctrl-group button .mapboxgl-ctrl-icon { filter: invert(1) opacity(0.9); }
+/* Attribution (compact info button and its expanded text). */
+:root .mapboxgl-map .mapboxgl-ctrl.mapboxgl-ctrl-attrib {
+  background: var(--surface);
+  color: var(--muted);
+  font-family: var(--font-sans);
+  border-radius: 0.75rem;
+  box-shadow: 0 0 0 1px var(--border);
+}
+:root .mapboxgl-map .mapboxgl-ctrl-attrib a { color: var(--accent-strong); }
+:root .mapboxgl-map .mapboxgl-ctrl-attrib.mapboxgl-compact { background: var(--surface); }
+:root .mapboxgl-map .mapboxgl-ctrl-attrib-button { background-color: transparent; }
+/* Mapbox's hover rule (.mapboxgl-ctrl button:not(:disabled):hover, specificity 0,3,1) beats the rule above (0,3,0), so match it. */
+:root .mapboxgl-map .mapboxgl-ctrl button.mapboxgl-ctrl-attrib-button:not(:disabled):hover { background-color: transparent; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mapboxgl-ctrl-attrib-button { filter: invert(1) opacity(0.9); }
+}
+:root[data-theme="dark"] .mapboxgl-ctrl-attrib-button { filter: invert(1) opacity(0.9); }
+/* The button carries the icon and, in dark mode, the invert filter, which would also invert its own focus ring. So the
+   button draws none, and the unfiltered control around it shows the ring; Mapbox's blue focus shadow is reset too. */
+:root .mapboxgl-map .mapboxgl-ctrl-attrib-button:focus { box-shadow: none; outline: none; }
+:root .mapboxgl-map .mapboxgl-ctrl-attrib:has(.mapboxgl-ctrl-attrib-button:focus-visible) { outline: 2px solid var(--accent-strong); }

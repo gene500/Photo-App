@@ -83,10 +83,31 @@ export async function handleGoogleSignIn(
   return true;
 }
 
+let lastBadTokenLog = 0;
+/**
+ * NextAuth logs a full stack trace for every request that carries an undecryptable session cookie (stale after a secret
+ * change, or junk sent by anyone). That is unlimited log volume from unauthenticated requests, so it is cut to one
+ * short line per minute. Every other error is logged as NextAuth would.
+ */
+export const authLogger: NonNullable<NextAuthOptions["logger"]> = {
+  error(code, metadata) {
+    if (code === "JWT_SESSION_ERROR") {
+      const now = Date.now();
+      if (now - lastBadTokenLog >= 60_000) {
+        lastBadTokenLog = now;
+        console.error("[next-auth] Ignored an unreadable session cookie (further ones are not logged for a minute).");
+      }
+      return;
+    }
+    console.error(`[next-auth][error][${code}]`, metadata);
+  },
+};
+
 // The Credentials provider only supports the JWT strategy: an encrypted
 // httpOnly cookie, verified server-side by getServerSession.
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
+  logger: authLogger,
   secret: process.env.NEXTAUTH_SECRET,
   // Errors (a failed Google sign-in, say) go to the styled login page as ?error=..., not NextAuth's unstyled /api/auth/error.
   pages: { signIn: "/login", error: "/login" },

@@ -31,6 +31,14 @@ describe("ExportControl", () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
+  it("moves the menu out of the clipped sheet on short (landscape) screens", async () => {
+    render(<ExportControl tripName="T" stops={[stop(0), stop(1)]} route={null} />);
+    await userEvent.click(screen.getByRole("button", { name: "Export" }));
+    const menu = screen.getByRole("group", { name: "Export trip" });
+    expect(menu.className).toContain("[@media(max-height:30rem)]:fixed");
+    expect(menu.className).toContain("[@media(max-height:30rem)]:overflow-y-auto");
+  });
+
   describe("Download PDF", () => {
     const two = [stop(0), stop(1)];
     const pdf = {

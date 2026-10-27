@@ -12,7 +12,7 @@ const base = { suggestions: [], error: null, canSearch: true, onFind: noop, onAc
 describe("SuggestionsPanel", () => {
   it("disables search until a route exists", () => {
     render(<SuggestionsPanel {...base} status="idle" canSearch={false} />);
-    expect((screen.getByRole("button", { name: "Find photo spots" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Find photo spots" }) as HTMLButtonElement).getAttribute("aria-disabled")).toBe("true");
     expect(screen.getByText("Suggestions need a route first.")).toBeTruthy();
   });
 
@@ -74,9 +74,9 @@ describe("SuggestionsPanel", () => {
     const accept = screen.getByRole("button", { name: /^Accept/ });
     await userEvent.dblClick(accept);
     expect(onAccept).toHaveBeenCalledTimes(1);
-    expect((accept as HTMLButtonElement).disabled).toBe(true);
+    expect((accept as HTMLButtonElement).getAttribute("aria-disabled")).toBe("true");
     await act(async () => { finish(); });
-    expect((screen.getByRole("button", { name: /^Accept/ }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /^Accept/ }) as HTMLButtonElement).getAttribute("aria-disabled")).toBeNull();
   });
 });
 
@@ -145,5 +145,27 @@ describe("hover photo beside the suggestion", () => {
     render(<SuggestionsPanel {...props} suggestions={[one]} weather={weather} />);
     expect(screen.getByRole("img", { name: "partly cloudy, 15% rain, 18°C" })).toBeTruthy();
   });
-});
 
+  it("moves focus to the next card's button, else the previous, else Find photo spots, when a card goes", async () => {
+    const mk = (n: number): Suggestion => ({ ...s, osmId: `node/${n}`, name: `Spot ${n}` });
+    const [a, b, c] = [mk(1), mk(2), mk(3)];
+    const { rerender } = render(<SuggestionsPanel {...base} status="done" suggestions={[a, b, c]} />);
+    await userEvent.click(screen.getByRole("button", { name: "Dismiss Spot 1" }));
+    rerender(<SuggestionsPanel {...base} status="done" suggestions={[b, c]} />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Dismiss Spot 2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Dismiss Spot 3" }));
+    rerender(<SuggestionsPanel {...base} status="done" suggestions={[b]} />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Dismiss Spot 2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Accept Spot 2" }));
+    rerender(<SuggestionsPanel {...base} status="done" suggestions={[]} />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Find photo spots" }));
+  });
+
+  it("keeps focus on Find photo spots while it searches", async () => {
+    const { rerender } = render(<SuggestionsPanel {...base} status="idle" />);
+    const find = screen.getByRole("button", { name: "Find photo spots" });
+    await userEvent.click(find);
+    rerender(<SuggestionsPanel {...base} status="loading" />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Searching…" }));
+  });
+});

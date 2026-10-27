@@ -15,12 +15,14 @@ const proximitySchema = z
   .pipe(z.object({ lng: z.number().min(-180).max(180), lat: z.number().min(-90).max(90) }));
 
 export const GET = handle(async (req: Request) => {
-  await enforcePaidLimit("geocode", await requireUserId());
+  const userId = await requireUserId();
   const params = new URL(req.url).searchParams;
   const q = querySchema.parse(params.get("q") ?? "");
   const sessionToken = sessionSchema.parse(params.get("session") ?? "");
   const rawProximity = params.get("proximity");
   const proximity = rawProximity === null ? undefined : proximitySchema.parse(rawProximity);
+  // Malformed requests are refused before they count against the paid limit.
+  await enforcePaidLimit("geocode", userId);
   try {
     return Response.json({ suggestions: await searchPlaces(q, { proximity, sessionToken }) });
   } catch (e) {

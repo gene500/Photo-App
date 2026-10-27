@@ -20,7 +20,7 @@ test("sign up → new trip → search + click to add stops → suggestion → re
 
   // Stop 1: search as you type, pick the result, add it
   await page.getByRole("combobox", { name: "Search for a place" }).fill("Alpha Town");
-  await page.getByRole("button", { name: "Alpha Town (fake)" }).click();
+  await page.getByRole("option", { name: "Alpha Town (fake)" }).click();
   await page.getByRole("button", { name: "Add stop" }).click();
   const rows = page.getByTestId("stop-row");
   await expect(rows).toHaveCount(1);

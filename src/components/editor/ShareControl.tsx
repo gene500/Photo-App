@@ -5,7 +5,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { HeaderButtonLabel } from "./HeaderButtonLabel";
 import { btnGhost, btnPrimary, btnSecondary, card, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
-import { usePopover } from "./use-popover";
+import { SHORT_SCREEN_POPOVER, usePopover } from "./use-popover";
 
 type Props = {
   tripId: string;
@@ -58,7 +58,7 @@ export function ShareControl({ tripId, shareToken, onChange }: Props) {
         <HeaderButtonLabel icon="share">Share</HeaderButtonLabel>
       </button>
       {open && (
-        <div ref={panelRef} id={panelId} role="group" aria-label="Share trip" className={`absolute right-0 top-full z-20 mt-1 w-72 max-w-full space-y-2 p-3 ${card}`}>
+        <div ref={panelRef} id={panelId} role="group" aria-label="Share trip" className={`absolute right-0 top-full z-20 mt-1 w-72 max-w-full space-y-2 p-3 ${SHORT_SCREEN_POPOVER} ${card}`}>
           <p className="text-sm text-muted">Anyone with the link can view this trip, including stop locations and shot lists (without photos or your notes).</p>
           {shareToken ? (
             <>

@@ -10,7 +10,7 @@ test("a saved trip can be reopened from the trips list, and the header goes back
   await page.getByRole("button", { name: "Create trip" }).click();
   await expect(page).toHaveURL(/\/trips\/[^/]+$/);
   await page.getByRole("combobox", { name: "Search for a place" }).fill("Alpha Town");
-  await page.getByRole("button", { name: "Alpha Town (fake)" }).click();
+  await page.getByRole("option", { name: "Alpha Town (fake)" }).click();
   await page.getByRole("button", { name: "Add stop" }).click();
   await expect(page.getByTestId("stop-row")).toHaveCount(1);
 

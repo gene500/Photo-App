@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearMapboxCaches, ExternalServiceError, geocode, getDirections, getDurationMatrix, locateArea, retrievePlace, reverseGeocode, searchPlaces } from "./mapbox";
+import { clearMapboxCaches, ExternalServiceError, geocode, getDirections, getDurationMatrix, locateArea, locateLandmark, retrievePlace, reverseGeocode, searchPlaces } from "./mapbox";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const okRoute = {
@@ -444,5 +444,100 @@ describe("locateArea", () => {
 
   it("raises ExternalServiceError when the service fails", async () => {
     await expect(locateArea("LA", vi.fn(async () => json({}, 500)))).rejects.toBeInstanceOf(ExternalServiceError);
+  });
+});
+
+describe("locateLandmark", () => {
+  beforeEach(() => {
+    process.env.MAPBOX_TOKEN = "test-token";
+    delete process.env.EXTERNAL_APIS_FAKE;
+    clearMapboxCaches();
+  });
+  afterEach(() => {
+    delete process.env.MAPBOX_TOKEN;
+  });
+
+  const suggest = (suggestions: unknown[]) =>
+    vi.fn(async (u: unknown) =>
+      String(u).includes("/suggest")
+        ? json({ suggestions })
+        : json({ features: [{ geometry: { coordinates: [-109.59, 38.73] }, properties: { name: "Arches National Park", place_formatted: "Utah, United States", feature_type: "poi" } }] }),
+    );
+
+  it("returns a park the name matches, with coordinates from retrieve, and caches it", async () => {
+    const fetchImpl = suggest([{ name: "Arches National Park", mapbox_id: "m1", feature_type: "poi", poi_category: ["national park"], place_formatted: "Utah" }]);
+    expect(await locateLandmark("arches national park", fetchImpl)).toEqual({ name: "Arches National Park, Utah, United States", lat: 38.73, lng: -109.59 });
+    await locateLandmark("Arches National Park", fetchImpl);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores towns, unrelated businesses and names that do not match", async () => {
+    expect(await locateLandmark("Utah", suggest([{ name: "Utah", mapbox_id: "m2", feature_type: "region", place_formatted: "United States" }]))).toBeNull();
+    clearMapboxCaches();
+    expect(await locateLandmark("Test", suggest([{ name: "Test Kitchen", mapbox_id: "m3", feature_type: "poi", poi_category: ["restaurant"], place_formatted: "Chicago" }]))).toBeNull();
+    clearMapboxCaches();
+    expect(await locateLandmark("Paris weekend", suggest([{ name: "Eiffel Tower", mapbox_id: "m4", feature_type: "poi", poi_category: ["monument"], place_formatted: "Paris" }]))).toBeNull();
+  });
+
+  const poi = (name: string, category: string, id = "m9") => ({ name, mapbox_id: id, feature_type: "poi", poi_category: [category], place_formatted: "Somewhere" });
+
+  it.each([
+    ["LA", poi("Lake Tahoe", "lake")],
+    ["Utah", poi("Utah Lake State Park", "state park")],
+    ["Park", poi("Central Park", "park")],
+    ["Paris weekend", poi("Paris", "restaurant")],
+    ["La", poi("La Brea Tar Pits", "landmark")],
+  ])("never lets %j match an unrelated place", async (query, suggestion) => {
+    const fetchImpl = suggest([suggestion]);
+    expect(await locateLandmark(query, fetchImpl)).toBeNull();
+  });
+
+  it("returns null without any upstream call for a name with nothing to compare", async () => {
+    const fetchImpl = suggest([poi("Anything", "park")]);
+    for (const q of ["東京", "!!", "  ", "ab"]) expect(await locateLandmark(q, fetchImpl)).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("accepts a short park name that a full park name starts with, and a longer trip name around a landmark", async () => {
+    expect(await locateLandmark("Yosemite", suggest([poi("Yosemite National Park", "national park")]))).not.toBeNull();
+    clearMapboxCaches();
+    expect(await locateLandmark("Horseshoe Bend sunrise", suggest([poi("Horseshoe Bend", "viewpoint")]))).not.toBeNull();
+  });
+
+  it("does not match a bare park suffix or a one-word kind of place", async () => {
+    expect(await locateLandmark("Phoenix", suggest([poi("Phoenix Park", "park")]))).toBeNull();
+    clearMapboxCaches();
+    expect(await locateLandmark("Beach", suggest([poi("Beach", "beach")]))).toBeNull();
+  });
+
+  it("finds memorials, preserves, Mt. abbreviations and accented names", async () => {
+    expect(await locateLandmark("Katmai", suggest([poi("Katmai National Preserve", "preserve")]))).not.toBeNull();
+    clearMapboxCaches();
+    expect(await locateLandmark("Gettysburg", suggest([poi("Gettysburg National Memorial", "memorial")]))).not.toBeNull();
+    clearMapboxCaches();
+    expect(await locateLandmark("Mt. Rainier", suggest([poi("Mount Rainier National Park", "national park")]))).not.toBeNull();
+    clearMapboxCaches();
+    expect(await locateLandmark("Mount Rainier", suggest([poi("Mt Rainier National Park", "national park")]))).not.toBeNull();
+    clearMapboxCaches();
+    expect(await locateLandmark("Yosemité", suggest([poi("Yosemite National Park", "national park")]))).not.toBeNull();
+  });
+
+  it("does not take a car park or garden centre for a landmark", async () => {
+    expect(await locateLandmark("Rose Garden", suggest([poi("Rose Garden", "garden center")]))).toBeNull();
+    clearMapboxCaches();
+    expect(await locateLandmark("Arches", suggest([poi("Arches", "parking")]))).toBeNull();
+  });
+
+  it("does not remember 'none' when Search Box was down and the fallback geocoder answered", async () => {
+    let down = true;
+    const fetchImpl = vi.fn(async (u: unknown) => {
+      const url = String(u);
+      if (url.includes("/suggest")) return down ? json({}, 500) : json({ suggestions: [poi("Arches National Park", "national park")] });
+      if (url.includes("/retrieve")) return json({ features: [{ geometry: { coordinates: [-109.59, 38.73] }, properties: { name: "Arches National Park", place_formatted: "Utah", feature_type: "poi" } }] });
+      return json({ features: [{ geometry: { coordinates: [-109.5, 38.7] }, properties: { name: "Moab", place_formatted: "Utah" } }] });
+    });
+    expect(await locateLandmark("Arches National Park", fetchImpl)).toBeNull();
+    down = false;
+    expect(await locateLandmark("Arches National Park", fetchImpl)).not.toBeNull();
   });
 });

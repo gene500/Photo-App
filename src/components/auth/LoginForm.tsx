@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { LegalLinks } from "@/components/legal/LegalPage";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { softDisabled } from "@/lib/focus";
 import { clearAllCopies, enableOfflineSaving } from "@/lib/offline-store";
 import { btnPrimary, inputClass } from "@/components/ui/styles";
 import { GoogleButton, loginErrorMessage } from "./GoogleButton";
+import { signInWithCredentials } from "./credentials-login";
 
 
 export function LoginForm({ google = false, urlError = null }: { google?: boolean; urlError?: string | null }) {
@@ -20,12 +21,18 @@ export function LoginForm({ google = false, urlError = null }: { google?: boolea
   useEffect(() => clearAllCopies(), []);
 
   async function submit() {
+    if (pending) return;
     setPending(true);
     setError(null);
-    const res = await signIn("credentials", { email, password, redirect: false });
+    if (!navigator.onLine) {
+      setPending(false);
+      setError("You're offline. Connect to the internet to log in.");
+      return;
+    }
+    const outcome = await signInWithCredentials(email, password);
     setPending(false);
-    if (!res || res.error) {
-      setError(res?.error === "RateLimited" ? "Too many login attempts. Try again in a few minutes." : "Invalid email or password");
+    if (!outcome.ok) {
+      setError(outcome.message);
       return;
     }
     enableOfflineSaving();
@@ -46,7 +53,7 @@ export function LoginForm({ google = false, urlError = null }: { google?: boolea
         <input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
       </label>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-      <button type="submit" disabled={pending} className={`${btnPrimary} w-full`}>
+      <button type="submit" {...softDisabled(pending)} className={`${btnPrimary} w-full`}>
         Log in
       </button>
       <p className="text-sm text-muted">

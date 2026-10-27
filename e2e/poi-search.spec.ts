@@ -11,7 +11,7 @@ test("searching a landmark by name finds it with its region and adds it as a sto
   await expect(page).toHaveURL(/\/trips\/[^/]+$/);
 
   await page.getByRole("combobox", { name: "Search for a place" }).fill("Horseshoe Bend");
-  const result = page.getByRole("button", { name: /Horseshoe Bend/ }).first();
+  const result = page.getByRole("option", { name: /Horseshoe Bend/ }).first();
   await expect(result).toContainText("viewpoint · Page, Arizona");
   await result.click();
   await page.getByRole("button", { name: "Add stop" }).click();

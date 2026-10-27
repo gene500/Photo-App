@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
+import { StrictMode } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { StopsPanel } from "./StopsPanel";
 
 function panel() {
@@ -19,6 +20,28 @@ function panel() {
 }
 
 describe("StopsPanel", () => {
+  beforeEach(() => window.sessionStorage.clear());
+
+  it("reopens on the tab the user left, as when coming back from Settings", async () => {
+    window.sessionStorage.clear();
+    const first = panel();
+    await userEvent.click(screen.getByRole("tab", { name: /My trip/ }));
+    first.unmount();
+    panel();
+    expect(await screen.findByText("trip content")).toBeTruthy();
+    expect(screen.queryByText("stops content")).toBeNull();
+    window.sessionStorage.clear();
+  });
+
+  it("keeps the saved tab under Strict Mode's doubled effects", async () => {
+    const strict = () => render(<StrictMode><StopsPanel header="h" collapsedSummary="c" summary="s" stops={<p>stops content</p>} trip={<p>trip content</p>} suggestions={<p>suggestions content</p>} suggestionCount={0} /></StrictMode>);
+    const first = strict();
+    await userEvent.click(screen.getByRole("tab", { name: /My trip/ }));
+    first.unmount();
+    strict();
+    expect(await screen.findByText("trip content")).toBeTruthy();
+  });
+
   it("shows the header, summary and the Stops tab by default", () => {
     panel();
     expect(screen.getByRole("heading", { name: /Sierra loop/ })).toBeTruthy();
@@ -107,5 +130,33 @@ describe("StopsPanel tabs follow the ARIA tab pattern", () => {
     expect(document.activeElement).toBe(sugg);
     expect(sugg.tabIndex).toBe(0);
     expect(stops.tabIndex).toBe(-1);
+  });
+
+  it("ignores a stored snap or tab that is not a plain string", async () => {
+    window.sessionStorage.setItem(`rtpp.panel.v1:${window.location.pathname}`, JSON.stringify({ tab: ["trip"], snap: ["collapsed"] }));
+    panel();
+    expect(await screen.findByText("stops content")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Shrink panel" }).closest("[data-snap]")!.getAttribute("data-snap")).toBe("half");
+  });
+
+  it("keeps keyboard focus on an arrow when the one pressed goes away", async () => {
+    panel();
+    await userEvent.click(screen.getByRole("button", { name: "Shrink panel" }));
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Expand panel" }));
+  });
+
+  it("moves focus to the Shrink arrow when Expand is hidden at the new height (lg:hidden, so focus() does nothing)", async () => {
+    window.sessionStorage.clear();
+    panel();
+    await userEvent.click(screen.getByRole("button", { name: "Shrink panel" })); // half -> collapsed: only Expand is left
+    const expand = screen.getByRole("button", { name: "Expand panel" });
+    expand.focus = () => {}; // what a display:none button does with focus()
+    await userEvent.click(expand);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Shrink panel" }));
+  });
+
+  it("names the panel landmark", () => {
+    panel();
+    expect(screen.getByRole("complementary", { name: "Trip panel" })).toBeTruthy();
   });
 });

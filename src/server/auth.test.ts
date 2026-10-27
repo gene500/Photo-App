@@ -1,7 +1,7 @@
 import type { Session } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { authOptions, authorizeCredentials, LOGIN_EMAIL_CEILING } from "./auth";
+import { authLogger, authOptions, authorizeCredentials, LOGIN_EMAIL_CEILING } from "./auth";
 import { clearAllLimits } from "./rate-limit";
 import * as users from "./users";
 import { clearSessionVersionCache, createUser, revokeAllSessions } from "./users";
@@ -185,5 +185,29 @@ describe("auth", () => {
         verify.mockRestore();
       }
     });
+  });
+});
+
+describe("authLogger", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("logs an unreadable session cookie as one short line per minute, with no stack trace", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const err = new Error("Invalid Compact JWE");
+      authLogger.error!("JWT_SESSION_ERROR", err);
+      authLogger.error!("JWT_SESSION_ERROR", err);
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(String(spy.mock.calls[0]![0])).not.toContain("Invalid Compact JWE");
+      vi.setSystemTime(new Date("2026-01-01T00:01:01Z"));
+      authLogger.error!("JWT_SESSION_ERROR", err);
+      expect(spy).toHaveBeenCalledTimes(2);
+      authLogger.error!("OAUTH_CALLBACK_ERROR", { error: new Error("x") });
+      expect(spy).toHaveBeenCalledTimes(3);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

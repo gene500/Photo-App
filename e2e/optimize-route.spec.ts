@@ -55,7 +55,7 @@ test("optimize route reorders stops for the shortest drive and can be undone", a
   await optimize.click();
   await expect.poll(names).toEqual([original[0], original[2], original[3], original[1]]);
   await optimize.click();
-  // The result is announced to screen readers only; nothing shows under the button.
+  // The result is shown inline to everyone and is the single live region.
   await expect(page.getByTestId("optimize-status")).toHaveText(/Already the fastest order/);
-  await expect(page.getByTestId("optimize-status")).toHaveClass("sr-only");
+  await expect(page.getByTestId("optimize-status")).not.toHaveClass(/sr-only/);
 });

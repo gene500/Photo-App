@@ -90,11 +90,15 @@ export function StartTimeControl({ plannedDate, departAt, defaultDepartAt = null
         onKeyDown={(e) => { if (e.key === "Enter") void commit(); }}
         className={`${inputClass} !mt-0 w-auto min-w-0`}
       />
-      {departAt && onReset && saved !== toTimeValue(defaultDepartAt) && (
+      {onReset && (departAt && saved !== toTimeValue(defaultDepartAt) ? (
         <button type="button" disabled={disabled} onClick={onReset} className={btnGhost}>
           Reset to now
         </button>
-      )}
+      ) : (
+        // Holds the button's room while it is hidden, so it appearing (right after a start time is saved) cannot move
+        // Optimize down between a press and its release, which loses the click.
+        <span aria-hidden data-testid="reset-placeholder" className={`${btnGhost} invisible`}>Reset to now</span>
+      ))}
       {!departAt && <span id={`${id}-hint`} className="text-xs">Now</span>}
     </div>
   );

@@ -36,6 +36,17 @@ describe("useOfflineCopy", () => {
     expect(listTripCopies()).toEqual([]);
   });
 
+  it("retries a save skipped while offline once the connection returns", () => {
+    const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    renderHook(() => useOfflineCopy(trip, stops, "u1"));
+    vi.advanceTimersByTime(2000);
+    expect(listTripCopies()).toEqual([]);
+    onLine.mockReturnValue(true);
+    window.dispatchEvent(new Event("online"));
+    vi.advanceTimersByTime(2000);
+    expect(loadTripCopy("t1")).not.toBeNull();
+  });
+
   it("wipes another user's copies before saving", () => {
     saveTripCopy({ ...trip, id: "old", stops: [] });
     localStorage.setItem("rtpp.offline.owner", "someone-else");

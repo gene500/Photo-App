@@ -164,3 +164,35 @@ describe("full policy map", () => {
     expect(isBlocked("geocode", "newcomer", t + 1).ok).toBe(true);
   });
 });
+
+describe("ipKey ports, brackets and leading zeros", () => {
+  it("keys a client the same with or without a port, brackets or leading zeros", async () => {
+    const { ipKey } = await import("./rate-limit");
+    expect(ipKey("1.2.3.4:5678")).toBe("1.2.3.4");
+    expect(ipKey("[::1]:443")).toBe(ipKey("::1"));
+    expect(ipKey("[::1]")).toBe(ipKey("::1"));
+    expect(ipKey("[::ffff:7.7.7.13]:80")).toBe("7.7.7.13");
+    expect(ipKey("07.7.7.016")).toBe("7.7.7.16");
+    expect(ipKey("2001:db8:1:2::1")).toBe(ipKey("[2001:db8:1:2::9]:8080"));
+  });
+});
+
+describe("full limiter maps (MAX_BUCKETS)", () => {
+  it("refuses new keys on a fail-closed policy once full of live keys, keeps existing counters, and recovers after expiry", async () => {
+    const { clearAllLimits, hit, peek } = await import("./rate-limit");
+    vi.stubEnv("RATE_LIMIT_DISABLED", "");
+    clearAllLimits();
+    const t0 = 1_000_000;
+    for (let i = 0; i < 10_000; i++) expect(hit("signup-ip", `k${i}`, t0).ok).toBe(true);
+    expect(hit("signup-ip", "fresh", t0).ok).toBe(false);
+    expect(hit("signup-ip", "k0", t0).ok).toBe(true);
+    expect(peek("signup-ip", "k0", t0)).toBe(2);
+    // A fail-open policy still serves a new key when full.
+    for (let i = 0; i < 10_000; i++) hit("weather", `k${i}`, t0);
+    expect(hit("weather", "fresh", t0).ok).toBe(true);
+    // After the window the expired keys are swept and new ones are tracked again.
+    expect(hit("signup-ip", "fresh", t0 + 61 * 60_000).ok).toBe(true);
+    clearAllLimits();
+  });
+});
+

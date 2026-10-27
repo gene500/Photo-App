@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnAccent, btnGhost, btnSecondary } from "@/components/ui/styles";
+import { focusFirst, focusLost, softDisabled } from "@/lib/focus";
 import { formatPhotoCount } from "@/lib/format";
 import { isHoverPointer } from "./hover-pointer";
 import { hasRoomBeside, SuggestionHoverPhoto } from "./SuggestionHoverPhoto";
@@ -73,6 +74,23 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
   // A re-rank or a changed list moves the rows, so a card anchored to the old layout is dropped (see `order` below).
   const order = suggestions.map((x) => x.osmId).join("|");
   const [accepting, setAccepting] = useState<ReadonlySet<string>>(new Set());
+  // Accept and Dismiss remove their row, which would drop keyboard focus to the page: the same button on the next row (else the
+  // previous one, else Find photo spots) takes it once the row is gone.
+  const findRef = useRef<HTMLButtonElement>(null);
+  const handoff = useRef<{ id: string; near: string[]; action: "accept" | "dismiss" } | null>(null);
+  function keepFocus(sug: Suggestion, action: "accept" | "dismiss") {
+    const at = suggestions.findIndex((x) => x.osmId === sug.osmId);
+    handoff.current = { id: sug.osmId, near: [suggestions[at + 1], suggestions[at - 1]].flatMap((x) => (x ? [x.osmId] : [])), action };
+  }
+  useEffect(() => {
+    const h = handoff.current;
+    if (!h || suggestions.some((x) => x.osmId === h.id)) return;
+    handoff.current = null;
+    if (!focusLost()) return;
+    const rows = Array.from(listRef.current?.children ?? []) as HTMLElement[];
+    const button = (id: string) => rows.find((r) => r.dataset.id === id)?.querySelector<HTMLElement>(`[data-action="${h.action}"]`);
+    focusFirst(...h.near.map(button), findRef.current);
+  }, [suggestions]);
   async function accept(sug: Suggestion) {
     if (inFlight.current.has(sug.osmId)) return;
     inFlight.current.add(sug.osmId);
@@ -91,8 +109,9 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
         <h2 className="text-sm font-semibold">Photo spot suggestions</h2>
         <button
           type="button"
-          onClick={onFind}
-          disabled={!canSearch || status === "loading"}
+          ref={findRef}
+          {...softDisabled(!canSearch || status === "loading")}
+          onClick={!canSearch || status === "loading" ? undefined : onFind}
           className={btnSecondary}
         >
           {status === "loading" ? "Searching…" : "Find photo spots"}
@@ -126,8 +145,8 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
               )}
             </div>
             <div className="flex shrink-0 gap-1">
-              <button type="button" disabled={accepting.has(s.osmId)} onClick={() => { setHover(null); void accept(s); }} className={btnAccent} aria-label={`Accept ${s.name}`}>Accept</button>
-              <button type="button" onClick={() => { setHover(null); onDismiss(s.osmId); }} className={btnGhost} aria-label={`Dismiss ${s.name}`}>Dismiss</button>
+              <button type="button" data-action="accept" {...softDisabled(accepting.has(s.osmId))} onClick={accepting.has(s.osmId) ? undefined : () => { setHover(null); keepFocus(s, "accept"); void accept(s); }} className={btnAccent} aria-label={`Accept ${s.name}`}>Accept</button>
+              <button type="button" data-action="dismiss" onClick={() => { setHover(null); keepFocus(s, "dismiss"); onDismiss(s.osmId); }} className={btnGhost} aria-label={`Dismiss ${s.name}`}>Dismiss</button>
             </div>
           </li>
           );

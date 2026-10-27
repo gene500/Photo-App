@@ -1,0 +1,18 @@
+{
+  "files.watcherExclude": {
+    "**/.next/**": true,
+    "**/.next-e2e/**": true,
+    "**/node_modules/**": true,
+    "**/test-results/**": true,
+    "**/.e2e-uploads/**": true
+  },
+  "search.exclude": {
+    "**/.next": true,
+    "**/.next-e2e": true,
+    "**/node_modules": true
+  },
+  "files.exclude": {
+    "**/.next-e2e": true
+  },
+  "typescript.tsserver.maxTsServerMemory": 3072
+}

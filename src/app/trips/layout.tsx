@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { InAppNavMarker } from "@/components/InAppNavMarker";
 import { OfflineOwnerSync } from "@/components/offline/OfflineOwnerSync";
 import { SignOutButton } from "@/components/SignOutButton";
 import { getCurrentUserId } from "@/server/session";
@@ -9,6 +10,7 @@ export default async function TripsLayout({ children }: LayoutProps<"/trips">) {
   if (!userId) redirect("/login");
   return (
     <div className="flex min-h-screen flex-col">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:ring-2 focus:ring-accent-strong">Skip to content</a>
       <header className="flex min-h-12 items-center justify-between gap-2 bg-surface px-4 shadow-sm">
         <Link href="/trips" className="min-w-0 truncate text-sm font-semibold tracking-tight">Photo Op Planner</Link>
         <div className="flex shrink-0 items-center">
@@ -21,6 +23,7 @@ export default async function TripsLayout({ children }: LayoutProps<"/trips">) {
           <SignOutButton />
         </div>
       </header>
+      <InAppNavMarker />
       <OfflineOwnerSync userId={userId} />
       <div className="anim-fade flex-1">{children}</div>
     </div>

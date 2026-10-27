@@ -1,4 +1,6 @@
-# Project instructions
+# Project instructions (Photo Op Planner)
+
+General working rules (testing before claiming, task board format and ID prefixes, subagent models, parallel work, agent memory limit, handoff) live in the global `~/.claude/CLAUDE.md` and apply here too. This file holds only what is specific to this project.
 
 ## After every push, check that Vercel deployed
 
@@ -12,7 +14,8 @@ A push is not finished until Vercel reports the deployment as done. After every 
      --jq '.statuses[] | select(.context | test("photo-app-pi2o")) | {state, description, target_url}'
    ```
 
-3. Report the result:
+3. Also check CI for the same commit (`check` and `e2e` must both succeed): `gh api repos/gene500/Photo-App/commits/$SHA/check-runs`.
+4. Report the result:
    - `success`: say the deployment completed, and give the live URL `https://photo-app-pi2o.vercel.app`.
    - `failure` or `error`: say the deployment failed and give the `target_url` so the user can open the build log. Do not claim the change is live.
    - Still `pending` after 10 minutes: say so and give the `target_url`; do not guess.
@@ -22,20 +25,14 @@ Notes:
 - If nothing is reported for the commit at all, the push may not have triggered a deploy; say that rather than assuming success.
 - A push to a branch other than `main` creates a preview deployment, not the live site. Say which one it is.
 
-## Keep the to-do list in docs/HANDOFF.md and update it as you go
+## Task board and handoff
 
-The single to-do list and handoff file is `docs/HANDOFF.md` (its "Task board"); there is no separate `TODO.md`.
+- The single to-do list and handoff file is `docs/HANDOFF.md` (its "Task board" and "Current work"); there is no separate `TODO.md`. The board format, ID prefixes and ordering rules are in the global file.
+- The standing last two rows of every list are SEC (`/security-review`) and FINAL. FINAL here means: full codebase check on Opus, merge, push to `main`, and confirmation that Vercel (`photo-app-pi2o`) and CI (`check`, `e2e`) both succeeded.
 
-For any job with more than one step, add the tasks to the Task board before starting work.
+## Project notes
 
-1. List every task up front, including review, verification and push/deploy steps, each as its own row.
-2. Give every row a status: pending, in progress, completed, blocked, or removed.
-3. Keep exactly one row in progress at a time. Mark it completed as soon as it is actually done and verified (tests run, output checked), not before.
-4. Update the board the moment anything changes: a task finishes, a new task appears, a task is dropped or split, or something becomes blocked. If a task is blocked, say why in its notes. Commit the update with the work it describes.
-5. Do not drop rows silently. If the user changes the plan, mark the old rows removed and add the new ones.
-6. Whenever you report progress, the board is the source of truth: say which rows are done, which is in progress, and what is left. Write it so a different Claude session or machine can resume from the file alone.
-7. Ordering: the list runs owner work items, then the bug sweeps (H rows), then the final row. New owner work items go after the existing work items but before the bug sweeps, in the order asked (then sorted Light to Heavy by Use within the work group and within the sweep group; the FINAL row stays last), never ahead of work already queued (the one item in progress finishes first). The absolute final row of any list is always one combined row: a **full codebase check (run on Opus), then merge, push to `main`, and confirmation that both Vercel and CI succeeded**. Nothing is ever placed after it. When new work is added, insert it above that final row and keep it last. The list is finished only when that row is complete.
-8. Visibility and progress prints: the task table must always be visible in the terminal. Print it at the end of every reply to the owner (even a short answer or a one-line status) and again each time a task is completed during a batch, in the item 10 format, kept in sync with `docs/HANDOFF.md`. One exception: if the table is already the most recent thing printed, do not print it again.
-9. Archive: the moment a task is completed or removed, move its row from "Open tasks" to the "Archive" section of `docs/HANDOFF.md` in the same update. The task table shown at the end of each reply lists open tasks only (the standing final row stays until its run completes).
-10. Task table format (end of every reply): a bordered markdown table with columns ID, Task, Status, Est, Use, and no emoji (emoji break the borders in the terminal). Task names at most about 45 characters; status one word (pending, active, paused, blocked); Est is Claude's rough working time like `15 min` (excluding deploy waits and owner review); Use is Light, Medium or Heavy token usage. Rows are grouped work, then sweeps, then FINAL, sorted Light to Heavy within work and sweeps. Put any longer note in a line under the table. Open tasks only.
-11. Parallel work: before starting a batch of tasks, check which ones could run in parallel (different files, no shared interface, read-only sweeps) and tell the owner which ones and why. Ask before running anything in parallel, and never start parallel agents without a yes. Without a yes, run one at a time.
+- Next.js 16: `AGENTS.md` says to read `node_modules/next/dist/docs/` before writing Next.js code.
+- Never print or commit the Mapbox `pk.` token or any `TURSO_*` secrets.
+- Tests: run the full vitest suite alone (`fileParallelism` is off); Playwright e2e runs on port 3100 (`E2E_PORT` overrides) against a fresh `e2e.db` with fake externals. Agents that run e2e in their own repo copy must copy `node_modules` (`cp -cR`), not symlink it, because a symlink breaks Turbopack.
+- `.vscode/settings.json` keeps VS Code from watching `.next`, `.next-e2e` and `node_modules`.

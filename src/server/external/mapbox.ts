@@ -2,7 +2,7 @@ import type { LngLat, Place, RouteResult, SearchSuggestion } from "@/lib/types";
 import { coordsLabel } from "@/lib/geo";
 import { clampText, stripNameChars } from "@/lib/text";
 import { TtlCache } from "../suggestions/cache";
-import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakeRetrieve, fakeReverseGeocode, fakeSearch, isFakeExternal } from "./fake";
+import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakeLocate, fakeRetrieve, fakeReverseGeocode, fakeSearch, isFakeExternal } from "./fake";
 
 const MAPBOX_BASE = "https://api.mapbox.com";
 const TIMEOUT_MS = 10_000;
@@ -62,6 +62,7 @@ export function clearMapboxCaches(): void {
   directionsCache.clear();
   geocodeCache.clear();
   areaCache.clear();
+  landmarkCache.clear();
   reverseCache.clear();
   searchCache.clear();
   retrieveCache.clear();
@@ -185,7 +186,7 @@ const isBbox = (b: unknown): b is [number, number, number, number] =>
 export async function locateArea(query: string, fetchImpl: typeof fetch = fetch): Promise<Area | null> {
   const q = query.trim();
   if (isFakeExternal()) {
-    const p = fakeGeocode(q)[0];
+    const p = fakeLocate(q);
     return p ? { lat: p.lat, lng: p.lng } : null;
   }
   const key = q.toLowerCase();
@@ -205,6 +206,59 @@ export async function locateArea(query: string, fetchImpl: typeof fetch = fetch)
   }
   areaCache.set(key, null);
   return null;
+}
+
+const LANDMARK_CATEGORY =
+  /\b(park|landmark|monument|viewpoint|lookout|natural|nature|forest|beach|lake|mountain|canyon|trail|garden|scenic|attraction|tourist|memorial|historic|preserve|wilderness|seashore|lakeshore|reserve|recreation|waterfall|falls|cave|volcano|glacier|island|bridge|arch|rock|hot spring)s?\b/i;
+const NOT_A_LANDMARK = /\b(parking|garden (center|centre)|store|shop)\b/i;
+/** What a park's full name may add to a short trip name: "Yosemite" is "Yosemite National Park", "Utah" is not "Utah Lake State Park". */
+const NAME_SUFFIX =
+  /^(national|state|provincial|regional|county) (park|monument|forest|seashore|lakeshore|preserve|wilderness|recreation area|memorial|historic site|historical park|historic park|scenic area|grassland|park and preserve)$/;
+/** One-word trip names that name a kind of place rather than a place ("Beach", "Lake"): never a landmark of their own. */
+const GENERIC_ONE_WORD = /^(park|beach|lake|mountain|mountains|forest|canyon|trail|garden|gardens|falls|river|bridge|island|memorial|monument|preserve|viewpoint|lookout|overlook|landmark|cave|rock|waterfall|desert|coast|valley)$/;
+const landmarkCache = new TtlCache<Place | null>(LOOKUP_TTL_MS, 300);
+/** Lower-case Latin words only: accents are dropped ("Yosemité" is "yosemite") and "Mt." is "mount". */
+const plain = (s: string) =>
+  s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\bmt\b/g, "mount");
+const hasWords = (hay: string, needle: string) => ` ${hay} `.includes(` ${needle} `);
+
+/** Whether a suggestion's name is the one the trip name points at, judged on whole words so "LA" never means "Lake Tahoe". */
+function namesMatch(name: string, want: string): boolean {
+  if (GENERIC_ONE_WORD.test(want) || GENERIC_ONE_WORD.test(name)) return false;
+  if (name === want) return true;
+  if (name.startsWith(`${want} `) && NAME_SUFFIX.test(name.slice(want.length + 1))) return true;
+  return name.length >= 5 && hasWords(want, name);
+}
+
+/**
+ * A park or landmark a trip name points at ("Arches National Park", "Horseshoe Bend"), found by name through the
+ * Search Box. Null for anything else: a town, a state, or a name that merely resembles some unrelated business, so a
+ * generic trip name never gets a stop of its own.
+ */
+export async function locateLandmark(query: string, fetchImpl: typeof fetch = fetch): Promise<Place | null> {
+  const q = query.trim();
+  if (isFakeExternal()) {
+    const p = fakeLocate(q);
+    return p ? { name: q, lat: p.lat, lng: p.lng } : null;
+  }
+  const want = plain(q);
+  // Too short, or no Latin letters or digits to compare ("LA", "!!", a name in another script): never a landmark.
+  if (want.length < 3) return null;
+  const key = q.toLowerCase();
+  const cached = landmarkCache.get(key);
+  if (cached !== undefined) return cached;
+  const sessionToken = crypto.randomUUID();
+  const suggestions = await searchPlaces(q, { sessionToken }, fetchImpl);
+  const found = suggestions.find((s) => {
+    if (!s.mapboxId) return false;
+    const [category = "", ...rest] = (s.subtitle ?? "").split(" · ");
+    return rest.length > 0 && LANDMARK_CATEGORY.test(category) && !NOT_A_LANDMARK.test(category) && namesMatch(plain(s.name), want);
+  });
+  const place = found?.mapboxId ? await retrievePlace(found.mapboxId, sessionToken, fetchImpl) : null;
+  // Suggestions without an id came from the fallback geocoder during a Search Box outage; don't remember "none" then.
+  const outage = suggestions.length > 0 && suggestions.every((s) => !s.mapboxId);
+  if (!outage) landmarkCache.set(key, place);
+  return place;
 }
 
 type SearchBoxSuggestion = {

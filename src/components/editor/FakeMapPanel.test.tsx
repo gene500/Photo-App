@@ -66,6 +66,23 @@ describe("FakeMapPanel", () => {
     expect(dot).toContain("opacity-70");
   });
 
+  it("keeps stop markers above the suggestion dots that follow them, so a dot never covers a stop or takes its click", () => {
+    render(<FakeMapPanel {...base} stops={[stop]} suggestions={[{ ...suggestion, lat: stop.lat, lng: stop.lng }]} />);
+    const stopBtn = screen.getByRole("button", { name: "Stop 1: Pin 1" });
+    const dot = screen.getByRole("button", { name: "Suggestion: Fake Viewpoint" });
+    expect(stopBtn.className).toContain("z-[1]");
+    expect(dot.className).not.toMatch(/\bz-/);
+    expect(stopBtn.compareDocumentPosition(dot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // dot is later in the DOM, so the z-index is what keeps the stop on top
+  });
+
+  it("tags markers for the shared dark-mode focus ring and uses the route token colour with a casing", () => {
+    render(<FakeMapPanel {...base} stops={[stop]} suggestions={[suggestion]} routeGeometry={[[-119, 37], [-118.5, 37.2]]} />);
+    expect(screen.getByRole("button", { name: "Stop 1: Pin 1" }).className).toContain("map-marker");
+    expect(screen.getByRole("button", { name: "Suggestion: Fake Viewpoint" }).className).toContain("map-marker");
+    expect(screen.getByTestId("route-line").getAttribute("stroke")).toBe("#a8834b");
+    expect(screen.getByTestId("route-casing")).toBeTruthy();
+  });
+
   it("rings the selected stop in the route colour", () => {
     render(<FakeMapPanel {...base} stops={[stop]} selectedId="s1" />);
     expect(screen.getByRole("button", { name: "Stop 1: Pin 1" }).className).toContain("ring-route");

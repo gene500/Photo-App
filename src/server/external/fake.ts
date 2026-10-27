@@ -45,6 +45,11 @@ export function fakeGeocode(query: string): Place[] {
   return [{ name: `${query.trim()} (fake)`, lat: 36 + (h % 200) / 100, lng: -121 + (Math.floor(h / 200) % 300) / 100 }];
 }
 
+/** Fake area lookup: only names that read like a park or well-known place resolve, as with the real service, so an ordinary trip name ("Reopen me") finds nothing. */
+export function fakeLocate(query: string): Place | null {
+  return /national park|yosemite|arches|grand canyon|zion/i.test(query) ? (fakeGeocode(query)[0] ?? null) : null;
+}
+
 const FAKE_LANDMARKS = [
   { id: "fake-horseshoe-bend", name: "Horseshoe Bend", subtitle: "viewpoint · Page, Arizona", place: "Page, Arizona", lat: 36.8791, lng: -111.51 },
   { id: "fake-griffith-observatory", name: "Griffith Observatory", subtitle: "landmark · Los Angeles, California", place: "Los Angeles, California", lat: 34.1184, lng: -118.3004 },

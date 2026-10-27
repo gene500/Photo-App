@@ -65,10 +65,17 @@ export async function guardAuthPost(req: Request): Promise<Response | null> {
   let email = "";
   try {
     const type = req.headers.get("content-type") ?? "";
-    const form = await new Response(body as BodyInit, { headers: { "content-type": type } }).formData();
-    email = String(form.get("email") ?? "").trim().toLowerCase();
+    if (type.includes("json")) {
+      // NextAuth also accepts a JSON body, so the throttle key must come from it too.
+      const parsed: unknown = JSON.parse(new TextDecoder().decode(body));
+      const raw = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>).email : "";
+      email = (typeof raw === "string" ? raw : "").trim().toLowerCase();
+    } else {
+      const form = await new Response(body as BodyInit, { headers: { "content-type": type } }).formData();
+      email = String(form.get("email") ?? "").trim().toLowerCase();
+    }
   } catch {
-    // Not a form post; NextAuth will reject it.
+    // Neither a form nor JSON post; NextAuth will reject it.
   }
   // An over-long email can never be a real account; authorize rejects it too, so it never becomes a limiter key.
   if (email && email.length <= 254) {
@@ -78,10 +85,14 @@ export async function guardAuthPost(req: Request): Promise<Response | null> {
   return null;
 }
 
-/** `new URL` would throw on this callbackUrl (NextAuth then answers a bare 500), so it is treated as absent. */
-const unparseable = (value: string, base: string) => {
+/**
+ * NextAuth answers a bare 500 when `new URL(callbackUrl)` throws, so such a value is treated as absent. A path that
+ * starts with a single `/` is fine (NextAuth resolves it itself); anything else must parse as an absolute URL.
+ */
+const unparseable = (value: string) => {
+  if (/^\/(?![/\\])/.test(value)) return false;
   try {
-    new URL(value, base);
+    new URL(value);
     return false;
   } catch {
     return true;
@@ -94,7 +105,7 @@ const unparseable = (value: string, base: string) => {
  */
 export async function sanitizeAuthRequest<T extends Request>(req: T): Promise<Request | T> {
   const url = new URL(req.url);
-  const bad = (v: string | null) => v !== null && unparseable(v, url.origin);
+  const bad = (v: string | null) => v !== null && unparseable(v);
   let out: Request | T = req;
   if (bad(url.searchParams.get("callbackUrl"))) {
     url.searchParams.delete("callbackUrl");

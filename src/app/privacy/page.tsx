@@ -32,7 +32,7 @@ export default function PrivacyPage() {
         <li><strong>OpenStreetMap / Overpass</strong> and <strong>Wikimedia Commons</strong> (and Flickr, if enabled) supply nearby places and photo counts. They receive the area being searched, not your identity.</li>
         <li><strong>Wikimedia Commons, Wikipedia</strong> (and Flickr, if enabled) also find a photo for each place you add or pick from the suggestions. They receive the name and coordinates of that place (typically not for a dropped pin that is only a street address or coordinates), and no account details.</li>
         <li>Images for places may load directly from Mapbox, Wikimedia or Flickr servers, which see your IP address like any website.</li>
-        <li><strong>Abuse protection:</strong> to limit repeated requests, our database briefly keeps counters keyed by your account or by your IP address (IPv6 addresses shortened, login-failure counters using only a hashed form). They are removed when their time window (at most an hour) ends.</li>
+        <li><strong>Abuse protection:</strong> to limit repeated requests, our database briefly keeps counters keyed by your account, by your IP address (IPv6 addresses shortened), or by the email address used in a sign-up or login attempt (as typed, lowercased; failed-login counters pair it with a hash of the IP address). They are removed when their time window (at most an hour) ends, even if the account is deleted sooner.</li>
       </ul>
 
       <h2>Security</h2>

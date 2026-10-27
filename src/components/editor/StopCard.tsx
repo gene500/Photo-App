@@ -23,7 +23,7 @@ export function StopCard({ stop, bestTime, arrival, onToggleVisited, onOpenDetai
   const mounted = useMounted(); // clock text is in the viewer's time zone
   const weather = useWeatherLine(stop.lat, stop.lng, arrival, stop.lightPref);
   return (
-    <section aria-label="Selected stop" className={`space-y-2 rounded-xl p-3 ${card}`}>
+    <section aria-label="Selected stop" onKeyDown={(e) => { if (e.key === "Escape") onClose(); }} className={`space-y-2 rounded-xl p-3 ${card}`}>
       <div className="flex items-start justify-between gap-2">
         <p className="py-1.5 text-sm font-semibold">{stop.name}</p>
         <button type="button" onClick={onClose} aria-label="Close" className={btnIcon}>

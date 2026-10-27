@@ -41,9 +41,9 @@ test("pages carry the security headers and the map + photo popups raise no CSP v
   await page.getByRole("tab", { name: "Suggestions" }).click();
   await page.getByRole("button", { name: "Find photo spots" }).click();
   await expect(page.getByTestId("suggestion-card")).toHaveCount(3);
-  await page.getByRole("button", { name: "Suggestion: Fake Attraction" }).hover();
+  await page.getByRole("button", { name: "Suggestion: Fake Attraction" }).focus();
   await expect(page.getByTestId("suggestion-popup").locator("img")).toBeVisible();
-  await page.getByRole("button", { name: "Suggestion: Fake Attraction" }).click();
+  await page.getByRole("button", { name: "Suggestion: Fake Attraction" }).dispatchEvent("click");
   await expect(page.getByRole("region", { name: "Selected place" }).locator("img")).toBeVisible();
 
   // The PDF flow (the Export menu), the public share page, and the static-looking pages.

@@ -52,7 +52,7 @@ export function OfflineView() {
   return (
     <main className="mx-auto w-full max-w-2xl space-y-4 px-4 py-8">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold">{copy && access === "show" ? copy.trip.name : "Saved trips"}</h1>
+        <h1 className="break-words text-2xl font-semibold">{copy && access === "show" ? copy.trip.name : "Saved trips"}</h1>
       </header>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -74,7 +74,7 @@ export function OfflineView() {
               <li key={s.id}>
                 <button type="button" onClick={() => setOpenId(s.id)} className={`${card} flex w-full items-center justify-between gap-3 p-4 text-left transition hover:bg-hover`}>
                   <span className="min-w-0">
-                    <span className="block truncate font-medium">{s.name}</span>
+                    <span className="block break-words font-medium">{s.name}</span>
                     <span className="block text-xs text-muted">
                       {s.plannedDate} · {s.stopCount} {s.stopCount === 1 ? "stop" : "stops"} · saved {new Date(s.savedAt).toLocaleDateString()}
                     </span>
@@ -121,7 +121,7 @@ function TripCopyView({ copy, onBack }: { copy: NonNullable<ReturnType<typeof lo
                 {i + 1}
               </span>
               <div className="min-w-0 flex-1 space-y-0.5">
-                <p className="text-sm font-medium leading-7">
+                <p className="break-words text-sm font-medium leading-7">
                   {s.name}
                   {s.visited && <span className="ml-2 text-xs font-normal text-muted">Visited</span>}
                 </p>
@@ -130,10 +130,10 @@ function TripCopyView({ copy, onBack }: { copy: NonNullable<ReturnType<typeof lo
                   {s.dwellMinutes > 0 && <> · Stay {s.dwellMinutes} min</>}
                 </p>
                 {s.lightPref !== "any" && <p className="text-xs text-muted">Best at {lightLabel(s.lightPref).toLowerCase()}</p>}
-                {s.notes && <p className="whitespace-pre-wrap text-xs">{s.notes}</p>}
-                {s.shotNotes && <p className="whitespace-pre-wrap text-xs">{s.shotNotes}</p>}
+                {s.notes && <p className="whitespace-pre-wrap break-words text-xs">{s.notes}</p>}
+                {s.shotNotes && <p className="whitespace-pre-wrap break-words text-xs">{s.shotNotes}</p>}
                 {s.shotChecklist.length > 0 && (
-                  <ul className="space-y-0.5 text-xs">
+                  <ul className="space-y-0.5 break-words text-xs">
                     {s.shotChecklist.map((item, j) => (
                       <li key={j} className={item.done ? "text-muted line-through" : ""}>
                         <span aria-hidden>{item.done ? "☑" : "☐"}</span> {item.text}

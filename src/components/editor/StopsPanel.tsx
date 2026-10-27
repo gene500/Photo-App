@@ -1,6 +1,8 @@
 "use client";
 
-import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { focusFirst } from "@/lib/focus";
+import { usePathname } from "next/navigation";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 type Snap = "collapsed" | "half" | "full";
 type Tab = "stops" | "trip" | "suggestions";
@@ -13,7 +15,7 @@ const SMALLER: Partial<Record<Snap, Snap>> = { full: "half", half: "collapsed" }
 const SNAP_CLASS: Record<Snap, string> = {
   collapsed: "h-14 lg:h-14",
   half: "h-[45dvh] lg:bottom-3 lg:h-auto",
-  full: "h-[85dvh] lg:bottom-3 lg:h-auto",
+  full: "h-[min(85dvh,calc(100dvh-7.25rem))] lg:bottom-3 lg:h-auto",
 };
 
 type Props = {
@@ -30,8 +32,55 @@ type Props = {
 export function StopsPanel({ header, collapsedSummary, summary, stops, trip, suggestions, suggestionCount }: Props) {
   const [snap, setSnap] = useState<Snap>("half");
   const [tab, setTab] = useState<Tab>("stops");
-  const uid = useId();
+  // Coming back from Settings (or a reload) reopens the tab and height the user left, kept per page for this browser tab.
+  // The router's pathname follows client-side navigation; window.location is only the fallback outside the router.
+  const pathname = usePathname();
+  const storeKey = pathname === null ? null : `rtpp.panel.v1:${pathname}`;
+  const keyNow = () => storeKey ?? `rtpp.panel.v1:${window.location.pathname}`;
+  // After a restore, the save effect that runs in the same commit must not write the default state over the saved one (Strict Mode runs both effects twice in dev).
+  const skipSaveRef = useRef(false);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(window.sessionStorage.getItem(keyNow()) ?? "null") as { tab?: unknown; snap?: unknown } | null;
+      // Restoring after mount (not in the initial state) keeps the server and first client render identical.
+      /* eslint-disable react-hooks/set-state-in-effect */
+      if (saved) skipSaveRef.current = true;
+      if (typeof saved?.tab === "string" && (TABS as string[]).includes(saved.tab)) setTab(saved.tab as Tab);
+      if (typeof saved?.snap === "string" && Object.hasOwn(SNAP_CLASS, saved.snap)) setSnap(saved.snap as Snap);
+      /* eslint-enable react-hooks/set-state-in-effect */
+    } catch {
+      // Storage blocked: start on Stops as before.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyNow only reads storeKey
+  }, [storeKey]);
+  useEffect(() => {
+    if (skipSaveRef.current) {
+      skipSaveRef.current = false;
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(keyNow(), JSON.stringify({ tab, snap }));
+    } catch {
+      // Storage blocked: nothing to remember.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyNow only reads storeKey
+  }, [storeKey, tab, snap]);
+  // A arrow that unmounts when it is pressed (▾ at the last height) would drop keyboard focus to the page: keep it on the arrow that is left.
+  const shrinkRef = useRef<HTMLButtonElement>(null);
+  const expandRef = useRef<HTMLButtonElement>(null);
   const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({});
+  const refocus = useRef<"shrink" | "expand" | null>(null);
+  useEffect(() => {
+    const pressed = refocus.current;
+    if (!pressed) return;
+    refocus.current = null;
+    const [first, second] = pressed === "shrink" ? [shrinkRef, expandRef] : [expandRef, shrinkRef];
+    // Expand is hidden on wide screens at the middle height (lg:hidden), so focus() on it does nothing there:
+    // fall back to the other arrow, then the selected tab, which are always visible.
+    focusFirst(first.current, second.current, tabRefs.current[tab]);
+  }, [snap, tab]);
+
+  const uid = useId();
   const tabId = (t: Tab) => `${uid}-tab-${t}`;
   const panelId = `${uid}-panel`;
   // ARIA tab pattern: arrows (and Home/End) move between the tabs, selecting and focusing the new one.
@@ -50,6 +99,7 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, trip, sug
 
   return (
     <aside
+      aria-label="Trip panel"
       data-snap={snap}
       className={`absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-2xl bg-surface text-foreground shadow-2xl ring-1 ring-border lg:inset-x-auto lg:left-3 lg:top-3 lg:w-[22.5rem] lg:rounded-2xl ${SNAP_CLASS[snap]}`}
     >
@@ -63,12 +113,12 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, trip, sug
         {/* One arrow per direction, so the arrow always does what it says. */}
         <div className="ml-auto flex shrink-0">
           {SMALLER[snap] && (
-            <button type="button" aria-label="Shrink panel" onClick={() => setSnap(SMALLER[snap]!)} className={arrowClass}>
+            <button type="button" ref={shrinkRef} aria-label="Shrink panel" onClick={() => { refocus.current = "shrink"; setSnap(SMALLER[snap]!); }} className={arrowClass}>
               ▾
             </button>
           )}
           {BIGGER[snap] && (
-            <button type="button" aria-label="Expand panel" onClick={() => setSnap(BIGGER[snap]!)} className={`${arrowClass} ${snap === "half" ? "lg:hidden" : ""}`}>
+            <button type="button" ref={expandRef} aria-label="Expand panel" onClick={() => { refocus.current = "expand"; setSnap(BIGGER[snap]!); }} className={`${arrowClass} ${snap === "half" ? "lg:hidden" : ""}`}>
               ▴
             </button>
           )}

@@ -18,7 +18,7 @@ import { createSuggestionPopupContent } from "./suggestion-popup";
 
 const ROUTE_SOURCE = "route";
 /** Mapbox paint can't read CSS variables; this is the light-theme `--route` token. */
-const ROUTE_COLOR = "#b08d57";
+const ROUTE_COLOR = "#a8834b"; // the light-theme --route token
 const SKY_SOURCE = "sky";
 /** Fixed hexes like ROUTE_COLOR: warm amber for sunrise, violet for sunset; both read on the beige map. */
 const SUNRISE_COLOR = "#d9822b";

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError } from "./api-client";
+import { api, ApiError, DEFAULT_TIMEOUT_MS, LONG_TIMEOUT_MS } from "./api-client";
 
 const SESSION = "11111111-1111-4111-8111-111111111111";
 const fetchMock = vi.fn();
@@ -39,6 +39,22 @@ describe("api client", () => {
     expect(url).toBe("/api/stops/s1/photo");
     expect(init.body).toBeInstanceOf(FormData);
     expect(init.headers).toBeUndefined();
+  });
+
+  it("gives suggestions the long timeout, as the server may take about a minute", async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockImplementation((_u: string, init: RequestInit) => new Promise((_res, rej) => init.signal?.addEventListener("abort", () => rej(new Error("aborted")))));
+      let outcome = "pending";
+      const p = api.suggestions([[0, 0], [1, 1]]).then(() => (outcome = "ok"), () => (outcome = "failed"));
+      await vi.advanceTimersByTimeAsync(DEFAULT_TIMEOUT_MS + 1000);
+      expect(outcome).toBe("pending");
+      await vi.advanceTimersByTimeAsync(LONG_TIMEOUT_MS);
+      await p;
+      expect(outcome).toBe("failed");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("encodes geocode queries", async () => {
@@ -82,5 +98,51 @@ describe("api client", () => {
     expect(url).toBe("/api/optimize");
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body)).toEqual({ coordinates: [[0, 0], [2, 2], [1, 1]] });
+  });
+
+  it("gives up on a hung request with a clear message, so callers can re-enable their buttons", async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockImplementation((_url: string, init: RequestInit) => new Promise((_res, rej) => {
+        init.signal?.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError")));
+      }));
+      const p = api.reverseGeocode(1, 2);
+      const assertion = expect(p).rejects.toEqual(new ApiError(0, "The server is taking too long to answer. Try again."));
+      await vi.advanceTimersByTimeAsync(20_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("allows optimize longer than the default timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      let aborted = false;
+      fetchMock.mockImplementation((_url: string, init: RequestInit) => new Promise((res, rej) => {
+        init.signal?.addEventListener("abort", () => { aborted = true; rej(new DOMException("aborted", "AbortError")); });
+        setTimeout(() => res(Response.json({ order: [0, 1] })), 30_000);
+      }));
+      const p = api.optimizeOrder([[0, 0], [1, 1]]);
+      await vi.advanceTimersByTimeAsync(30_000);
+      await expect(p).resolves.toEqual({ order: [0, 1] });
+      expect(aborted).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("explains non-JSON 5xx and 429 answers instead of showing 'Request failed (500)'", async () => {
+    fetchMock.mockResolvedValueOnce(new Response("<html>boom</html>", { status: 500 }));
+    await expect(api.listTrips()).rejects.toThrow("The server had a problem. Try again in a moment.");
+    fetchMock.mockResolvedValueOnce(new Response("slow down", { status: 429 }));
+    await expect(api.listTrips()).rejects.toThrow(/too many requests/i);
+    fetchMock.mockResolvedValueOnce(new Response("x", { status: 418 }));
+    await expect(api.listTrips()).rejects.toThrow("Request failed (418)");
+  });
+
+  it("says the session expired on a 401", async () => {
+    fetchMock.mockResolvedValue(Response.json({ error: "Not signed in" }, { status: 401 }));
+    await expect(api.geocode("abc", SESSION)).rejects.toThrow(/session has expired.*log in/i);
   });
 });

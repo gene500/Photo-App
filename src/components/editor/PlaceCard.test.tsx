@@ -27,6 +27,11 @@ describe("PlaceCard", () => {
     expect(at).toBeInstanceOf(Date);
   });
 
+  it("wraps a long unbreakable place name instead of overlapping Add stop", () => {
+    render(<PlaceCard name={"W".repeat(60)} resolving={false} busy={false} onAdd={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText("W".repeat(60)).className).toContain("break-words");
+  });
+
   it("shows no forecast line without a visit or while it is unavailable", () => {
     render(<PlaceCard name="X" resolving={false} busy={false} onAdd={vi.fn()} onClose={vi.fn()} />);
     expect(screen.queryByTestId("place-weather")).toBeNull();
@@ -42,9 +47,9 @@ describe("PlaceCard", () => {
 
   it("disables adding while the name is still being looked up or a save is in flight", () => {
     const { rerender } = render(<PlaceCard name="Looking up place…" resolving busy={false} onAdd={vi.fn()} onClose={vi.fn()} />);
-    expect((screen.getByRole("button", { name: "Add stop" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Add stop" }) as HTMLButtonElement).getAttribute("aria-disabled")).toBe("true");
     rerender(<PlaceCard name="Tunnel View" resolving={false} busy onAdd={vi.fn()} onClose={vi.fn()} />);
-    expect((screen.getByRole("button", { name: "Add stop" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Add stop" }) as HTMLButtonElement).getAttribute("aria-disabled")).toBe("true");
   });
 
   it("closes", async () => {
@@ -80,5 +85,24 @@ describe("PlaceCard", () => {
     render(<PlaceCard name="Alpha Town" resolving={false} busy={false} onAdd={vi.fn()} onClose={vi.fn()} />);
     expect(loadPlacePhoto).not.toHaveBeenCalled();
     expect(screen.queryByRole("img")).toBeNull();
+  });
+
+  it("keeps keyboard focus on Add stop while the add is in flight", async () => {
+    const props = { name: "Tunnel View", resolving: false, onAdd: vi.fn(), onClose: vi.fn() };
+    const { rerender } = render(<PlaceCard {...props} busy={false} />);
+    await userEvent.click(screen.getByRole("button", { name: "Add stop" }));
+    rerender(<PlaceCard {...props} busy />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Add stop" }));
+    expect(props.onAdd).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole("button", { name: "Add stop" }));
+    expect(props.onAdd).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes on Escape", async () => {
+    const onClose = vi.fn();
+    render(<PlaceCard name="Tunnel View" resolving={false} busy={false} onAdd={vi.fn()} onClose={onClose} />);
+    screen.getByRole("button", { name: "Add stop" }).focus();
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

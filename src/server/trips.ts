@@ -3,6 +3,7 @@ import { dateOnlyToUtc, shiftDepartAtLocal, utcToDateOnly } from "@/lib/dates";
 import type { Trip, TripSummary, TripWithStops } from "@/lib/types";
 import { inYearRange, type TripCreateInput, type TripPatch } from "@/lib/validation";
 import { prisma } from "./db";
+import { HttpError } from "./http-error";
 import { toStopDto, toTripDto } from "./mappers";
 
 const HOUR_MS = 3_600_000;
@@ -57,17 +58,24 @@ export class TooManyTripsError extends Error {
 export async function createTrip(userId: string, input: TripCreateInput): Promise<Trip> {
   if (input.departAt) assertOnPlannedDay(new Date(input.departAt), input.plannedDate, null);
   // Count and create together, so parallel requests cannot slip past the cap.
-  const row = await prisma.$transaction(async (tx) => {
-    if ((await tx.trip.count({ where: { userId } })) >= MAX_TRIPS_PER_USER) throw new TooManyTripsError();
-    return tx.trip.create({
-      data: {
-        userId,
-        name: input.name,
-        plannedDate: dateOnlyToUtc(input.plannedDate),
-        ...(input.departAt && { departAt: new Date(input.departAt) }),
-      },
+  let row;
+  try {
+    row = await prisma.$transaction(async (tx) => {
+      if ((await tx.trip.count({ where: { userId } })) >= MAX_TRIPS_PER_USER) throw new TooManyTripsError();
+      return tx.trip.create({
+        data: {
+          userId,
+          name: input.name,
+          plannedDate: dateOnlyToUtc(input.plannedDate),
+          ...(input.departAt && { departAt: new Date(input.departAt) }),
+        },
+      });
     });
-  });
+  } catch (e) {
+    // The account was deleted after the session check passed (foreign key violation): signed out, not a server error.
+    if ((e as { code?: unknown } | null)?.code === "P2003") throw new HttpError(401, "Not signed in");
+    throw e;
+  }
   return toTripDto(row);
 }
 

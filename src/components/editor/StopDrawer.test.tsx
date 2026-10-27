@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -212,6 +212,61 @@ describe("StopDrawer", () => {
       expect(onSave).not.toHaveBeenCalled();
     });
 
+    it("asks before the Close button drops unsaved edits, like Escape", async () => {
+      const onClose = vi.fn();
+      render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={onClose} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+      await userEvent.type(screen.getByLabelText("Notes"), "bring a tripod");
+      await userEvent.click(screen.getByRole("button", { name: "Close" }));
+      expect(onClose).not.toHaveBeenCalled();
+      expect((await screen.findByRole("alert")).textContent).toContain("unsaved");
+      await userEvent.click(screen.getByRole("button", { name: "Discard edits" }));
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("closes straight from the Close button when nothing was edited", async () => {
+      const onClose = vi.fn();
+      render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={onClose} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+      await userEvent.click(screen.getByRole("button", { name: "Close" }));
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not close on Escape while a save is running", async () => {
+      const onClose = vi.fn();
+      let finish: () => void = () => {};
+      const onSave = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+      render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={onClose} onSave={onSave} onPhotoChange={vi.fn()} />);
+      await userEvent.click(screen.getByLabelText("Visited"));
+      await userEvent.click(screen.getByRole("button", { name: "Save" }));
+      await userEvent.keyboard("{Escape}");
+      expect(onClose).not.toHaveBeenCalled();
+      await act(async () => finish());
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it("a save that finishes after the drawer is gone does not close the drawer that replaced it", async () => {
+      const onClose = vi.fn();
+      let finish: () => void = () => {};
+      const onSave = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+      const { unmount } = render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={onClose} onSave={onSave} onPhotoChange={vi.fn()} />);
+      await userEvent.click(screen.getByLabelText("Visited"));
+      await userEvent.click(screen.getByRole("button", { name: "Save" }));
+      unmount();
+      await act(async () => finish());
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it("reports a save that fails after the drawer is gone, instead of losing it", async () => {
+      const onSaveError = vi.fn();
+      let fail: () => void = () => {};
+      const onSave = vi.fn(() => new Promise<void>((_, reject) => { fail = () => reject(new Error("Network down")); }));
+      const { unmount } = render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onSaveError={onSaveError} onPhotoChange={vi.fn()} />);
+      await userEvent.click(screen.getByLabelText("Visited"));
+      await userEvent.click(screen.getByRole("button", { name: "Save" }));
+      unmount();
+      await act(async () => fail());
+      expect(onSaveError).toHaveBeenCalledWith("Network down");
+    });
+
     it("moves focus into the dialog on open and back to the opener on close", () => {
       const opener = document.createElement("button");
       document.body.append(opener);
@@ -243,5 +298,25 @@ describe("StopDrawer sky card", () => {
     useWeatherLine.mockReturnValue(null);
     render(<StopDrawer stop={stop} plannedDate="2026-07-01" onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
     expect(screen.getByTestId("sky-card")).toBeTruthy();
+  });
+
+  it("keeps focus inside the drawer after a failed Save, so Escape still closes it", async () => {
+    const onClose = vi.fn();
+    const onSave = vi.fn(async () => { throw new Error("Couldn't save the stop"); });
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={onClose} onSave={onSave} onPhotoChange={vi.fn()} />);
+    await userEvent.click(screen.getByLabelText("Visited"));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Couldn't save the stop")).toBeTruthy();
+    expect(screen.getByRole("dialog").contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it("returns focus to the drawer when the focused control was disabled by a busy upload", async () => {
+    let finish!: () => void;
+    vi.mocked(api.removePhoto).mockReturnValue(new Promise((r) => { finish = () => r({ stop: { ...stop, photoUrl: null } }); }));
+    render(<StopDrawer plannedDate="2026-07-01" stop={{ ...stop, photoUrl: "/p.jpg" }} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "Remove photo" }));
+    finish();
+    await vi.waitFor(() => expect(screen.getByRole("dialog").contains(document.activeElement)).toBe(true));
   });
 });

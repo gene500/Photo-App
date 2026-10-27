@@ -20,9 +20,9 @@ const cases: [string, keyof typeof POLICIES, (n: number) => Promise<Response>][]
   ["directions", "directions", () => directions(jsonRequest("POST", "/api/directions", {}))],
   ["suggestions", "suggestions", () => suggestions(jsonRequest("POST", "/api/suggestions", {}))],
   ["popularity", "popularity", () => popularity(jsonRequest("POST", "/api/suggestions/popularity", {}))],
-  ["geocode", "geocode", () => geocodeGET(new Request("http://localhost/api/geocode"))],
-  ["geocode retrieve", "geocode-retrieve", () => retrieveGET(new Request("http://localhost/api/geocode/retrieve"))],
-  ["place-photo", "place-photo", () => placePhoto(new Request("http://localhost/api/place-photo"))],
+  ["geocode", "geocode", () => geocodeGET(new Request("http://localhost/api/geocode?q=Paris&session=123e4567-e89b-42d3-a456-426614174000"))],
+  ["geocode retrieve", "geocode-retrieve", () => retrieveGET(new Request("http://localhost/api/geocode/retrieve?id=abc&session=123e4567-e89b-42d3-a456-426614174000"))],
+  ["place-photo", "place-photo", () => placePhoto(new Request("http://localhost/api/place-photo?lat=1&lng=2&name=Spot"))],
   ["photo upload", "photo-upload", () => photoPOST(new Request("http://localhost/api/stops/x/photo", { method: "POST" }), idParams("x"))],
 ];
 
@@ -63,8 +63,8 @@ describe("per-user limits on costly routes", () => {
 
   it("counts paid routes across instances: a fresh instance still sees the user's spent budget", async () => {
     vi.mocked(getCurrentUserId).mockResolvedValue("user-shared");
-    for (let i = 0; i < POLICIES.geocode.limit; i++) await geocodeGET(new Request("http://localhost/api/geocode"));
+    for (let i = 0; i < POLICIES.geocode.limit; i++) await geocodeGET(new Request("http://localhost/api/geocode?q=Paris&session=123e4567-e89b-42d3-a456-426614174000"));
     clearAllLimits(); // another warm instance
-    expect((await geocodeGET(new Request("http://localhost/api/geocode"))).status).toBe(429);
+    expect((await geocodeGET(new Request("http://localhost/api/geocode?q=Paris&session=123e4567-e89b-42d3-a456-426614174000"))).status).toBe(429);
   });
 });

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LngLat, Suggestion } from "@/lib/types";
 import { prisma } from "../db";
 import { clearSuggestionCache, findSuggestions, SUGGESTION_CACHE_TTL_MS } from "./service";
-import { SHARED_READ_TIMEOUT_MS, sharedGet, sharedPut, sweepSuggestionCache } from "./shared-cache";
+import { SHARED_PRUNE_AGE_MS, SHARED_READ_TIMEOUT_MS, sharedGet, sharedPut, sweepSuggestionCache } from "./shared-cache";
 
 const spot = (n: number): Suggestion => ({ osmId: `node/${n}`, name: `Spot ${n}`, lat: 37.2, lng: -119.6, kind: "viewpoint" });
 const ROUTE: LngLat[] = [[-119.79, 36.74], [-119.6, 37.2], [-119.12, 37.96]];
@@ -25,6 +25,19 @@ describe("shared suggestion cache", () => {
     expect(hit.raw?.createdAt).toBe(2_000);
     expect(await sharedGet("k", 1_500, 3_000)).toEqual({ raw: { value: [spot(2)], createdAt: 2_000 } });
     expect(await sharedGet("other", 5_000, 3_000)).toEqual({});
+  });
+
+  it("prunes rows too old to serve while writing, not only in the daily cron", async () => {
+    const now = SHARED_PRUNE_AGE_MS * 3;
+    await sharedPut("old", "raw", [spot(1)], 1_000);
+    const rnd = vi.spyOn(Math, "random").mockReturnValue(0);
+    try {
+      await sharedPut("new", "raw", [spot(2)], now);
+      await vi.waitFor(async () => expect(await prisma.suggestionCache.count()).toBe(1));
+    } finally {
+      rnd.mockRestore();
+    }
+    expect((await sharedGet("new", 5_000, now)).raw).toBeTruthy();
   });
 
   it("counts a read that takes too long as a miss", async () => {

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost, btnPrimary, inputClass, btnIcon } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
+import { focusLost, softDisabled } from "@/lib/focus";
 import { useWeatherLine } from "@/lib/use-weather";
 import { checkPhotoFile, PHOTO_TYPES } from "@/lib/photo-rules";
 import type { LightPref, ShotItem, Stop, Suggestion } from "@/lib/types";
@@ -20,6 +21,8 @@ type Props = {
   arrival?: Date | null;
   onClose: () => void;
   onSave: (patch: StopPatch) => Promise<void>;
+  /** A save that failed after the drawer was already closed: the editor shows the message, since the drawer cannot. */
+  onSaveError?: (message: string) => void;
   onPhotoChange: (stop: Stop) => void;
   /** Nearby alternatives for this stop; the panel is shown only when the editor provides it. */
   alternatives?: { status: SuggestionsStatus; items: Suggestion[]; error: string | null; onFind: () => void; onSwap: (s: Suggestion) => void | Promise<void>; onDismissError: () => void };
@@ -35,7 +38,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
-export function StopDrawer({ stop, plannedDate, onClose, onSave, onPhotoChange, alternatives, arrival }: Props) {
+export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, onPhotoChange, alternatives, arrival }: Props) {
   const [initial] = useState({ name: stop.name, notes: stop.notes ?? null, visited: stop.visited, lightPref: stop.lightPref, dwellMinutes: stop.dwellMinutes, shotNotes: stop.shotNotes, shotChecklist: JSON.stringify(stop.shotChecklist) });
   const [name, setName] = useState(stop.name);
   const [notes, setNotes] = useState(stop.notes ?? "");
@@ -51,6 +54,14 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onPhotoChange, 
   const [busy, setBusy] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
+  // False once this drawer is gone: a save that finishes later must not close a drawer the user has reopened.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Modal behaviour: focus moves into the drawer when it opens and goes back to whatever opened it when it closes.
   useEffect(() => {
@@ -60,6 +71,14 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onPhotoChange, 
       if (opener && opener.isConnected) opener.focus();
     };
   }, []);
+
+  // A save, upload or removal disables its controls while it runs; if that took keyboard focus with it, put it back on the
+  // dialog when the work settles, so Escape and the Tab trap work again.
+  useEffect(() => {
+    if (busy) return;
+    const el = document.activeElement;
+    if (focusLost() || !dialogRef.current?.contains(el)) dialogRef.current?.focus();
+  }, [busy]);
 
   function keepEditing() {
     setConfirmDiscard(false);
@@ -73,7 +92,7 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onPhotoChange, 
       if (dirty && !busy) {
         if (confirmDiscard) keepEditing();
         else setConfirmDiscard(true);
-      } else onClose();
+      } else if (!busy) onClose(); // a save in flight cannot be abandoned by a stray key
       return;
     }
     if (e.key !== "Tab") return;
@@ -99,6 +118,7 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onPhotoChange, 
     JSON.stringify(plain(shots)) !== initial.shotChecklist || newShot.trim() !== "";
 
   async function save() {
+    if (busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -123,12 +143,20 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onPhotoChange, 
       const nextShots = plain(pending !== "" && shots.length < MAX_SHOT_ITEMS ? [...shots, { id: -1, text: pending.slice(0, MAX_SHOT_TEXT), done: false }] : shots);
       if (JSON.stringify(nextShots) !== initial.shotChecklist) patch.shotChecklist = nextShots;
       if (Object.keys(patch).length > 0) await onSave(patch);
-      onClose();
+      if (mountedRef.current) onClose();
     } catch (e) {
-      setError(message(e, "Couldn't save the stop"));
+      if (mountedRef.current) setError(message(e, "Couldn't save the stop"));
+      else onSaveError?.(message(e, "Couldn't save the stop"));
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
+  }
+
+  /** The Close button follows the same rule as Escape: unsaved edits are asked about first. */
+  function requestClose() {
+    if (busy) return;
+    if (dirty) setConfirmDiscard(true);
+    else onClose();
   }
 
   function addShot() {
@@ -171,7 +199,7 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onPhotoChange, 
     <div ref={dialogRef} tabIndex={-1} onKeyDown={onKeyDown} role="dialog" aria-modal="true" aria-label={`Edit ${stop.name}`} className="anim-slide-in outline-none fixed inset-y-0 right-0 z-20 w-full max-w-md space-y-4 overflow-y-auto rounded-l-2xl bg-surface p-5 text-foreground shadow-2xl ring-1 ring-border">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Edit stop</h2>
-        <button type="button" onClick={onClose} className={btnGhost}>Close</button>
+        <button type="button" onClick={requestClose} className={btnGhost}>Close</button>
       </div>
       {confirmDiscard && dirty && (
         <div role="alert" className="space-y-2 rounded-lg border border-border bg-hover p-3 text-sm">
@@ -264,7 +292,7 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onPhotoChange, 
           <div className="space-y-1">
             {/* eslint-disable-next-line @next/next/no-img-element -- user uploads served by an auth-checked route */}
             <img src={stop.photoUrl} alt={`Reference for ${stop.name}`} className="max-h-48 rounded-xl" />
-            <button type="button" disabled={busy} onClick={() => void removePhoto()} className="text-sm text-danger underline">
+            <button type="button" {...softDisabled(busy)} onClick={busy ? undefined : () => void removePhoto()} className="text-sm text-danger underline aria-disabled:opacity-50">
               Remove photo
             </button>
           </div>
@@ -282,13 +310,13 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onPhotoChange, 
               if (file) void upload(file);
               e.target.value = "";
             }}
-            className="mt-1 block"
+            className="mt-1 block w-full max-w-full"
           />
         </label>
         <p className="text-xs text-muted">JPEG, PNG or WebP, up to 4 MB.</p>
       </div>
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      <button type="button" disabled={busy} onClick={() => void save()} className={btnPrimary}>
+      <button type="button" {...softDisabled(busy)} onClick={busy ? undefined : () => void save()} className={btnPrimary}>
         Save
       </button>
     </div>

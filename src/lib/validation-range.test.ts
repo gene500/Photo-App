@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dateOnlySchema, tripPatchSchema } from "./validation";
+import { dateOnlySchema, dwellMinutesSchema, formatZodError, tripPatchSchema } from "./validation";
 
 describe("date range", () => {
   it("rejects years outside 1970-2200", () => {
@@ -21,5 +21,17 @@ describe("suggestions route length", () => {
     const zig = Array.from({ length: 200 }, (_, i): [number, number] => [i % 2 ? -70 : -122, 26 + i * 0.11]);
     expect(suggestionsRequestSchema.safeParse({ coordinates: zig }).success).toBe(false);
     expect(suggestionsRequestSchema.safeParse({ coordinates: [[-122.4, 37.8], [-118.2, 34.05]] }).success).toBe(true);
+  });
+});
+
+describe("number range messages", () => {
+  it("names the limit instead of saying the value is not valid", () => {
+    const bad = tripPatchSchema.safeParse({ departAt: undefined, name: "x" });
+    expect(bad.success).toBe(true);
+    const r = dwellMinutesSchema.safeParse(9999);
+    expect(r.success).toBe(false);
+    if (!r.success) expect(formatZodError(r.error)).toBe("This field must be at most 480");
+    const low = dwellMinutesSchema.safeParse(-1);
+    if (!low.success) expect(formatZodError(low.error)).toBe("This field must be at least 0");
   });
 });

@@ -91,7 +91,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
       <aside className={`absolute inset-x-0 bottom-0 z-10 flex h-[55dvh] flex-col overflow-hidden rounded-b-none rounded-t-2xl lg:inset-x-auto lg:bottom-3 lg:left-3 lg:top-3 lg:h-auto lg:w-[23.75rem] lg:rounded-2xl ${card}`}>
         <header className="space-y-0.5 px-4 pb-2 pt-3">
           <div className="flex flex-wrap items-start justify-between gap-x-2">
-            <h1 className="min-w-0 max-w-full flex-1 basis-28 text-lg font-semibold">{trip.name}</h1>
+            <h1 className="min-w-0 max-w-full flex-1 basis-28 break-words text-lg font-semibold">{trip.name}</h1>
             {canDownload && (
               <button type="button" onClick={downloadPdf} className={`${btnGhost} shrink-0`}>Download PDF</button>
             )}
@@ -132,7 +132,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
                       {i + 1}
                     </span>
                     <div className="min-w-0 flex-1 space-y-0.5">
-                      <button type="button" onClick={() => setSelected(s.id === selected ? null : s.id)} className="block w-full text-left text-sm font-medium leading-7 hover:underline">
+                      <button type="button" onClick={() => setSelected(s.id === selected ? null : s.id)} className="block w-full break-words text-left text-sm font-medium leading-7 hover:underline">
                         {s.name}
                       </button>
                       {mounted && (
@@ -147,9 +147,9 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
                           {s.priority !== "normal" && <> · {s.priority === "must" ? "Must-have" : "High priority"}</>}
                         </p>
                       )}
-                      {s.shotNotes && <p className="whitespace-pre-wrap text-xs">{s.shotNotes}</p>}
+                      {s.shotNotes && <p className="whitespace-pre-wrap break-words text-xs">{s.shotNotes}</p>}
                       {s.shotChecklist.length > 0 && (
-                        <ul className="space-y-0.5 text-xs">
+                        <ul className="space-y-0.5 break-words text-xs">
                           {s.shotChecklist.map((item, j) => (
                             <li key={j} className={item.done ? "text-muted line-through" : ""}>
                               <span aria-hidden>{item.done ? "☑" : "☐"}</span> {item.text}

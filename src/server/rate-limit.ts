@@ -175,9 +175,22 @@ const markWarnedNoProxy = (): void => {
   (globalThis as Record<string, unknown>)[WARNED_KEY] = true;
 };
 
+/** A plain IPv4 without leading zeros per octet (07.7.7.16 and 7.7.7.16 are the same client); anything else as is. */
+function normalizeDotted(ip: string): string {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+  if (!m) return ip;
+  const o = m.slice(1).map((x) => Number.parseInt(x, 10));
+  return o.every((n) => n <= 255) ? o.join(".") : ip;
+}
+
 /** IPv4 as is. IPv6 collapses to its /64, because one customer controls a whole /64 and could otherwise rotate addresses past every per-IP limit. */
 export function ipKey(raw: string): string {
-  const ip = raw.split("%")[0]!; // drop a zone id (fe80::1%eth0)
+  let text0 = raw.trim();
+  // [::1]:443 and [::1] -> ::1; 1.2.3.4:5678 -> 1.2.3.4 (a port is never part of the client's identity).
+  const bracketed = /^\[([^\]]+)\](?::\d{1,5})?$/.exec(text0);
+  if (bracketed) text0 = bracketed[1]!;
+  else if (/^\d{1,3}(\.\d{1,3}){3}:\d{1,5}$/.test(text0)) text0 = text0.slice(0, text0.lastIndexOf(":"));
+  const ip = normalizeDotted(text0.split("%")[0]!); // drop a zone id (fe80::1%eth0)
   if (!ip.includes(":")) return ip;
   let text = ip;
   const dotted = /^(.*:)(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(text);

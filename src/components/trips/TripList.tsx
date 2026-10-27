@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
-import { api } from "@/lib/api-client";
+import { ApiError, api } from "@/lib/api-client";
 import { pruneTripCopies, removeTripCopy } from "@/lib/offline-store";
+import { focusFirst, softDisabled } from "@/lib/focus";
 import type { TripSummary } from "@/lib/types";
 
 export function TripList({ trips }: { trips: TripSummary[] }) {
@@ -16,6 +17,8 @@ export function TripList({ trips }: { trips: TripSummary[] }) {
   // A second click while a delete is in flight must not send another request (or show another confirm).
   const inFlight = useRef(new Set<string>());
   const [deleting, setDeleting] = useState<ReadonlySet<string>>(new Set());
+  // Each row's link, so focus can move to a neighbour when its row is deleted.
+  const listRef = useRef<HTMLUListElement>(null);
   const markDeleting = () => setDeleting(new Set(inFlight.current));
 
   // Offline copies of trips that no longer exist (deleted here or elsewhere) must not stay readable.
@@ -29,8 +32,16 @@ export function TripList({ trips }: { trips: TripSummary[] }) {
     inFlight.current.add(trip.id);
     markDeleting();
     try {
-      await api.deleteTrip(trip.id);
+      try {
+        await api.deleteTrip(trip.id);
+      } catch (e) {
+        if (!(e instanceof ApiError && e.status === 404)) throw e; // already deleted elsewhere: same end result
+      }
       removeTripCopy(trip.id);
+      // The row is about to go: keep keyboard focus on the next row, else the previous one, else the page heading.
+      const at = trips.findIndex((t) => t.id === trip.id);
+      const near = [trips[at + 1], trips[at - 1]].map((t) => (t ? listRef.current?.querySelector<HTMLElement>(`[data-trip-link="${t.id}"]`) : null));
+      focusFirst(...near, document.querySelector<HTMLElement>("main h1"));
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't delete the trip");
@@ -40,23 +51,23 @@ export function TripList({ trips }: { trips: TripSummary[] }) {
     }
   }
 
-  if (trips.length === 0) return <p className="text-muted">No trips yet. Create one below.</p>;
+  if (trips.length === 0) return <p className="w-fit rounded-lg bg-surface/90 px-2 py-1 text-muted">No trips yet. Create one below.</p>;
 
   return (
     <div className="space-y-3">
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
-      <ul className="space-y-3">
+      <ul ref={listRef} className="space-y-3">
         {trips.map((t) => (
           <li key={t.id} className="anim-rise lift group flex items-center rounded-2xl bg-surface shadow-sm ring-1 ring-border">
             {/* The whole row (name and details) is the link; only Delete sits outside it. */}
-            <Link href={`/trips/${t.id}`} className="flex min-w-0 flex-1 items-center gap-4 rounded-2xl px-4 py-3.5 focus-visible:outline-2 focus-visible:outline-accent-strong">
+            <Link data-trip-link={t.id} href={`/trips/${t.id}`} className="flex min-w-0 flex-1 items-center gap-4 rounded-2xl px-4 py-3.5 focus-visible:outline-2 focus-visible:outline-accent-strong">
               <DateStub iso={t.plannedDate} />
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span title={t.name} className="font-display truncate text-lg font-semibold">{t.name}</span>
                 <span className="text-sm text-muted">{t.stopCount} stops</span>
               </span>
             </Link>
-            <button type="button" disabled={deleting.has(t.id)} onClick={() => void remove(t)} aria-label={`Delete ${t.name}`} className="mr-3 min-h-9 shrink-0 rounded-lg px-3 text-sm text-muted transition hover:bg-danger-soft hover:text-danger disabled:opacity-50 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100">
+            <button type="button" {...softDisabled(deleting.has(t.id))} onClick={deleting.has(t.id) ? undefined : () => void remove(t)} aria-label={`Delete ${t.name}`} className="mr-3 min-h-9 shrink-0 rounded-lg px-3 text-sm text-muted transition hover:bg-danger-soft hover:text-danger aria-disabled:opacity-50 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100">
               Delete
             </button>
           </li>

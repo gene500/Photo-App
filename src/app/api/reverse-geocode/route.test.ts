@@ -19,4 +19,11 @@ describe("GET /api/reverse-geocode", () => {
     expect(res.status).toBe(200);
     expect(enforcePaidLimit).toHaveBeenCalledWith("reverse-geocode", "u1");
   });
+
+  it("refuses a malformed request without counting it against the limiter", async () => {
+    vi.mocked(enforcePaidLimit).mockClear();
+    const res = await GET(new Request("http://localhost/api/reverse-geocode?lat=abc&lng=2"));
+    expect(res.status).toBe(400);
+    expect(enforcePaidLimit).not.toHaveBeenCalled();
+  });
 });

@@ -44,6 +44,10 @@ export async function sharedGet(key: string, maxAgeMs: number, now = Date.now())
   }
 }
 
+/** Rows older than this are never served (service.ts: TTL plus stale grace); pruned opportunistically on writes, not only by the daily cron. */
+export const SHARED_PRUNE_AGE_MS = 6.5 * 3_600_000;
+const PRUNE_CHANCE = 0.02;
+
 export async function sharedPut(key: string, kind: SharedKind, value: Suggestion[], now = Date.now()): Promise<void> {
   if (sharedCacheDisabled()) return;
   try {
@@ -53,6 +57,8 @@ export async function sharedPut(key: string, kind: SharedKind, value: Suggestion
   } catch {
     // The next search just builds the result again.
   }
+  // User-chosen keys can add thousands of rows a day; do not wait for the daily cron to remove the stale ones.
+  if (Math.random() < PRUNE_CHANCE) void sweepSuggestionCache(SHARED_PRUNE_AGE_MS, now);
 }
 
 /** Removes entries too old to be served; run daily by the cron route. Returns how many went. */

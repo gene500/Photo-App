@@ -22,16 +22,16 @@ async function changeDate(trip: Trip, date: string) {
 describe("TripHeader date change across a DST change", () => {
   it("sends the start time at the same clock time on the new date", async () => {
     const onSave = await changeDate(base, "2026-11-06");
-    expect(onSave).toHaveBeenCalledWith({ name: "Sierra loop", plannedDate: "2026-11-06", departAt: "2026-11-06T15:00:00.000Z" }); // 07:00 PST
+    expect(onSave).toHaveBeenCalledWith({ plannedDate: "2026-11-06", departAt: "2026-11-06T15:00:00.000Z" }); // 07:00 PST
   });
 
   it("is unchanged without a DST change (whole days)", async () => {
     const onSave = await changeDate(base, "2026-10-20");
-    expect(onSave).toHaveBeenCalledWith({ name: "Sierra loop", plannedDate: "2026-10-20", departAt: "2026-10-20T14:00:00.000Z" });
+    expect(onSave).toHaveBeenCalledWith({ plannedDate: "2026-10-20", departAt: "2026-10-20T14:00:00.000Z" });
   });
 
   it("sends no departAt when none is saved", async () => {
     const onSave = await changeDate({ ...base, departAt: null }, "2026-11-06");
-    expect(onSave).toHaveBeenCalledWith({ name: "Sierra loop", plannedDate: "2026-11-06" });
+    expect(onSave).toHaveBeenCalledWith({ plannedDate: "2026-11-06" });
   });
 });

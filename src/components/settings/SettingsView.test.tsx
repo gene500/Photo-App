@@ -25,6 +25,27 @@ beforeEach(() => {
 });
 
 describe("SettingsView", () => {
+  it("Back returns to the previous page when the user came from inside the app", async () => {
+    await setup();
+    const back = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    vi.spyOn(window.history, "length", "get").mockReturnValue(3);
+    window.sessionStorage.setItem("rtpp.inapp.v1", "1");
+    await userEvent.click(screen.getByRole("link", { name: "‹ Back" }));
+    expect(back).toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  it("Back falls back to the trips list on a direct visit", async () => {
+    await setup();
+    const back = vi.spyOn(window.history, "back").mockImplementation(() => {});
+    window.sessionStorage.removeItem("rtpp.inapp.v1");
+    const link = screen.getByRole("link", { name: "‹ Back" });
+    expect(link.getAttribute("href")).toBe("/trips");
+    await userEvent.click(link);
+    expect(back).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
   it("shows the account email and a sign out button", async () => {
     await setup();
     expect(screen.getByText("me@example.com")).toBeTruthy();

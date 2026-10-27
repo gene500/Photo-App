@@ -35,6 +35,8 @@ test("find alternatives for a stop and swap one in", async ({ page }) => {
 
   // The swap is saved, not just shown.
   await page.reload();
+  // The panel reopens on the tab it was left on (My trip), so go back to the stop list.
+  await page.getByRole("tab", { name: "Stops" }).click();
   await expect(rows.first()).toContainText("Fake Viewpoint");
 
   // The undo row is client-only, so a reload retires it.

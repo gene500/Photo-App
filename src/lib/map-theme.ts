@@ -1,22 +1,22 @@
 // Recolours Mapbox's stock light-v11 basemap to the beige theme at runtime (we can't publish a custom Studio style).
-// Pure: maps a style layer to the paint properties to override. Anything unrecognised returns null and is left alone.
+// Darkened one step 2026-10-26 (A43). Pure: maps a style layer to the paint properties to override. Anything unrecognised returns null and is left alone.
 
 export const MAP_COLORS = {
-  land: "#e6e0d0",
-  water: "#c9d0cc",
-  green: "#d8d8bc",
-  greenLine: "#c9c8ab",
-  building: "#dcd3be",
-  buildingLine: "#cdc3aa",
-  road: "#fffdf8",
-  roadMajor: "#f3deb0",
-  roadTunnel: "#f0e8d4",
-  roadCasing: "#bfb399",
-  roadCasingFaint: "#d0c5ac",
-  path: "#a89a7c",
-  boundary: "#b9ad94",
-  labelText: "#5a4d34",
-  labelHalo: "#efe9dc",
+  land: "#d8d1bd",
+  water: "#b9c3be",
+  green: "#c8c9a8",
+  greenLine: "#b9b898",
+  building: "#cdc4ac",
+  buildingLine: "#bdb298",
+  road: "#f7f3e6",
+  roadMajor: "#d9a441",
+  roadTunnel: "#e3dac2",
+  roadCasing: "#ab9f84",
+  roadCasingFaint: "#bdb299",
+  path: "#978968",
+  boundary: "#a79b82",
+  labelText: "#4a3e28",
+  labelHalo: "#e2dccb",
 } as const;
 
 export type LayerPaint = { paint: Record<string, unknown>; hide?: boolean };

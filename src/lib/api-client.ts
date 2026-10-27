@@ -13,23 +13,56 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(url: string, init: RequestInit = {}): Promise<T> {
+/** How long a request may take before it is given up on, so buttons never stay disabled forever. */
+export const DEFAULT_TIMEOUT_MS = 20_000;
+/** Optimize (a big Matrix call) and photo uploads legitimately take longer. */
+export const LONG_TIMEOUT_MS = 60_000;
+
+const TIMEOUT_MESSAGE = "The server is taking too long to answer. Try again.";
+const SESSION_EXPIRED = "Your session has expired. Log in again to keep working.";
+
+/** A readable message when the server's answer carries none (an HTML or empty error page, for example). */
+function fallbackMessage(status: number): string {
+  if (status === 401) return SESSION_EXPIRED;
+  if (status === 429) return "Too many requests. Wait a moment and try again.";
+  if (status >= 500) return "The server had a problem. Try again in a moment.";
+  return `Request failed (${status})`;
+}
+
+async function request<T>(url: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
   const isForm = init.body instanceof FormData;
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      ...init,
-      headers: isForm || init.body === undefined ? init.headers : { "Content-Type": "application/json" },
-    });
-  } catch (e) {
-    // fetch rejects with a bare TypeError ("Failed to fetch") when offline or the server is unreachable.
-    if (e instanceof TypeError) throw new ApiError(0, "You're offline or the server can't be reached. Try again.");
-    throw e;
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  if (init.signal) {
+    if (init.signal.aborted) controller.abort();
+    else init.signal.addEventListener("abort", () => controller.abort(), { once: true });
   }
-  if (res.status === 204) return undefined as T;
-  const body = (await res.json().catch(() => null)) as { error?: string; reason?: string } | null;
-  if (!res.ok) throw new ApiError(res.status, body?.error ?? `Request failed (${res.status})`, body?.reason);
-  return body as T;
+  try {
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+        headers: isForm || init.body === undefined ? init.headers : { "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      if (timedOut) throw new ApiError(0, TIMEOUT_MESSAGE);
+      // fetch rejects with a bare TypeError ("Failed to fetch") when offline or the server is unreachable.
+      if (e instanceof TypeError) throw new ApiError(0, "You're offline or the server can't be reached. Try again.");
+      throw e;
+    }
+    if (res.status === 204) return undefined as T;
+    const body = (await res.json().catch(() => null)) as { error?: string; reason?: string } | null;
+    if (timedOut) throw new ApiError(0, TIMEOUT_MESSAGE);
+    if (!res.ok) throw new ApiError(res.status, (res.status === 401 ? SESSION_EXPIRED : body?.error) ?? fallbackMessage(res.status), body?.reason);
+    return body as T;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const send = (method: string, body?: unknown): RequestInit => ({
@@ -59,7 +92,7 @@ export const api = {
   uploadPhoto: (stopId: string, file: File) => {
     const form = new FormData();
     form.append("photo", file);
-    return request<{ stop: Stop }>(`/api/stops/${stopId}/photo`, { method: "POST", body: form });
+    return request<{ stop: Stop }>(`/api/stops/${stopId}/photo`, { method: "POST", body: form }, LONG_TIMEOUT_MS);
   },
   removePhoto: (stopId: string) => request<{ stop: Stop }>(`/api/stops/${stopId}/photo`, send("DELETE")),
   directions: (coordinates: LngLat[]) =>
@@ -68,10 +101,11 @@ export const api = {
     request<{ order: number[]; complete?: boolean; departAt?: string | null; misses?: { stopIndex: number; minutes: number; priority?: StopPriority }[]; dark?: { stopIndex: number; minutes: number; priority?: StopPriority }[]; polar?: number[] }>(
       "/api/optimize",
       send("POST", { coordinates, ...light }),
+      LONG_TIMEOUT_MS,
     ),
-  /** `enrich: false` answers as soon as places are found; popularity then arrives via `suggestionPopularity`. */
+  /** The server may take about a minute outside the US, so this uses the long timeout. `enrich: false` answers as soon as places are found; popularity then arrives via `suggestionPopularity`. */
   suggestions: (route: LngLat[] | { around: LngLat; radiusKm?: number }, opts: { enrich?: boolean } = {}) =>
-    request<{ suggestions: Suggestion[]; degraded?: boolean }>("/api/suggestions", send("POST", { ...(Array.isArray(route) ? { coordinates: route } : route), ...opts })),
+    request<{ suggestions: Suggestion[]; degraded?: boolean }>("/api/suggestions", send("POST", { ...(Array.isArray(route) ? { coordinates: route } : route), ...opts }), LONG_TIMEOUT_MS),
   /** Photo-count popularity for up to 10 places; a null count means unknown. */
   suggestionPopularity: (places: { lat: number; lng: number; name?: string }[]) =>
     request<{ counts: (number | null)[]; notable?: (boolean | null)[] }>("/api/suggestions/popularity", send("POST", { places })),
@@ -86,7 +120,7 @@ export const api = {
     request<{ place: Place }>(`/api/reverse-geocode?lat=${lat.toFixed(6)}&lng=${lng.toFixed(6)}`),
   /** Where a trip name points (a city, park region or state), or null. */
   locate: (q: string) =>
-    request<{ area: { lat: number; lng: number; bbox?: [number, number, number, number] } | null }>(`/api/locate?q=${encodeURIComponent(q)}`),
+    request<{ area: { lat: number; lng: number; bbox?: [number, number, number, number] } | null; landmark?: { name: string; lat: number; lng: number } | null }>(`/api/locate?q=${encodeURIComponent(q)}`),
   placePhoto: (p: { name: string; lat: number; lng: number }) =>
     request<{ photo: PlacePhoto | null }>(
       `/api/place-photo?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}&name=${encodeURIComponent(p.name)}`,

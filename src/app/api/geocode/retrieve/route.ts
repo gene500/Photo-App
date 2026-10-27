@@ -9,10 +9,12 @@ const idSchema = z.string().min(1, "id is required").max(300).regex(/^[A-Za-z0-9
 const sessionSchema = z.string().uuid("session must be a uuid");
 
 export const GET = handle(async (req: Request) => {
-  await enforcePaidLimit("geocode-retrieve", await requireUserId());
+  const userId = await requireUserId();
   const params = new URL(req.url).searchParams;
   const id = idSchema.parse(params.get("id") ?? "");
   const session = sessionSchema.parse(params.get("session") ?? "");
+  // Malformed requests are refused before they count against the paid limit.
+  await enforcePaidLimit("geocode-retrieve", userId);
   try {
     return Response.json({ place: await retrievePlace(id, session) });
   } catch (e) {

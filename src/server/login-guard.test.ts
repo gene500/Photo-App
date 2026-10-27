@@ -47,6 +47,20 @@ describe("guardAuthPost", () => {
     expect(await guardAuthPost(login("other@b.c", ip))).toBeNull();
   });
 
+  it("throttles a JSON body by its email too", async () => {
+    const ip = { "x-forwarded-for": "198.51.100.1" };
+    for (let i = 0; i < 8; i++) hit("login-email-failures", loginEmailKey("victim@b.c", "198.51.100.1"));
+    const json = (email: unknown) =>
+      new Request("http://localhost:3000/api/auth/callback/credentials", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...ip },
+        body: JSON.stringify({ email, password: "x" }),
+      });
+    expect((await guardAuthPost(json(" Victim@B.c ")))?.status).toBe(429);
+    expect(await guardAuthPost(json("other@b.c"))).toBeNull();
+    expect(await guardAuthPost(json(["victim@b.c"]))).toBeNull();
+  });
+
   it("past the global email cap refuses addresses with failures, not clean ones", async () => {
     for (let i = 0; i < 50; i++) hit("login-email-global", "victim@b.c");
     hit("login-email-failures", loginEmailKey("victim@b.c", "198.51.100.1"));
@@ -97,6 +111,13 @@ describe("sanitizeAuthRequest", () => {
     const u = new URL(out.url);
     expect(u.searchParams.has("callbackUrl")).toBe(false);
     expect(u.searchParams.get("x")).toBe("1");
+  });
+
+  it.each(["x", "//evil.com", "/\\evil.com"])("drops the callbackUrl %j, which NextAuth cannot parse", async (value) => {
+    const url = new URL("http://localhost:3000/api/auth/callback/credentials");
+    url.searchParams.set("callbackUrl", value);
+    const out = await sanitizeAuthRequest(new Request(url));
+    expect(new URL(out.url).searchParams.has("callbackUrl")).toBe(false);
   });
 
   it("keeps a parseable callbackUrl", async () => {

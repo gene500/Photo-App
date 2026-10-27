@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
 import { useState } from "react";
+import { softDisabled } from "@/lib/focus";
 import { enableOfflineSaving } from "@/lib/offline-store";
 import { btnPrimary, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { GoogleButton } from "./GoogleButton";
+import { signInWithCredentials } from "./credentials-login";
 
 
 /** `formToken` is signed by the server when the page renders (see signup-guard.ts); `website` is a honeypot. */
@@ -20,12 +21,14 @@ export function SignupForm({ formToken, google = false }: { formToken?: string; 
   const [pending, setPending] = useState(false);
 
   async function submit() {
+    if (pending) return;
     setPending(true);
     setError(null);
     try {
+      if (!navigator.onLine) throw new Error("You're offline. Connect to the internet to sign up.");
       await api.signup(email, password, { formToken, website });
-      const res = await signIn("credentials", { email, password, redirect: false });
-      if (!res || res.error) throw new Error("Account created, but signing in failed. Try logging in.");
+      const res = await signInWithCredentials(email, password);
+      if (!res.ok) throw new Error("Account created, but signing in failed. Try logging in.");
       enableOfflineSaving();
       router.push("/trips");
       router.refresh();
@@ -56,7 +59,7 @@ export function SignupForm({ formToken, google = false }: { formToken?: string; 
         </label>
       </div>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-      <button type="submit" disabled={pending} className={`${btnPrimary} w-full`}>
+      <button type="submit" {...softDisabled(pending)} className={`${btnPrimary} w-full`}>
         Create account
       </button>
       <p className="text-sm text-muted">

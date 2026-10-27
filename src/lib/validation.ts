@@ -222,6 +222,8 @@ export function formatZodError(error: z.ZodError): string {
   const chars = (n: unknown) => `${n} character${n === 1 ? "" : "s"}`;
   if (issue.code === "too_big" && issue.origin === "string") return `${label} must be at most ${chars(issue.maximum)}`;
   if (issue.code === "too_small" && issue.origin === "string") return `${label} must be at least ${chars(issue.minimum)}`;
+  if (issue.code === "too_small" && issue.origin === "number") return `${label} must be at least ${issue.minimum}`;
+  if (issue.code === "too_big" && issue.origin === "number") return `${label} must be at most ${issue.maximum}`;
   return `${label} is not valid`;
 }
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { softDisabled } from "@/lib/focus";
 
 type Props = {
   /** The StartTimeControl element: an input the optimizer reads, so it is shown before and after Optimize. */
@@ -27,9 +28,9 @@ export function TripPlan({ startTime, optimize, routeStatus, swapNote, list }: P
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <button
           type="button"
-          onClick={optimize.onOptimize}
-          disabled={optimize.disabled}
-          className="inline-flex min-h-9 items-center rounded-full bg-ink px-4 text-sm font-medium text-ink-foreground transition hover:opacity-85 disabled:opacity-40"
+          {...softDisabled(optimize.disabled)}
+          onClick={optimize.disabled ? undefined : optimize.onOptimize}
+          className="inline-flex min-h-9 items-center rounded-full bg-ink px-4 text-sm font-medium text-ink-foreground transition hover:opacity-85 aria-disabled:opacity-40"
         >
           {optimize.busy ? "Optimizing…" : "Optimize route"}
         </button>
@@ -47,15 +48,21 @@ export function TripPlan({ startTime, optimize, routeStatus, swapNote, list }: P
         {optimize.onUndo && (
           <button
             type="button"
-            onClick={optimize.onUndo}
-            disabled={optimize.undoing}
+            {...softDisabled(optimize.undoing)}
+            onClick={optimize.undoing ? undefined : optimize.onUndo}
             className="inline-flex min-h-9 items-center rounded-full bg-hover px-4 text-sm font-medium text-foreground ring-1 ring-border transition active:scale-[0.97] hover:bg-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
           >
             Undo
           </button>
         )}
-        {/* Screen-reader only: always mounted so a text change is announced; nothing shows under the button. */}
-        <p role="status" data-testid="optimize-status" className="sr-only">{optimize.status}</p>
+        {/* The one live region (always mounted so a text change is announced once). Empty: screen-reader only. With a result: an inline notice on its own line under the buttons, so it is visible to everyone and covers nothing. */}
+        <p
+          role="status"
+          data-testid="optimize-status"
+          className={optimize.status ? "order-last basis-full rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent-foreground ring-1 ring-border" : "sr-only"}
+        >
+          {optimize.status}
+        </p>
         <p data-testid="route-status" className="text-sm font-medium text-foreground">{routeStatus}</p>
       </div>
       {swapNote}

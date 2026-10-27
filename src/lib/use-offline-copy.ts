@@ -11,17 +11,26 @@ export function useOfflineCopy(trip: Trip, stops: Stop[], userId: string | undef
   useEffect(() => {
     if (!userId) return;
     if (offlineSavingDisabled()) return;
-    const t = setTimeout(() => {
+    let t: ReturnType<typeof setTimeout>;
+    const run = () => {
       if (offlineSavingDisabled()) return;
       if (typeof navigator !== "undefined" && navigator.onLine === false) return;
       // The owner mark is gone when copies were cleared (Settings in another tab): claim it again. A sign-out
       // elsewhere switches saving off instead (checked above), so it never gets here.
       claimOwner(userId);
       saveTripCopy({ ...trip, stops });
-    }, delayMs);
+    };
+    t = setTimeout(run, delayMs);
+    // A save skipped while offline is retried when the connection returns (a quick disconnect must not leave the copy stale).
+    const onOnline = () => {
+      clearTimeout(t);
+      t = setTimeout(run, delayMs);
+    };
+    window.addEventListener("online", onOnline);
     const stopListening = onOfflineSavingDisabled(() => clearTimeout(t)); // signing out cancels the pending save
     return () => {
       clearTimeout(t);
+      window.removeEventListener("online", onOnline);
       stopListening();
     };
   }, [trip, stops, userId, delayMs]);

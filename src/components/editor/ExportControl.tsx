@@ -9,7 +9,7 @@ import { useItineraryDownload } from "@/components/itinerary/use-itinerary-downl
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { buildItinerary, itineraryFileName, type ItineraryStopSource } from "@/lib/itinerary";
 import { createItineraryPdf, loadWeatherLines, mapTokenFromEnv, saveBlob } from "@/lib/itinerary-download";
-import { usePopover } from "./use-popover";
+import { SHORT_SCREEN_POPOVER, usePopover } from "./use-popover";
 
 type Props = {
   tripName: string;
@@ -79,7 +79,7 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
       </button>
       <DownloadDialog download={download} />
       {open && enough && (
-        <div ref={panelRef} id={panelId} role="group" aria-label="Export trip" className={`absolute right-0 top-full z-20 mt-1 w-56 max-w-full p-1 ${card}`}>
+        <div ref={panelRef} id={panelId} role="group" aria-label="Export trip" className={`absolute right-0 top-full z-20 mt-1 w-56 max-w-full p-1 ${SHORT_SCREEN_POPOVER} ${card}`}>
           {pdf && (
             <button type="button" onClick={downloadPdf} className={item}>Download PDF</button>
           )}

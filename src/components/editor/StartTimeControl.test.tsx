@@ -96,3 +96,14 @@ describe("StartTimeControl reset", () => {
     expect((screen.getByRole("button", { name: "Reset to now" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe("StartTimeControl layout", () => {
+  it("keeps room for Reset to now while it is hidden, so it appearing cannot shift Optimize mid-click", () => {
+    const { rerender } = render(<StartTimeControl plannedDate="2026-07-01" departAt={null} onChange={() => {}} onReset={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Reset to now" })).toBeNull();
+    expect(screen.getByTestId("reset-placeholder").className).toContain("invisible");
+    rerender(<StartTimeControl plannedDate="2026-07-01" departAt={new Date(2026, 6, 1, 7, 0).toISOString()} defaultDepartAt={new Date(2026, 6, 1, 9, 0).toISOString()} onChange={() => {}} onReset={() => {}} />);
+    expect(screen.getByRole("button", { name: "Reset to now" })).toBeTruthy();
+    expect(screen.queryByTestId("reset-placeholder")).toBeNull();
+  });
+});

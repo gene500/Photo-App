@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, type MouseEvent, type ReactNode } from "react";
+import { IN_APP_KEY } from "@/components/InAppNavMarker";
 import { LegalLinks } from "@/components/legal/LegalPage";
 import { ChangePasswordButton, DeleteAccountButton, SignOutButton, SignOutEverywhereButton } from "@/components/SignOutButton";
 import { btnSecondary, card, inputClass } from "@/components/ui/styles";
@@ -48,6 +49,18 @@ function Segmented<K extends keyof Settings>({ legend, hint, name, value, option
   );
 }
 
+/** Back goes to the page the user came from (the trip, tab and all) when the tab has been inside the app; a direct visit falls back to the trips list. */
+function goBack(e: MouseEvent<HTMLAnchorElement>) {
+  try {
+    if (window.history.length > 1 && window.sessionStorage.getItem(IN_APP_KEY) === "1") {
+      e.preventDefault();
+      window.history.back();
+    }
+  } catch {
+    // Link's own href takes over.
+  }
+}
+
 export function SettingsView({ email, hasPassword = true }: { email: string | null; hasPassword?: boolean }) {
   const { settings, update, reset } = useSettings();
   const dwellId = useId();
@@ -65,7 +78,7 @@ export function SettingsView({ email, hasPassword = true }: { email: string | nu
     <main className="mx-auto max-w-2xl space-y-5 px-4 py-8">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Settings</h1>
-        <Link href="/trips" className="inline-flex min-h-9 items-center rounded-lg px-2 text-sm text-muted hover:bg-hover hover:text-foreground">‹ Trips</Link>
+        <Link href="/trips" onClick={goBack} className="inline-flex min-h-9 items-center rounded-lg px-2 text-sm text-muted hover:bg-hover hover:text-foreground">‹ Back</Link>
       </div>
       <p className="text-sm text-muted">These are saved on this device only.</p>
 
@@ -170,7 +183,7 @@ export function SettingsView({ email, hasPassword = true }: { email: string | nu
       </Section>
 
       <Section title="Account">
-        <p className="text-sm">Signed in as <span className="font-medium">{email ?? "your account"}</span></p>
+        <p className="text-sm">Signed in as <span className="break-all font-medium">{email ?? "your account"}</span></p>
         <div><SignOutButton className={btnSecondary} /></div>
         <div>
           <SignOutEverywhereButton className={btnSecondary} />

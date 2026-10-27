@@ -13,6 +13,10 @@ describe("trips data access", () => {
     expect(trip).toEqual({ id: expect.any(String), ...sampleTripInput, departAt: null, shareToken: null, routeOptimizedFor: null });
   });
 
+  it("answers 401 (not a raw database error) when the account no longer exists", async () => {
+    await expect(createTrip("deleted-user-id", sampleTripInput)).rejects.toMatchObject({ name: "HttpError", status: 401 });
+  });
+
   it("sets and clears departAt as an ISO string", async () => {
     const user = await createTestUser();
     const trip = await createTrip(user.id, sampleTripInput);

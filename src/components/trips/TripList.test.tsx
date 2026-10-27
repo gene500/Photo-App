@@ -7,8 +7,8 @@ import { listTripCopies, saveTripCopy } from "@/lib/offline-store";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push: vi.fn() }) }));
-vi.mock("@/lib/api-client", () => ({ api: { deleteTrip: vi.fn() } }));
-import { api } from "@/lib/api-client";
+vi.mock("@/lib/api-client", async (orig) => ({ ...(await orig<typeof import("@/lib/api-client")>()), api: { deleteTrip: vi.fn() } }));
+import { ApiError, api } from "@/lib/api-client";
 import type { TripSummary } from "@/lib/types";
 import { TripList } from "./TripList";
 
@@ -34,6 +34,18 @@ describe("TripList", () => {
     expect(listTripCopies()).toEqual([]);
   });
 
+  it("treats a 404 (already deleted elsewhere) as success: removes the copy and refreshes", async () => {
+    refresh.mockClear();
+    vi.mocked(api.deleteTrip).mockReset().mockRejectedValue(new ApiError(404, "Trip not found"));
+    saveTripCopy(copy("t1"));
+    render(<TripList trips={[trip]} />);
+    await userEvent.click(screen.getByRole("button", { name: "Delete Sierra loop" }));
+    await confirmDelete();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(listTripCopies()).toEqual([]);
+    expect(refresh).toHaveBeenCalled();
+  });
+
   it("sends one delete (and asks once) when Delete is clicked twice while it is in flight", async () => {
     let finish!: () => void;
     vi.mocked(api.deleteTrip).mockReset().mockReturnValue(new Promise<void>((r) => { finish = r; }));
@@ -47,9 +59,9 @@ describe("TripList", () => {
     await userEvent.click(button);
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(api.deleteTrip).toHaveBeenCalledTimes(1);
-    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect((button as HTMLButtonElement).getAttribute("aria-disabled")).toBe("true");
     finish();
-    await vi.waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+    await vi.waitFor(() => expect((button as HTMLButtonElement).getAttribute("aria-disabled")).toBeNull());
   });
 
   it("prunes offline copies of trips the server no longer lists, even when the list is empty", () => {
@@ -84,5 +96,31 @@ describe("TripList", () => {
     await confirmDelete();
     expect(api.deleteTrip).toHaveBeenCalledWith("t1");
     expect(refresh).toHaveBeenCalled();
+  });
+
+  describe("keyboard focus after a confirmed delete", () => {
+    const trips = ["a", "b", "c"].map((id) => ({ ...trip, id, name: `Trip ${id}` }));
+    async function remove(list: TripSummary[], name: string) {
+      vi.mocked(api.deleteTrip).mockReset().mockResolvedValue(undefined);
+      render(<main><h1 tabIndex={-1}>Your trips</h1><TripList trips={list} /></main>);
+      await userEvent.click(screen.getByRole("button", { name: `Delete ${name}` }));
+      await confirmDelete();
+      await vi.waitFor(() => expect(api.deleteTrip).toHaveBeenCalled());
+    }
+
+    it("moves to the next row's link", async () => {
+      await remove(trips, "Trip a");
+      expect(document.activeElement).toBe(screen.getByRole("link", { name: /Trip b/ }));
+    });
+
+    it("moves to the previous row's link when the last row goes", async () => {
+      await remove(trips, "Trip c");
+      expect(document.activeElement).toBe(screen.getByRole("link", { name: /Trip b/ }));
+    });
+
+    it("moves to the page heading when the only row goes", async () => {
+      await remove([trips[0]!], "Trip a");
+      expect(document.activeElement).toBe(screen.getByRole("heading", { name: "Your trips" }));
+    });
   });
 });

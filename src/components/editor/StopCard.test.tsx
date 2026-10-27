@@ -59,4 +59,12 @@ describe("StopCard", () => {
     await userEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("closes on Escape", async () => {
+    const onClose = vi.fn();
+    render(<StopCard {...base} onClose={onClose} arrival={null} />);
+    screen.getByRole("checkbox", { name: "Visited" }).focus();
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

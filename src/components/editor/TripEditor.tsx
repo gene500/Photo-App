@@ -193,8 +193,6 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const [adding, setAdding] = useState(false);
   const [cardId, setCardId] = useState<string | null>(null);
   const [drawerId, setDrawerId] = useState<string | null>(null);
-  /** Stops whose hike line stays on the map (the "Show hike" toggle on their My trip row); the selected stop's hike always shows. */
-  const [hikeShownIds, setHikeShownIds] = useState<ReadonlySet<string>>(new Set());
   const [flyTo, setFlyTo] = useState<(LatLng & { nonce: number; area?: { bbox?: [number, number, number, number] } }) | null>(null);
   // Tagged with the waypoints they were found for, like routeResult: a change of stops
   // makes them stale, so they are simply not shown (and a late response is dropped).
@@ -725,9 +723,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const anchor = Math.max(done - 1, 0);
       const head = before.slice(0, anchor);
       const tail = before.slice(anchor);
-      // Leaving the last visited stop: when the current route says the owner got there, plus the time spent there.
+      // The re-plan starts at the last visited stop: when the current route says the owner got there. The optimizer adds that stop's dwell itself.
       const anchorArrival = done > 1 ? arrivals[anchor] : null;
-      const planFrom = anchorArrival ? new Date(anchorArrival.getTime() + before[anchor].dwellMinutes * 60_000).toISOString() : (previousDepartAt ?? (done > 0 ? departAt : null));
+      const planFrom = anchorArrival ? anchorArrival.toISOString() : (previousDepartAt ?? (done > 0 ? departAt : null));
       if (done >= before.length) {
         setOptimizeNote({ moveAt: null, notes: ["Every stop is already visited, so there is nothing left to reorder"], idsKey: startKey });
         return;
@@ -761,15 +759,16 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const misses = missed.map((m) => m.name);
       const mustMisses = missed.filter((m) => m.must).map((m) => m.name);
       const missNote = misses.length
-        ? `Can't fit ${misses.length} ${misses.length === 1 ? "stop in its light" : "stops in their light"}: ${misses.join(", ")}.` +
-          (mustMisses.length ? ` ${mustMisses.join(", ")} ${mustMisses.length === 1 ? "is a must-have" : "are must-haves"}: try fewer stops or a different order.` : "")
+        ? `Can't fit ${misses.length} ${misses.length === 1 ? "stop in its light" : "stops in their light"}: ${misses.join(", ")}.`
         : null;
+      // Its own note (joined with ". " like the others) so the long list of names above can be collapsed on its own.
+      const mustNote = mustMisses.length ? `${mustMisses.join(", ")} ${mustMisses.length === 1 ? "is a must-have" : "are must-haves"}: try fewer stops or a different order.` : null;
       // Stops visited wholly in the dark (leaving out the ones already reported for their light), and stops with no sunrise or sunset that day.
       const darkNames = (result.dark ?? []).flatMap((m) => (tail[m.stopIndex] && !tail[m.stopIndex].visited && !misses.includes(tail[m.stopIndex].name) ? [tail[m.stopIndex].name] : []));
       const darkNote = darkNames.length ? `Can't fit ${darkNames.length} ${darkNames.length === 1 ? "stop" : "stops"} in daylight: ${darkNames.join(", ")}` : null;
       const polarNames = (result.polar ?? []).flatMap((i) => (tail[i] ? [tail[i].name] : []));
       const polarNote = polarNames.length ? `No sunrise or sunset that day at ${polarNames.join(", ")}, so no daylight rule applies there` : null;
-      const notes = [missNote, darkNote, polarNote];
+      const notes = [missNote, mustNote, darkNote, polarNote];
       // null means the departure was not searched (no light preference and no dark visit): leave it alone.
       // The optimizer's pick is kept on the planned solar day too (at the first stop of the new order, as the server checks it): the trips API refuses a start time on a neighbouring day.
       // With visited stops the trip has already started, so its start time is left alone.
@@ -1139,7 +1138,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const moveText = optimizeNote?.moveAt && sameInstant(trip.departAt, optimizeNote.moveAt)
     ? `Start time moved to ${formatClock(new Date(optimizeNote.moveAt), undefined, settings.timeFormat)} so stops land in good light`
     : null;
-  const optimizeStatus = optimizeNote?.idsKey === idsKey ? joinNotes([moveText, ...optimizeNote.notes]) : "";
+  const optimizeParts = optimizeNote?.idsKey === idsKey ? [moveText, ...optimizeNote.notes].filter((t): t is string => !!t) : [];
+  const optimizeStatus = joinNotes(optimizeParts);
 
   const swapped = swapNote ? stops.find((s) => s.id === swapNote.stopId) : undefined;
   const canUndoSwap = swapNote !== null && swapped !== undefined && swapped.lat === swapNote.applied.lat && swapped.lng === swapNote.applied.lng &&
@@ -1192,12 +1192,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     </div>
   );
 
-  // Hike lines on the map: the selected stop's, plus every stop toggled on. A separate layer, never part of the route.
-  const hikeStops = useMemo(() => stops.filter((s) => s.id === cardId || hikeShownIds.has(s.id)), [stops, cardId, hikeShownIds]);
+  // Hike lines on the map: every stop's when the Show hikes setting is on (the default), else only the selected stop's. A separate layer, never part of the route.
+  const hikeStops = useMemo(() => stops.filter((s) => settings.showHikes || s.id === cardId), [stops, cardId, settings.showHikes]);
   const hikePoints = useMemo(() => hikeStops.map((s) => ({ id: s.id, lat: s.lat, lng: s.lng })), [hikeStops]);
   const hikeByStop = useHikes(hikePoints);
   const mapHikes = useMemo(() => hikeStops.flatMap((s) => { const h = hikeByStop.get(s.id); return h ? [{ id: s.id, geometry: h.geometry }] : []; }), [hikeStops, hikeByStop]);
-  const toggleHike = useCallback((id: string) => setHikeShownIds((prev) => { const next = new Set(prev); if (!next.delete(id)) next.add(id); return next; }), []);
 
   return (
     <main id="main-content" tabIndex={-1} className="relative h-[calc(100dvh-3rem)] overflow-hidden outline-none">
@@ -1266,7 +1265,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       )}
 
       <StopsPanel
-        header={<TripHeader trip={trip} onSave={saveTrip} onShareChange={(shareToken) => void tracked(async () => setTrip((t) => ({ ...t, shareToken })))} exportData={{
+        header={<TripHeader trip={trip} stopCount={stops.length} onSave={saveTrip} onShareChange={(shareToken) => void tracked(async () => setTrip((t) => ({ ...t, shareToken })))} exportData={{
           stops,
           route: activeRoute?.geometry ?? null,
           pdf: {
@@ -1283,7 +1282,6 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         }
         summary={
           <>
-            <p className="text-sm text-muted">{stops.length} {stops.length === 1 ? "stop" : "stops"}</p>
             <ErrorBanner
               // The route is not drawn before Optimize, so a failure to fetch it is not worth a banner until then.
               message={current?.dismissed || !(optimized || optimizing) || activeRouteError === stopsError ? null : activeRouteError}
@@ -1313,6 +1311,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
               undoing,
               disabled: stops.length < 2 || optimizing || optimizeWaiting,
               status: optimizeStatus,
+              statusParts: optimizeParts,
               reason: stops.length < 2 ? "Optimize route needs 2 stops" : undefined,
             }}
             routeStatus={
@@ -1338,8 +1337,6 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                 onToggleVisited={(id, visited) => void toggleVisited(id, visited)}
                 onPriorityChange={(id, priority) => patchStop(id, { priority })}
                 onSelect={openFromList}
-                hikeShownIds={hikeShownIds}
-                onToggleHike={toggleHike}
               />
             }
           />

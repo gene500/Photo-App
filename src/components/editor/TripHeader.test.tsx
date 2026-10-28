@@ -17,6 +17,11 @@ describe("TripHeader", () => {
     expect(screen.getByText("Planned for 2026-07-01")).toBeTruthy();
   });
 
+  it("shows the date and the stop count on one line", () => {
+    render(<TripHeader trip={trip} stopCount={9} onSave={vi.fn()} />);
+    expect(screen.getByText("Planned for 2026-07-01").parentElement?.textContent).toBe("Planned for 2026-07-01 · 9 stops");
+  });
+
   it("edits and saves name and date", async () => {
     const onSave = vi.fn(async () => {});
     render(<TripHeader trip={trip} onSave={onSave} />);

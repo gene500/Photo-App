@@ -77,8 +77,8 @@ export function StartTimeControl({ plannedDate, departAt, defaultDepartAt = null
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
-      <label htmlFor={id}>Start time</label>
+    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-muted">
+      <label htmlFor={id} className="whitespace-nowrap">Start time</label>
       <input
         id={id}
         type="time"
@@ -88,18 +88,22 @@ export function StartTimeControl({ plannedDate, departAt, defaultDepartAt = null
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => void commit()}
         onKeyDown={(e) => { if (e.key === "Enter") void commit(); }}
-        className={`${inputClass} !mt-0 w-auto min-w-0`}
+        className={`${inputClass} !mt-0 !w-auto min-w-0 !px-2 !py-1`}
       />
       {onReset && (departAt && saved !== toTimeValue(defaultDepartAt) ? (
-        <button type="button" disabled={disabled} onClick={onReset} className={btnGhost}>
+        <button type="button" disabled={disabled} onClick={onReset} className={`${btnGhost} whitespace-nowrap !px-1`}>
           Reset to now
         </button>
       ) : (
         // Holds the button's room while it is hidden, so it appearing (right after a start time is saved) cannot move
-        // Optimize down between a press and its release, which loses the click.
-        <span aria-hidden data-testid="reset-placeholder" className={`${btnGhost} invisible`}>Reset to now</span>
+        // Optimize down between a press and its release, which loses the click. The "Now" hint sits in that same room,
+        // so the row stays one line where it fits instead of the hint wrapping below.
+        <span className="relative inline-flex">
+          <span aria-hidden data-testid="reset-placeholder" className={`${btnGhost} invisible whitespace-nowrap !px-1`}>Reset to now</span>
+          {!departAt && <span id={`${id}-hint`} className="absolute inset-0 flex items-center px-2 text-xs">Now</span>}
+        </span>
       ))}
-      {!departAt && <span id={`${id}-hint`} className="text-xs">Now</span>}
+      {!departAt && !onReset && <span id={`${id}-hint`} className="text-xs">Now</span>}
     </div>
   );
 }

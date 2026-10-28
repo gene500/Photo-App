@@ -27,11 +27,6 @@ export function formatHikeDistance(meters: number, unit: DistanceUnit = "km"): s
   return `${(Math.round(meters / 100) / 10).toFixed(1)} km`;
 }
 
-/** The attribution to print for a source (decided here, not taken from the server's text). */
-export function hikeAttribution(source: Hike["source"]): string {
-  return source === "nps" ? NPS_ATTRIBUTION : OSM_ATTRIBUTION;
-}
-
 /** True for a well-formed hike from the server (a wrong shape is treated as "no hike"). */
 export function isHike(v: unknown): v is Hike {
   const h = v as Hike | null;

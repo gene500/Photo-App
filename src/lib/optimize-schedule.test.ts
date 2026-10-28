@@ -412,3 +412,33 @@ describe("optimizeScheduleAsync (shared-server solver)", () => {
     expect(worst).toBeLessThan(250);
   });
 });
+
+describe("light windows across solar midnight", () => {
+  const winsOn = (pref: LightPref, date: string) => lightWindows(pref, getSunWindows(base.lat, base.lng, date)).map(([a, b]) => [a.getTime(), b.getTime()] as [number, number]);
+  const missFrom = (arrival: number, wins: [number, number][], dwell: number) => Math.min(...wins.map(([a, b]) => (arrival + dwell * 60_000 < a ? a - arrival - dwell * 60_000 : Math.max(0, arrival - b)))) / 60_000;
+  const run = (pref: LightPref, arrival: Date) =>
+    optimizeSchedule({
+      durations: flat(2, 600),
+      stops: [stop("any", 0), stop(pref, 30)],
+      plannedDate: DATE,
+      defaultDeparture: new Date(arrival.getTime() - 600_000),
+      fixedDeparture: true,
+    });
+
+  it("measures a sunrise miss to the nearest sunrise, which can be the next day's", () => {
+    const arrival = new Date("2026-07-02T05:00:00Z");
+    const r = run("sunrise", arrival);
+    const expected = missFrom(arrival.getTime(), [...winsOn("sunrise", "2026-07-01"), ...winsOn("sunrise", "2026-07-02")], 30);
+    expect(expected).toBeLessThan(500);
+    expect(r.misses).toHaveLength(1);
+    expect(r.misses[0]!.minutes).toBeCloseTo(expected, 5);
+  });
+
+  it("measures a sunset miss to the previous evening's sunset just after solar midnight", () => {
+    const arrival = new Date("2026-07-02T08:30:00Z");
+    const r = run("sunset", arrival);
+    const expected = missFrom(arrival.getTime(), [...winsOn("sunset", "2026-07-01"), ...winsOn("sunset", "2026-07-02")], 30);
+    expect(expected).toBeLessThan(400);
+    expect(r.misses[0]!.minutes).toBeCloseTo(expected, 5);
+  });
+});

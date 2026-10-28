@@ -20,6 +20,8 @@ export default defineConfig({
       SIGNUP_MIN_SECONDS: "0",
       TRUST_PROXY_HEADERS: "1", // tests simulate client addresses with x-forwarded-for; clientIp has its own tests for every trust mode
     },
+    // The 5 s default fails slow-but-correct tests (jsdom editor, bcrypt) on a busy machine or a slow CI runner.
+    testTimeout: 20_000,
     fileParallelism: false, // DB-backed tests share one SQLite file
     // The tdd-guard reporter is a local dev aid; it is skipped on CI, where it only adds a path that can fail to write.
     reporters: process.env.CI

@@ -261,14 +261,19 @@ body {
   .zoom-fit-fake { top: calc(4rem + 10px); }
 }
 
-/* Offline map preview: the water-flow highlight sweeping the route after Optimize (the real map animates a line-gradient). Lengths are in pathLength units (100 = whole route). */
+/* Offline map preview: the route drawn in along its length with the water-flow highlight as its head after Optimize (the real map trims the line and animates a line-gradient). Lengths are in pathLength units (100 = whole route). Keep the durations in step with FLOW_SWEEP_MS / FLOW_TOTAL_MS in route-flow.ts. */
 @keyframes route-flow-sweep {
   from { stroke-dashoffset: 14; opacity: 1; }
-  85% { stroke-dashoffset: -100; opacity: 1; }
+  91% { stroke-dashoffset: -100; opacity: 1; }
   to { stroke-dashoffset: -100; opacity: 0; }
 }
-.route-flow-line { stroke-dasharray: 14 200; animation: route-flow-sweep 2.9s ease-in-out forwards; }
-@media (prefers-reduced-motion: reduce) { .route-flow-line { animation: none; display: none; } }
+@keyframes route-reveal-sweep {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+.route-flow-line { stroke-dasharray: 14 200; animation: route-flow-sweep 5.5s ease-in-out forwards; }
+.route-reveal { stroke-dasharray: 100 100; animation: route-reveal-sweep 5s ease-in-out both; }
+@media (prefers-reduced-motion: reduce) { .route-flow-line { animation: none; display: none; } .route-reveal { animation: none; stroke-dasharray: none; } }
 
 /* Print: always dark ink on white, whatever the theme (a dark-theme print would otherwise use the dark background and pale text). */
 @media print {

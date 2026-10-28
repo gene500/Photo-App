@@ -58,7 +58,10 @@ function exact(d: number[][]): number[] {
   return [0, ...order.reverse()];
 }
 
-/** Nearest neighbour, then 2-opt and or-opt passes until nothing improves. */
+/** Perturbed restarts after the first descent: a fixed count, so the answer is the same on every machine. */
+const restartsFor = (n: number) => Math.max(8, Math.round(160 / n));
+
+/** Nearest neighbour and a local search, then perturbed restarts of the best order (seeded, so deterministic). */
 function heuristic(d: number[][]): number[] {
   const n = d.length;
   const order = [0];
@@ -71,6 +74,36 @@ function heuristic(d: number[][]): number[] {
     left.delete(next);
   }
 
+  let best = descend(d, order);
+  let bestCost = pathCost(d, best);
+  let state = 0x2545f491;
+  const rand = (max: number) => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return Math.floor((state / 4294967296) * max);
+  };
+  for (let r = 0; r < restartsFor(n); r++) {
+    const start = best.slice();
+    // A few random swaps, or a reversed random segment; stop 0 never moves.
+    for (let k = 0; k < 2 + (r % 3); k++) {
+      const i = 1 + rand(n - 1);
+      const j = 1 + rand(n - 1);
+      if (r % 2 === 0) [start[i], start[j]] = [start[j]!, start[i]!];
+      else start.splice(Math.min(i, j), Math.abs(i - j) + 1, ...start.slice(Math.min(i, j), Math.max(i, j) + 1).reverse());
+    }
+    const cand = descend(d, start);
+    const c = pathCost(d, cand);
+    if (c < bestCost - 1e-9) {
+      best = cand;
+      bestCost = c;
+    }
+  }
+  return best;
+}
+
+/** 2-opt and or-opt passes on a copy of `start` until nothing improves. */
+function descend(d: number[][], start: number[]): number[] {
+  const n = d.length;
+  const order = start.slice();
   let cost = pathCost(d, order);
   let improved = true;
   while (improved) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  ROUTE_WIDTH_STOPS, SIMPLIFY_MAX_ZOOM, casingLineWidth, routeLineWidth, simplifyBucket, simplifyRoute, simplifyToleranceDeg,
+  ROUTE_WIDTH_STOPS, SIMPLIFY_MAX_ZOOM, casingLineWidth, firstLabelLayerId, routeLineWidth, simplifyBucket, simplifyRoute, simplifyToleranceDeg,
 } from "./route-style";
 
 function checkInterpolate(expr: unknown[]) {
@@ -68,5 +68,16 @@ describe("simplifyRoute", () => {
       }
       expect(best).toBeLessThanOrEqual(tol + 1e-12);
     }
+  });
+});
+
+describe("firstLabelLayerId", () => {
+  it("picks the first symbol layer so the route sits under every label", () => {
+    const layers = [{ id: "land", type: "background" }, { id: "road", type: "line" }, { id: "road-label", type: "symbol" }, { id: "poi", type: "symbol" }];
+    expect(firstLabelLayerId(layers)).toBe("road-label");
+  });
+  it("is undefined when there is no symbol layer or no style yet", () => {
+    expect(firstLabelLayerId([{ id: "road", type: "line" }])).toBeUndefined();
+    expect(firstLabelLayerId(undefined)).toBeUndefined();
   });
 });

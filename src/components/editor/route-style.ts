@@ -51,3 +51,11 @@ export function simplifyRoute(points: LngLat[], toleranceDeg: number): LngLat[] 
   }
   return points.filter((_, i) => keep[i]);
 }
+
+/**
+ * The layer id to draw the route (and its casing) under: the first text/icon layer of the base style, so road names, place
+ * names and shields stay readable on top of the line. `undefined` (draw on top) when the style has no symbol layer.
+ */
+export function firstLabelLayerId(layers: readonly { id: string; type: string }[] | undefined): string | undefined {
+  return layers?.find((l) => l.type === "symbol")?.id;
+}

@@ -39,6 +39,7 @@ export function isExactOptimization(stopCount: number, usesLight: boolean): bool
 }
 
 type Interval = [number, number];
+type SunAround = { light: Interval[]; daylight: Interval[]; hasLight: boolean; hasDaylight: boolean };
 
 /**
  * Pick the visiting order (stop 0 stays first) and the departure time that minimise
@@ -134,10 +135,11 @@ export function optimizeScheduleExact(input: ScheduleInput): Schedule {
 
 class Evaluator {
   readonly candidates: number[];
+  private readonly aroundCache: Map<number, SunAround>[];
   private readonly windowCache: Map<number, { light: Interval[]; daylight: Interval | null }>[];
   /** The last day looked up per stop, which nearly every following lookup repeats. */
   private readonly lastDay: number[];
-  private readonly lastSun: ({ light: Interval[]; daylight: Interval | null } | undefined)[];
+  private readonly lastSun: (SunAround | undefined)[];
   private readonly constrained: boolean[];
   private readonly weight: number[];
   /** Weight of a minute in the dark per stop: its priority weight, none under the time focus (darkness is then only reported). */
@@ -158,6 +160,7 @@ class Evaluator {
       if (t !== defaultMs && t !== preferredMs) this.candidates.push(t);
     }
     this.windowCache = stops.map(() => new Map());
+    this.aroundCache = stops.map(() => new Map());
     this.lastDay = stops.map(() => NaN);
     this.lastSun = stops.map(() => undefined);
     this.constrained = stops.map((s) => s.lightPref !== "any");
@@ -185,35 +188,51 @@ class Evaluator {
     return off;
   }
 
-  /** Light windows and daylight (epoch ms) of stop `i` on the solar day containing `arrivalMs`; cached per day. */
-  private sunDay(i: number, arrivalMs: number): { light: Interval[]; daylight: Interval | null } {
-    const s = this.stops[i]!;
-    const day = Math.floor((arrivalMs + s.lng * 240_000) / DAY_MS);
-    if (day === this.lastDay[i]) return this.lastSun[i]!;
+  /** Light windows and daylight (epoch ms) of stop `i` on one solar day (index = days since the epoch); cached. */
+  private oneDay(i: number, day: number): { light: Interval[]; daylight: Interval | null } {
     const cache = this.windowCache[i]!;
     let w = cache.get(day);
     if (!w) {
+      const s = this.stops[i]!;
       const date = new Date(day * DAY_MS).toISOString().slice(0, 10);
       const light = lightWindows(s.lightPref, getSunWindows(s.lat, s.lng, date)).map(([a, b]) => [a.getTime(), b.getTime()] as Interval);
       const dl = daylightInterval(s.lat, s.lng, date);
       w = { light, daylight: dl ? [dl[0].getTime(), dl[1].getTime()] : null };
       cache.set(day, w);
     }
+    return w;
+  }
+
+  /**
+   * Light windows and daylight (epoch ms) of stop `i` around `arrivalMs`: the solar day it falls on plus the days either side,
+   * because just after solar midnight the evening that just ended is nearer than the morning ahead. `ownLight` and `ownDaylight`
+   * are the arrival's own day alone: a day without a window (polar) has no light rule, whatever the neighbours have. Cached per day.
+   */
+  private sunDay(i: number, arrivalMs: number): SunAround {
+    const day = Math.floor((arrivalMs + this.stops[i]!.lng * 240_000) / DAY_MS);
+    if (day === this.lastDay[i]) return this.lastSun[i]!;
+    let w = this.aroundCache[i]!.get(day);
+    if (!w) {
+      const own = this.oneDay(i, day);
+      const before = this.oneDay(i, day - 1);
+      const after = this.oneDay(i, day + 1);
+      const daylight: Interval[] = [];
+      for (const x of [before, own, after]) if (x.daylight) daylight.push(x.daylight);
+      // Of the neighbouring days only the window nearest the arrival's day can be the nearest one.
+      w = { light: [...before.light.slice(-1), ...own.light, ...after.light.slice(0, 1)], daylight, hasLight: own.light.length > 0, hasDaylight: own.daylight !== null };
+      this.aroundCache[i]!.set(day, w);
+    }
     this.lastDay[i] = day;
     this.lastSun[i] = w;
     return w;
   }
 
-  private windows(i: number, arrivalMs: number): Interval[] {
-    return this.sunDay(i, arrivalMs).light;
-  }
-
   private missAt(i: number, arrivalMs: number): number {
-    const w = this.windows(i, arrivalMs);
-    if (w.length === 0) return 0;
+    const { light, hasLight } = this.sunDay(i, arrivalMs);
+    if (!hasLight) return 0;
     const end = arrivalMs + this.stops[i]!.dwellMinutes * 60_000;
     let best = Infinity;
-    for (const [ws, we] of w) {
+    for (const [ws, we] of light) {
       if (end >= ws && arrivalMs <= we) return 0;
       best = Math.min(best, end < ws ? ws - end : arrivalMs - we);
     }
@@ -225,11 +244,14 @@ class Evaluator {
    * visit touches either. A day without sunrise or sunset has no daylight rule.
    */
   private darkAt(i: number, arrivalMs: number): number {
-    const { light, daylight } = this.sunDay(i, arrivalMs);
-    if (!daylight) return 0;
+    const { light, daylight, hasDaylight } = this.sunDay(i, arrivalMs);
+    if (!hasDaylight) return 0;
     const end = arrivalMs + this.stops[i]!.dwellMinutes * 60_000;
-    if (end >= daylight[0] && arrivalMs <= daylight[1]) return 0;
-    let best = end < daylight[0] ? daylight[0] - end : arrivalMs - daylight[1];
+    let best = Infinity;
+    for (const [a, b] of daylight) {
+      if (end >= a && arrivalMs <= b) return 0;
+      best = Math.min(best, end < a ? a - end : arrivalMs - b);
+    }
     for (const [a, b] of light) {
       if (end >= a && arrivalMs <= b) return 0;
       best = Math.min(best, end < a ? a - end : arrivalMs - b);
@@ -358,7 +380,7 @@ const SPREAD_MAX_STOPS = 12;
  * (the server may additionally stop early on a time budget, see `optimizeScheduleAsync`); each restart costs more as stops
  * are added, so large trips get fewer. Kept modest: this runs on the request thread of a shared server.
  */
-const restartsFor = (n: number) => (n <= 12 ? 100 : Math.max(4, Math.floor(150 / n)));
+const restartsFor = (n: number) => (n <= 12 ? 300 : Math.max(4, Math.floor(150 / n)));
 
 /**
  * Local search: descents from several seeds (nearest-neighbour, window-sorted, must-stops-first, shortest drive), then
@@ -368,7 +390,7 @@ function* localSteps(ctx: Evaluator, n: number, over: () => boolean): Generator<
   const seeds = [nearestNeighbour(ctx.d, n), windowSorted(ctx.stops, n), mustFirst(ctx.stops, n), optimizeOrder(ctx.d)];
   let best: Solution | null = null;
   for (const seed of seeds) {
-    const sol = improve(ctx, seed);
+    const sol = yield* improve(ctx, seed);
     if (!best || sol.cost < best.cost - EPS) best = sol;
     yield;
   }
@@ -377,7 +399,7 @@ function* localSteps(ctx: Evaluator, n: number, over: () => boolean): Generator<
     for (const f of SPREAD_DEPARTURES) {
       const at = ctx.candidates[Math.floor(f * (ctx.candidates.length - 1))]!;
       for (const seed of seeds) {
-        const sol = improve(ctx, seed, at);
+        const sol = yield* improve(ctx, seed, at);
         if (sol.cost < best!.cost - EPS) best = sol;
         yield;
       }
@@ -399,7 +421,7 @@ function* localSteps(ctx: Evaluator, n: number, over: () => boolean): Generator<
       else order.splice(Math.min(i, j), Math.abs(i - j) + 1, ...order.slice(Math.min(i, j), Math.max(i, j) + 1).reverse());
     }
     // Every other restart also jumps to another departure: the best order depends on it and the landscape is rugged.
-    const sol = improve(ctx, order, r % 4 < 2 ? undefined : ctx.candidates[rand(ctx.candidates.length)]);
+    const sol = yield* improve(ctx, order, r % 4 < 2 ? undefined : ctx.candidates[rand(ctx.candidates.length)]);
     if (sol.cost < best!.cost - EPS) best = sol;
     yield;
   }
@@ -410,7 +432,7 @@ function* localSteps(ctx: Evaluator, n: number, over: () => boolean): Generator<
  * Alternate: move stops around at the current departure (swap / 2-opt / or-opt, first
  * improvement), then re-pick the best departure for the new order, until nothing improves.
  */
-function improve(ctx: Evaluator, start: number[], from?: number): Solution {
+function* improve(ctx: Evaluator, start: number[], from?: number): Generator<void, Solution> {
   let order = start;
   let { departMs, cost } = from === undefined ? ctx.bestDeparture(order) : { departMs: from, cost: ctx.cost(start, from) };
   for (let round = 0; round < MAX_ROUNDS; round++) {
@@ -428,6 +450,7 @@ function improve(ctx: Evaluator, start: number[], from?: number): Solution {
         }
       }
     }
+    yield; // a descent at 25 stops can take ~0.2 s: let other work run between rounds
     const re = ctx.bestDeparture(order);
     const shifted = re.departMs !== departMs && re.cost < cost - EPS;
     if (shifted) {

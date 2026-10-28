@@ -30,6 +30,8 @@ test("Optimize runs the water flow along the route once per run, with every stop
   await optimize.click();
   await expect(map).toHaveAttribute("data-route-flow", "running");
   await expect(page.getByTestId("route-flow")).toHaveCount(1);
+  // The route is drawn in behind the water, not shown whole from the start.
+  await expect(page.getByTestId("route-line")).toHaveClass(/route-reveal/);
   // Nothing is blocked while it runs: the markers still take clicks.
   await expect(page.getByTestId("route-flow")).toHaveCSS("pointer-events", "none");
   // Every stop is inside the browser window.
@@ -42,13 +44,14 @@ test("Optimize runs the water flow along the route once per run, with every stop
     expect(box.right).toBeLessThanOrEqual(vp.width);
     expect(box.bottom).toBeLessThanOrEqual(vp.height);
   }
-  await expect(map).toHaveAttribute("data-route-flow", "done", { timeout: 8000 });
+  await expect(map).toHaveAttribute("data-route-flow", "done", { timeout: 15000 });
   await expect(page.getByTestId("route-flow")).toHaveCount(0);
+  await expect(page.getByTestId("route-line")).not.toHaveClass(/route-reveal/);
 
   // Optimizing again re-runs it.
   await optimize.click();
   await expect(map).toHaveAttribute("data-route-flow", "running");
-  await expect(map).toHaveAttribute("data-route-flow", "done", { timeout: 8000 });
+  await expect(map).toHaveAttribute("data-route-flow", "done", { timeout: 15000 });
 });
 
 test("with reduced motion Optimize draws no flow", async ({ page }) => {

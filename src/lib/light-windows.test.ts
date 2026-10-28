@@ -81,6 +81,15 @@ describe("describeLightHint", () => {
     const hint = describeLightHint(yosemite, new Date(to.getTime() + 40 * 60_000), "UTC")!;
     expect(hint).toEqual({ text: "Misses sunset by 40 min", met: false });
   });
+  it("measures the miss to the previous evening's sunset just after solar midnight", () => {
+    // 08:30 UTC on Jul 2 is 00:32 solar time: Jul 1's sunset ended about 4.7 h ago, while Jul 2's is about 19 h away.
+    const arrival = new Date("2026-07-02T08:30:00Z");
+    const minutes = Math.round((arrival.getTime() - to.getTime()) / 60_000);
+    expect(minutes).toBeLessThan(400);
+    const hint = describeLightHint(yosemite, arrival, "UTC")!;
+    expect(hint.met).toBe(false);
+    expect(hint.text).toBe(`Misses sunset by ${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ""}`);
+  });
   it("is null for any, without an arrival, or without a window", () => {
     expect(describeLightHint({ ...yosemite, lightPref: "any" }, from)).toBeNull();
     expect(describeLightHint(yosemite, null)).toBeNull();

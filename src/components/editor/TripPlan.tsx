@@ -14,6 +14,8 @@ type Props = {
     undoing: boolean;
     disabled: boolean;
     status: string;
+    /** The status sentences before they are joined: a long "Can't fit N stops ...: names" one is collapsed behind its count. Without it the plain `status` text is shown. */
+    statusParts?: string[];
     /** Why Optimize is unavailable (read out with the button), when that is not just "busy". */
     reason?: string;
   };
@@ -22,14 +24,54 @@ type Props = {
   list: ReactNode;
 };
 
+/** More names than this are folded into a native <details> under the count. */
+const NAMES_SHOWN_INLINE = 2;
+const FIT_NOTE = /^(Can't fit (\d+) stops? in (?:its|their) light|Can't fit (\d+) stops? in daylight): (.+)$/;
+
+/** The status sentences joined the way the live-region text reads (". " between, one final "."), with a long list of stop names collapsed. A closed <details> is not read by screen readers, so when one is shown the full sentence is also in a screen-reader-only copy and the visual one is hidden from them. */
+function StatusText({ status, parts }: { status: string; parts?: string[] }) {
+  if (!parts) return <>{status}</>;
+  const folded = parts.some((part) => {
+    const m = FIT_NOTE.exec(part.replace(/\.$/, ""));
+    return m && Number(m[2] ?? m[3]) > NAMES_SHOWN_INLINE;
+  });
+  const visual = (
+    <>
+      {parts.map((part, i) => {
+        const end = i === parts.length - 1 ? "." : ". ";
+        const text = part.replace(/\.$/, "");
+        const m = FIT_NOTE.exec(text);
+        if (m && Number(m[2] ?? m[3]) > NAMES_SHOWN_INLINE) {
+          return (
+            <details key={i} className="my-0.5">
+              <summary className="cursor-pointer rounded font-medium focus-visible:outline-2 focus-visible:outline-accent-strong">{m[1]}:</summary>{" "}
+              <span>{m[4]}{end}</span>
+            </details>
+          );
+        }
+        return <span key={i}>{text}{end}</span>;
+      })}
+    </>
+  );
+  if (!folded) return visual;
+  return (
+    <>
+      <span className="sr-only">{status}</span>
+      <span aria-hidden="true">{visual}</span>
+    </>
+  );
+}
+
 /** Layout of the My trip tab: start time, then Optimize, Undo and the route totals on one row, then the itinerary. */
 export function TripPlan({ startTime, optimize, routeStatus, swapNote, list }: Props) {
   const optimizeRef = useRef<HTMLButtonElement>(null);
   const reason = optimize.disabled ? optimize.reason : undefined;
   return (
     <>
+      {/* Start time, the buttons and the route totals are one group, so they sit close together. */}
+      <div className="space-y-1.5">
       {startTime}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <button
           type="button"
           ref={optimizeRef}
@@ -71,14 +113,15 @@ export function TripPlan({ startTime, optimize, routeStatus, swapNote, list }: P
           </button>
         )}
         {/* The one live region (always mounted so a text change is announced once). Empty: screen-reader only. With a result: an inline notice on its own line under the buttons, so it is visible to everyone and covers nothing. */}
-        <p
+        <div
           role="status"
           data-testid="optimize-status"
           className={optimize.status ? "order-last basis-full rounded-lg bg-accent-soft px-3 py-2 text-sm min-w-0 max-w-full [overflow-wrap:anywhere] text-accent-foreground dark:text-foreground ring-1 ring-border" : "sr-only"}
         >
-          {optimize.status}
-        </p>
+          <StatusText status={optimize.status} parts={optimize.statusParts} />
+        </div>
         <p data-testid="route-status" className="text-sm font-medium text-foreground">{routeStatus}</p>
+      </div>
       </div>
       {swapNote}
       {list}

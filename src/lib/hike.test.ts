@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatHikeDistance, hikeAttribution, hikeKey, isHike, type Hike } from "./hike";
+import { formatHikeDistance, hikeKey, isHike, type Hike } from "./hike";
 
 const good: Hike = { distanceMeters: 1930, geometry: [[-119.52, 36.99], [-119.5, 37]], source: "osm", attribution: "x" };
 
@@ -17,13 +17,9 @@ describe("formatHikeDistance", () => {
   });
 });
 
-describe("hikeKey and attribution", () => {
+describe("hikeKey", () => {
   it("rounds to a 4-decimal grid", () => {
     expect(hikeKey(37.123449, -119.5)).toBe("37.1234,-119.5000");
-  });
-  it("names the source", () => {
-    expect(hikeAttribution("nps")).toBe("Trail data: National Park Service");
-    expect(hikeAttribution("osm")).toBe("Trail data © OpenStreetMap contributors");
   });
 });
 

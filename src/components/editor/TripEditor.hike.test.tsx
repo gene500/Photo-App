@@ -4,6 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { installMemoryStorage } from "../../../tests/helpers/memory-storage";
 import { resetHikeCache } from "@/lib/hike-cache";
+import { SETTINGS_KEY } from "@/lib/settings";
+import { SettingsProvider } from "@/components/settings/SettingsProvider";
 
 vi.mock("@/lib/api-client", () => ({
   api: {
@@ -40,15 +42,17 @@ describe("TripEditor hike line", () => {
     vi.mocked(api.hike).mockImplementation(async (p) => ({ hike: p.lat === 37 ? HIKE : null }));
   });
 
-  it("requests no hike until the My trip tab is open or a stop is selected", async () => {
-    render(<TripEditor initialTrip={trip} />);
+  it("with Show hikes off, requests no hike until a stop is selected", async () => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ showHikes: false, version: 2 }));
+    render(<SettingsProvider><TripEditor initialTrip={trip} /></SettingsProvider>);
     await new Promise((r) => setTimeout(r, 30));
     expect(api.hike).not.toHaveBeenCalled();
     expect(screen.getByTestId("map-hikes").textContent).toBe("");
   });
 
-  it("shows the selected stop's hike on the map and clears it when the stop is deselected", async () => {
-    render(<TripEditor initialTrip={trip} />);
+  it("shows the selected stop's hike on the map and clears it when the stop is deselected (Show hikes off)", async () => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ showHikes: false, version: 2 }));
+    render(<SettingsProvider><TripEditor initialTrip={trip} /></SettingsProvider>);
     await userEvent.click(screen.getByText("click first marker"));
     await waitFor(() => expect(screen.getByTestId("map-hikes").textContent).toBe("a:3"));
     expect(screen.getByTestId("map-route").textContent).toBe("none"); // not the route
@@ -56,23 +60,29 @@ describe("TripEditor hike line", () => {
     await waitFor(() => expect(screen.getByTestId("map-hikes").textContent).toBe(""));
   });
 
-  it("keeps the hike on the map with the Show hike toggle, and drops it when toggled off", async () => {
-    render(<TripEditor initialTrip={trip} />);
+  it("by default (Show hikes on) draws every stop's hike on the map, with no per-stop toggle", async () => {
+    render(<SettingsProvider><TripEditor initialTrip={trip} /></SettingsProvider>);
+    await waitFor(() => expect(screen.getByTestId("map-hikes").textContent).toBe("a:3"));
+    expect(screen.queryByRole("button", { name: /Show hike/ })).toBeNull();
+    await userEvent.click(screen.getByRole("tab", { name: "My trip" }));
+    expect(await screen.findByText(/Hike 1\.2 mi one way/)).toBeTruthy();
+    expect(screen.getAllByTestId("stop-hike")).toHaveLength(1); // the other stop has none and shows nothing
+    expect(screen.queryByRole("button", { name: /Show hike/ })).toBeNull();
+  });
+
+  it("with Show hikes off the map has no hike lines until a stop is selected, but My trip still shows the distance", async () => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ showHikes: false, version: 2 }));
+    render(<SettingsProvider><TripEditor initialTrip={trip} /></SettingsProvider>);
     await userEvent.click(screen.getByRole("tab", { name: "My trip" }));
     expect(await screen.findByText(/Hike 1\.2 mi one way/)).toBeTruthy();
     expect(screen.getByTestId("map-hikes").textContent).toBe("");
-    const toggle = screen.getByRole("button", { name: "Show hike: Arch" });
-    await userEvent.click(toggle);
+    await userEvent.click(screen.getByText("click first marker"));
     await waitFor(() => expect(screen.getByTestId("map-hikes").textContent).toBe("a:3"));
-    expect(toggle.getAttribute("aria-pressed")).toBe("true");
-    await userEvent.click(toggle);
-    await waitFor(() => expect(screen.getByTestId("map-hikes").textContent).toBe(""));
-    expect(screen.getAllByTestId("stop-hike")).toHaveLength(1); // the other stop has none and shows nothing
   });
 
   it("shows nothing when the lookup fails", async () => {
     vi.mocked(api.hike).mockRejectedValue(new Error("offline"));
-    render(<TripEditor initialTrip={trip} />);
+    render(<SettingsProvider><TripEditor initialTrip={trip} /></SettingsProvider>);
     await userEvent.click(screen.getByRole("tab", { name: "My trip" }));
     await waitFor(() => expect(api.hike).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 30));

@@ -21,6 +21,19 @@ describe("TripPlan", () => {
     expect(note.textContent).toBe("Can't fit 2 stops in their light: C, B.");
   });
 
+  it("folds a long list of stop names into a details element, and keeps the full sentence for screen readers", () => {
+    const parts = ["Start time moved to 6:49 AM so stops land in good light", "Can't fit 3 stops in their light: A, B, C."];
+    const status = "Start time moved to 6:49 AM so stops land in good light. Can't fit 3 stops in their light: A, B, C.";
+    render(<TripPlan startTime={null} optimize={{ ...optimize, status, statusParts: parts }} routeStatus="" swapNote={null} list={null} />);
+    const note = screen.getByTestId("optimize-status");
+    expect(note.tagName).toBe("DIV");
+    // A closed <details> is skipped by screen readers: they get the sr-only full sentence, the folded copy is hidden from them.
+    expect(note.querySelector(".sr-only")?.textContent).toBe(status);
+    const visual = note.querySelector("[aria-hidden='true']")!;
+    expect(visual.querySelector("details > summary")?.textContent).toBe("Can't fit 3 stops in their light:");
+    expect(visual.textContent).toBe(status);
+  });
+
   it("puts a gear link to the optimize settings beside the Optimize route button", () => {
     render(<TripPlan startTime={null} optimize={optimize} routeStatus="199 mi · 7 h 0 min" swapNote={null} list={null} />);
     expect(screen.getByRole("link", { name: "Optimize settings" }).getAttribute("href")).toBe("/settings#optimize");

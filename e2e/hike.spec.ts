@@ -23,54 +23,49 @@ async function tripWithTwoStops(page: Page) {
   await expect(rows).toHaveCount(2);
 }
 
-test("My trip shows the hike distance only where there is a hike, and the map line follows selection and the toggle", async ({ page }) => {
+test("My trip shows the hike distance only where there is a hike, and the map lines follow the Show hikes setting and selection", async ({ page }) => {
   await tripWithTwoStops(page);
   await page.getByRole("tab", { name: "My trip" }).click();
   const rows = page.getByTestId("trip-row");
   await expect(rows).toHaveCount(2);
 
-  // Distance only, with the data credit; the far stop shows nothing.
+  // Distance only, no per-card data credit (the map's attribution has it); the far stop shows nothing. No per-stop toggle any more.
   const hike = rows.nth(0).getByTestId("stop-hike");
   await expect(hike).toContainText(/^Hike \d+\.\d mi one way/);
   await expect(hike).not.toContainText(/min|hour|easy|moderate|hard|elevation/i);
-  await expect(rows.nth(0).getByTestId("hike-attribution")).toHaveText("Trail data © OpenStreetMap contributors");
+  await expect(rows.nth(0).getByText(/Trail data/)).toHaveCount(0);
   await expect(rows.nth(1).getByTestId("stop-hike")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Show hike/ })).toHaveCount(0);
 
-  // The hike is separate from the route and not drawn until the stop is selected or the toggle is on.
+  // Default is on: the stop's hike is drawn, separate from the route.
   const line = page.getByTestId("hike-line");
-  await expect(line).toHaveCount(0);
-  await expect(page.getByTestId("route-line")).toHaveCount(0);
-
-  // Toggle on keeps it visible, off clears it.
-  const toggle = rows.nth(0).getByRole("button", { name: /^Show hike/ });
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
-  await toggle.click();
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
   await expect(line).toHaveCount(1);
   await expect(line).toHaveAttribute("data-stop-id", /.+/);
   expect(Number(await line.getAttribute("data-points"))).toBeGreaterThanOrEqual(2);
-  await toggle.click();
+  await expect(page.getByTestId("route-line")).toHaveCount(0);
+  await expect(page.getByTestId("route-casing")).toHaveCount(0);
+
+  // Turn the setting off (it is per device): no lines, but the distance text stays.
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  const box = page.getByRole("checkbox", { name: /Show hikes/ });
+  await expect(box).toBeChecked();
+  await box.focus();
+  await page.keyboard.press("Space");
+  await expect(box).not.toBeChecked();
+  await page.goBack();
+  await page.getByRole("tab", { name: "My trip" }).click();
+  await expect(page.getByTestId("trip-row").nth(0).getByTestId("stop-hike")).toBeVisible();
   await expect(line).toHaveCount(0);
 
-  // Selecting the stop shows it; selecting the other stop (no hike) clears it.
+  // A selected stop's hike still shows; selecting the other stop (no hike) clears it.
   await page.getByRole("button", { name: /^Stop 1:/ }).click();
   await expect(line).toHaveCount(1);
   await page.getByRole("button", { name: /^Stop 2:/ }).click();
   await expect(line).toHaveCount(0);
-  // The route layer was never involved.
-  await expect(page.getByTestId("route-casing")).toHaveCount(0);
-});
 
-test("the hike toggle works from the keyboard", async ({ page }) => {
-  await tripWithTwoStops(page);
-  await page.getByRole("tab", { name: "My trip" }).click();
-  const toggle = page.getByTestId("trip-row").nth(0).getByRole("button", { name: /^Show hike/ });
-  await expect(toggle).toBeVisible();
-  await toggle.focus();
-  await page.keyboard.press("Enter");
-  await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByTestId("hike-line")).toHaveCount(1);
-  await page.keyboard.press("Space");
-  await expect(toggle).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByTestId("hike-line")).toHaveCount(0);
+  // Reset to defaults turns it back on.
+  await page.goto("/settings");
+  await expect(page.getByRole("checkbox", { name: /Show hikes/ })).not.toBeChecked();
+  await page.getByRole("button", { name: "Reset to defaults" }).click();
+  await expect(page.getByRole("checkbox", { name: /Show hikes/ })).toBeChecked();
 });

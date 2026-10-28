@@ -57,7 +57,7 @@ export function TripList({ trips, renderedAt }: { trips: TripSummary[]; /** The 
     }
   }
 
-  if (trips.length === 0) return <p className="w-fit rounded-lg bg-surface/90 px-2 py-1 text-muted">No trips yet. Create one below.</p>;
+  if (trips.length === 0) return <p className="rounded-2xl bg-surface px-4 py-5 text-center text-muted shadow-sm ring-1 ring-border">No trips yet. Create one below.</p>;
 
   return (
     <div className="space-y-3">

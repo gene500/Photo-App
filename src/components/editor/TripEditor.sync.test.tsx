@@ -64,7 +64,7 @@ const mk = (ids: string[], over: Partial<Stop> = {}) => ids.map((id, order) => n
 const withStops = (stops: Stop[], over: Partial<TripWithStops> = {}): TripWithStops => ({ ...trip, ...over, stops });
 const openMyTrip = () => userEvent.click(screen.getByRole("tab", { name: "My trip" }));
 const openStops = () => userEvent.click(screen.getByRole("tab", { name: "Stops" }));
-const count = (n: number) => screen.queryByText(`${n} ${n === 1 ? "stop" : "stops"}`);
+const count = (n: number) => screen.queryByText(new RegExp(`· ${n} ${n === 1 ? "stop" : "stops"}$`));
 
 beforeEach(() => {
   window.sessionStorage.clear();

@@ -106,14 +106,20 @@ export function describeLightHint(
   timeFormat: TimeFormat = "auto",
 ): LightHint | null {
   if (stop.lightPref === "any" || !arrival) return null;
-  const windows = windowsForArrival(stop.lightPref, stop.lat, stop.lng, arrival);
-  if (windows.length === 0) return null;
+  const own = windowsForArrival(stop.lightPref, stop.lat, stop.lng, arrival);
+  if (own.length === 0) return null;
+  // The neighbouring solar days count too: just after solar midnight the evening that ended is nearer than the morning ahead.
+  const windows = [
+    ...windowsForArrival(stop.lightPref, stop.lat, stop.lng, new Date(arrival.getTime() - 86_400_000)),
+    ...own,
+    ...windowsForArrival(stop.lightPref, stop.lat, stop.lng, new Date(arrival.getTime() + 86_400_000)),
+  ];
   const label = lightLabel(stop.lightPref);
   const miss = windowMissMinutes(arrival, stop.dwellMinutes, windows);
   if (miss > 0) return { text: `Misses ${label.toLowerCase()} by ${formatMinutes(Math.round(miss))}`, met: false };
   const hit =
     windows.find(([s, e]) => arrival.getTime() + stop.dwellMinutes * MS_MIN >= s.getTime() && arrival.getTime() <= e.getTime()) ??
-    windows[0]!;
+    own[0]!;
   return {
     text: `${label} ${clockRange(hit[0], hit[1], timeZone, timeFormat)} · arrive ${formatClock(arrival, timeZone, timeFormat)}`,
     met: true,

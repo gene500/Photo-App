@@ -1455,6 +1455,29 @@ describe("TripEditor", () => {
       expect(vi.mocked(api.updateTrip).mock.calls.every(([, patch]) => !("departAt" in patch))).toBe(true);
     });
 
+    it("plans from the arrival at the last visited stop, counting its dwell once (the optimizer adds it)", async () => {
+      reorderEcho();
+      const mk = (dwell: number) => [...three, newStop({ id: "d", order: 3, name: "D", lat: 39, lng: -119 })].map((x, i) => (i === 1 ? { ...x, dwellMinutes: dwell, visited: true } : i === 0 ? { ...x, visited: true } : x));
+      vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], departAt: null, misses: [] });
+      vi.mocked(api.directions).mockResolvedValue({ route: { ...route, legs: [1, 2, 3].map(() => ({ distance: 50_000, duration: 3_600 })), duration: 10_800 } });
+      const user = userEvent.setup();
+      const sentFor = async (dwell: number) => {
+        vi.mocked(api.optimizeOrder).mockClear();
+        const { unmount } = render(<TripEditor initialTrip={{ ...withStops(mk(dwell)), departAt: "2026-07-01T15:00:00.000Z", routeOptimizedFor: routeSignature("2026-07-01", mk(dwell)) }} />);
+        await openMyTrip();
+        await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/mi/));
+        await user.click(screen.getByRole("button", { name: "Optimize route" }));
+        await waitFor(() => expect(api.optimizeOrder).toHaveBeenCalled());
+        const sent = (vi.mocked(api.optimizeOrder).mock.calls[0]![1] as { departAt?: string }).departAt!;
+        unmount();
+        return new Date(sent).getTime();
+      };
+      const short = await sentFor(0);
+      const long = await sentFor(60);
+      // The anchor's own dwell is not part of the arrival time handed to the optimizer.
+      expect(long).toBe(short);
+    });
+
     it("marks an already-optimal order as optimized", async () => {
       vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2] });
       const user = userEvent.setup();

@@ -102,6 +102,9 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
   // Display-only: stops whose markers overlap are fanned out (the fixed viewport is treated as 1000x600 px).
   const fan = fanOffsets(stops.map((s) => { const p = pos(s); return { id: s.id, x: p.left * 10, y: p.top * 6 }; }));
 
+  // While the water runs the route itself is drawn in behind it (the real map trims the line the same way).
+  const running = flow === "running";
+  const revealing = running ? { className: "route-reveal", pathLength: 100 } : {};
   const popupId = hoveredId ?? highlightedSuggestionId;
   const popupSuggestion = suggestions.find((s) => s.osmId === popupId);
 
@@ -117,8 +120,8 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
       }}
     >
       <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-        {routePoints && <polyline data-testid="route-casing" points={routePoints} fill="none" stroke="#ffffff" strokeOpacity={0.85} strokeWidth={1.1} strokeLinecap="round" strokeLinejoin="round" />}
-        {routePoints && <polyline data-testid="route-line" points={routePoints} fill="none" stroke="#a8834b" strokeWidth={0.6} strokeLinecap="round" strokeLinejoin="round" />}
+        {routePoints && <polyline key={`c${running ? flowRun : 0}`} data-testid="route-casing" {...revealing} points={routePoints} fill="none" stroke="#ffffff" strokeOpacity={0.85} strokeWidth={1.1} strokeLinecap="round" strokeLinejoin="round" />}
+        {routePoints && <polyline key={`l${running ? flowRun : 0}`} data-testid="route-line" {...revealing} points={routePoints} fill="none" stroke="#a8834b" strokeWidth={0.6} strokeLinecap="round" strokeLinejoin="round" />}
         {routePoints && flow === "running" && (
           <polyline key={flowRun} data-testid="route-flow" className="route-flow-line" points={routePoints} pathLength={100} fill="none" stroke="#8fd3f7" strokeOpacity={0.9} strokeWidth={0.9} strokeLinecap="round" strokeLinejoin="round" />
         )}

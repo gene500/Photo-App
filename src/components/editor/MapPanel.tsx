@@ -14,7 +14,7 @@ import { SUNRISE_COLOR, SUNSET_COLOR } from "@/lib/sky";
 import { decideFit, routeKey, selectionPadding } from "./map-fit";
 import { fitMapToPoints, startRouteFlow } from "./route-flow-map";
 import { fitTargets, ZoomFitControl } from "./zoom-fit";
-import { casingLineWidth, routeLineWidth, simplifyBucket, simplifyRoute, simplifyToleranceDeg } from "./route-style";
+import { casingLineWidth, firstLabelLayerId, routeLineWidth, simplifyBucket, simplifyRoute, simplifyToleranceDeg } from "./route-style";
 import { fanOffsets } from "@/lib/marker-fan";
 import { STOP_MARKER_CLASS, stopColor } from "@/lib/stop-style";
 import type { LngLat, Suggestion } from "@/lib/types";
@@ -219,6 +219,8 @@ export default function MapPanel({
       theme();
       // lineMetrics lets the Optimize water-flow highlight use a line-gradient along the route.
       map.addSource(ROUTE_SOURCE, { type: "geojson", data: routeData(null), lineMetrics: true });
+      // Under the style's labels, so road and place names stay readable over the line.
+      const belowLabels = firstLabelLayerId(map.getStyle()?.layers);
       // A slightly wider white line underneath gives the route a soft casing on the pale map.
       map.addLayer({
         id: "route-casing",
@@ -226,14 +228,14 @@ export default function MapPanel({
         source: ROUTE_SOURCE,
         layout: { "line-join": "round", "line-cap": "round" },
         paint: { "line-color": "#ffffff", "line-width": casingLineWidth() as mapboxgl.Expression, "line-opacity": 0.9 },
-      });
+      }, belowLabels);
       map.addLayer({
         id: "route-line",
         type: "line",
         source: ROUTE_SOURCE,
         layout: { "line-join": "round", "line-cap": "round" },
         paint: { "line-color": ROUTE_COLOR, "line-width": routeLineWidth() as mapboxgl.Expression },
-      });
+      }, belowLabels);
       // Sunrise/sunset direction lines for the selected stop (data is set by the sky effect).
       map.addSource(SKY_SOURCE, { type: "geojson", data: emptySky() });
       for (const [kind, color] of [["sunrise", SUNRISE_COLOR], ["sunset", SUNSET_COLOR]] as const) {
@@ -358,7 +360,9 @@ export default function MapPanel({
       padding: viewPadding(readOnly),
       reducedMotion,
       source: ROUTE_SOURCE,
-      beforeId: map.getLayer("sky-sunrise") ? "sky-sunrise" : undefined,
+      hideLayers: ["route-casing", "route-line"],
+      // Just above the route, under the labels (like the route itself); the sky layers if the style has no labels.
+      beforeId: firstLabelLayerId(map.getStyle()?.layers) ?? (map.getLayer("sky-sunrise") ? "sky-sunrise" : undefined),
       onEnd: () => { if (flowRef.current === run) flowRef.current = null; },
     });
     flowRef.current = run;

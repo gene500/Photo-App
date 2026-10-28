@@ -139,3 +139,55 @@ describe("optimizeOrder keeps the given order when nothing is gained", () => {
     expect(optimizeOrder(big)).toEqual(Array.from({ length: 15 }, (_, i) => i));
   });
 });
+
+describe("optimizeOrder above the exact range", () => {
+  /** Held-Karp: the cheapest open path from stop 0, for the reference. */
+  function heldKarp(d: number[][]): number {
+    const m = d.length - 1;
+    const full = (1 << m) - 1;
+    const best = Array.from({ length: full + 1 }, () => new Float64Array(m).fill(Infinity));
+    for (let k = 0; k < m; k++) best[1 << k][k] = d[0][k + 1];
+    for (let mask = 1; mask <= full; mask++) {
+      for (let last = 0; last < m; last++) {
+        const cur = best[mask][last];
+        if (!(mask & (1 << last)) || cur === Infinity) continue;
+        for (let next = 0; next < m; next++) {
+          if (mask & (1 << next)) continue;
+          const c = cur + d[last + 1][next + 1];
+          if (c < best[mask | (1 << next)][next]) best[mask | (1 << next)][next] = c;
+        }
+      }
+    }
+    return Math.min(...best[full]);
+  }
+
+  it("stays close to the exact optimum on seeded random 13-16 stop instances, always a valid permutation from 0", () => {
+    let sum = 0;
+    let worst = 0;
+    let count = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const n = 13 + (seed % 4);
+      const d = randomSymmetric(n, seed * 7919);
+      const order = optimizeOrder(d);
+      expect(order[0]).toBe(0);
+      expect([...order].sort((a, b) => a - b)).toEqual(Array.from({ length: n }, (_, i) => i));
+      const gap = cost(d, order) / heldKarp(d) - 1;
+      expect(gap).toBeGreaterThanOrEqual(-1e-9);
+      sum += gap;
+      worst = Math.max(worst, gap);
+      count++;
+    }
+    // A single nearest-neighbour + 2-opt + or-opt descent averaged about 1% here, and up to 7% on some instances.
+    expect(sum / count).toBeLessThan(0.002);
+    expect(worst).toBeLessThan(0.02);
+  });
+
+  it("is deterministic and fast at 25 stops", () => {
+    const d = randomSymmetric(25, 5);
+    const t0 = performance.now();
+    const a = optimizeOrder(d);
+    const ms = performance.now() - t0;
+    expect(optimizeOrder(d)).toEqual(a);
+    expect(ms).toBeLessThan(200);
+  });
+});

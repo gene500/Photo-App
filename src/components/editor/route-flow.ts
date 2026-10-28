@@ -3,12 +3,12 @@
  * route-flow-map.ts and the fake map feed it the elapsed time and draw the result.
  */
 
-/** Time the water takes to run from the first stop to the last, then the time the finished fill takes to fade out. */
-export const FLOW_SWEEP_MS = 2400;
+/** Time the water takes to run from the first stop to the last, then the time the glow takes to fade out. */
+export const FLOW_SWEEP_MS = 5000;
 export const FLOW_FADE_MS = 500;
 export const FLOW_TOTAL_MS = FLOW_SWEEP_MS + FLOW_FADE_MS;
 
-/** Fixed hexes like ROUTE_COLOR in MapPanel: a pale blue that reads over the brown route on light and dark maps. */
+/** Fixed hexes like ROUTE_COLOR in MapPanel: a pale blue that reads over the brown route on light and dark maps. The route itself is uncovered behind the head (see hiddenRange), so the glow is only a short soft tail. */
 export const FLOW_TRAIL_COLOR = "rgba(120, 200, 245, 0.7)";
 export const FLOW_HEAD_COLOR = "rgba(235, 249, 255, 0.98)";
 const FLOW_CLEAR = "rgba(120, 200, 245, 0)";
@@ -35,21 +35,25 @@ export function flowFrame(elapsedMs: number): { head: number; opacity: number; d
 
 export type GradientStop = [number, string];
 
+/** The part of the route still hidden at `head`: from the head to the far end (a Mapbox `line-trim-offset`). */
+export function hiddenRange(head: number): [number, number] {
+  return [Math.min(Math.max(head, 0), 1), 1];
+}
+
 /**
- * Stops for a Mapbox `line-gradient` (`["interpolate", ["linear"], ["line-progress"], ...stops]`): water filling the pipe
- * behind the head, a bright head, and a soft clear edge ahead. Offsets are strictly increasing and inside 0..1, as Mapbox requires.
+ * Stops for a Mapbox `line-gradient` (`["interpolate", ["linear"], ["line-progress"], ...stops]`): a short soft glow that
+ * trails into a bright head, and a clear line everywhere else. The route itself is uncovered behind the head by hiddenRange.
+ * Offsets are strictly increasing and inside 0..1, as Mapbox requires.
  */
 export function flowGradientStops(head: number): GradientStop[] {
   const raw: GradientStop[] = [
-    [0, head > 0 ? FLOW_TRAIL_COLOR : FLOW_CLEAR],
-    [head - HEAD * 2, FLOW_TRAIL_COLOR],
-    [head - HEAD * 0.4, FLOW_HEAD_COLOR],
+    [0, FLOW_CLEAR],
+    [head - HEAD * 3, FLOW_CLEAR],
+    [head - HEAD * 0.4, FLOW_TRAIL_COLOR],
     [head, FLOW_HEAD_COLOR],
-    [head + HEAD * 2, FLOW_CLEAR],
+    [head + HEAD * 1.5, FLOW_CLEAR],
     [1, FLOW_CLEAR],
   ];
-  // A head that has left the far end leaves the whole line filled.
-  if (head >= 1) return [[0, FLOW_TRAIL_COLOR], [1, FLOW_TRAIL_COLOR]];
   const out: GradientStop[] = [];
   for (const [t, color] of raw) {
     const c = Math.min(Math.max(t, 0), 1);

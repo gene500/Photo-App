@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsProvider } from "@/components/settings/SettingsProvider";
 import type { Hike } from "@/lib/hike";
@@ -17,7 +16,6 @@ const stop = (id: string, name: string): Stop => ({
   id, tripId: "t1", order: 0, name, lat: id === "a" ? 37 : 40, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [],
 });
 const HIKE: Hike = { distanceMeters: 1931, geometry: [[-119.52, 36.99], [-119.5, 37]], source: "osm", attribution: "x" };
-const NPS: Hike = { ...HIKE, source: "nps" };
 const handlers = { onToggleVisited: vi.fn(), onPriorityChange: vi.fn(), onSelect: vi.fn() };
 const list = (props: Partial<React.ComponentProps<typeof TripPlanList>> = {}) =>
   render(<SettingsProvider><TripPlanList stops={[stop("a", "Arch"), stop("b", "Plain")]} optimized={false} bestTimes={[null, null]} {...handlers} {...props} /></SettingsProvider>);
@@ -52,12 +50,10 @@ describe("TripPlanList hike line", () => {
     expect(screen.getByTestId("stop-hike").textContent).toContain("Hike 1.9 km one way");
   });
 
-  it("credits the source: OpenStreetMap contributors, or the National Park Service", () => {
+  it("does not repeat the data credit on the card (the map's attribution carries it)", () => {
     list();
-    expect(screen.getByTestId("hike-attribution").textContent).toBe("Trail data © OpenStreetMap contributors");
-    useHike.mockImplementation((id: string) => (id === "a" ? NPS : null));
-    list();
-    expect(screen.getAllByTestId("hike-attribution")[1].textContent).toBe("Trail data: National Park Service");
+    expect(screen.queryByTestId("hike-attribution")).toBeNull();
+    expect(screen.queryByText(/Trail data/)).toBeNull();
   });
 
   it("shows nothing at all while loading or when there is no hike", () => {
@@ -74,20 +70,10 @@ describe("TripPlanList hike line", () => {
     expect(useHike).toHaveBeenCalledWith("b", 40, -119);
   });
 
-  it("has a Show hike toggle button: aria-pressed reflects the state and a click or Enter/Space toggles", async () => {
-    const onToggleHike = vi.fn();
-    const user = userEvent.setup();
-    const { rerender } = list({ onToggleHike, hikeShownIds: new Set() });
-    const btn = screen.getByRole("button", { name: "Show hike: Arch" });
-    expect(btn.getAttribute("aria-pressed")).toBe("false");
-    await user.click(btn);
-    expect(onToggleHike).toHaveBeenCalledWith("a");
-    btn.focus();
-    await user.keyboard("{Enter}");
-    await user.keyboard(" ");
-    expect(onToggleHike).toHaveBeenCalledTimes(3);
-    rerender(<SettingsProvider><TripPlanList stops={[stop("a", "Arch")]} optimized={false} bestTimes={[null]} {...handlers} onToggleHike={onToggleHike} hikeShownIds={new Set(["a"])} /></SettingsProvider>);
-    expect(screen.getByRole("button", { name: "Show hike: Arch" }).getAttribute("aria-pressed")).toBe("true");
+  it("has no per-stop Show hike button (it is the Show hikes setting now)", () => {
+    list();
+    expect(screen.queryByRole("button", { name: /Show hike/ })).toBeNull();
+    expect(screen.getByTestId("stop-hike").textContent).toMatch(/^Hike .* one way$/);
   });
 
   it("is placed after the weather line when the route is optimized", () => {

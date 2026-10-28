@@ -2,7 +2,7 @@
 
 ## Goal (owner decisions)
 
-In My trip, under a stop's temperature line: `Hike 1.2 mi one way` (distance only, honours the Imperial/Metric setting; no time, difficulty or elevation). The hike's route is drawn on the map as a dotted, matte green line for the selected stop, plus a "Show hike" toggle on the stop's row to keep it visible. The line is its own map layer: never part of the trip route, GPX, PDF, saved geometry, or the A49 flow / A51 route layers.
+In My trip, under a stop's temperature line: `Hike 1.2 mi one way` (distance only, honours the Imperial/Metric setting; no time, difficulty or elevation). The hike's route is drawn on the map as a dotted, matte green line for the selected stop, and for every stop with a hike while the per-device "Show hikes" setting (Settings > Map, on by default) is on. The line is its own map layer: never part of the trip route, GPX, PDF, saved geometry, or the A49 flow / A51 route layers.
 
 ## Data (checked against the live services, 27 Oct 2026)
 
@@ -10,7 +10,7 @@ In My trip, under a stop's temperature line: `Hike 1.2 mi one way` (distance onl
 
 **OSM via Overpass** (reuses `fetchOverpass`: mirrors, hedging, retry). One query for a box around the stop: `way[highway=path|footway|track|steps|bridleway]` (minus sidewalks/crossings), the member ways of `route=hiking` relations (relation members only, not whole relations, which can be country-long), `node[highway=trailhead]`, `node[amenity=parking]`; `out tags geom qt`. Elements are `{type:"way", tags, geometry:[{lat,lon}]}` and `{type:"node", lat, lon, tags}`. Fixture: `osm-delicate-arch.json` (15 usable ways, 2 trailheads). Dropped: private/`foot=no` ways, and `track`s named like roads (Cache Valley Road).
 
-Attribution: "Trail data (c) OpenStreetMap contributors" or "Trail data: National Park Service" in a small caption under the hike line in the row, and the map source `attribution` text (shown in Mapbox's attribution control). Printed text is chosen from `source` on the client, not taken from the server.
+Attribution: "Trail data (c) OpenStreetMap contributors" or "Trail data: National Park Service" in the map source `attribution` text (shown in Mapbox's attribution control while hikes are drawn). There is no per-row caption (removed in A57).
 
 ## Algorithm (`src/server/hike/graph.ts`)
 
@@ -23,7 +23,7 @@ Work in a flat metre grid around the stop. Vertices within 6 m are one node; a t
 
 ## Client
 
-`src/lib/hike-cache.ts` (one request per cell, at most 3 in flight, subscriber counting with abort on last release, 30 min / 10 min / 1 min TTLs, no request offline) and `src/lib/use-hike.ts` (`useHike`, `useHikes`). `TripPlanList` row: `HikeLines` renders only when a hike exists (no reserved space), the "Show hike" button (`aria-pressed`, keyboard reachable). `TripEditor` keeps `hikeShownIds` and passes `hikes` (selected stop plus toggled stops) to `MapView`; `MapPanel` calls `ensureHikeLayer` (`hike-layer.ts`) on load, whenever the list changes, and on `style.load` (re-adds after a style reload). `FakeMapPanel` draws `<polyline data-testid="hike-line" data-stop-id data-points>`.
+`src/lib/hike-cache.ts` (one request per cell, at most 3 in flight, subscriber counting with abort on last release, 30 min / 10 min / 1 min TTLs, no request offline) and `src/lib/use-hike.ts` (`useHike`, `useHikes`). `TripPlanList` row: `HikeLines` renders only when a hike exists (no reserved space), no per-row button. `TripEditor` passes `hikes` (every stop when `settings.showHikes`, else only the selected stop) to `MapView`; `MapPanel` calls `ensureHikeLayer` (`hike-layer.ts`) on load, whenever the list changes, and on `style.load` (re-adds after a style reload). `FakeMapPanel` draws `<polyline data-testid="hike-line" data-stop-id data-points>`.
 
 Line style: `#3f6b3a` (muted dark green, about 4.9:1 on the beige `#d8d1bd`), `line-dasharray [0.01, 2]` with round caps = round dots, width 3 to 5 px by zoom, opacity 0.95, no blur/casing/glow. Hex because Mapbox paint cannot read CSS variables.
 

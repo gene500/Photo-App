@@ -25,6 +25,16 @@ describe("parseSettings", () => {
   });
 });
 
+describe("showHikes", () => {
+  it("defaults to on, accepts a boolean and rejects anything else", () => {
+    expect(DEFAULT_SETTINGS.showHikes).toBe(true);
+    expect(parseSettings({}).showHikes).toBe(true);
+    expect(parseSettings({ showHikes: false }).showHikes).toBe(false);
+    expect(parseSettings({ showHikes: "no" }).showHikes).toBe(true);
+    expect(parseStoredSettings(serializeSettings({ ...DEFAULT_SETTINGS, showHikes: false })).showHikes).toBe(false);
+  });
+});
+
 describe("parseStoredSettings", () => {
   it("falls back on null and invalid JSON", () => {
     expect(parseStoredSettings(null)).toEqual(DEFAULT_SETTINGS);

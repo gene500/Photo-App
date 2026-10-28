@@ -101,6 +101,29 @@ describe("startRouteFlow", () => {
     expect(onEnd).toHaveBeenCalledTimes(1);
     expect(m.handlers.get("wheel")?.size).toBe(0);
   });
+  it("hides the whole route before the zoom-out, uncovers it behind the head, and shows it all at the end", async () => {
+    const m = fakeMap();
+    m.layers.add("route-line");
+    m.layers.add("route-casing");
+    startRouteFlow(asMap(m), { ...opts, hideLayers: ["route-casing", "route-line"] });
+    expect(m.setPaintProperty).toHaveBeenCalledWith("route-line", "line-trim-offset", [0, 1]);
+    expect(m.setPaintProperty).toHaveBeenCalledWith("route-casing", "line-trim-offset", [0, 1]);
+    m.emit("moveend");
+    await vi.advanceTimersByTimeAsync(0);
+    step(FLOW_TOTAL_MS / 2);
+    const mid = m.setPaintProperty.mock.calls.filter((c) => c[0] === "route-line" && c[1] === "line-trim-offset").at(-1)![2] as number[];
+    expect(mid[0]).toBeGreaterThan(0);
+    expect(mid[1]).toBe(1);
+    step(FLOW_TOTAL_MS);
+    expect(m.setPaintProperty.mock.calls.filter((c) => c[0] === "route-line" && c[1] === "line-trim-offset").at(-1)![2]).toEqual([0, 0]);
+  });
+  it("leaves the route alone with reduced motion", async () => {
+    const m = fakeMap({ moving: false });
+    m.layers.add("route-line");
+    startRouteFlow(asMap(m), { ...opts, reducedMotion: true, hideLayers: ["route-line"] });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(m.setPaintProperty).not.toHaveBeenCalledWith("route-line", "line-trim-offset", [0, 1]);
+  });
   it("starts after the timeout fallback if moveend never arrives", async () => {
     const m = fakeMap();
     startRouteFlow(asMap(m), opts);

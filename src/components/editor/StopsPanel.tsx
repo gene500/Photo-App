@@ -97,7 +97,7 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, trip, sug
   const side = useShortLandscape();
   const open = side || snap !== "collapsed";
   const tabClass = (t: Tab) =>
-    `min-h-9 flex-1 rounded-lg px-3 py-1.5 text-center text-sm transition ${tab === t ? "bg-surface font-medium text-foreground shadow-sm" : "text-muted hover:text-foreground"}`;
+    `min-h-9 flex-1 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-center text-sm transition min-[400px]:px-3 ${tab === t ? "bg-surface font-medium text-foreground shadow-sm" : "text-muted hover:text-foreground"}`;
   const arrowClass = "flex h-9 w-9 items-center justify-center rounded-full bg-hover text-2xl leading-none text-foreground ring-1 ring-border transition hover:bg-border focus-visible:outline-2 focus-visible:outline-accent-strong";
 
   return (
@@ -130,7 +130,7 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, trip, sug
       {open && (
         <>
           <div className="space-y-2 px-4">{summary}</div>
-          <div role="tablist" onKeyDown={onTabKey} className="mx-4 mt-3 flex flex-wrap gap-1 rounded-xl bg-hover p-1">
+          <div role="tablist" onKeyDown={onTabKey} className="mx-4 mt-3 flex gap-1 rounded-xl bg-hover p-1">
             <button role="tab" type="button" id={tabId("stops")} ref={(el) => { tabRefs.current.stops = el; }} aria-selected={tab === "stops"} aria-controls={panelId} tabIndex={tab === "stops" ? 0 : -1} className={tabClass("stops")} onClick={() => setTab("stops")}>
               Stops
             </button>

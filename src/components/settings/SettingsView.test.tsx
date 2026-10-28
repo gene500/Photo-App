@@ -60,6 +60,25 @@ describe("SettingsView", () => {
     expect(saved().optimizeFocus).toBe("time");
   });
 
+  it("Show hikes is a labelled checkbox: on by default, saves when switched off, and reset turns it back on", async () => {
+    await setup();
+    const box = screen.getByRole("checkbox", { name: /Show hikes/ });
+    expect(box).toHaveProperty("checked", true);
+    box.focus();
+    await userEvent.keyboard(" ");
+    expect(box).toHaveProperty("checked", false);
+    expect(saved().showHikes).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
+    expect(screen.getByRole("checkbox", { name: /Show hikes/ })).toHaveProperty("checked", true);
+    expect(saved().showHikes).not.toBe(false);
+  });
+
+  it("restores a saved Show hikes off after a reload", async () => {
+    storage.setItem(SETTINGS_KEY, JSON.stringify({ showHikes: false, version: 2 }));
+    await setup();
+    expect(screen.getByRole("checkbox", { name: /Show hikes/ })).toHaveProperty("checked", false);
+  });
+
   it("segmented controls are labelled radio groups that save immediately", async () => {
     await setup();
     expect(screen.getByRole("radio", { name: "System" })).toHaveProperty("checked", true);

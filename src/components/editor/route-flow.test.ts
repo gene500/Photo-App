@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FLOW_SWEEP_MS, FLOW_TOTAL_MS, easeInOutSine, flowFrame, flowGradientExpression, flowGradientStops } from "./route-flow";
+import { FLOW_SWEEP_MS, FLOW_TOTAL_MS, easeInOutSine, flowFrame, flowGradientExpression, flowGradientStops, hiddenRange } from "./route-flow";
 
 describe("easeInOutSine", () => {
   it("runs 0 to 1, slowly at the ends, and clamps", () => {
@@ -52,19 +52,28 @@ describe("flowGradientStops", () => {
     for (let h = -0.2; h <= 1.2; h += 0.0137) valid(flowGradientStops(h));
     for (const h of [-0.07, 0, 0.0001, 0.03, 0.06, 0.5, 0.94, 0.97, 1, 1.07]) valid(flowGradientStops(h));
   });
-  it("is clear everywhere before the head enters and filled once it has left", () => {
+  it("is clear everywhere before the head enters and after it has left", () => {
     expect(flowGradientStops(-0.07).every(([, c]) => /, 0\)$/.test(c))).toBe(true);
-    const done = flowGradientStops(1.07);
-    expect(done.every(([, c]) => /0\.7\)$/.test(c))).toBe(true);
+    expect(flowGradientStops(1.2).every(([, c]) => /, 0\)$/.test(c))).toBe(true);
   });
-  it("fills behind the head and leaves the line ahead clear mid-sweep", () => {
+  it("has a bright head with a short glow behind it and clear line elsewhere mid-sweep", () => {
     const s = flowGradientStops(0.5);
-    expect(s[0]![1]).toMatch(/0\.7\)$/);
+    expect(s[0]![1]).toMatch(/, 0\)$/);
     expect(s[s.length - 1]![1]).toMatch(/, 0\)$/);
+    expect(s.some(([t, c]) => t === 0.5 && /0\.98\)$/.test(c))).toBe(true);
+    expect(s.filter(([, c]) => !/, 0\)$/.test(c)).length).toBeLessThanOrEqual(2);
   });
   it("builds the Mapbox expression", () => {
     const e = flowGradientExpression(0.5);
     expect(e.slice(0, 3)).toEqual(["interpolate", ["linear"], ["line-progress"]]);
     expect((e.length - 3) % 2).toBe(0);
+  });
+});
+
+describe("hiddenRange", () => {
+  it("hides everything before the head arrives, less as it moves, and nothing once it has left", () => {
+    expect(hiddenRange(-0.07)).toEqual([0, 1]);
+    expect(hiddenRange(0.4)).toEqual([0.4, 1]);
+    expect(hiddenRange(1.07)).toEqual([1, 1]);
   });
 });

@@ -73,6 +73,20 @@ test("settings: theme, text size, units and reset persist per device", async ({ 
   await expect(page.getByRole("radio", { name: "Imperial" })).toBeChecked();
 });
 
+test("Show hikes setting: on by default, persists when off, reset turns it on", async ({ page }) => {
+  await signup(page, "hikes");
+  await page.goto("/settings");
+  const box = page.getByRole("checkbox", { name: /Show hikes/ });
+  await expect(box).toBeChecked();
+  await box.uncheck();
+  await page.reload();
+  await expect(page.getByRole("checkbox", { name: /Show hikes/ })).not.toBeChecked();
+  await page.getByRole("button", { name: "Reset to defaults" }).click();
+  await expect(page.getByRole("checkbox", { name: /Show hikes/ })).toBeChecked();
+  await page.reload();
+  await expect(page.getByRole("checkbox", { name: /Show hikes/ })).toBeChecked();
+});
+
 test("explicit theme beats the OS colour scheme in both directions", async ({ page }) => {
   await signup(page, "theme");
   await page.goto("/settings");

@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Stop, Suggestion } from "@/lib/types";
 import { FakeMapPanel } from "./FakeMapPanel";
+import { FLOW_TOTAL_MS } from "./route-flow";
 
 const loadPlacePhoto = vi.fn();
 vi.mock("@/lib/place-photo-cache", () => ({ loadPlacePhoto: (...a: unknown[]) => loadPlacePhoto(...a) }));
@@ -263,7 +264,7 @@ describe("FakeMapPanel sky lines", () => {
       rerender(<FakeMapPanel {...flowProps} routeFlowId={4} />);
       expect(screen.getByTestId("map").getAttribute("data-route-flow")).toBe("running");
       expect(screen.getByTestId("route-flow")).toBeTruthy();
-      act(() => { vi.advanceTimersByTime(3000); });
+      act(() => { vi.advanceTimersByTime(FLOW_TOTAL_MS); });
       expect(screen.getByTestId("map").getAttribute("data-route-flow")).toBe("done");
       expect(screen.queryByTestId("route-flow")).toBeNull();
       rerender(<FakeMapPanel {...flowProps} routeFlowId={5} />);

@@ -37,6 +37,8 @@ export type Settings = {
   distanceUnit: DistanceUnit;
   timeFormat: TimeFormat;
   mapStyle: MapStyle;
+  /** On draws every stop's hike line on the map; off shows only the selected stop's. */
+  showHikes: boolean;
   /** Minutes for a new stop. */
   defaultDwellMinutes: number;
   suggestionLightPref: SuggestionLightPref;
@@ -50,6 +52,7 @@ export const DEFAULT_SETTINGS: Settings = {
   distanceUnit: "mi",
   timeFormat: "auto",
   mapStyle: "beige",
+  showHikes: true,
   defaultDwellMinutes: 30,
   suggestionLightPref: "auto",
   optimizeFocus: "priority",
@@ -73,6 +76,7 @@ export function parseSettings(raw: unknown): Settings {
     distanceUnit: pick(DISTANCE_UNITS, o.distanceUnit, d.distanceUnit),
     timeFormat: pick(TIME_FORMATS, o.timeFormat, d.timeFormat),
     mapStyle: pick(MAP_STYLES, o.mapStyle, d.mapStyle),
+    showHikes: typeof o.showHikes === "boolean" ? o.showHikes : d.showHikes,
     defaultDwellMinutes: dwell,
     suggestionLightPref: pick(SUGGESTION_LIGHT_PREFS, o.suggestionLightPref, d.suggestionLightPref),
     optimizeFocus: pick(OPTIMIZE_FOCUSES, o.optimizeFocus, d.optimizeFocus),

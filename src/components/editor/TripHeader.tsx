@@ -13,7 +13,7 @@ import { ExportControl } from "./ExportControl";
 import { ShareControl } from "./ShareControl";
 
 
-export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: Trip; onSave: (patch: TripPatch) => Promise<void>; onShareChange?: (shareToken: string | null) => void; exportData?: { stops: ExportStop[]; route: LngLat[] | null; pdf?: ComponentProps<typeof ExportControl>["pdf"] } }) {
+export function TripHeader({ trip, onSave, onShareChange, exportData, stopCount }: { trip: Trip; stopCount?: number; onSave: (patch: TripPatch) => Promise<void>; onShareChange?: (shareToken: string | null) => void; exportData?: { stops: ExportStop[]; route: LngLat[] | null; pdf?: ComponentProps<typeof ExportControl>["pdf"] } }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(trip.name);
   const [plannedDate, setPlannedDate] = useState(trip.plannedDate);
@@ -77,7 +77,12 @@ export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: 
             {onShareChange && <ShareControl tripId={trip.id} shareToken={trip.shareToken} onChange={onShareChange} />}
           </div>
         </div>
-        <p className="text-sm text-muted">Planned for {trip.plannedDate}</p>
+        <p className="text-sm text-muted">
+          {stopCount === undefined ? `Planned for ${trip.plannedDate}` : (
+            // Each half stays whole when the line has to break, so it never splits inside "4 stops".
+            <><span className="whitespace-nowrap">Planned for {trip.plannedDate}</span> <span className="whitespace-nowrap">· {stopCount} {stopCount === 1 ? "stop" : "stops"}</span></>
+          )}
+        </p>
       </header>
     );
   }

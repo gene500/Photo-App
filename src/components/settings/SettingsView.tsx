@@ -136,6 +136,13 @@ export function SettingsView({ email, hasPassword = true }: { email: string | nu
           options={[{ value: "beige", label: "Beige" }, { value: "standard", label: "Standard" }]}
           hint="Takes effect the next time the map loads."
         />
+        <label className="flex items-start gap-3">
+          <input type="checkbox" checked={settings.showHikes} onChange={(e) => update({ showHikes: e.target.checked })} className="h-6 w-6 shrink-0 accent-[var(--accent-strong)]" />
+          <span className="text-sm">
+            <span className="font-medium">Show hikes</span>
+            <span className="block text-xs text-muted">Draws a dotted hike line on the map for every stop that has one. When off, only the selected stop&apos;s hike shows.</span>
+          </span>
+        </label>
       </Section>
 
       <Section title="New stops">

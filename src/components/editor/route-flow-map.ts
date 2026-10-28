@@ -1,6 +1,6 @@
 import type mapboxgl from "mapbox-gl";
 import type { LngLat } from "@/lib/types";
-import { flowFrame, flowGradientExpression } from "./route-flow";
+import { flowFrame, flowGradientExpression, hiddenRange } from "./route-flow";
 
 export const FLOW_LAYER = "route-flow";
 const FIT_MS = 700;
@@ -49,15 +49,16 @@ export function fitMapToPoints(
 }
 
 /**
- * After a successful Optimize: zoom out to show every point, wait for that move to end, then run a pale-blue "water" highlight
- * along the route from the first stop to the last, and take it away again. With `reducedMotion` it only does the fit.
+ * After a successful Optimize: hide the route (`hideLayers`), zoom out to show every point, wait for that move to end, then
+ * draw the route from the first stop to the last behind a pale-blue "water" head, which then fades. With `reducedMotion` the
+ * route stays as it is and it only does the fit.
  * `cancel` (also called by itself when the viewer pans, zooms or drags) stops everything and removes the layer.
  * The route source needs `lineMetrics: true` for the gradient. Pointer events are never touched.
  */
 export function startRouteFlow(
   map: FlowMap,
-  { points, padding, reducedMotion, source, beforeId, onEnd }: {
-    points: LngLat[]; padding: mapboxgl.PaddingOptions; reducedMotion: boolean; source: string; beforeId?: string; onEnd?: () => void;
+  { points, padding, reducedMotion, source, beforeId, hideLayers = [], onEnd }: {
+    points: LngLat[]; padding: mapboxgl.PaddingOptions; reducedMotion: boolean; source: string; beforeId?: string; hideLayers?: string[]; onEnd?: () => void;
   },
 ): { cancel: () => void } {
   let cancelled = false;
@@ -67,10 +68,17 @@ export function startRouteFlow(
   const removeLayer = () => {
     try { if (map.getLayer(FLOW_LAYER)) map.removeLayer(FLOW_LAYER); } catch { /* the map is already gone */ }
   };
+  // Cut the route (and its casing) away from `range[0]` to `range[1]` along the line; [0, 0] shows all of it.
+  const trim = (range: [number, number]) => {
+    for (const id of hideLayers) {
+      try { if (map.getLayer(id)) map.setPaintProperty(id, "line-trim-offset", range); } catch { /* the map is already gone */ }
+    }
+  };
   const end = () => {
     if (ended) return;
     ended = true;
     if (raf) cancelAnimationFrame(raf);
+    trim([0, 0]);
     for (const t of USER_EVENTS) { try { map.off(t, interrupt); } catch { /* map removed */ } }
     removeLayer();
     onEnd?.();
@@ -81,6 +89,7 @@ export function startRouteFlow(
     end();
   }
   for (const t of USER_EVENTS) map.on(t, interrupt);
+  if (!reducedMotion) trim(hiddenRange(flowFrame(0).head)); // no full line while the map zooms out
   const fit = fitMapToPoints(map, points, padding, { duration: reducedMotion ? 0 : FIT_MS });
   void fit.done.then(() => {
     if (cancelled || ended) return;
@@ -105,6 +114,7 @@ export function startRouteFlow(
       const f = flowFrame(now - t0);
       if (f.done) return end();
       try {
+        trim(hiddenRange(f.head));
         map.setPaintProperty(FLOW_LAYER, "line-gradient", flowGradientExpression(f.head) as never);
         map.setPaintProperty(FLOW_LAYER, "line-opacity", f.opacity);
       } catch {

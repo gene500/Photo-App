@@ -89,7 +89,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
         />
       </div>
 
-      <aside className={`absolute inset-x-0 bottom-0 z-10 flex h-[55dvh] flex-col overflow-hidden rounded-b-none rounded-t-2xl lg:inset-x-auto lg:bottom-3 lg:left-3 lg:top-3 lg:h-auto lg:w-[23.75rem] lg:rounded-2xl short-landscape:inset-y-0 short-landscape:left-0 short-landscape:right-auto short-landscape:h-auto short-landscape:w-[clamp(17.5rem,40%,23.75rem)] short-landscape:overflow-y-auto short-landscape:overflow-x-hidden short-landscape:rounded-none short-landscape:pb-[env(safe-area-inset-bottom)] short-landscape:pl-[env(safe-area-inset-left)] print:static print:h-auto print:w-auto print:overflow-visible print:rounded-none print:border-0 print:shadow-none ${card}`}>
+      <aside aria-label="Trip panel" className={`absolute inset-x-0 bottom-0 z-10 flex h-[55dvh] flex-col overflow-hidden rounded-b-none rounded-t-2xl lg:inset-x-auto lg:bottom-3 lg:left-3 lg:top-3 lg:h-auto lg:w-[23.75rem] lg:rounded-2xl short-landscape:inset-y-0 short-landscape:left-0 short-landscape:right-auto short-landscape:h-auto short-landscape:w-[clamp(17.5rem,40%,23.75rem)] short-landscape:overflow-y-auto short-landscape:overflow-x-hidden short-landscape:rounded-none short-landscape:pb-[env(safe-area-inset-bottom)] short-landscape:pl-[env(safe-area-inset-left)] print:static print:h-auto print:w-auto print:overflow-visible print:rounded-none print:border-0 print:shadow-none ${card}`}>
         <header className="space-y-0.5 px-4 pb-2 pt-3">
           <div className="flex flex-wrap items-start justify-between gap-x-2">
             <h1 className="min-w-0 max-w-full flex-1 basis-28 break-words text-lg font-semibold">{trip.name}</h1>

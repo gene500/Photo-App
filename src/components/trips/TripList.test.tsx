@@ -26,6 +26,16 @@ describe("TripList", () => {
     installMemoryStorage().setItem("rtpp.offline.owner", "u1");
   });
 
+  it("lets a long trip name wrap to two lines (not one-line truncation) and keeps the full name in a title", () => {
+    const long = "W".repeat(60);
+    render(<TripList trips={[{ ...trip, name: long }]} />);
+    const name = screen.getByTitle(long);
+    expect(name.className).toContain("line-clamp-2");
+    expect(name.className).toContain("break-words");
+    expect(name.className).not.toContain("truncate");
+    expect(screen.getByText("3 stops")).toBeTruthy();
+  });
+
   it("drops the offline copy of a trip when it is deleted", async () => {
     vi.mocked(api.deleteTrip).mockResolvedValue(undefined);
     saveTripCopy(copy("t1"));

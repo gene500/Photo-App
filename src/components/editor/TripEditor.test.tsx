@@ -370,6 +370,27 @@ describe("TripEditor", () => {
     expect(await screen.findByRole("region", { name: "Selected place" })).toBeTruthy();
   });
 
+  it("fetches a failed route again when the browser comes back online", async () => {
+    vi.mocked(api.directions).mockRejectedValueOnce(new Error("Couldn't load the route"));
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+    await screen.findByRole("alert");
+    expect(api.directions).toHaveBeenCalledTimes(1);
+    act(() => { window.dispatchEvent(new Event("online")); });
+    await waitFor(() => expect(api.directions).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(await screen.findByTestId("route-line")).toBeTruthy();
+  });
+
+  it("does not refetch a route that loaded fine when the browser comes back online", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+    await screen.findByTestId("route-line");
+    act(() => { window.dispatchEvent(new Event("online")); });
+    await act(async () => {});
+    expect(api.directions).toHaveBeenCalledTimes(1);
+  });
+
   it("shows no route error banner before Optimize", async () => {
     vi.mocked(api.directions).mockRejectedValue(new Error("No driving route found between these points"));
     render(<TripEditor initialTrip={withStops(seed)} />);
@@ -516,6 +537,91 @@ describe("TripEditor", () => {
       expect(read()?.key).toBe(twoKey);
       await userEvent.click(screen.getAllByRole("button", { name: /^Dismiss/ })[0]);
       await waitFor(() => expect(read()?.items).toHaveLength(5));
+    });
+
+    it("a failed Find keeps the list and its saved copy, shows the error with Retry, and Retry brings fresh results", async () => {
+      const three = Array.from({ length: 3 }, (_, i) => ({ osmId: `node/${i}`, name: `Spot ${i}`, lat: 37.7 + i / 100, lng: -119.7, kind: "viewpoint" as const }));
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.suggestions).mockResolvedValueOnce({ suggestions: three });
+      vi.mocked(api.suggestionPopularity).mockResolvedValue({ counts: three.map(() => 7) });
+      render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+      await openMyTrip();
+      await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/\d mi\b/));
+      await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
+      await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+      expect(await screen.findAllByTestId("suggestion-card")).toHaveLength(3);
+      const read = () => JSON.parse(window.sessionStorage.getItem("rtpp.suggestions.v1.t1") ?? "null") as { items: unknown[] } | null;
+      await waitFor(() => expect(read()?.items).toHaveLength(3));
+      vi.mocked(api.suggestions).mockRejectedValueOnce(new Error("offline"));
+      await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+      expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy();
+      expect(screen.getAllByTestId("suggestion-card")).toHaveLength(3);
+      expect(read()?.items).toHaveLength(3);
+      vi.mocked(api.suggestions).mockResolvedValueOnce({ suggestions: three.slice(0, 2) });
+      await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+      await waitFor(() => expect(screen.getAllByTestId("suggestion-card")).toHaveLength(2));
+    });
+
+    it("a failed Find does not keep a half-ranked list, so dismissing the error cannot save it", async () => {
+      const twelve = Array.from({ length: 12 }, (_, i) => ({ osmId: `node/${i}`, name: `Spot ${i}`, lat: 37.7 + i / 100, lng: -119.7, kind: "viewpoint" as const }));
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.suggestions).mockResolvedValueOnce({ suggestions: twelve });
+      vi.mocked(api.suggestionPopularity).mockImplementation(() => new Promise(() => {})); // ranking never finishes
+      render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+      await openMyTrip();
+      await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/\d mi\b/));
+      await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
+      await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+      expect(await screen.findAllByTestId("suggestion-card")).toHaveLength(5);
+      vi.mocked(api.suggestions).mockRejectedValueOnce(new Error("offline"));
+      await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+      const alert = await screen.findByRole("alert");
+      expect(screen.queryAllByTestId("suggestion-card")).toHaveLength(0);
+      await userEvent.click(within(alert).getByRole("button"));
+      expect(screen.queryAllByTestId("suggestion-card")).toHaveLength(0);
+      expect(window.sessionStorage.getItem("rtpp.suggestions.v1.t1")).toBeNull();
+    });
+
+    it("a Dismiss while a failed Find still shows the kept list is saved", async () => {
+      const three = Array.from({ length: 3 }, (_, i) => ({ osmId: `node/${i}`, name: `Spot ${i}`, lat: 37.7 + i / 100, lng: -119.7, kind: "viewpoint" as const }));
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.suggestions).mockResolvedValueOnce({ suggestions: three });
+      vi.mocked(api.suggestionPopularity).mockResolvedValue({ counts: three.map(() => 7) });
+      render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+      await openMyTrip();
+      await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/\d mi\b/));
+      await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
+      await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+      expect(await screen.findAllByTestId("suggestion-card")).toHaveLength(3);
+      const read = () => JSON.parse(window.sessionStorage.getItem("rtpp.suggestions.v1.t1") ?? "null") as { items: unknown[] } | null;
+      await waitFor(() => expect(read()?.items).toHaveLength(3));
+      vi.mocked(api.suggestions).mockRejectedValueOnce(new Error("offline"));
+      await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+      await screen.findByRole("button", { name: "Retry" });
+      await userEvent.click(screen.getByRole("button", { name: "Dismiss Spot 0" }));
+      expect(screen.getAllByTestId("suggestion-card")).toHaveLength(2);
+      await waitFor(() => expect(read()?.items).toHaveLength(2));
+    });
+
+    it("saves a list only once popularity ranking has finished", async () => {
+      const twelve = Array.from({ length: 12 }, (_, i) => ({ osmId: `node/${i}`, name: `Spot ${i}`, lat: 37.7 + i / 100, lng: -119.7, kind: "viewpoint" as const }));
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.suggestions).mockResolvedValue({ suggestions: twelve });
+      const releases: Array<() => void> = [];
+      vi.mocked(api.suggestionPopularity).mockImplementation(
+        (places) => new Promise((resolve) => releases.push(() => resolve({ counts: places.map(() => 1) }))),
+      );
+      render(<TripEditor initialTrip={optimizedTrip(seed)} />);
+      await openMyTrip();
+      await waitFor(() => expect(screen.getByTestId("route-status").textContent).toMatch(/\d mi\b/));
+      await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
+      await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+      await waitFor(() => expect(releases).toHaveLength(3));
+      await act(async () => releases[0]()); // 5 of 12 ranked: partial
+      await waitFor(() => expect(screen.getAllByTestId("suggestion-card")).toHaveLength(10));
+      expect(window.sessionStorage.getItem("rtpp.suggestions.v1.t1")).toBeNull();
+      await act(async () => { releases[1](); releases[2](); });
+      await waitFor(() => expect(JSON.parse(window.sessionStorage.getItem("rtpp.suggestions.v1.t1") ?? "null")?.items).toHaveLength(12));
     });
 
     it("shows a saved list after a reload without any network call, and Dismiss still filters it", async () => {
@@ -1290,6 +1396,34 @@ describe("TripEditor", () => {
       expect(api.reorderStops).not.toHaveBeenCalled();
     });
 
+    it("optimizes two unvisited stops without the optimizer even when the visited anchor has a light preference", async () => {
+      const stops = [
+        newStop({ id: "a", order: 0, name: "A", lat: 36, lng: -119, visited: true }),
+        newStop({ id: "b", order: 1, name: "B", lat: 38, lng: -119, visited: true, lightPref: "sunrise" }),
+        newStop({ id: "c", order: 2, name: "C", lat: 37, lng: -119 }),
+      ];
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(stops)} />);
+      await openMyTrip();
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", { routeOptimizedFor: routeSignature("2026-07-01", stops) }));
+      expect(api.optimizeOrder).not.toHaveBeenCalled();
+    });
+
+    it("still calls the optimizer for two unvisited stops when one has a light preference", async () => {
+      const stops = [
+        newStop({ id: "a", order: 0, name: "A", lat: 36, lng: -119, visited: true }),
+        newStop({ id: "b", order: 1, name: "B", lat: 38, lng: -119 }),
+        newStop({ id: "c", order: 2, name: "C", lat: 37, lng: -119, lightPref: "sunset" }),
+      ];
+      vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], misses: [] });
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(stops)} />);
+      await openMyTrip();
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      await waitFor(() => expect(api.optimizeOrder).toHaveBeenCalledTimes(1));
+    });
+
     it("saves the route signature with the departure in one PATCH when optimizing", async () => {
       reorderEcho();
       vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1] });
@@ -1405,6 +1539,40 @@ describe("TripEditor", () => {
         await waitFor(() => expect(api.reorderStops).toHaveBeenLastCalledWith("t1", ["a", "b", "c"]));
         await waitFor(() => expect(screen.queryByRole("button", { name: "Reset to now" })).toBeNull());
         expect((screen.getByLabelText("Start time") as HTMLInputElement).value).toMatch(/^\d{2}:\d{2}$/); // back to now
+      });
+
+      describe("with exactly two stops", () => {
+        const sunsetB = [three[0], { ...three[1], lightPref: "sunset" as const }];
+        const two = (departAt: string | null) => ({ ...withStops(sunsetB), departAt });
+        const echoTwo = () =>
+          vi.mocked(api.updateTrip).mockImplementation(async (_id, patch) => ({ trip: { ...two(null), ...patch } as never }));
+
+        it("still searches the start time for light, saves it, and Undo restores it", async () => {
+          echoTwo();
+          vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1], departAt: "2026-07-01T23:15:00.000Z", misses: [{ stopIndex: 1, minutes: 40 }] });
+          const user = userEvent.setup();
+          render(<TripEditor initialTrip={two(null)} />);
+          await openMyTrip();
+          await user.click(screen.getByRole("button", { name: "Optimize route" }));
+          await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", expect.objectContaining({ departAt: "2026-07-01T23:15:00.000Z" })));
+          expect(api.reorderStops).not.toHaveBeenCalled();
+          await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toMatch(/^Start time moved to .*Can't fit 1 stop in its light: B\./));
+          await user.click(await screen.findByRole("button", { name: "Undo" }));
+          await waitFor(() => expect(api.updateTrip).toHaveBeenLastCalledWith("t1", { departAt: null, routeOptimizedFor: null }));
+          expect(api.reorderStops).not.toHaveBeenCalled();
+        });
+
+        it("says nothing about a fastest order when nothing changed", async () => {
+          echoTwo();
+          vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1], departAt: null, misses: [] });
+          const user = userEvent.setup();
+          render(<TripEditor initialTrip={two(null)} />);
+          await openMyTrip();
+          await user.click(screen.getByRole("button", { name: "Optimize route" }));
+          await waitFor(() => expect(api.updateTrip).toHaveBeenCalledWith("t1", { routeOptimizedFor: routeSignature("2026-07-01", sunsetB) }));
+          expect(api.optimizeOrder).toHaveBeenCalledTimes(1);
+          expect(screen.queryByText(/fastest/)).toBeNull();
+        });
       });
 
       it("never saves a start time outside the planned day: the optimizer's pick is clamped, and the move is announced", async () => {
@@ -1735,6 +1903,22 @@ describe("TripEditor with saved settings", () => {
       expect((await screen.findByRole("alert")).textContent).toContain("offline");
       await userEvent.click(screen.getByRole("button", { name: "Add stop" }));
       await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    });
+
+    it("the offline banner clears when the connection returns, but another error stays", async () => {
+      vi.mocked(api.directions).mockResolvedValue({ route });
+      vi.mocked(api.addStop).mockRejectedValue(new Error("You're offline or the server can't be reached. Try again."));
+      render(<TripEditor initialTrip={withStops(seed)} />);
+      await userEvent.click(screen.getByRole("button", { name: "pick place" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Add stop" }));
+      expect((await screen.findByRole("alert")).textContent).toContain("offline or the server");
+      act(() => { window.dispatchEvent(new Event("online")); });
+      await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+      vi.mocked(api.addStop).mockRejectedValue(new Error("Trip is full"));
+      await userEvent.click(screen.getByRole("button", { name: "Add stop" }));
+      expect((await screen.findByRole("alert")).textContent).toContain("Trip is full");
+      act(() => { window.dispatchEvent(new Event("online")); });
+      expect(screen.getByRole("alert").textContent).toContain("Trip is full");
     });
 
     it("does not show the same error twice", async () => {

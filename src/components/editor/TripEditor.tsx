@@ -65,6 +65,8 @@ function joinNotes(parts: (string | null)[]): string {
   return kept.map((t, i) => (i < kept.length - 1 ? t.replace(/\.$/, "") : t.replace(/\.?$/, "."))).join(". ");
 }
 
+/** The message api-client gives when a request fails because the browser is offline or the server is unreachable. */
+const OFFLINE_ERROR = /offline or the server can't be reached/;
 const OPTIMIZED_ANNOUNCEMENT = "Route optimized. Undo is available.";
 
 /** JSON with sorted keys, so two copies of the same data compare equal whatever order their keys were built in. */
@@ -287,6 +289,23 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     window.addEventListener("online", retry);
     return () => window.removeEventListener("online", retry);
   }, []);
+  // The "offline or the server can't be reached" banner goes away when the browser reports the connection is back
+  // (the next successful action clears an error banner too); the dismiss button works as before.
+  // A route that failed to load is fetched again at the same moment (routeRetry is in the directions effect's deps).
+  const [routeRetry, setRouteRetry] = useState(0);
+  const routeFailedRef = useRef(false);
+  useEffect(() => {
+    routeFailedRef.current = routeResult !== null && routeResult.error !== null;
+  });
+  useEffect(() => {
+    const clearOffline = () => {
+      if (routeFailedRef.current) setRouteRetry((n) => n + 1);
+      setStopsError((prev) => (prev !== null && OFFLINE_ERROR.test(prev) ? null : prev));
+      setRouteResult((r) => (r && r.error !== null && OFFLINE_ERROR.test(r.error) ? { ...r, dismissed: true } : r));
+    };
+    window.addEventListener("online", clearOffline);
+    return () => window.removeEventListener("online", clearOffline);
+  }, []);
   useEffect(() => {
     const name = trip.name.trim();
     if (!noStops || name.length < 2 || nameLocatedRef.current === name) return;
@@ -354,10 +373,17 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSuggestionsState(restored);
   }, [trip.id]);
-  // Keep the saved copy in step with the list (a Dismiss or Accept saves again); anything but a finished list clears it.
+  // Keep the saved copy in step with the list (a Dismiss or Accept saves again). Only a fully ranked list is saved (`shown` is
+  // set while popularity is still revealing it), so a reload never freezes a half-ranked one. A search in flight leaves the saved copy
+  // alone; one that failed but kept the old (complete) list on screen saves it again, so a Dismiss sticks; anything else clears it.
   useEffect(() => {
     if (!suggestionsState || suggestionsState === restoredRef.current) return;
-    if (suggestionsState.status === "done") saveSuggestions(trip.id, { key: suggestionsState.key, items: suggestionsState.items });
+    const { status, items, key, shown } = suggestionsState;
+    if (status === "done") {
+      if (shown === undefined) saveSuggestions(trip.id, { key, items });
+      else removeSuggestions(trip.id);
+    } else if (status === "error" && items.length > 0) saveSuggestions(trip.id, { key, items }); // the kept list is a complete one
+    else if (status === "loading") return;
     else removeSuggestions(trip.id);
   }, [suggestionsState, trip.id]);
   // A place that is now a stop is not suggested again.
@@ -431,7 +457,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     return () => {
       cancelled = true;
     };
-  }, [waypointKey]);
+  }, [waypointKey, routeRetry]);
 
   // With a single stop there is no route to follow, so look around that stop automatically
   // (with two or more, suggestions follow the route and are found on request).
@@ -706,8 +732,10 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         setOptimizeNote({ moveAt: null, notes: ["Every stop is already visited, so there is nothing left to reorder"], idsKey: startKey });
         return;
       }
-      // Two stops have nothing to reorder (the optimizer needs three), so Optimize only records the state.
-      if (tail.length < 3) {
+      // Two stops have nothing to reorder, so without a light preference to plan the start time around Optimize only records the state.
+      // (The visited anchor does not count: only the unvisited stops are being planned.)
+      // With one, the optimizer still runs: it keeps the order and searches the start time, as it does for three or more.
+      if (tail.length < 2 || (tail.length === 2 && before.slice(done).every((s) => s.lightPref === "any"))) {
         await saveTrip({ routeOptimizedFor: routeSignature(trip.plannedDate, before) });
         setRouteFlowId((n) => n + 1);
         return;
@@ -754,8 +782,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         await saveTrip({ routeOptimizedFor: optimizedFor });
         setRouteFlowId((n) => n + 1);
         const usesLight = tail.some((s) => s.lightPref !== "any") || result.departAt != null;
-        const verdict = isExactOptimization(tail.length, usesLight) && result.complete !== false ? "Already the fastest order" : "No faster order found";
-        setOptimizeNote({ moveAt: null, notes: [verdict, ...notes], idsKey: startKey });
+        // Two stops have no other order to compare, so there is no verdict to give, only the light notes.
+        const verdict = tail.length < 3 ? null : isExactOptimization(tail.length, usesLight) && result.complete !== false ? "Already the fastest order" : "No faster order found";
+        if (verdict || notes.some(Boolean)) setOptimizeNote({ moveAt: null, notes: [verdict, ...notes], idsKey: startKey });
         return;
       }
       const previousIds = before.map((s) => s.id);
@@ -978,6 +1007,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     if (stops.length === 1) {
       const key = waypointKey;
       const { lng, lat } = stops[0];
+      const kept = keptForRetry(key);
       setSuggestionsState({ key, items: [], status: "loading", error: null });
       try {
         const { suggestions: found } = await api.suggestions({ around: [lng, lat] }, { enrich: false });
@@ -985,13 +1015,14 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         setSuggestionsState({ key, items: found.filter((x) => haversineMeters({ lat, lng }, x) >= ALREADY_A_STOP_M), status: "done", error: null, shown: POPULARITY_BATCH });
       } catch (e) {
         if (seq !== suggestionsSeq.current) return;
-        setSuggestionsState({ key, items: [], status: "error", error: errorMessage(e, "Couldn't load suggestions. Please retry.") });
+        setSuggestionsState({ key, items: kept, status: "error", error: errorMessage(e, "Couldn't load suggestions. Please retry.") });
       }
       return;
     }
     if (!activeRoute) return;
     const key = waypointKey;
     const placed = stops;
+    const kept = keptForRetry(key);
     setSuggestionsState({ key, items: [], status: "loading", error: null });
     askedKeyRef.current = key;
     const warm = prewarmRef.current?.key === key ? prewarmRef.current.prewarm : null;
@@ -1004,8 +1035,15 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       setSuggestionsState({ key, items, status: "done", error: null, shown: POPULARITY_BATCH });
     } catch (e) {
       if (seq !== suggestionsSeq.current) return;
-      setSuggestionsState({ key, items: [], status: "error", error: errorMessage(e, "Couldn't load suggestions. Please retry.") });
+      setSuggestionsState({ key, items: kept, status: "error", error: errorMessage(e, "Couldn't load suggestions. Please retry.") });
     }
+  }
+
+  /** A failed search keeps the list already on screen for the same route (and its saved copy) when that list is complete; a half-ranked list or a changed route starts empty. */
+  function keptForRetry(key: string): Suggestion[] {
+    const have = suggestionsStateRef.current;
+    const complete = have && (have.restored || have.status === "error" || (have.status === "done" && have.shown === undefined));
+    return have && have.key === key && complete ? have.items : [];
   }
 
   function dismissSuggestion(osmId: string) {
@@ -1188,8 +1226,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         <div className="pointer-events-auto">
           <SearchBar getProximity={() => centerRef.current} onSelect={selectSearchResult} inputRef={searchRef} />
         </div>
+        {/* Below the large breakpoint the map controls (zoom, compass, info, Zoom to fit) run down the right edge from just under the search bar: the cards stop short of them. */}
         {pending && (
-          <div className="pointer-events-auto">
+          <div className="pointer-events-auto mr-12 lg:mr-0">
             <PlaceCard
               name={pending.name}
               resolving={pending.resolving}
@@ -1207,7 +1246,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
           </div>
         )}
         {cardStop && !pending && (
-          <div className="pointer-events-auto">
+          <div className="pointer-events-auto mr-12 lg:mr-0">
             <StopCard
               stop={cardStop}
               bestTime={bestTimes[cardIndex] ?? null}
@@ -1316,7 +1355,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
             onDismiss={dismissSuggestion}
             onHover={setHighlightedId}
             weather={suggestionWeather}
-            onDismissError={() => setSuggestionsState({ key: waypointKey, items: [], status: "idle", error: null })}
+            onDismissError={() => setSuggestionsState((prev) => (prev && prev.items.length > 0 ? { ...prev, status: "done", error: null, shown: undefined, restored: true } : { key: waypointKey, items: [], status: "idle", error: null }))}
           />
         }
         suggestionCount={suggestions.length}

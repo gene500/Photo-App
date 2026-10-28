@@ -185,6 +185,11 @@ describe("SharedTripView Download PDF", () => {
     expect(apple.rel).toContain("noopener");
   });
 
+  it("names the side panel like the editor's", () => {
+    render(<SharedTripView trip={trip} />);
+    expect(screen.getByRole("complementary", { name: "Trip panel" })).toBeTruthy();
+  });
+
   it("shows no map links with fewer than two stops", () => {
     render(<SharedTripView trip={{ ...trip, stops: trip.stops.slice(0, 1) }} />);
     expect(screen.queryByRole("link", { name: /open in/i })).toBeNull();

@@ -26,8 +26,9 @@ describe("POST /api/optimize", () => {
     expect((await post([[0, 0], [0, 1], [0, 2]])).status).toBe(401);
   });
 
-  it("needs at least 3 stops and at most 25", async () => {
-    expect((await post([[0, 0], [0, 1]])).status).toBe(400);
+  it("needs at least 2 stops and at most 25, and can time a two-stop trip", async () => {
+    expect((await post([[0, 0]])).status).toBe(400);
+    expect((await post([[0, 0], [0, 1]])).status).toBe(200);
     expect((await post(Array.from({ length: 26 }, (_, i) => [i * 0.01, 0]))).status).toBe(400);
     expect((await post([[0, 0], [0, 1], [200, 2]])).status).toBe(400);
   });

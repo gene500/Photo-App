@@ -39,6 +39,15 @@ export async function createUser(
 let dummyHash: Promise<string> | undefined;
 const getDummyHash = () => (dummyHash ??= bcrypt.hash("not-a-real-password", BCRYPT_COST));
 
+/**
+ * Whether the password matches the hash. bcrypt only reads the first 72 bytes (signup refuses longer ones), so a longer
+ * password that merely starts with the right 72 is wrong. The compare runs first so the timing does not change.
+ */
+async function passwordMatches(password: string, hash: string): Promise<boolean> {
+  const ok = await bcrypt.compare(password, hash);
+  return ok && new TextEncoder().encode(password).length <= 72;
+}
+
 export async function verifyCredentials(
   email: string,
   password: string,
@@ -46,7 +55,7 @@ export async function verifyCredentials(
   const user = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
   // A Google-only account has no password: compare against the dummy so the timing matches, and refuse.
   const usable = user?.passwordSet ? user.passwordHash : undefined;
-  const ok = await bcrypt.compare(password, usable ?? (await getDummyHash()));
+  const ok = await passwordMatches(password, usable ?? (await getDummyHash()));
   return user && usable && ok ? { id: user.id, email: user.email } : null;
 }
 
@@ -106,7 +115,7 @@ export async function revokeAllSessions(userId: string): Promise<void> {
 /** Sets a new password after checking the current one, and ends every session, this one included. */
 export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user || !user.passwordSet || !(await bcrypt.compare(currentPassword, user.passwordHash))) return false;
+  if (!user || !user.passwordSet || !(await passwordMatches(currentPassword, user.passwordHash))) return false;
   // Compare-and-swap on the hash that was just checked: of several simultaneous changes only one wins.
   const { count } = await prisma.user.updateMany({
     where: { id: userId, passwordHash: user.passwordHash },
@@ -141,7 +150,7 @@ export async function deleteAccount(
   if (!user.passwordSet && !(proof.authTime !== undefined && Date.now() - proof.authTime <= REAUTH_WINDOW_MS)) return REAUTH_REQUIRED;
   // Password accounts confirm with the password; Google-only accounts (no password) by typing their email address.
   const confirmed = user.passwordSet
-    ? proof.password !== undefined && (await bcrypt.compare(proof.password, user.passwordHash))
+    ? proof.password !== undefined && (await passwordMatches(proof.password, user.passwordHash))
     : proof.confirmEmail !== undefined && normalizeEmail(proof.confirmEmail) === user.email;
   if (!confirmed) return null;
   // One transaction, so a photo attached between the read and the delete cannot be left behind.

@@ -15,6 +15,21 @@ export class ApiError extends Error {
   }
 }
 
+/** Replaces lone UTF-16 surrogates with U+FFFD: `encodeURIComponent` throws a URIError on them (typed or pasted text can carry one). */
+function wellFormed(text: string): string {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff && i + 1 < text.length && (text.charCodeAt(i + 1) & 0xfc00) === 0xdc00) {
+      out += text[i] + text[++i];
+    } else {
+      out += c >= 0xd800 && c <= 0xdfff ? "\ufffd" : text[i];
+    }
+  }
+  return out;
+}
+const encodeQuery = (text: string) => encodeURIComponent(wellFormed(text));
+
 /** How long a request may take before it is given up on, so buttons never stay disabled forever. */
 export const DEFAULT_TIMEOUT_MS = 20_000;
 /** Optimize (a big Matrix call) and photo uploads legitimately take longer. */
@@ -124,21 +139,21 @@ export const api = {
   /** `session` groups the suggests and the retrieve of one search (Mapbox bills them together). */
   geocode: (q: string, session: string, proximity?: { lat: number; lng: number }) =>
     request<{ suggestions: SearchSuggestion[] }>(
-      `/api/geocode?q=${encodeURIComponent(q)}&session=${session}${proximity ? `&proximity=${proximity.lng.toFixed(6)},${proximity.lat.toFixed(6)}` : ""}`,
+      `/api/geocode?q=${encodeQuery(q)}&session=${session}${proximity ? `&proximity=${proximity.lng.toFixed(6)},${proximity.lat.toFixed(6)}` : ""}`,
       {},
       DEFAULT_TIMEOUT_MS,
       shapes.suggestions,
     ),
   retrievePlace: (id: string, session: string) =>
-    request<{ place: Place }>(`/api/geocode/retrieve?id=${encodeURIComponent(id)}&session=${session}`, {}, DEFAULT_TIMEOUT_MS, shapes.place),
+    request<{ place: Place }>(`/api/geocode/retrieve?id=${encodeQuery(id)}&session=${session}`, {}, DEFAULT_TIMEOUT_MS, shapes.place),
   reverseGeocode: (lat: number, lng: number) =>
     request<{ place: Place }>(`/api/reverse-geocode?lat=${lat.toFixed(6)}&lng=${lng.toFixed(6)}`, {}, DEFAULT_TIMEOUT_MS, shapes.place),
   /** Where a trip name points (a city, park region or state), or null. */
   locate: (q: string) =>
-    request<{ area: { lat: number; lng: number; bbox?: [number, number, number, number] } | null; landmark?: { name: string; lat: number; lng: number } | null }>(`/api/locate?q=${encodeURIComponent(q)}`),
+    request<{ area: { lat: number; lng: number; bbox?: [number, number, number, number] } | null; landmark?: { name: string; lat: number; lng: number } | null }>(`/api/locate?q=${encodeQuery(q)}`),
   placePhoto: (p: { name: string; lat: number; lng: number }) =>
     request<{ photo: PlacePhoto | null }>(
-      `/api/place-photo?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}&name=${encodeURIComponent(p.name)}`,
+      `/api/place-photo?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}&name=${encodeQuery(p.name)}`,
     ),
   /** Weather for up to 10 places on one date, in the same order; unavailable ones come back as unavailable. */
   weatherBatch: (date: string, points: { lat: number; lng: number }[]) =>

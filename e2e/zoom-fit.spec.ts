@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { signUp } from "./helpers";
 
 async function newTrip(page: Page, label: string) {
   await page.goto("/signup");
@@ -40,3 +41,31 @@ test("Zoom to fit: absent with no stops, then counts presses with every stop in 
   }
   await page.screenshot({ path: process.env.ZFIT_SHOT ?? "test-results/zoom-fit.png" });
 });
+
+// The selected-stop card used to run under the control column (phone portrait and short landscape).
+for (const [label, width, height] of [["phone portrait", 375, 667], ["short landscape", 667, 375]] as const) {
+  test(`Zoom to fit stays reachable while a stop card is open (${label})`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await signUp(page, `e2e-zfit-card-${width}`);
+    await page.getByLabel("Trip name").fill("Fit me");
+    await page.getByLabel("Planned date").fill("2026-07-01");
+    await page.getByRole("button", { name: "Create trip" }).click();
+    await expect(page).toHaveURL(/\/trips\/[^/]+$/);
+    const tripId = page.url().split("/").pop()!;
+    for (const [name, lat, lng] of [["Card A", 36.8, -119.8], ["Card B", 37.4, -119.0]] as const) {
+      expect((await page.request.post(`/api/trips/${tripId}/stops`, { data: { name, lat, lng, source: "manual" } })).status()).toBe(201);
+    }
+    await page.reload();
+    await expect(page.getByTestId("stop-row")).toHaveCount(2);
+    const marker = page.getByTestId("map").getByRole("button", { name: /^Stop 1: Card A/ });
+    await marker.focus(); // by keyboard: on a phone the marker can sit under the bottom sheet
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("region", { name: "Selected stop" })).toBeVisible();
+    const fit = page.getByRole("button", { name: "Zoom to fit all stops" });
+    const f = (await fit.boundingBox())!;
+    const onTop = await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest(".zoom-fit-ctrl"), [f.x + f.width / 2, f.y + f.height / 2]);
+    expect(onTop).toBe(true);
+    await fit.click();
+    await expect(page.getByTestId("map")).toHaveAttribute("data-fit-count", "1");
+  });
+}

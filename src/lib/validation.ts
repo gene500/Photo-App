@@ -145,7 +145,7 @@ export const optimizeRequestSchema = z
   .object({
   coordinates: z
     .array(lngLat)
-    .min(3, "Add at least 3 stops to optimize the route")
+    .min(2, "Add at least 2 stops to optimize the route")
     .max(MAX_ROUTE_WAYPOINTS, `Optimizing supports at most ${MAX_ROUTE_WAYPOINTS} stops per trip`),
     /** Per-coordinate light preference and time spent; same length as `coordinates`. */
     stops: z.array(z.object({ lightPref: lightPrefSchema, priority: stopPrioritySchema.optional(), dwellMinutes: dwellMinutesSchema })).optional(),

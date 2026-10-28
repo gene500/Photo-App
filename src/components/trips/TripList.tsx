@@ -69,7 +69,7 @@ export function TripList({ trips, renderedAt }: { trips: TripSummary[]; /** The 
             <Link data-trip-link={t.id} href={`/trips/${t.id}`} className="flex min-w-0 flex-1 items-center gap-4 rounded-2xl px-4 py-3.5 focus-visible:outline-2 focus-visible:outline-accent-strong">
               <DateStub iso={t.plannedDate} />
               <span className="flex min-w-0 flex-col gap-0.5">
-                <span title={t.name} className="font-display truncate text-lg font-semibold">{t.name}</span>
+                <span title={t.name} className="font-display line-clamp-2 break-words text-lg font-semibold">{t.name}</span>
                 <span className="text-sm text-muted">{t.stopCount} stops</span>
               </span>
             </Link>

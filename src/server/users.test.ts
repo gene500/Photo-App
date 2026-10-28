@@ -33,6 +33,27 @@ describe("users", () => {
     expect(await verifyCredentials("nobody@example.com", "correct-horse")).toBeNull();
   });
 
+  it("rejects a password longer than 72 bytes even when its first 72 bytes match", async () => {
+    const base = "a".repeat(72);
+    const user = await createUser("ann@example.com", base);
+    expect(await verifyCredentials("ann@example.com", base)).toEqual(user);
+    expect(await verifyCredentials("ann@example.com", base + "extra")).toBeNull();
+    // 36 two-byte characters are 72 bytes; one more character passes 72 bytes
+    const wide = "é".repeat(36);
+    await createUser("bob@example.com", wide);
+    expect(await verifyCredentials("bob@example.com", wide + "é")).toBeNull();
+  });
+
+  it("changePassword and deleteAccount also refuse a password longer than 72 bytes with a matching first 72", async () => {
+    const { deleteAccount } = await import("./users");
+    const base = "a".repeat(72);
+    const user = await createUser("ann@example.com", base);
+    expect(await changePassword(user.id, base + "extra", "new-password-1")).toBe(false);
+    expect(await deleteAccount(user.id, { password: base + "extra" })).toBeNull();
+    expect(await prisma.user.count()).toBe(1);
+    expect(await verifyCredentials("ann@example.com", base)).toEqual(user);
+  });
+
   it("still runs a bcrypt comparison when the email is unknown (no timing tell)", async () => {
     await createUser("ann@example.com", "correct-horse");
     const compare = vi.spyOn(bcrypt, "compare");

@@ -63,6 +63,25 @@ describe("api client", () => {
     expect(fetchMock.mock.calls[0][0]).toBe(`/api/geocode?q=Lee%20Vining%2C%20CA&session=${SESSION}`);
   });
 
+  it("does not throw on a lone surrogate in a query, name or id", async () => {
+    fetchMock.mockImplementation(async () => Response.json({ suggestions: [], area: null, photo: null, place: null }));
+    await api.geocode("abc\ud83d", SESSION);
+    expect(fetchMock.mock.calls[0][0]).toBe(`/api/geocode?q=abc%EF%BF%BD&session=${SESSION}`);
+    await api.geocode("\ude00x", SESSION);
+    expect(fetchMock.mock.calls[1][0]).toBe(`/api/geocode?q=%EF%BF%BDx&session=${SESSION}`);
+    await api.geocode("ok \ud83d\ude00", SESSION); // a valid pair is kept
+    expect(fetchMock.mock.calls[2][0]).toBe(`/api/geocode?q=ok%20%F0%9F%98%80&session=${SESSION}`);
+    // The answers may not match the expected shapes; only that the request is built and sent matters here.
+    await api.retrievePlace("id\ud83d", SESSION).catch(() => undefined);
+    await api.locate("x\ud83d").catch(() => undefined);
+    await api.placePhoto({ name: "n\ud83d", lat: 1, lng: 2 }).catch(() => undefined);
+    expect(fetchMock.mock.calls.slice(3).map(([u]) => u)).toEqual([
+      `/api/geocode/retrieve?id=id%EF%BF%BD&session=${SESSION}`,
+      "/api/locate?q=x%EF%BF%BD",
+      "/api/place-photo?lat=1.000000&lng=2.000000&name=n%EF%BF%BD",
+    ]);
+  });
+
   it("adds a proximity bias to geocode requests", async () => {
     fetchMock.mockResolvedValue(Response.json({ suggestions: [] }));
     await api.geocode("Spring", SESSION, { lat: 36.74, lng: -119.79 });

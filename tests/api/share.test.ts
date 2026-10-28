@@ -2,17 +2,16 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
-import { getCurrentUserId } from "@/server/session";
 import { DELETE, POST } from "@/app/api/trips/[id]/share/route";
 import { GET as getTripRoute } from "@/app/api/trips/[id]/route";
 import { GET as listTripsRoute } from "@/app/api/trips/route";
 import SharedTripPage, { generateMetadata } from "@/app/s/[token]/page";
 import { prisma } from "@/server/db";
-import { getSharedTrip } from "@/server/share";
+import { loadSharedTrip } from "@/server/share";
 import { createTestUser, resetDb } from "../helpers/db";
+import { signInAs } from "../helpers/session";
 import { idParams, jsonRequest } from "../helpers/requests";
 
-const signInAs = (id: string | null) => vi.mocked(getCurrentUserId).mockResolvedValue(id);
 const share = (tripId: string) => POST(jsonRequest("POST", `/api/trips/${tripId}/share`), idParams(tripId));
 const revoke = (tripId: string) => DELETE(jsonRequest("DELETE", `/api/trips/${tripId}/share`), idParams(tripId));
 
@@ -68,7 +67,7 @@ describe("share routes", () => {
     signInAs((await createTestUser()).id);
     expect((await share(trip.id)).status).toBe(404);
     expect((await revoke(trip.id)).status).toBe(404);
-    expect(await getSharedTrip(token)).not.toBeNull();
+    expect(await loadSharedTrip(token)).not.toBeNull();
     // and a stranger cannot create a token on an unshared trip
     const fresh = await seed();
     expect((await share(fresh.trip.id)).status).toBe(404);
@@ -80,7 +79,7 @@ describe("share routes", () => {
     signInAs(owner.id);
     const token = (await (await share(trip.id)).json()).shareToken as string;
     expect((await revoke(trip.id)).status).toBe(204);
-    expect(await getSharedTrip(token)).toBeNull();
+    expect((await loadSharedTrip(token))?.trip ?? null).toBeNull();
     await expect(SharedTripPage({ params: Promise.resolve({ token }) } as never)).rejects.toThrow();
     const again = (await (await share(trip.id)).json()).shareToken as string;
     expect(again).not.toBe(token);
@@ -112,12 +111,12 @@ describe("public share data", () => {
 
   it("rejects malformed or unknown tokens without a DB hit for garbage", async () => {
     await sharedToken();
-    for (const t of ["", "short", "x".repeat(43), "../etc/passwd", "a".repeat(200)]) expect(await getSharedTrip(t)).toBeNull();
+    for (const t of ["", "short", "x".repeat(43), "../etc/passwd", "a".repeat(200)]) expect((await loadSharedTrip(t))?.trip ?? null).toBeNull();
   });
 
   it("returns exactly the sanitized DTO, stops in order, with shot data", async () => {
     const { token } = await sharedToken();
-    const dto = await getSharedTrip(token);
+    const dto = (await loadSharedTrip(token))?.trip;
     expect(dto).toEqual({
       name: "Coast run",
       plannedDate: "2026-07-01",
@@ -131,14 +130,14 @@ describe("public share data", () => {
 
   it("leaves private stop notes out of the DTO, keeping shot notes", async () => {
     const { token } = await sharedToken();
-    const dto = await getSharedTrip(token);
+    const dto = (await loadSharedTrip(token))?.trip;
     expect(JSON.stringify(dto)).not.toContain("Park by the gate");
     expect(JSON.stringify(dto)).toContain("Use a polarizer");
   });
 
   it("the DTO never contains email, userId, photoUrl, ids or the token", async () => {
     const { owner, trip, token } = await sharedToken();
-    const dto = await getSharedTrip(token);
+    const dto = (await loadSharedTrip(token))?.trip;
     const json = JSON.stringify(dto);
     for (const secret of [EMAIL, owner.id, trip.id, ...trip.stops.map((s) => s.id), PHOTO, "private-upload", token]) {
       expect(json).not.toContain(secret);

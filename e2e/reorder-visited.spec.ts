@@ -1,15 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
+import { signUp } from "./helpers";
 
 // Visited stops stay first and in place: their handles are disabled, drops on them land at the first unvisited slot,
 // keyboard moves never pass them, and the server normalises a reorder request that moves one.
 const NAMES = ["Alpha", "Bravo", "Charlie", "Delta", "Echo"];
 
 async function setup(page: Page, prefix: string) {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`${prefix}-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, prefix);
   const res = await page.request.post("/api/trips", { data: { name: "Visited order", plannedDate: "2026-07-01" } });
   expect(res.status()).toBe(201);
   const tripId = (await res.json()).trip.id as string;

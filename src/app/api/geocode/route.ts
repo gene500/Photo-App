@@ -1,10 +1,10 @@
 import { z } from "zod";
+import { sessionSchema } from "@/lib/validation";
 import { ExternalServiceError, searchPlaces } from "@/server/external/mapbox";
 import { handle, HttpError, requireUserId } from "@/server/http";
 import { enforcePaidLimit } from "@/server/shared-limit";
 
 const querySchema = z.string().trim().min(2, "Type at least 2 characters").max(200, "Search text must be at most 200 characters");
-const sessionSchema = z.string().uuid("session must be a uuid");
 const proximitySchema = z
   .string()
   .regex(/^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/, "proximity must be lng,lat")

@@ -1,12 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { signUp } from "./helpers";
 
 test("sign up → new trip → search + click to add stops → suggestion → reorder → mark visited", async ({ page }) => {
   // Sign up
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e");
 
   // New trip: just a name and a date, then the empty map
   await page.getByLabel("Trip name").fill("Sierra loop");

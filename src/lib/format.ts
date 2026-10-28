@@ -1,7 +1,7 @@
 import { formatClock } from "./best-time";
 import type { DistanceUnit, TimeFormat } from "./settings";
 
-const METERS_PER_MILE = 1609.344;
+export const METERS_PER_MILE = 1609.344;
 
 export function formatDistance(meters: number, unit: DistanceUnit = "km"): string {
   return unit === "mi" ? `${Math.round(meters / METERS_PER_MILE)} mi` : `${Math.round(meters / 1000)} km`;

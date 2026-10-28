@@ -1,16 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
-import { getCurrentUserId } from "@/server/session";
 import { POST as addPOST } from "@/app/api/trips/[id]/stops/route";
 import { PUT as orderPUT } from "@/app/api/trips/[id]/stops/order/route";
 import { DELETE, PATCH } from "@/app/api/stops/[id]/route";
 import { MAX_ROUTE_WAYPOINTS } from "@/lib/validation";
 import { createTrip, getTrip } from "@/server/trips";
 import { createTestUser, resetDb, sampleTripInput } from "../helpers/db";
+import { signInAs } from "../helpers/session";
 import { idParams, jsonRequest } from "../helpers/requests";
 
-const signInAs = (id: string | null) => vi.mocked(getCurrentUserId).mockResolvedValue(id);
 let userId: string;
 let tripId: string;
 

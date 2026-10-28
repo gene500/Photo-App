@@ -1,5 +1,6 @@
 import type { LngLat, Place, RouteResult, SearchSuggestion } from "@/lib/types";
 import { coordsLabel } from "@/lib/geo";
+import { MAX_STOP_NAME } from "@/lib/validation";
 import { clampText, stripNameChars } from "@/lib/text";
 import { TtlCache } from "../suggestions/cache";
 import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakeLocate, fakeRetrieve, fakeReverseGeocode, fakeSearch, isFakeExternal } from "./fake";
@@ -137,10 +138,9 @@ type GeocodeResponse = {
   }[];
 };
 
-const MAX_NAME_LENGTH = 200; // matches newStopSchema's name limit
 const MAX_SUBTITLE_LENGTH = 120;
 /** Drops control and bidi characters (the stop schema would otherwise refuse the name) and cuts without splitting a surrogate pair. */
-const clampName = (name: string) => clampText(stripNameChars(name), MAX_NAME_LENGTH).trim();
+const clampName = (name: string) => clampText(stripNameChars(name), MAX_STOP_NAME).trim();
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 /** The first usable name: Mapbox fields of the wrong type are skipped. */
 const pickName = (p: { full_address?: unknown; name?: unknown } | undefined, fallback: string) =>

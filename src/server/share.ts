@@ -31,8 +31,3 @@ export async function loadSharedTrip(token: string): Promise<{ trip: PublicTrip;
   const row = await prisma.trip.findUnique({ where: { shareToken: token }, include: { stops: true } });
   return row ? { trip: toPublicTripDto(row), ownerId: row.userId } : null;
 }
-
-/** The sanitized read-only trip for a share token, or null for an unknown, malformed or revoked one. */
-export async function getSharedTrip(token: string): Promise<PublicTrip | null> {
-  return (await loadSharedTrip(token))?.trip ?? null;
-}

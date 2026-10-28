@@ -1,11 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { signUp } from "./helpers";
 
 test("optimize route reorders stops for the shortest drive and can be undone", async ({ page }) => {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-opt-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-opt");
   await page.getByLabel("Trip name").fill("Optimize me");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();

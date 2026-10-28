@@ -7,9 +7,6 @@ import { useSyncExternalStore } from "react";
  */
 export const SHORT_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px) and (max-width: 1023px)";
 
-/** Side panel width: 40% of the page, never narrower than 17.5rem or wider than 23.75rem. Used as a Tailwind arbitrary value. */
-export const SIDE_PANEL_WIDTH = "clamp(17.5rem,40%,23.75rem)";
-
 function subscribe(onChange: () => void): () => void {
   if (typeof window === "undefined" || !window.matchMedia) return () => {};
   const mq = window.matchMedia(SHORT_LANDSCAPE_QUERY);
@@ -26,7 +23,7 @@ export function useShortLandscape(): boolean {
   return useSyncExternalStore(subscribe, isShortLandscape, () => false);
 }
 
-/** The side panel's width in px for a page `pageWidth` px wide (the CSS clamp above, with rem scaled by the text-size setting). */
+/** The side panel's width in px for a page `pageWidth` px wide (40% of the page, clamped to 17.5rem..23.75rem like the `short-landscape:w-[clamp(...)]` classes, with rem scaled by the text-size setting). */
 export function sidePanelPx(pageWidth: number, scale = 1): number {
   return Math.round(Math.min(Math.max(pageWidth * 0.4, 17.5 * 16 * scale), 23.75 * 16 * scale));
 }

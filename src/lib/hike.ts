@@ -1,3 +1,4 @@
+import { METERS_PER_MILE } from "./format";
 import type { DistanceUnit } from "./settings";
 import type { LngLat } from "./types";
 
@@ -18,8 +19,6 @@ export const OSM_ATTRIBUTION = "Trail data © OpenStreetMap contributors";
 export function hikeKey(lat: number, lng: number): string {
   return `${lat.toFixed(4)},${lng.toFixed(4)}`;
 }
-
-const METERS_PER_MILE = 1609.344;
 
 /** "1.2 mi", or "1.9 km" / "850 m": distance only, one decimal (never "0"). */
 export function formatHikeDistance(meters: number, unit: DistanceUnit = "km"): string {

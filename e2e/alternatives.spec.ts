@@ -1,11 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { signUp } from "./helpers";
 
 test("find alternatives for a stop and swap one in", async ({ page }) => {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-alt-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-alt");
   await page.getByLabel("Trip name").fill("Alternatives");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();
@@ -45,11 +42,7 @@ test("find alternatives for a stop and swap one in", async ({ page }) => {
 });
 
 test("undoing a swap restores the previous place", async ({ page }) => {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-alt-undo-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-alt-undo");
   await page.getByLabel("Trip name").fill("Alternatives undo");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();

@@ -1,14 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { signUp } from "./helpers";
 
 test("a sunset stop moves the departure so it is reached in its light, and Undo restores", async ({ page }) => {
   // A new trip starts at the time of day it was created; late in the evening the sunset stop is already reached in its
   // light and Optimize rightly leaves the departure alone. Pin the clock to midday so the test does not depend on when it runs.
   await page.clock.install({ time: new Date("2026-10-27T12:00:00Z") });
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-light-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-light");
   await page.getByLabel("Trip name").fill("Chase the light");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();

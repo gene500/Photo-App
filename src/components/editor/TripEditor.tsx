@@ -30,7 +30,7 @@ import { formatDistance, formatDuration } from "@/lib/format";
 import { coordsLabel, haversineMeters } from "@/lib/geo";
 import { getSkyInfo } from "@/lib/sky";
 import type { LightPref, LngLat, Place, RouteResult, Stop, StopSource, Suggestion, Trip, TripWithStops } from "@/lib/types";
-import { MAX_ROUTE_WAYPOINTS, type StopPatch, type TripPatch } from "@/lib/validation";
+import { MAX_ROUTE_WAYPOINTS, MAX_STOP_NAME, type StopPatch, type TripPatch } from "@/lib/validation";
 import { MapView } from "./MapView";
 import { focusLost } from "@/lib/focus";
 import { PlaceCard } from "./PlaceCard";
@@ -65,7 +65,6 @@ function joinNotes(parts: (string | null)[]): string {
   return kept.map((t, i) => (i < kept.length - 1 ? t.replace(/\.$/, "") : t.replace(/\.?$/, "."))).join(". ");
 }
 
-const MAX_STOP_NAME = 200;
 const OPTIMIZED_ANNOUNCEMENT = "Route optimized. Undo is available.";
 
 /** JSON with sorted keys, so two copies of the same data compare equal whatever order their keys were built in. */

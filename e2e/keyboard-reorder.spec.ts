@@ -1,12 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { signUp } from "./helpers";
 
 // The slimmed Stops row keeps its keyboard reordering: Space lifts, arrows move, Space drops.
 test("keyboard reorder on the Stops rows: to the top, then one down, and it persists", async ({ page }) => {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-kbd-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-kbd");
   await page.getByLabel("Trip name").fill("Keyboard order");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();

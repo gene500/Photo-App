@@ -1,6 +1,10 @@
 import { getMoonIllumination, getMoonTimes, getPosition } from "suncalc";
 import { getSunWindows, solarDayAnchor } from "./best-time";
 
+/** Fixed map hexes like ROUTE_COLOR in MapPanel: a warm amber for sunrise, a violet for sunset; both read on the beige map. */
+export const SUNRISE_COLOR = "#d9822b";
+export const SUNSET_COLOR = "#7b4fa3";
+
 export type MoonPhaseName =
   | "new moon"
   | "waxing crescent"

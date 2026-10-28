@@ -47,7 +47,6 @@
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@turf/boolean-point-in-polygon": "^7.4.0",
-    "@types/better-sqlite3": "^9.6.0",
     "@types/geojson": "^7946.0.16",
     "@types/node": "^20",
     "@types/react": "^19",

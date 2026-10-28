@@ -1,6 +1,7 @@
+import { isObj } from "./guards";
+
 // Light checks on what the server answers, so a captive-portal page or an odd 200 body ends in a clean error message
 // instead of a raw "Cannot destructure property" or a crashed page. They check only what the client dereferences.
-const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const isStop = (v: unknown) => isObj(v) && typeof v.id === "string";
 const isTrip = (v: unknown) => isObj(v) && typeof v.id === "string";
 const isPlace = (v: unknown) => isObj(v) && typeof v.name === "string" && typeof v.lat === "number" && typeof v.lng === "number";

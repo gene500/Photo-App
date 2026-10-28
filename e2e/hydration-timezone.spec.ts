@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { signUp } from "./helpers";
 
 // The server renders in UTC (as on Vercel) while this browser is in New York: clock text must not differ on hydration.
 test.use({ timezoneId: "America/New_York", locale: "en-US" });
@@ -10,11 +11,7 @@ test("trip page hydrates cleanly when the browser's time zone differs from the s
     if (m.type() === "error" && /hydrat/i.test(m.text())) problems.push(`console: ${m.text()}`);
   });
 
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-tz-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-tz");
   await page.getByLabel("Trip name").fill("Time zones");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();

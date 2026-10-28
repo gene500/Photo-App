@@ -13,6 +13,11 @@ export const MAX_DWELL_MINUTES = 480;
 const lat = z.number().min(-90).max(90);
 const lng = z.number().min(-180).max(180);
 
+/** The search session token the geocode routes pass to Mapbox (a client-made uuid). */
+export const sessionSchema = z.string().uuid("session must be a uuid");
+
+/** Longest stop name; search results and suggestions are cut to this so any of them can be added as a stop. */
+export const MAX_STOP_NAME = 200;
 
 /**
  * A trimmed one-line name: required (zero-width characters do not count) and at most `max` characters.
@@ -43,7 +48,6 @@ export const tripInputSchema = z.object({
   name: nameText("Trip name", 120),
   plannedDate: dateOnlySchema,
 });
-export type TripInput = z.infer<typeof tripInputSchema>;
 
 const departAtSchema = z.iso.datetime({ offset: true }).refine((v) => inYearRange(Date.parse(v)), "Date must be between 1970 and 2200");
 
@@ -74,7 +78,7 @@ export const tripPatchSchema = tripInputSchema
 export type TripPatch = z.infer<typeof tripPatchSchema>;
 
 export const newStopSchema = z.object({
-  name: nameText("Stop name", 200),
+  name: nameText("Stop name", MAX_STOP_NAME),
   lat,
   lng,
   source: z.enum(["manual", "suggested"]),
@@ -89,7 +93,7 @@ export type NewStopInput = z.input<typeof newStopSchema>;
 
 export const stopPatchSchema = z
   .object({
-    name: nameText("Stop name", 200),
+    name: nameText("Stop name", MAX_STOP_NAME),
     notes: freeText(5000).nullable(),
     visited: z.boolean(),
     lightPref: lightPrefSchema,

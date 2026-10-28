@@ -1,11 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { signUp } from "./helpers";
 
 test("selecting a stop draws its sunrise and sunset lines and the drawer shows the sky card", async ({ page }) => {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-sky-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-sky");
   await page.getByLabel("Trip name").fill("Sky preview");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();
@@ -38,11 +35,7 @@ test("selecting a stop draws its sunrise and sunset lines and the drawer shows t
 });
 
 test("opening a stop from the list draws that stop's lines, replacing another stop's", async ({ page }) => {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-sky-list-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-sky-list");
   await page.getByLabel("Trip name").fill("Sky from list");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();

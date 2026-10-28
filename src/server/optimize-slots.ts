@@ -31,5 +31,3 @@ export async function withOptimizeSlot<T>(work: () => Promise<T>): Promise<T> {
     inFlight--;
   }
 }
-
-export const optimizationsInFlight = () => inFlight;

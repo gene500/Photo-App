@@ -1,14 +1,11 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Download, type Page } from "@playwright/test";
+import { signUp } from "./helpers";
 
 const FILENAME = "PDF-coast-itinerary.pdf";
 
 async function signupAndAddStops(page: Page, prefix: string) {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`${prefix}-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, prefix);
   await page.getByLabel("Trip name").fill("PDF coast");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();

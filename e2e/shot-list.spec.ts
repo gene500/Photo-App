@@ -1,11 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { signUp } from "./helpers";
 
 test("a stop's shot list persists: add two shots, tick one, reload", async ({ page }) => {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-shots-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-shots");
   await page.getByLabel("Trip name").fill("Shots");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();

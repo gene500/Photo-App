@@ -3,6 +3,7 @@
 // copies are wiped on sign-out and when a different user signs in, and everything is best-effort
 // (storage can be missing, full or blocked; nothing here ever throws).
 import { isDateOnly } from "@/lib/dates";
+import { isObj } from "@/lib/guards";
 import { clearAllSuggestions, removeSuggestions } from "@/lib/suggestions-store";
 import type { ShotItem, Stop, TripWithStops } from "@/lib/types";
 
@@ -237,7 +238,6 @@ export function listTripCopies(): TripCopySummary[] {
 }
 
 const LIGHT_PREFS = ["any", "sunrise", "golden", "sunset"] as const;
-const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
 /** Shallow validation of one stored stop; fills defaults for fields older copies lack. Null when it cannot be shown safely. */

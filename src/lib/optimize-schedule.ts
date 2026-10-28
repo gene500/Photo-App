@@ -1,6 +1,6 @@
 import { daylightInterval, getSunWindows } from "./best-time";
 import { lightWindows } from "./light-windows";
-import { EXACT_MAX, optimizeOrder } from "./optimize-order";
+import { EXACT_MAX, optimizeOrder, PENALTY } from "./optimize-order";
 import type { LightPref, StopPriority } from "./types";
 
 export type ScheduleStop = { lat: number; lng: number; lightPref: LightPref; dwellMinutes: number; priority?: StopPriority };
@@ -31,7 +31,6 @@ const FLAT_WEIGHT: Record<StopPriority, number> = { normal: 1, high: 1, must: 1 
 const EXACT_MAX_STOPS = 7; // 8 stops (7! orders x ~65 departures) held the event loop for ~0.9 s per request
 const STEP_MS = 15 * 60_000;
 const DAY_MS = 86_400_000;
-const PENALTY = 1e9; // unreachable / missing durations, as in optimizeOrder
 const EPS = 1e-9;
 
 /** Whether the order for `stopCount` stops is provably the best one (exact search), rather than the best a heuristic found. */

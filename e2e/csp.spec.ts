@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { signUp } from "./helpers";
 
 // Run against a production build (`E2E_PROD=1 E2E_PORT=3106 npx playwright test e2e/csp.spec.ts`) to check the
 // strict policy; under `next dev` it still checks the dev policy.
@@ -22,11 +23,7 @@ test("pages carry the security headers and the map + photo popups raise no CSP v
   expect(h["permissions-policy"]).toContain("geolocation=()");
   expect(h["strict-transport-security"]).toBeTruthy();
 
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-csp-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-csp");
   await page.getByLabel("Trip name").fill("CSP check");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();

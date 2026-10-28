@@ -1,7 +1,6 @@
-import { createHash } from "node:crypto";
 import { prisma } from "./db";
 import { HttpError } from "./http";
-import { hit, isBlocked, peek, POLICIES, resetLimit, type PolicyName } from "./rate-limit";
+import { disabled, hit, isBlocked, peek, POLICIES, resetLimit, type PolicyName } from "./rate-limit";
 import type { LimitResult as BaseResult } from "./rate-limit";
 
 /** `unavailable` marks a refusal because the shared store could not be reached (fail closed), not because the limit was reached. */
@@ -14,9 +13,6 @@ export type LimitResult = BaseResult | { ok: false; retryAfter: number; unavaila
  * so a database outage never locks everyone out of logging in.
  */
 
-const disabled = () => process.env.NODE_ENV !== "production" && process.env.RATE_LIMIT_DISABLED === "1";
-/** A key that is safe to store: short keys as they are, anything over 254 characters as its sha256 hex. */
-export const limitKey = (key: string) => (key.length > 254 ? createHash("sha256").update(key).digest("hex") : key);
 const rowKey = (name: PolicyName, key: string) => `${name}:${key}`;
 const fail = (retryAfterMs: number): LimitResult => ({ ok: false, retryAfter: Math.max(1, Math.ceil(retryAfterMs / 1000)) });
 

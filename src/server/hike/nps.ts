@@ -1,3 +1,4 @@
+import { isNum } from "@/lib/guards";
 import type { LngLat } from "@/lib/types";
 import { PHOTO_USER_AGENT } from "@/server/external/photo-http";
 
@@ -6,7 +7,6 @@ const LAYER = "https://mapservices.nps.gov/arcgis/rest/services/NationalDatasets
 export const NPS_TIMEOUT_MS = 6000;
 export const NPS_MAX_FEATURES = 500;
 
-const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const isPoint = (p: unknown): p is LngLat => Array.isArray(p) && p.length >= 2 && isNum(p[0]) && isNum(p[1]) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90;
 
 /**

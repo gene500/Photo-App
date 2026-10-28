@@ -9,7 +9,6 @@ vi.mock("@/server/photos", async (importOriginal) => {
   return { ...actual, savePhoto: vi.fn(actual.savePhoto), deletePhotoFile: vi.fn(actual.deletePhotoFile) };
 });
 import { deletePhotoFile, savePhoto } from "@/server/photos";
-import { getCurrentUserId } from "@/server/session";
 import { DELETE as photoDELETE, POST as photoPOST } from "@/app/api/stops/[id]/photo/route";
 import { DELETE as stopDELETE, PATCH as stopPATCH } from "@/app/api/stops/[id]/route";
 import { GET as uploadGET } from "@/app/api/uploads/[name]/route";
@@ -19,10 +18,10 @@ import { createTrip } from "@/server/trips";
 import { MAX_PHOTO_BYTES } from "@/lib/photo-rules";
 import { jpegWithGps, tinyPng } from "../helpers/images";
 import { createTestUser, resetDb, sampleTripInput } from "../helpers/db";
+import { signInAs } from "../helpers/session";
 import { idParams } from "../helpers/requests";
 
 const PNG = tinyPng();
-const signInAs = (id: string | null) => vi.mocked(getCurrentUserId).mockResolvedValue(id);
 const fileOnDisk = (photoUrl: string) => existsSync(path.join(process.env.UPLOAD_DIR!, path.basename(photoUrl)));
 
 function upload(stopId: string, file: File) {

@@ -1,12 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { signUp } from "./helpers";
 
 // A generated suggestions list stays until the owner asks for a new search, whatever is done on the other tabs.
 test("suggestions stay after actions on My trip and Stops", async ({ page }) => {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-sugstay-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-sugstay");
   await page.getByLabel("Trip name").fill("Suggestions stay");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();
@@ -69,11 +66,7 @@ test("suggestions stay after actions on My trip and Stops", async ({ page }) => 
 });
 
 test("suggestions stay after start time and a reorder", async ({ page }) => {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-sugstay2-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-sugstay2");
   await page.getByLabel("Trip name").fill("Suggestions stay 2");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();
@@ -126,11 +119,7 @@ test("a search still running while the owner works on My trip lands in the list"
     await new Promise((r) => setTimeout(r, 2500));
     await route.continue();
   });
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-sugstay3-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-sugstay3");
   await page.getByLabel("Trip name").fill("Suggestions stay 3");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();
@@ -161,11 +150,7 @@ test("a search still running while the owner works on My trip lands in the list"
 });
 
 test("a server refresh of the page keeps the suggestions", async ({ page }) => {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-sugstay4-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-sugstay4");
   await page.getByLabel("Trip name").fill("Suggestions stay 4");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();
@@ -190,11 +175,7 @@ test("a server refresh of the page keeps the suggestions", async ({ page }) => {
 });
 
 test("a reload keeps the generated suggestions and does not search again", async ({ page }) => {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-sugstay5-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, "e2e-sugstay5");
   await page.getByLabel("Trip name").fill("Suggestions stay 5");
   await page.getByLabel("Planned date").fill("2026-07-01");
   await page.getByRole("button", { name: "Create trip" }).click();

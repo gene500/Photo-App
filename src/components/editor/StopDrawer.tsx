@@ -11,6 +11,7 @@ import { hasContent } from "@/lib/text";
 import type { LightPref, ShotItem, Stop, Suggestion } from "@/lib/types";
 import { AlternativesPanel } from "./AlternativesPanel";
 import { SkyCard } from "./SkyCard";
+import { FOCUSABLE } from "@/components/ui/Dialog";
 import type { SuggestionsStatus } from "./SuggestionsPanel";
 import { MAX_DWELL_MINUTES, MAX_SHOT_ITEMS, MAX_SHOT_NOTES, MAX_SHOT_TEXT, type StopPatch } from "@/lib/validation";
 
@@ -35,7 +36,6 @@ const LIGHT_OPTIONS: [LightPref, string][] = [["any", "Any"], ["sunrise", "Sunri
 type ShotRow = ShotItem & { id: number };
 const plain = (rows: ShotRow[]): ShotItem[] => rows.map(({ text, done }) => ({ text, done }));
 
-const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 

@@ -48,7 +48,6 @@ next-env.d.ts
 *.db-journal
 *.db-wal
 *.db-shm
-test-*.db
 /uploads/
 /.test-uploads/
 /.e2e-uploads/
@@ -62,9 +61,7 @@ test-*.db
 # tdd-guard runtime data
 /.claude/tdd-guard/
 
-.DS_Store
 .claude/
-.vercel
 
 # SDD ledgers (local working notes)
 .superpowers/

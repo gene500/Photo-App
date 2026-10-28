@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
+import { Bricolage_Grotesque, Geist } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/offline/ServiceWorkerRegister";
 import { headers } from "next/headers";
 import { InitScript } from "@/components/settings/InitScript";
@@ -17,11 +17,6 @@ const display = Bricolage_Grotesque({
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
   title: "Photo Op Planner",
   description: "Plan photo ops: scenic stops, the best light, and the route between them.",
@@ -33,7 +28,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${display.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${display.variable} h-full antialiased`}
       // The inline script below sets data-theme / data-text-size / data-reduce-motion before hydration.
       suppressHydrationWarning
     >

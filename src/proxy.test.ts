@@ -26,7 +26,7 @@ describe("proxy: public share page render limit", () => {
 
   it("skips the public files, so only pages and share links reach the proxy", () => {
     const re = new RegExp(`^${config.matcher[0]}$`);
-    const publicFiles = ["/icons/icon-192.png", "/fonts/NotoSans-Bold.ttf", "/manifest.webmanifest", "/sw.js", "/favicon.ico", "/file.svg", "/globe.svg", "/next.svg", "/vercel.svg", "/window.svg"];
+    const publicFiles = ["/icons/icon-192.png", "/fonts/NotoSans-Bold.ttf", "/manifest.webmanifest", "/sw.js", "/favicon.ico"];
     for (const path of publicFiles) expect(re.test(path), path).toBe(false);
     // Every file actually in /public is covered.
     const onDisk = readdirSync("public", { recursive: true, withFileTypes: true }).filter((e) => e.isFile()).map((e) => `/${relative("public", join(e.parentPath, e.name))}`);

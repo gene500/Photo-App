@@ -1,11 +1,10 @@
 import { haversineMeters } from "@/lib/geo";
 import type { Suggestion, SuggestionKind } from "@/lib/types";
+import { MAX_STOP_NAME } from "@/lib/validation";
 import { clampText, stripNameChars } from "@/lib/text";
 
 export const SUGGESTION_CAP = 40;
 export const DUPLICATE_RADIUS_M = 100;
-/** Matches newStopSchema's name limit, so any suggestion can be added as a stop. */
-export const MAX_NAME_LENGTH = 200;
 
 export function classifyKind(tags: Record<string, string>): SuggestionKind | null {
   if (tags.tourism === "viewpoint") return "viewpoint";
@@ -51,7 +50,7 @@ function toCandidate(el: OverpassElement): Candidate | null {
   if (!kind || typeof el.type !== "string" || typeof el.id !== "number" || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat as number) > 90 || Math.abs(lng as number) > 180) {
     return null;
   }
-  const name = tags.name === undefined ? undefined : clampText(stripNameChars(tags.name).trim(), MAX_NAME_LENGTH).trim();
+  const name = tags.name === undefined ? undefined : clampText(stripNameChars(tags.name).trim(), MAX_STOP_NAME).trim();
   if (name && isDedicationName(name)) return null;
   return {
     osmId: `${el.type}/${el.id}`,

@@ -1,6 +1,7 @@
 // The generated photo-spot list, kept per trip in sessionStorage so a reload (or a discarded tab) does not lose it.
 // Best-effort like offline-store: storage can be missing, full or blocked and nothing here ever throws.
 // Only a finished list is stored; whatever is read back is validated strictly and rebuilt field by field.
+import { isNum } from "@/lib/guards";
 import type { Suggestion, SuggestionKind } from "@/lib/types";
 
 const PREFIX = "rtpp.suggestions.";
@@ -23,8 +24,6 @@ function storage(): Storage | null {
     return null;
   }
 }
-
-const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
 function validKey(key: unknown): key is string {
   if (typeof key !== "string") return false;

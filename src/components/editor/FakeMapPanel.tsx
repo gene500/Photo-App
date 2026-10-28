@@ -5,6 +5,7 @@ import { bearingEndpoint } from "@/lib/geo";
 import { fanOffsets } from "@/lib/marker-fan";
 import { latLngToPercent, pixelToLatLng, type Bounds } from "@/lib/map-bounds";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
+import { SUNRISE_COLOR, SUNSET_COLOR } from "@/lib/sky";
 import { STOP_MARKER_CLASS, stopColor } from "@/lib/stop-style";
 import type { Suggestion } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
@@ -37,9 +38,6 @@ function SuggestionPopup({ suggestion, left, top }: { suggestion: Suggestion; le
   );
 }
 
-/** Fixed hexes, like ROUTE_COLOR in MapPanel: a warm amber for sunrise, a violet for sunset. */
-const SUNRISE_COLOR = "#d9822b";
-const SUNSET_COLOR = "#7b4fa3";
 const SKY_LINE_KM = 30;
 
 /** No-network stand-in for Mapbox GL: used in e2e and when no token is configured. */

@@ -2,7 +2,7 @@ import { addDays, forecastSpan, inForecastRange, inTypicalRange, parseOpenMeteo 
 import type { WeatherForecast } from "@/lib/types";
 import { fakeWeather, isFakeExternal } from "./fake";
 import { PHOTO_USER_AGENT } from "./photo-http";
-import { sharedTypical } from "./typical-weather";
+import { round2, sharedTypical } from "./typical-weather";
 
 // Fixed host, no key. Only numbers and a validated date are interpolated into the query.
 const API = "https://api.open-meteo.com/v1/forecast";
@@ -11,9 +11,6 @@ export const WEATHER_CACHE_MAX = 500;
 export const WEATHER_TTL_MS = 30 * 60_000;
 /** An upstream failure is remembered briefly so a flapping Open-Meteo is not hammered. */
 export const WEATHER_FAILURE_TTL_MS = 60_000;
-
-/** Same ~1 km grid as the cache key, so every request that shares a key asks upstream for the same point. */
-const round2 = (n: number) => n.toFixed(2);
 
 export function weatherCacheKey(lat: number, lng: number, date: string): string {
   return `${round2(lat)},${round2(lng)}|${date}`;

@@ -18,7 +18,8 @@ const WET_DAY_MM = 1;
 type Point = { lat: number; lng: number };
 export type TypicalProfile = { utcOffsetSeconds: number; cloud: (number | null)[]; temp: (number | null)[]; wetDayPct: number; thin?: boolean };
 
-const round2 = (n: number) => n.toFixed(2);
+/** Same ~1 km grid as the cache keys, so every request that shares a key asks upstream for the same point. */
+export const round2 = (n: number) => n.toFixed(2);
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 /** The same calendar day `years` earlier (29 Feb rolls to 1 Mar, which is close enough for an average). */

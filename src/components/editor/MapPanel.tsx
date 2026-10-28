@@ -10,6 +10,7 @@ import { useSettings } from "@/components/settings/SettingsProvider";
 import { applyMapTheme } from "@/lib/map-theme";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import { isShortLandscape, sideViewPadding } from "@/lib/short-landscape";
+import { SUNRISE_COLOR, SUNSET_COLOR } from "@/lib/sky";
 import { decideFit, routeKey, selectionPadding } from "./map-fit";
 import { fitMapToPoints, startRouteFlow } from "./route-flow-map";
 import { fitTargets, ZoomFitControl } from "./zoom-fit";
@@ -26,9 +27,6 @@ const ROUTE_SOURCE = "route";
 /** Mapbox paint can't read CSS variables; this is the light-theme `--route` token. */
 const ROUTE_COLOR = "#a8834b"; // the light-theme --route token
 const SKY_SOURCE = "sky";
-/** Fixed hexes like ROUTE_COLOR: warm amber for sunrise, violet for sunset; both read on the beige map. */
-const SUNRISE_COLOR = "#d9822b";
-const SUNSET_COLOR = "#7b4fa3";
 /** The direction lines are this long on screen, whatever the zoom. */
 const SKY_LINE_PX = 90;
 const MARKER_CLASS = "map-marker";

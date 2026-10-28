@@ -59,7 +59,7 @@ export const POLICIES = {
 export type PolicyName = keyof typeof POLICIES;
 
 /** Tests set RATE_LIMIT_DISABLED=1 (never honoured in production). */
-function disabled(): boolean {
+export function disabled(): boolean {
   return process.env.NODE_ENV !== "production" && process.env.RATE_LIMIT_DISABLED === "1";
 }
 

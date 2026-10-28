@@ -69,7 +69,7 @@ for (const size of SIZES) {
   });
 }
 
-test("short landscape 568x320: dragging a handle ~110px down swaps one place (autoscroll stays bounded)", async ({ page }) => {
+test("short landscape 568x320: dragging a handle ~110px down moves the row down and autoscroll stays bounded", async ({ page }) => {
   await setup(page, 8);
   await page.setViewportSize({ width: 568, height: 320 });
   const before = await names(page);
@@ -91,8 +91,13 @@ test("short landscape 568x320: dragging a handle ~110px down swaps one place (au
   const after = await names(page);
   const strip = (n: string) => n.replace(/^\d+\.\s*/, "");
   const b = before.map(strip);
-  // One place down: the first two swap, nothing else moves (the hold did not run the list away to the end).
-  expect(after.map(strip)).toEqual([b[1], b[0], ...b.slice(2)]);
+  // The dragged row's bottom edge ends at the panel's edge, so how far a 1.2 s hold carries it depends on the row height
+  // (fonts differ between machines: one place on a Mac, four on the Linux CI runner). What must hold: the row moved down,
+  // the others kept their order, and it did not run away to the end of the list (it did, to the last place, before the fix).
+  const moved = after.map(strip).indexOf(b[0]);
+  expect(moved).toBeGreaterThan(0);
+  expect(moved).toBeLessThanOrEqual(b.length - 3);
+  expect(after.map(strip).filter((n) => n !== b[0])).toEqual(b.slice(1));
 });
 
 test("a mouse drag released outside the list cancels the reorder: same order, no PUT", async ({ page }) => {

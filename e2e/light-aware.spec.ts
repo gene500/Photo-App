@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 test("a sunset stop moves the departure so it is reached in its light, and Undo restores", async ({ page }) => {
+  // A new trip starts at the time of day it was created; late in the evening the sunset stop is already reached in its
+  // light and Optimize rightly leaves the departure alone. Pin the clock to midday so the test does not depend on when it runs.
+  await page.clock.install({ time: new Date("2026-10-27T12:00:00Z") });
   await page.goto("/signup");
   await page.getByLabel("Email").fill(`e2e-light-${Date.now()}@example.com`);
   await page.getByLabel("Password").fill("correct-horse-battery");

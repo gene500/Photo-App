@@ -2,28 +2,85 @@
 // public/fonts/OFL.txt) adds Latin Extended, Vietnamese, Cyrillic and Greek. The files are fetched only when a PDF is
 // built, never bundled.
 
-export type PdfFonts = { regular: ArrayBuffer; bold: ArrayBuffer };
+// CJK fallback (only when the trip text has Han, kana or Hangul): one extra file holding Noto Sans Latin/Cyrillic/Greek plus
+// the script, regular weight only (jsPDF cannot switch fonts inside a line, so the whole document uses that one family).
+// Chinese+Japanese (GB2312 level 1 hanzi plus JIS X 0208 level 1 kanji and kana, Simplified Chinese glyph forms) and Korean (KS X 1001 syllables) are included. Arabic,
+// Hebrew, Thai and the Indic scripts are NOT: jsPDF has no text shaping or right-to-left support, so they would render
+// wrongly, and "?" is better than wrong text.
+export type CjkScript = "sc" | "kr";
+export type PdfFonts = {
+  regular: ArrayBuffer;
+  bold: ArrayBuffer;
+  /** Present only when the trip text needed it and the file loaded. */
+  cjk?: { script: CjkScript; regular: ArrayBuffer };
+};
 
 const FONT_URLS = { regular: "/fonts/NotoSans-Regular.ttf", bold: "/fonts/NotoSans-Bold.ttf" };
+export const CJK_FONT_URLS: Record<CjkScript, string> = { sc: "/fonts/NotoSansSC-Regular.ttf", kr: "/fonts/NotoSansKR-Regular.ttf" };
+const CJK_PROBE: Record<CjkScript, number> = { sc: 0x4eac, kr: 0xd55c }; // 京, 한: a file without it is the wrong file
+const CJK_MAX_BYTES = 6_000_000;
 
-/** Fetches both font files; any failure (offline, 404, truncated file) is null so the PDF still downloads with the built-in fonts. */
-export async function loadPdfFonts(opts: { timeoutMs?: number; fetchImpl?: typeof fetch } = {}): Promise<PdfFonts | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 15000);
-  const get = async (url: string) => {
-    const res = await (opts.fetchImpl ?? fetch)(url, { signal: controller.signal });
-    if (!res.ok) throw new Error(`font ${res.status}`);
-    const buf = await res.arrayBuffer();
-    if (buf.byteLength < 10000 || parseCmap(buf).size === 0) throw new Error("not a font");
-    return buf;
+const isHangul = (c: number) => (c >= 0xac00 && c <= 0xd7af) || (c >= 0x1100 && c <= 0x11ff) || (c >= 0x3130 && c <= 0x318f);
+const isHanKana = (c: number) =>
+  (c >= 0x3400 && c <= 0x4dbf) || (c >= 0x4e00 && c <= 0x9fff) || (c >= 0xf900 && c <= 0xfaff) || (c >= 0x3040 && c <= 0x30ff) || (c >= 0x31f0 && c <= 0x31ff);
+
+/** The CJK font the text needs: the script with more characters in the text, or null when it has neither Han/kana nor Hangul. */
+export function cjkScriptFor(text: string): CjkScript | null {
+  let sc = 0;
+  let kr = 0;
+  for (const ch of text) {
+    const c = ch.codePointAt(0)!;
+    if (c < 0x1100) continue;
+    if (isHangul(c)) kr++;
+    else if (isHanKana(c)) sc++;
+  }
+  if (sc === 0 && kr === 0) return null;
+  return kr > sc ? "kr" : "sc";
+}
+
+/**
+ * Fetches the base fonts and, only when `opts.text` has Han/kana/Hangul, the one matching CJK file. Any base failure
+ * (offline, 404, truncated file) is null so the PDF still downloads with the built-in fonts; a CJK failure (404, timeout,
+ * wrong or oversized file) just leaves `cjk` out, so those characters become "?".
+ */
+export async function loadPdfFonts(opts: { timeoutMs?: number; cjkTimeoutMs?: number; fetchImpl?: typeof fetch; text?: string } = {}): Promise<PdfFonts | null> {
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  const get = async (url: string, timeoutMs: number, valid: (buf: ArrayBuffer) => boolean) => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Aborting rejects a real fetch; the race also ends the wait if the transport ignores the signal.
+    const timedOut = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new Error("font timeout"));
+      }, timeoutMs);
+    });
+    try {
+      const download = (async () => {
+        const res = await fetchImpl(url, { signal: controller.signal });
+        if (!res.ok) throw new Error(`font ${res.status}`);
+        const buf = await res.arrayBuffer();
+        if (!valid(buf)) throw new Error("not a font");
+        return buf;
+      })();
+      download.catch(() => {});
+      return await Promise.race([download, timedOut]);
+    } finally {
+      clearTimeout(timer);
+    }
   };
+  const base = (buf: ArrayBuffer) => buf.byteLength >= 10000 && parseCmap(buf).size > 0;
+  const script = opts.text ? cjkScriptFor(opts.text) : null;
+  const cjkPromise: Promise<PdfFonts["cjk"]> = script
+    ? get(CJK_FONT_URLS[script], opts.cjkTimeoutMs ?? 30000, (b) => b.byteLength >= 10000 && b.byteLength <= CJK_MAX_BYTES && parseCmap(b).has(CJK_PROBE[script]))
+        .then((regular) => ({ script, regular }))
+        .catch(() => undefined)
+    : Promise.resolve(undefined);
   try {
-    const [regular, bold] = await Promise.all([get(FONT_URLS.regular), get(FONT_URLS.bold)]);
-    return { regular, bold };
+    const [regular, bold, cjk] = await Promise.all([get(FONT_URLS.regular, opts.timeoutMs ?? 15000, base), get(FONT_URLS.bold, opts.timeoutMs ?? 15000, base), cjkPromise]);
+    return cjk ? { regular, bold, cjk } : { regular, bold };
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 

@@ -2,7 +2,7 @@
 import { StrictMode } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { StopsPanel } from "./StopsPanel";
 
 function panel() {
@@ -158,5 +158,30 @@ describe("StopsPanel tabs follow the ARIA tab pattern", () => {
   it("names the panel landmark", () => {
     panel();
     expect(screen.getByRole("complementary", { name: "Trip panel" })).toBeTruthy();
+  });
+});
+
+describe("StopsPanel in short landscape (side panel)", () => {
+  beforeEach(() => window.sessionStorage.clear());
+  const original = window.matchMedia;
+  afterEach(() => { window.matchMedia = original; });
+
+  function landscape() {
+    window.matchMedia = ((q: string) => ({ matches: q.includes("max-height: 500px"), media: q, addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+  }
+
+  it("is always fully open and hides the Shrink/Expand arrows", () => {
+    landscape();
+    panel();
+    expect(screen.getByRole("tab", { name: "Stops" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Shrink panel" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Expand panel" })).toBeNull();
+  });
+
+  it("stays open even if the saved sheet height was collapsed", () => {
+    window.sessionStorage.setItem(`rtpp.panel.v1:${window.location.pathname}`, JSON.stringify({ tab: "stops", snap: "collapsed" }));
+    landscape();
+    panel();
+    expect(screen.getByText("stops content")).toBeTruthy();
   });
 });

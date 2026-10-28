@@ -130,3 +130,12 @@ describe("optimizeOrder exact range", () => {
   }, 60_000);
 });
 
+
+describe("optimizeOrder keeps the given order when nothing is gained", () => {
+  it("leaves identical-distance stops where they are", () => {
+    const zero = Array.from({ length: 4 }, () => [0, 0, 0, 0]);
+    expect(optimizeOrder(zero)).toEqual([0, 1, 2, 3]);
+    const big = Array.from({ length: 15 }, () => new Array(15).fill(0));
+    expect(optimizeOrder(big)).toEqual(Array.from({ length: 15 }, (_, i) => i));
+  });
+});

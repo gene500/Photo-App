@@ -11,8 +11,10 @@ import { btnGhost } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { downsampleRoute } from "@/lib/downsample";
 import { adoptPrewarm, PREWARM_DELAY_MS, startPrewarm, type Prewarm } from "@/lib/suggestion-prewarm";
+import { loadSuggestions, removeSuggestions, saveSuggestions } from "@/lib/suggestions-store";
 import { prefetchPlacePhotos } from "@/lib/place-photo-cache";
 import { useSuggestionWeather } from "@/lib/use-weather";
+import { useHikes } from "@/lib/use-hike";
 import { holdWeather } from "@/lib/weather-cache";
 import { loadPopularityInBatches, POPULARITY_BATCH, rankSuggestions } from "@/lib/suggestion-popularity";
 import { clampToSolarDay, computeArrivals, computeBestTimes, formatClock } from "@/lib/best-time";
@@ -21,7 +23,7 @@ import { fromTimeValue, toTimeValue } from "./StartTimeControl";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useOfflineCopy, type Freshness } from "@/lib/use-offline-copy";
 import { isExactOptimization } from "@/lib/optimize-schedule";
-import { leadingVisited } from "@/lib/visited-run";
+import { leadingVisited, pinVisitedFirst } from "@/lib/visited-run";
 import { routeSignature } from "@/lib/route-signature";
 import { defaultLightPref } from "@/lib/light-windows";
 import { formatDistance, formatDuration } from "@/lib/format";
@@ -190,11 +192,15 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const [adding, setAdding] = useState(false);
   const [cardId, setCardId] = useState<string | null>(null);
   const [drawerId, setDrawerId] = useState<string | null>(null);
+  /** Stops whose hike line stays on the map (the "Show hike" toggle on their My trip row); the selected stop's hike always shows. */
+  const [hikeShownIds, setHikeShownIds] = useState<ReadonlySet<string>>(new Set());
   const [flyTo, setFlyTo] = useState<(LatLng & { nonce: number; area?: { bbox?: [number, number, number, number] } }) | null>(null);
   // Tagged with the waypoints they were found for, like routeResult: a change of stops
   // makes them stale, so they are simply not shown (and a late response is dropped).
-  const [suggestionsState, setSuggestionsState] = useState<{ key: string; items: Suggestion[]; status: SuggestionsStatus; error: string | null; shown?: number } | null>(null);
+  const [suggestionsState, setSuggestionsState] = useState<{ key: string; items: Suggestion[]; status: SuggestionsStatus; error: string | null; shown?: number; /** Read back from sessionStorage after a reload: popularity was already ranked, so it is not asked for again. */ restored?: boolean } | null>(null);
   const [optimizing, setOptimizing] = useState(false);
+  /** Counts up with each successful Optimize; on a new value the map zooms out to every stop and runs the water-flow animation. */
+  const [routeFlowId, setRouteFlowId] = useState(0);
   const [undoing, setUndoing] = useState(false);
   // Remembered so the optimization can be undone. Only honoured while the list still
   // matches `appliedIds`, so any later add/remove/reorder retires it without bookkeeping.
@@ -334,6 +340,27 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   useEffect(() => {
     suggestionsStateRef.current = suggestionsState;
   }, [suggestionsState]);
+  // After a reload the finished list comes back from sessionStorage (read in an effect, not in the initial state, so the
+  // server and first client render agree). This effect is declared before the single-stop search below, so that search sees
+  // the restored list through the ref and does not fetch again. No network call is made here.
+  const restoredRef = useRef<typeof suggestionsState>(null);
+  useEffect(() => {
+    if (suggestionsStateRef.current) return;
+    const saved = loadSuggestions(trip.id);
+    if (!saved) return;
+    const restored = { key: saved.key, items: saved.items, status: "done" as const, error: null, restored: true };
+    restoredRef.current = restored;
+    suggestionsStateRef.current = restored;
+    // Deliberate: reading storage must wait until after hydration (see above).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSuggestionsState(restored);
+  }, [trip.id]);
+  // Keep the saved copy in step with the list (a Dismiss or Accept saves again); anything but a finished list clears it.
+  useEffect(() => {
+    if (!suggestionsState || suggestionsState === restoredRef.current) return;
+    if (suggestionsState.status === "done") saveSuggestions(trip.id, { key: suggestionsState.key, items: suggestionsState.items });
+    else removeSuggestions(trip.id);
+  }, [suggestionsState, trip.id]);
   // A place that is now a stop is not suggested again.
   const allSuggestions = useMemo(() => {
     const items = freshSuggestions?.items;
@@ -351,7 +378,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   useEffect(() => {
     suggestionItemsRef.current = allSuggestions;
   }, [allSuggestions]);
-  const popularityKey = freshSuggestions?.status === "done" ? freshSuggestions.key : null;
+  const popularityKey = freshSuggestions?.status === "done" && !freshSuggestions.restored ? freshSuggestions.key : null;
   useEffect(() => {
     if (popularityKey === null) return;
     return loadPopularityInBatches(
@@ -453,6 +480,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const askedKeyRef = useRef<string | null>(null); // the route "Find" last searched, so a pending prewarm does not repeat it
   useEffect(() => {
     if (!activeRoute) return;
+    // A list restored after a reload is already on screen: no quiet place search behind it (Find searches afresh if asked).
+    const shown = suggestionsStateRef.current;
+    if (shown?.restored && shown.key === waypointKey) return;
     const geometry = activeRoute.geometry;
     let entry: { key: string; prewarm: Prewarm } | null = null;
     const timer = setTimeout(() => {
@@ -614,7 +644,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     return tracked(() => reorderInner(ids, announce, movedId));
   }
 
-  async function reorderInner(ids: string[], announce: boolean, movedId?: string): Promise<boolean> {
+  async function reorderInner(requested: string[], announce: boolean, movedId?: string): Promise<boolean> {
+    // Visited stops stay first, as the server also enforces; only the unvisited ones take the requested order.
+    const ids = pinVisitedFirst(stops, requested);
     const seq = ++reorderSeq.current;
     const previousOrderById = new Map(stops.map((s) => [s.id, s.order]));
     // Applied onto the latest state so an edit that landed since this render is never reverted.
@@ -678,6 +710,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       // Two stops have nothing to reorder (the optimizer needs three), so Optimize only records the state.
       if (tail.length < 3) {
         await saveTrip({ routeOptimizedFor: routeSignature(trip.plannedDate, before) });
+        setRouteFlowId((n) => n + 1);
         return;
       }
       const result = await api.optimizeOrder(tail.map((s): LngLat => [s.lng, s.lat]), {
@@ -720,6 +753,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const optimizedFor = routeSignature(trip.plannedDate, ids.map((id) => before.find((s) => s.id === id)!));
       if (!orderChanged && !departChanged) {
         await saveTrip({ routeOptimizedFor: optimizedFor });
+        setRouteFlowId((n) => n + 1);
         const usesLight = tail.some((s) => s.lightPref !== "any") || result.departAt != null;
         const verdict = isExactOptimization(tail.length, usesLight) && result.complete !== false ? "Already the fastest order" : "No faster order found";
         setOptimizeNote({ moveAt: null, notes: [verdict, ...notes], idsKey: startKey });
@@ -731,6 +765,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       try {
         await saveTrip({ ...(departChanged && { departAt: nextDepartAt }), routeOptimizedFor: optimizedFor });
         appliedDepartAt = nextDepartAt;
+        setRouteFlowId((n) => n + 1); // the route is marked optimized: the map shows every stop and runs the water along it
       } catch (e) {
         setStopsError(errorMessage(e, "Couldn't save the route"));
       }
@@ -752,6 +787,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     const { previousIds, previousDepartAt, previousOptimizedFor } = undo;
     setUndoing(true);
     try {
+      // Stops ticked visited since the optimize stay first, so the old order may not come back in full.
+      const fullyRestorable = pinVisitedFirst(stops, previousIds).join(",") === previousIds.join(",");
       if (previousIds.join(",") !== idsKey && !(await reorder(previousIds))) return;
       // One save for both, so the optimized mark and the start time cannot disagree.
       try {
@@ -759,7 +796,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       } catch (e) {
         setStopsError(errorMessage(e, "Couldn't restore the departure time"));
       }
-      setAnnouncement("Optimize undone. Your previous order is back.");
+      setAnnouncement(fullyRestorable ? "Optimize undone. Your previous order is back." : "Optimize undone, but the previous order could not be fully restored because visited stops stay first.");
     } finally {
       setUndoing(false);
     }
@@ -1118,6 +1155,13 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     </div>
   );
 
+  // Hike lines on the map: the selected stop's, plus every stop toggled on. A separate layer, never part of the route.
+  const hikeStops = useMemo(() => stops.filter((s) => s.id === cardId || hikeShownIds.has(s.id)), [stops, cardId, hikeShownIds]);
+  const hikePoints = useMemo(() => hikeStops.map((s) => ({ id: s.id, lat: s.lat, lng: s.lng })), [hikeStops]);
+  const hikeByStop = useHikes(hikePoints);
+  const mapHikes = useMemo(() => hikeStops.flatMap((s) => { const h = hikeByStop.get(s.id); return h ? [{ id: s.id, geometry: h.geometry }] : []; }), [hikeStops, hikeByStop]);
+  const toggleHike = useCallback((id: string) => setHikeShownIds((prev) => { const next = new Set(prev); if (!next.delete(id)) next.add(id); return next; }), []);
+
   return (
     <main id="main-content" tabIndex={-1} className="relative h-[calc(100dvh-3rem)] overflow-hidden outline-none">
       {dialog}
@@ -1130,7 +1174,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         highlightedSuggestionId={highlightedId}
         selectedId={cardId}
         sky={sky}
+        hikes={mapHikes}
         drawerOpen={drawerStop !== null}
+        routeFlowId={routeFlowId}
         flyTo={flyTo}
         onMapClick={(p) => void pickPoint(p)}
         onStopClick={clickMarker}
@@ -1139,7 +1185,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         onCenterChange={handleCenter}
       />
 
-      <div className="pointer-events-none absolute inset-x-3 top-3 z-[15] space-y-2 lg:inset-x-auto lg:left-[24.25rem] lg:w-[28.75rem] lg:max-w-[calc(100vw-29rem)]">
+      <div className="pointer-events-none absolute inset-x-3 top-3 z-[15] space-y-2 lg:inset-x-auto lg:left-[24.25rem] lg:w-[28.75rem] lg:max-w-[calc(100vw-29rem)] short-landscape:inset-x-auto short-landscape:left-[calc(clamp(17.5rem,40%,23.75rem)+0.75rem)] short-landscape:right-[max(0.75rem,env(safe-area-inset-right))] short-landscape:w-auto short-landscape:max-w-none">
         <div className="pointer-events-auto">
           <SearchBar getProximity={() => centerRef.current} onSelect={selectSearchResult} inputRef={searchRef} />
         </div>
@@ -1254,6 +1300,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                 onToggleVisited={(id, visited) => void toggleVisited(id, visited)}
                 onPriorityChange={(id, priority) => patchStop(id, { priority })}
                 onSelect={openFromList}
+                hikeShownIds={hikeShownIds}
+                onToggleHike={toggleHike}
               />
             }
           />

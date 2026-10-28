@@ -22,7 +22,7 @@ export function DownloadDialog({ download }: { download: ReturnType<typeof useIt
   const description =
     state.status === "preparing" ? "Preparing your PDF…" : state.status === "ready" ? "Your PDF is ready." : state.status === "error" ? <span role="alert">{state.message}</span> : "";
   return (
-    <Dialog open={state.status !== "idle"} title="Itinerary PDF" description={description} onCancel={cancel} busy={state.status === "preparing"}>
+    <Dialog open={state.status !== "idle"} title="Itinerary PDF" description={description} onCancel={cancel} busy={state.status === "preparing"} backdropGraceMs={350}>
       {state.status === "error" ? (
         <>
           <button key="close" type="button" className={btnSecondary} onClick={cancel}>Close</button>

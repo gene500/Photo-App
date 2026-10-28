@@ -16,12 +16,14 @@ type Props = {
   /** Gets focus on open; otherwise the first focusable element. */
   initialFocusRef?: RefObject<HTMLElement | null>;
   busy?: boolean;
+  /** Backdrop presses this soon after opening are ignored (the tail of a double-click on the opener). */
+  backdropGraceMs?: number;
   /** The action row. */
   children: ReactNode;
 };
 
 /** Modal card over a dimmed backdrop: focus trap, Escape, focus restored to the opener on close. */
-export function Dialog({ open, role = "alertdialog", title, description, onCancel, initialFocusRef, busy, children }: Props) {
+export function Dialog({ open, role = "alertdialog", title, description, onCancel, initialFocusRef, busy, backdropGraceMs = 0, children }: Props) {
   const titleId = useId();
   const descId = useId();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -33,9 +35,11 @@ export function Dialog({ open, role = "alertdialog", title, description, onCance
     initialRef.current = initialFocusRef;
   });
   const pressedBackdrop = useRef(false);
+  const openedAt = useRef(0);
 
   useEffect(() => {
     if (!open) return;
+    openedAt.current = Date.now();
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const first = initialRef.current?.current ?? cardRef.current?.querySelector<HTMLElement>(FOCUSABLE) ?? cardRef.current;
     first?.focus();
@@ -81,7 +85,8 @@ export function Dialog({ open, role = "alertdialog", title, description, onCance
       // Only a press that starts and ends on the backdrop cancels, not a drag that ends there.
       onPointerDown={(e) => { pressedBackdrop.current = e.target === e.currentTarget; }}
       onClick={(e) => {
-        if (e.target === e.currentTarget && pressedBackdrop.current) onCancel();
+        // A press within the first moments is the tail of a double-click on the button that opened the dialog, not a dismissal.
+        if (e.target === e.currentTarget && pressedBackdrop.current && (backdropGraceMs === 0 || Date.now() - openedAt.current > backdropGraceMs)) onCancel();
         pressedBackdrop.current = false;
       }}
     >

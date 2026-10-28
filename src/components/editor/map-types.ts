@@ -16,6 +16,10 @@ export type MapViewProps = {
   flyTo?: (LatLng & { nonce: number; area?: { bbox?: [number, number, number, number] } }) | null;
   /** The selected stop with its sunrise/sunset compass bearings (degrees clockwise from north); null draws no lines. */
   sky?: { lat: number; lng: number; sunrise: number | null; sunset: number | null } | null;
+  /** Hike lines to draw (a dotted green line each, in their own map layer: never part of the route). Empty/absent: none. */
+  hikes?: { id: string; geometry: LngLat[] }[];
+  /** Counts up with every successful Optimize: a new value zooms out to show every stop, then runs the water-flow animation along the route. 0/absent: never. */
+  routeFlowId?: number;
   /** The Edit stop drawer is open: the selected stop is re-centred clear of it. */
   drawerOpen?: boolean;
   onMapClick: (p: LatLng) => void;

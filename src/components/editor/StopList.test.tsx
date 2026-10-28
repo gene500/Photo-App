@@ -3,12 +3,26 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Stop } from "@/lib/types";
-import { reorderIds, StopList } from "./StopList";
+import { listCollision, reorderIds, StopList } from "./StopList";
 
 const stop = (id: string, name: string, extra: Partial<Stop> = {}): Stop => ({
   id, tripId: "t1", order: 0, name, lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], ...extra,
 });
 const handlers = { onReorder: vi.fn(), onDelete: vi.fn(), onSelect: vi.fn() };
+
+describe("listCollision (drag released outside the list cancels)", () => {
+  const rect = (top: number) => ({ top, bottom: top + 40, left: 0, right: 300, width: 300, height: 40 });
+  const droppableRects = new Map([["a", rect(0)], ["b", rect(40)]]) as never;
+  const base = { droppableRects, droppableContainers: [{ id: "a", rect: { current: rect(0) } }, { id: "b", rect: { current: rect(40) } }], active: {}, collisionRect: rect(45) } as never;
+  it("has no target when the pointer is outside the rows", () => {
+    expect(listCollision({ ...(base as object), pointerCoordinates: { x: 500, y: 20 } } as never)).toEqual([]);
+    expect(listCollision({ ...(base as object), pointerCoordinates: { x: 100, y: 200 } } as never)).toEqual([]);
+  });
+  it("picks the closest row when the pointer is over the list, and for keyboard drags", () => {
+    expect(listCollision({ ...(base as object), pointerCoordinates: { x: 100, y: 60 } } as never)[0]?.id).toBe("b");
+    expect(listCollision({ ...(base as object), pointerCoordinates: null } as never)[0]?.id).toBe("b");
+  });
+});
 
 describe("reorderIds", () => {
   it("moves the active id to the over position", () => {
@@ -20,7 +34,28 @@ describe("reorderIds", () => {
   });
 });
 
+describe("reorderIds with visited stops pinned", () => {
+  it("never moves a visited stop", () => {
+    expect(reorderIds(["a", "b", "c", "d"], "a", "d", 2)).toBeNull();
+    expect(reorderIds(["a", "b", "c", "d"], "b", "d", 2)).toBeNull();
+  });
+  it("treats a drop onto a visited stop as the first unvisited place", () => {
+    expect(reorderIds(["a", "b", "c", "d"], "d", "a", 2)).toEqual(["a", "b", "d", "c"]);
+    expect(reorderIds(["a", "b", "c", "d"], "c", "b", 2)).toBeNull();
+  });
+  it("still moves unvisited stops among themselves", () => {
+    expect(reorderIds(["a", "b", "c", "d"], "c", "d", 2)).toEqual(["a", "b", "d", "c"]);
+  });
+});
+
 describe("StopList", () => {
+  it("disables the drag handle of visited rows with a reason", () => {
+    render(<StopList stops={[stop("a", "A", { visited: true }), stop("b", "B"), stop("c", "C")]} {...handlers} />);
+    const a = screen.getByRole("button", { name: "A is visited and stays in place" }) as HTMLButtonElement;
+    expect(a.disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Reorder B" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("disables browser touch panning on the drag handle so touch drags reach dnd-kit", () => {
     render(<StopList stops={[stop("a", "A")]} {...handlers} />);
     expect(screen.getByTestId("drag-handle").className).toContain("touch-none");

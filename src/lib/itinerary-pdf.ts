@@ -1,6 +1,7 @@
 // Draws the itinerary as an A4 PDF with jsPDF (loaded on demand, never at module load).
 
 import { downsampleRoute } from "./downsample";
+import { fanOffsets } from "./marker-fan";
 import { parseCmap, pdfText, type PdfFonts } from "./pdf-fonts";
 import type { ItineraryInput } from "./itinerary";
 import { STATIC_MAP_HEIGHT, STATIC_MAP_WIDTH } from "./static-map";
@@ -17,6 +18,14 @@ export function pdfSafe(text: string): string {
 }
 
 const UNICODE_FAMILY = "NotoSans";
+const CJK_FAMILY = "NotoSansCJK";
+
+/** Every string the PDF draws, for choosing fonts before the PDF is built. */
+export function itineraryText(input: ItineraryInput): string {
+  const parts = [input.tripName, input.dateLine, input.startLine, input.routeLine, input.note];
+  for (const s of input.stops) parts.push(s.name, s.arrival, s.bestLight, s.weather, s.notes);
+  return parts.filter((t): t is string => typeof t === "string").join("\n");
+}
 
 function toBase64(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
@@ -90,8 +99,13 @@ function drawFallbackMap(doc: Doc, family: string, x: number, y: number, w: numb
     doc.lines(deltas, a[0][0], a[0][1], [1, 1], "S", false);
   }
   doc.setFontSize(8);
-  stopPts.forEach((p, i) => {
-    const [cx, cy] = at(p);
+  // Display-only: numbered circles (16 pt wide) that would overlap are fanned around their shared spot so every number stays legible.
+  const spots = stopPts.map((p, i) => { const [x, y] = at(p); return { id: String(i), x, y }; });
+  const fan = fanOffsets(spots, 18);
+  stopPts.forEach((_, i) => {
+    const o = fan.get(String(i));
+    const cx = spots[i].x + (o?.dx ?? 0);
+    const cy = spots[i].y + (o?.dy ?? 0);
     doc.setFillColor(225, 29, 72);
     doc.circle(cx, cy, 8, "F");
     doc.setTextColor(255, 255, 255);
@@ -120,7 +134,38 @@ export async function renderItineraryPdf(
   // With the Unicode font only its own gaps become "?"; without it (offline, failed fetch) the WinAnsi rule applies.
   let family = "helvetica";
   let safe = pdfSafe;
-  if (fonts) {
+  // jsPDF swallows a font parse error inside addFont (a truncated file registers a broken family and a later measure throws),
+  // so after adding, check the family is registered with usable metrics; a failure throws into the caller's try/catch.
+  const verifyFamily = (fam: string, sample: string) => {
+    const styles = (doc.getFontList() as Record<string, string[]>)[fam];
+    if (!styles || !styles.includes("normal") || !styles.includes("bold")) throw new Error("font not registered");
+    for (const style of ["normal", "bold"]) {
+      doc.setFont(fam, style);
+      const width = doc.getTextWidth(sample);
+      if (!Number.isFinite(width) || width <= 0) throw new Error("font has no metrics");
+    }
+    doc.setFont("helvetica", "normal");
+  };
+  const applyCjk = (cjk: NonNullable<PdfFonts["cjk"]>): boolean => {
+    try {
+      // One family with Latin + the CJK script; regular weight stands in for bold (jsPDF cannot mix fonts in a line).
+      const cjkSupported = parseCmap(cjk.regular);
+      if (cjkSupported.size === 0) return false;
+      doc.addFileToVFS("NotoSansCJK-Regular.ttf", toBase64(cjk.regular));
+      doc.addFont("NotoSansCJK-Regular.ttf", CJK_FAMILY, "normal");
+      doc.addFont("NotoSansCJK-Regular.ttf", CJK_FAMILY, "bold");
+      verifyFamily(CJK_FAMILY, "A\u4eac");
+      family = CJK_FAMILY;
+      safe = (t) => pdfText(t, (c) => cjkSupported.has(c));
+      return true;
+    } catch {
+      doc.setFont("helvetica", "normal");
+      family = "helvetica";
+      safe = pdfSafe;
+      return false;
+    }
+  };
+  if (fonts && !(fonts.cjk && applyCjk(fonts.cjk))) {
     try {
       const supported = parseCmap(fonts.regular);
       const boldSupported = parseCmap(fonts.bold);
@@ -129,6 +174,7 @@ export async function renderItineraryPdf(
       doc.addFileToVFS("NotoSans-Bold.ttf", toBase64(fonts.bold));
       doc.addFont("NotoSans-Bold.ttf", UNICODE_FAMILY, "bold");
       if (supported.size === 0 || boldSupported.size === 0) throw new Error("unreadable font");
+      verifyFamily(UNICODE_FAMILY, "Ab");
       family = UNICODE_FAMILY;
       safe = (t) => pdfText(t, (c) => supported.has(c) && boldSupported.has(c));
     } catch {

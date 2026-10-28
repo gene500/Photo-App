@@ -72,6 +72,10 @@ export function SearchBar({ getProximity, onSelect, inputRef }: Props) {
   // Escape with the list open only closes it (the text stays); it opens again when the text changes. A second Escape clears.
   const [closedFor, setClosedFor] = useState<string | null>(null);
   const listOpen = options.length > 0 && closedFor !== query;
+  // The list scrolls on short screens: keep the option the arrow keys are on in view.
+  useEffect(() => {
+    if (listOpen && activeIndex >= 0) document.getElementById(`place-option-${activeIndex}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [listOpen, activeIndex]);
   const message = pickError ?? shown?.error ?? "";
 
   function clear() {
@@ -166,7 +170,7 @@ export function SearchBar({ getProximity, onSelect, inputRef }: Props) {
       {/* Always mounted so "No matches found" and errors are announced when their text appears. */}
       <p role="status" className={message ? "mt-1 rounded-xl bg-surface px-3 py-2 text-sm text-danger shadow-lg" : "sr-only"}>{message}</p>
       {listOpen && (
-        <ul id="place-search-results" role="listbox" aria-label="Search results" className={`mt-1 overflow-hidden rounded-xl py-1 ${card}`}>
+        <ul id="place-search-results" role="listbox" aria-label="Search results" className={`mt-1 max-h-[max(6rem,calc(100dvh-8rem))] overflow-y-auto rounded-xl py-1 ${card}`}>
           {options.map((p, i) => (
             <li
               key={p.mapboxId ?? `${p.lat},${p.lng},${p.name}`}

@@ -15,3 +15,10 @@ export function leadingVisited(stops: { visited: boolean }[]): number {
   const n = stops.findIndex((s) => !s.visited);
   return n < 0 ? stops.length : n;
 }
+
+/** Reorder request made safe: visited stops stay first in their current order, the unvisited ones follow in the requested relative order. */
+export function pinVisitedFirst(currentOrder: HasVisited[], requestedIds: string[]): string[] {
+  const visited = currentOrder.filter((s) => s.visited).map((s) => s.id);
+  const pinned = new Set(visited);
+  return [...visited, ...requestedIds.filter((id) => !pinned.has(id))];
+}

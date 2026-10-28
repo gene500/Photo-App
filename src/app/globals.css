@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Phone in landscape: the trip panel becomes a side panel. Keep in sync with SHORT_LANDSCAPE_QUERY in lib/short-landscape.ts. */
+@custom-variant short-landscape (@media (orientation: landscape) and (max-height: 500px) and (max-width: 1023px));
+
 /* `dark:` follows the Settings theme: explicit dark, or the OS when the theme is "system". */
 @custom-variant dark {
   &:where([data-theme="dark"], [data-theme="dark"] *) {
@@ -227,6 +230,46 @@ body {
    button draws none, and the unfiltered control around it shows the ring; Mapbox's blue focus shadow is reset too. */
 :root .mapboxgl-map .mapboxgl-ctrl-attrib-button:focus { box-shadow: none; outline: none; }
 :root .mapboxgl-map .mapboxgl-ctrl-attrib:has(.mapboxgl-ctrl-attrib-button:focus-visible) { outline: 2px solid var(--accent-strong); }
+
+/* "Zoom to fit all stops": a round button under the (i), styled like the other map controls (surface, border ring, shadow, hover, focus ring).
+   Shared by the real map (a Mapbox control) and the offline preview. */
+:root .zoom-fit-ctrl {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 1px var(--border);
+  overflow: hidden;
+}
+:root .zoom-fit-ctrl[hidden] { display: none; }
+:root .zoom-fit-ctrl button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+}
+:root .zoom-fit-ctrl button:hover { background: var(--hover); }
+:root .zoom-fit-ctrl button:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent-strong); }
+.zoom-fit-fake { position: absolute; right: 10px; top: 10px; z-index: 2; }
+@media (max-width: 1023px) {
+  .zoom-fit-fake { top: calc(4rem + 10px); }
+}
+
+/* Offline map preview: the water-flow highlight sweeping the route after Optimize (the real map animates a line-gradient). Lengths are in pathLength units (100 = whole route). */
+@keyframes route-flow-sweep {
+  from { stroke-dashoffset: 14; opacity: 1; }
+  85% { stroke-dashoffset: -100; opacity: 1; }
+  to { stroke-dashoffset: -100; opacity: 0; }
+}
+.route-flow-line { stroke-dasharray: 14 200; animation: route-flow-sweep 2.9s ease-in-out forwards; }
+@media (prefers-reduced-motion: reduce) { .route-flow-line { animation: none; display: none; } }
 
 /* Print: always dark ink on white, whatever the theme (a dark-theme print would otherwise use the dark background and pale text). */
 @media print {

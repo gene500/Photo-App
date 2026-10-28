@@ -169,6 +169,15 @@ describe("edge cases", () => {
     noNaN(Buffer.from(await blob.arrayBuffer()).toString("latin1"));
   });
 
+  it("fans the numbers of stacked stops on the fallback map so each stays legible", async () => {
+    const same = { lat: 10, lng: 20 };
+    const s = await renderItineraryPdf(input(3), fallback, [[20, 10], [20, 10]], [same, same, same]).then(async (b) => Buffer.from(await b.arrayBuffer()).toString("latin1"));
+    const nums = placed(s).filter((t) => ["1", "2", "3"].includes(t.text) && t.page === 1);
+    expect(nums.length).toBeGreaterThanOrEqual(3);
+    const first = ["1", "2", "3"].map((n) => nums.find((t) => t.text === n)!);
+    for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) expect(Math.hypot(first[i].x - first[j].x, first[i].y - first[j].y)).toBeGreaterThanOrEqual(16);
+  });
+
   it("draws an antimeridian route as a short hop, not a line across the whole world", async () => {
     const blob = await renderItineraryPdf(input(1), fallback, [[179, 0], [-179, 1], [-178, 2]], [{ lat: 0, lng: 179 }, { lat: 2, lng: -178 }]);
     const s = Buffer.from(await blob.arrayBuffer()).toString("latin1");
@@ -293,6 +302,39 @@ describe("Unicode font", () => {
     expect(codes.has("?".codePointAt(0)!)).toBe(true);
     expect(codes.has("東".codePointAt(0)!)).toBe(false);
     expect(codes.has("😀".codePointAt(0)!)).toBe(false);
+  });
+
+  it("draws Chinese, Japanese and Korean text with the CJK font instead of ?", async () => {
+    const sc = { ...fonts, cjk: { script: "sc" as const, regular: font("NotoSansSC-Regular.ttf") } };
+    const s = await renderWith(input(1, { name: "東京タワー", notes: "Москва" }), sc);
+    expect(s).toContain("/BaseFont /NotoSansCJK");
+    const codes = mapped(s);
+    for (const ch of "東京タワー") expect(codes.has(ch.codePointAt(0)!), ch).toBe(true);
+    const kr = { ...fonts, cjk: { script: "kr" as const, regular: font("NotoSansKR-Regular.ttf") } };
+    const k = mapped(await renderWith({ ...input(1), tripName: "서울 여행" }, kr));
+    for (const ch of "서울여행") expect(k.has(ch.codePointAt(0)!), ch).toBe(true);
+  });
+
+  it("falls back to the base font when the CJK file cannot be read", async () => {
+    const bad = { ...fonts, cjk: { script: "sc" as const, regular: new ArrayBuffer(100) } };
+    const s = await renderWith(input(1, { name: "東京" }), bad);
+    expect(s).toContain("/BaseFont /NotoSans");
+    expect(s).not.toContain("NotoSansCJK");
+    expect(mapped(s).has("東".codePointAt(0)!)).toBe(false);
+  });
+
+  it.each([0.5, 0.9])("falls back instead of failing when the CJK font is truncated to %s of its size", async (frac) => {
+    const full = font("NotoSansSC-Regular.ttf");
+    const cjk = { script: "sc" as const, regular: full.slice(0, Math.floor(full.byteLength * frac)) };
+    const s = await renderWith(input(1, { name: "東京" }), { ...fonts, cjk } as never);
+    expect(s.startsWith("%PDF")).toBe(true);
+    expect(mapped(s).has("東".codePointAt(0)!)).toBe(false);
+  });
+
+  it.each([0.5, 0.9])("falls back to the built-in fonts when the base font is truncated to %s of its size", async (frac) => {
+    const cut = (b: ArrayBuffer) => b.slice(0, Math.floor(b.byteLength * frac));
+    const s = await renderWith({ ...input(1), tripName: "Москва" }, { regular: cut(fonts.regular), bold: cut(fonts.bold) });
+    expect(s.startsWith("%PDF")).toBe(true);
   });
 
   it("without the font keeps the built-in fonts and the same placeholder rule", async () => {

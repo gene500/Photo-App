@@ -9,11 +9,17 @@ import { bearingEndpoint, wrapLng } from "@/lib/geo";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { applyMapTheme } from "@/lib/map-theme";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
+import { isShortLandscape, sideViewPadding } from "@/lib/short-landscape";
 import { decideFit, routeKey, selectionPadding } from "./map-fit";
+import { fitMapToPoints, startRouteFlow } from "./route-flow-map";
+import { fitTargets, ZoomFitControl } from "./zoom-fit";
+import { casingLineWidth, routeLineWidth, simplifyBucket, simplifyRoute, simplifyToleranceDeg } from "./route-style";
+import { fanOffsets } from "@/lib/marker-fan";
 import { STOP_MARKER_CLASS, stopColor } from "@/lib/stop-style";
 import type { LngLat, Suggestion } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
 import { isHoverPointer } from "./hover-pointer";
+import { ensureHikeLayer } from "./hike-layer";
 import { createSuggestionPopupContent } from "./suggestion-popup";
 
 const ROUTE_SOURCE = "route";
@@ -30,6 +36,13 @@ const DEFAULT_CENTER: LngLat = [-98.5, 39.8];
 // Visited markers are light, so they get dark numerals; the rest get white.
 const textClass = (visited: boolean) => (visited ? "text-black/75" : "text-white");
 const PENDING_CLASS = "h-5 w-5 rounded-full border-2 border-white bg-[#3b3226] shadow-md";
+
+/** Draws the route, smoothed to the map's current zoom so switchbacks and parallel roads don't clump when zoomed out. */
+function drawRoute(map: mapboxgl.Map, geometry: LngLat[] | null, bucket: { current: number }) {
+  bucket.current = simplifyBucket(map.getZoom());
+  const line = geometry ? simplifyRoute(geometry, simplifyToleranceDeg(map.getZoom())) : null;
+  (map.getSource(ROUTE_SOURCE) as mapboxgl.GeoJSONSource | undefined)?.setData(routeData(line));
+}
 
 function routeData(geometry: LngLat[] | null): Feature<LineString> {
   return { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: geometry ?? [] } };
@@ -100,6 +113,8 @@ function rootScale(): number {
 // Keep fitted/flown-to points clear of what floats over the map: the bottom sheet on phones, the left card on desktop.
 // The shared (read-only) page uses a taller sheet (55% of the height), so it needs more room below the points.
 function viewPadding(readOnly = false): mapboxgl.PaddingOptions {
+  // Short landscape: a side panel on the left and the whole height free, so frame the points in the map to its right.
+  if (isShortLandscape()) return sideViewPadding(window.innerWidth, rootScale());
   const phone = typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
   return phone
     ? { top: 72, right: 24, left: 24, bottom: Math.round(window.innerHeight * (readOnly ? 0.57 : 0.45)) }
@@ -114,7 +129,7 @@ function isDarkNow(): boolean {
 }
 
 export default function MapPanel({
-  stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, flyTo, readOnly, sky, drawerOpen,
+  stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, flyTo, readOnly, sky, hikes, drawerOpen, routeFlowId,
   onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange,
 }: MapViewProps) {
   const { settings } = useSettings();
@@ -134,13 +149,29 @@ export default function MapPanel({
   const seenSuggestionsRef = useRef(new Set<string>());
   const pendingMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const popupRef = useRef<mapboxgl.Popup | null>(null);
+  const routeGeometryRef = useRef(routeGeometry);
+  const drawnBucketRef = useRef(NaN);
   const handlersRef = useRef({ onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange });
   const initialRef = useRef({ center: (stops[0] ? [stops[0].lng, stops[0].lat] : DEFAULT_CENTER) as LngLat, zoom: stops.length ? 7 : 3.5 });
   const fittedRef = useRef(false);
   const prevStopCountRef = useRef(0);
   const fittedRouteRef = useRef<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const flowRef = useRef<{ cancel: () => void } | null>(null);
+  const zoomFitRef = useRef<ZoomFitControl | null>(null);
+  const fitDataRef = useRef({ stops, routeGeometry, readOnly });
+  /** The last Optimize run that was started (or dropped as stale), and when each new run id was first seen. */
+  const flowHandledRef = useRef(routeFlowId ?? 0);
+  const flowSeenRef = useRef({ id: routeFlowId ?? 0, at: 0 });
+  const hikesRef = useRef(hikes);
 
+  useEffect(() => {
+    routeGeometryRef.current = routeGeometry;
+  }, [routeGeometry]);
+  useEffect(() => {
+    fitDataRef.current = { stops, routeGeometry, readOnly };
+    zoomFitRef.current?.setVisible(stops.length > 0);
+  }, [stops, routeGeometry, readOnly]);
   useEffect(() => {
     handlersRef.current = { onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange };
   }, [onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange]);
@@ -164,6 +195,19 @@ export default function MapPanel({
     }
     map.addControl(new mapboxgl.NavigationControl(), "top-right");
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), "top-right");
+    // Added last, so it stacks directly under the (i). Fits every stop and the route; never starts the Optimize animation.
+    const zoomFit = new ZoomFitControl(() => {
+      const { stops: s, routeGeometry: r, readOnly: ro } = fitDataRef.current;
+      const points = fitTargets(s, r);
+      if (points.length === 0) return;
+      flowRef.current?.cancel();
+      flowRef.current = null;
+      const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+      fitMapToPoints(map, points, viewPadding(ro), reduced ? { duration: 0 } : undefined);
+    });
+    zoomFit.setVisible(fitDataRef.current.stops.length > 0);
+    zoomFitRef.current = zoomFit;
+    map.addControl(zoomFit, "top-right");
     const reportCenter = () => {
       const c = map.getCenter();
       handlersRef.current.onCenterChange?.({ lat: c.lat, lng: wrapLng(c.lng) });
@@ -175,21 +219,22 @@ export default function MapPanel({
     map.on("style.load", theme);
     map.on("load", () => {
       theme();
-      map.addSource(ROUTE_SOURCE, { type: "geojson", data: routeData(null) });
+      // lineMetrics lets the Optimize water-flow highlight use a line-gradient along the route.
+      map.addSource(ROUTE_SOURCE, { type: "geojson", data: routeData(null), lineMetrics: true });
       // A slightly wider white line underneath gives the route a soft casing on the pale map.
       map.addLayer({
         id: "route-casing",
         type: "line",
         source: ROUTE_SOURCE,
         layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#ffffff", "line-width": 7, "line-opacity": 0.9 },
+        paint: { "line-color": "#ffffff", "line-width": casingLineWidth() as mapboxgl.Expression, "line-opacity": 0.9 },
       });
       map.addLayer({
         id: "route-line",
         type: "line",
         source: ROUTE_SOURCE,
         layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": ROUTE_COLOR, "line-width": 4 },
+        paint: { "line-color": ROUTE_COLOR, "line-width": routeLineWidth() as mapboxgl.Expression },
       });
       // Sunrise/sunset direction lines for the selected stop (data is set by the sky effect).
       map.addSource(SKY_SOURCE, { type: "geojson", data: emptySky() });
@@ -238,10 +283,15 @@ export default function MapPanel({
           "text-halo-width": 1.5,
         },
       });
+      ensureHikeLayer(map, hikesRef.current);
       setLoaded(true);
       reportCenter();
     });
     map.on("moveend", reportCenter);
+    // Redraw the (zoom-smoothed) route when the zoom level changes; the saved geometry is never altered.
+    map.on("zoomend", () => {
+      if (simplifyBucket(map.getZoom()) !== drawnBucketRef.current) drawRoute(map, routeGeometryRef.current, drawnBucketRef);
+    });
     map.on("click", (e) => {
       const target = e.originalEvent.target as HTMLElement | null;
       if (target?.closest(`.${MARKER_CLASS}`)) return; // marker clicks select, they don't drop pins
@@ -251,6 +301,8 @@ export default function MapPanel({
     return () => {
       popupRef.current?.remove();
       popupRef.current = null;
+      flowRef.current?.cancel();
+      flowRef.current = null;
       map.remove();
       mapRef.current = null;
     };
@@ -260,7 +312,7 @@ export default function MapPanel({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    (map.getSource(ROUTE_SOURCE) as mapboxgl.GeoJSONSource | undefined)?.setData(routeData(routeGeometry));
+    drawRoute(map, routeGeometry, drawnBucketRef);
     const key = routeKey(routeGeometry);
     const fit = decideFit({ prevCount: prevStopCountRef.current, count: stops.length, route: key, fittedRoute: fittedRouteRef.current, fitted: fittedRef.current });
     if (fit) {
@@ -277,6 +329,56 @@ export default function MapPanel({
     // Only the stop count matters here (not their positions), so a drag does not reframe the map.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, routeGeometry, readOnly, stops.length]);
+
+  // A running water flow is dropped as soon as the stops or the route change under it (an edit, Undo, another Optimize).
+  const stopsSig = stops.map((s) => `${s.id}:${s.lat},${s.lng}`).join("|");
+  const flowRouteKey = routeKey(routeGeometry);
+  useEffect(() => {
+    return () => {
+      flowRef.current?.cancel();
+      flowRef.current = null;
+    };
+  }, [stopsSig, flowRouteKey]);
+
+  // After a successful Optimize: show every stop, wait for that move to end, then run the water along the route.
+  // Waits for the route if it has not arrived yet; a run id that never found a route within 10 s is dropped.
+  useEffect(() => {
+    const map = mapRef.current;
+    const id = routeFlowId ?? 0;
+    if (!map || !loaded || !id || id === flowHandledRef.current) return;
+    if (flowSeenRef.current.id !== id) flowSeenRef.current = { id, at: Date.now() };
+    if (!routeGeometry || routeGeometry.length < 2) {
+      if (Date.now() - flowSeenRef.current.at > 10_000) flowHandledRef.current = id;
+      return;
+    }
+    flowHandledRef.current = id;
+    flowRef.current?.cancel();
+    const points: LngLat[] = [...stops.map((s): LngLat => [s.lng, s.lat]), ...routeGeometry];
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    const run = startRouteFlow(map, {
+      points,
+      padding: viewPadding(readOnly),
+      reducedMotion,
+      source: ROUTE_SOURCE,
+      beforeId: map.getLayer("sky-sunrise") ? "sky-sunrise" : undefined,
+      onEnd: () => { if (flowRef.current === run) flowRef.current = null; },
+    });
+    flowRef.current = run;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- starts per run id (or when the route arrives), not on stop edits
+  }, [loaded, routeFlowId, routeGeometry]);
+
+  // Hike lines (the selected stop's and toggled-on ones): a separate dotted layer, never the route. Emptied when there are none, and put back if a style reload dropped it.
+  useEffect(() => {
+    hikesRef.current = hikes;
+    const map = mapRef.current;
+    if (!map || !loaded) return;
+    const apply = () => ensureHikeLayer(map, hikesRef.current);
+    apply();
+    map.on("style.load", apply);
+    return () => {
+      map.off("style.load", apply);
+    };
+  }, [loaded, hikes]);
 
   // Sunrise/sunset lines for the selected stop; redrawn after each zoom so they stay SKY_LINE_PX long.
   useEffect(() => {
@@ -339,7 +441,11 @@ export default function MapPanel({
             markers.delete(id);
             return;
           }
-          const { lat, lng } = marker.getLngLat();
+          // A fanned marker is drawn at its true point plus the fan offset, but Mapbox drags from the true point: the
+          // spot the owner dropped it on is the drawn one.
+          const { x: ox, y: oy } = marker.getOffset();
+          const { lat, lng } = map.unproject(map.project(marker.getLngLat()).add(new mapboxgl.Point(ox, oy)));
+          marker.setLngLat([lng, lat]).setOffset([0, 0]);
           handlersRef.current.onStopMove?.(id, { lat, lng: wrapLng(lng) });
         });
         markers.set(id, marker);
@@ -347,6 +453,30 @@ export default function MapPanel({
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- readOnly is fixed for the life of the map
   }, [stops, selectedId]);
+
+  // Display-only: fan out stop markers that overlap on screen at the current zoom (stored coordinates are untouched).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const update = () => {
+      const markers = stopMarkersRef.current;
+      const pts = stops.filter((s) => markers.has(s.id)).map((s) => {
+        const p = map.project([s.lng, s.lat]);
+        return { id: s.id, x: p.x, y: p.y };
+      });
+      const fan = fanOffsets(pts);
+      for (const [id, m] of markers) {
+        if (draggingRef.current.has(id)) continue;
+        const o = fan.get(id);
+        m.setOffset(o ? [o.dx, o.dy] : [0, 0]);
+      }
+    };
+    update();
+    map.on("zoomend", update);
+    return () => {
+      map.off("zoomend", update);
+    };
+  }, [stops, loaded]);
 
   // Remove all stop markers on unmount (the map teardown also drops them; this clears our bookkeeping).
   useEffect(() => {

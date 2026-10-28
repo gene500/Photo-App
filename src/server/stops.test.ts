@@ -98,6 +98,15 @@ describe("stops data access", () => {
     expect(result!.map((s) => s.order)).toEqual([0, 1, 2]);
   });
 
+  it("keeps the visited run first and orders only the unvisited stops", async () => {
+    const { user, trip, stops } = await tripWithStops(["a", "b", "c", "d"]);
+    await updateStopCascade(user.id, stops[1].id, { visited: true });
+    const result = await reorderStops(user.id, trip.id, [stops[3].id, stops[2].id, stops[1].id, stops[0].id]);
+    expect(result!.map((s) => s.name)).toEqual(["a", "b", "d", "c"]);
+    expect(result!.map((s) => s.visited)).toEqual([true, true, false, false]);
+    expect(result!.map((s) => s.order)).toEqual([0, 1, 2, 3]);
+  });
+
   it("rejects reorders that are not a permutation of the trip's stops", async () => {
     const { user, trip, stops } = await tripWithStops(["a", "b"]);
     const ids = stops.map((s) => s.id);

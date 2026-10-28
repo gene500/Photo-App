@@ -135,6 +135,31 @@ describe("service worker fetch handler", () => {
     expect(sw.cache.put).not.toHaveBeenCalled();
   });
 
+  describe("PDF fonts", () => {
+    const font = () => Promise.resolve(new Response("TTFBYTES", { status: 200, headers: { "content-type": "font/ttf" } }));
+    it("stores a font after the first fetch and serves it offline", async () => {
+      const sw = boot(font);
+      await sw.fire("/fonts/NotoSansSC-Regular.ttf").respondWith.mock.calls[0][0];
+      await sw.settle();
+      expect(sw.puts).toEqual(["/fonts/NotoSansSC-Regular.ttf"]);
+      const off = boot(down);
+      off.store.set(`${ORIGIN}/fonts/NotoSansSC-Regular.ttf`, new Response("TTFBYTES"));
+      const res = (await off.fire("/fonts/NotoSansSC-Regular.ttf").respondWith.mock.calls[0][0]) as Response;
+      expect(await res.text()).toBe("TTFBYTES");
+    });
+    it("never caches failed or HTML responses", async () => {
+      for (const res of [new Response("x", { status: 404 }), new Response("<html>", { status: 200, headers: { "content-type": "text/html" } })]) {
+        const sw = boot(() => Promise.resolve(res));
+        await sw.fire("/fonts/NotoSans-Regular.ttf").respondWith.mock.calls[0][0];
+        await sw.settle();
+        expect(sw.cache.put).not.toHaveBeenCalled();
+      }
+    });
+    it("ignores non-font paths under /fonts/", () => {
+      expect(boot(font).fire("/fonts/OFL.txt").respondWith).not.toHaveBeenCalled();
+    });
+  });
+
   it("install precaches /offline and the static assets it references, nothing else", async () => {
     const html = `<html><script src="/_next/static/chunks/x.js"></script><link href="/_next/static/css/y.css" rel="stylesheet"><a href="/trips">t</a></html>`;
     const sw = boot(() => Promise.resolve(new Response(html)));
@@ -157,7 +182,7 @@ describe("service worker fetch handler", () => {
   });
 
   it("activate deletes only older rtpp-offline- caches, never other apps' caches", async () => {
-    const sw = boot(ok, ["rtpp-offline-v1", "rtpp-offline-v2", "other-app-cache", "workbox-precache"]);
+    const sw = boot(ok, ["rtpp-offline-v1", "rtpp-offline-v3", "other-app-cache", "workbox-precache"]);
     let done: Promise<unknown> = Promise.resolve();
     sw.listeners.activate({ waitUntil: (p: Promise<unknown>) => { done = p; } });
     await done;

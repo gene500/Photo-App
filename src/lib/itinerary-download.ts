@@ -1,6 +1,6 @@
 import { staticMapUrl } from "./static-map";
 import { loadPdfFonts } from "./pdf-fonts";
-import { renderItineraryPdf, type PdfMap } from "./itinerary-pdf";
+import { itineraryText, renderItineraryPdf, type PdfMap } from "./itinerary-pdf";
 import type { ItineraryInput } from "./itinerary";
 import type { LightPref, LngLat } from "./types";
 import { forecastTarget, weatherLine, type WeatherLine } from "./use-weather";
@@ -88,7 +88,7 @@ export async function createItineraryPdf(a: {
   // The Unicode font is fetched only here, on click; null (offline, blocked) keeps the built-in fonts.
   const [map, fonts] = await Promise.all([
     loadMapImage(staticMapUrl({ stops: a.stops, geometry: a.geometry, token: a.token })),
-    loadPdfFonts(),
+    loadPdfFonts({ text: itineraryText(a.input) }),
   ]);
   return renderItineraryPdf(a.input, map, a.geometry, a.stops, fonts);
 }

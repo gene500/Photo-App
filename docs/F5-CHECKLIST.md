@@ -37,7 +37,7 @@
 ## f5 (map) - no High/Medium; F4 fixes re-verified (aria-pressed, pending pin role=img, dark focus ring, sky lines)
 - [ ] L: stops at identical coordinates overlap exactly; pointer click always selects the last one (FakeMapPanel.tsx; owner decision pending on clustering/offset)
 - [x] L: Escape does not close the place card/stop card unless focus is inside the card (same as f2 item; also with a stop marker focused)
-- [ ] L (known, owner decision): card covers the sheet header/Shrink at half on landscape and at full on phones; also covers the selected marker at 375x667 portrait (card y116-244, marker y221-253)
+- [ ] L (known, owner decision): card covers the sheet header/Shrink at half on landscape and at full on phones; also covers the selected marker at 375x667 portrait (card y116-244, marker y221-253) A46: landscape part addressed (side panel, cards over map only); portrait phone part remains. Verify in T9.
 - Fake-map only / polish: stop markers cover suggestion dots (z-[1]); desktop stops near the left edge hidden under the 360px sheet; 320x480 card sits ~20px above sheet
 
 ## f8 (auth and accounts) - no bugs; F4 fixes (login 500 message, search session-expiry message, Settings softDisabled) re-verified in a browser
@@ -53,5 +53,11 @@
 
 ## f10 (cross-feature chaos) - nothing new
 - 43 seeded API sequences, 2x1000 concurrent cascade requests (no 5xx, one visited run, sessions agree), 10 seeded UI runs (offline copy == server after each reload check).
-- Only failure was seed 8 = known open item: keyboard reorder moved a visited stop (server visited 1,0,0,1). OWNER DECISION still pending (reorder vs visited rule).
+- Only failure was seed 8 = known open item: keyboard reorder moved a visited stop (server visited 1,0,0,1). OWNER DECISION made (A44): reordering ignores visited stops. FIXED: visited stops are pinned first (drag handle disabled, drops clamp to the first unvisited place; server normalises the order). Tests: stops.test.ts, StopList.test.tsx, visited-run.test.ts.
 - Not covered: PDF export, photos, drawer UI in the chaos mix; 429 behaviour in the UI.
+
+## A47 (non-Latin text in the itinerary PDF)
+- [x] CJK in the PDF. When the trip text has Han/kana, `loadPdfFonts({ text })` also fetches `/fonts/NotoSansSC-Regular.ttf` (3.4 MB: GB2312 level 1 hanzi + JIS X 0208 level 1 kanji + kana + CJK punctuation, Simplified Chinese glyph forms, plus Latin/Cyrillic/Greek/Vietnamese); for Hangul it fetches `/fonts/NotoSansKR-Regular.ttf` (1.0 MB: KS X 1001 syllables + jamo + Latin etc.). Latin trips fetch only the two base fonts (unchanged; the e2e still sees exactly 2 requests). Files are same-origin static files (CSP-safe, not bundled), subset with fonttools from @fontsource Noto Sans SC/KR 5.3.1 (SIL OFL, `public/fonts/OFL.txt`). Any CJK failure (404, offline, timeout 30 s, wrong or >6 MB file) leaves "?" and the PDF still downloads.
+- Limits: jsPDF cannot switch fonts inside a line, so a CJK trip uses that one family for the whole document, regular weight only (no bold headings), and a trip mixing Chinese/Japanese and Korean uses the script with more characters (the other becomes "?"). Rare hanzi/kanji outside the subset, and Japanese-only forms of shared kanji (Simplified glyph shapes are drawn), are limitations. CJK PDFs are larger (the font is embedded whole, about 3 MB).
+- NOT included on purpose: Arabic, Hebrew (right-to-left), Thai, Devanagari and other Indic scripts: jsPDF has no text shaping or bidi, so letters would be drawn disconnected, reversed or with misplaced marks; "?" is better than wrong text. Emoji stay "?" (colour glyphs unsupported).
+- Not browser-tested (T9 runs e2e): an e2e for a CJK trip (3 font requests, PDF contains /BaseFont /NotoSansCJK) is still to add.

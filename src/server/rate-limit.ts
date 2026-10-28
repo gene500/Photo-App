@@ -42,6 +42,7 @@ export const POLICIES = {
   popularity: { limit: 10, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   /** App-wide Flickr API calls (all users, key "all"); past it popularity falls back to Commons and place photos skip Flickr. */
   "flickr-app": { limit: 3000, windowMs: 60 * MINUTE, message: "Flickr budget spent." },
+  hike: { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   weather: { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   "weather-batch": { limit: 20, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   "password-change": { limit: 5, windowMs: 15 * MINUTE, message: "Too many attempts. Try again later." },

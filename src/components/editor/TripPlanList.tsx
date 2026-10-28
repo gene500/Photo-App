@@ -7,6 +7,8 @@ import { useMounted } from "@/lib/use-mounted";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { stopColor } from "@/lib/stop-style";
 import { useWeatherLine } from "@/lib/use-weather";
+import { useHike } from "@/lib/use-hike";
+import { formatHikeDistance, hikeAttribution } from "@/lib/hike";
 import { WeatherText } from "@/components/weather/WeatherIcon";
 import type { Stop, StopPriority } from "@/lib/types";
 import { PriorityPill } from "./PriorityPill";
@@ -21,9 +23,12 @@ type Props = {
   /** May return a promise; the pill shows the new value meanwhile and reverts if it rejects. */
   onPriorityChange: (stopId: string, priority: StopPriority) => void | Promise<unknown>;
   onSelect: (stopId: string) => void;
+  /** Stops whose hike line is kept on the map after they are deselected. */
+  hikeShownIds?: ReadonlySet<string>;
+  onToggleHike?: (stopId: string) => void;
 };
 
-export function TripPlanList({ stops, optimized, bestTimes, arrivals, onToggleVisited, onPriorityChange, onSelect }: Props) {
+export function TripPlanList({ stops, optimized, bestTimes, arrivals, onToggleVisited, onPriorityChange, onSelect, hikeShownIds, onToggleHike }: Props) {
   if (stops.length === 0) return <p className="text-sm text-muted">No stops yet.</p>;
   return (
     <ol aria-label="Trip plan">
@@ -32,6 +37,7 @@ export function TripPlanList({ stops, optimized, bestTimes, arrivals, onToggleVi
           bestTime={bestTimes[i] ?? null} arrival={arrivals?.[i] ?? null}
           role={stops.length > 1 ? (i === 0 ? "Start" : i === stops.length - 1 ? "End" : null) : null}
           onToggleVisited={onToggleVisited} onPriorityChange={onPriorityChange} onSelect={onSelect}
+          hikeShown={hikeShownIds?.has(s.id) ?? false} onToggleHike={onToggleHike}
         />
       ))}
     </ol>
@@ -74,7 +80,36 @@ function ArrivalLines({ stop, bestTime, arrival }: { stop: Stop; bestTime: BestT
   );
 }
 
-function TripRow({ stop, index, first, last, optimized, bestTime, arrival, role, onToggleVisited, onPriorityChange, onSelect }: Pick<Props, "optimized" | "onToggleVisited" | "onPriorityChange" | "onSelect"> & { stop: Stop; index: number; first: boolean; last: boolean; bestTime: BestTime; arrival: Date | null; role: "Start" | "End" | null }) {
+/**
+ * "Hike 1.2 mi one way" (distance only) with a toggle that keeps the trail on the map, and the data credit. Rendered only
+ * when the stop has a hike, so a stop without one reserves no space.
+ */
+function HikeLines({ stop, shown, onToggle }: { stop: Stop; shown: boolean; onToggle?: (stopId: string) => void }) {
+  const { settings } = useSettings();
+  const hike = useHike(stop.id, stop.lat, stop.lng);
+  if (!hike) return null;
+  return (
+    <>
+      <div data-testid="stop-hike" className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-foreground/80">
+        <span>Hike {formatHikeDistance(hike.distanceMeters, settings.distanceUnit)} one way</span>
+        {onToggle && (
+          <button
+            type="button"
+            aria-pressed={shown}
+            aria-label={`Show hike: ${stop.name}`}
+            onClick={() => onToggle(stop.id)}
+            className="inline-flex min-h-6 items-center rounded-full bg-hover px-2 text-[11px] font-medium text-foreground ring-1 ring-border transition hover:bg-border aria-pressed:bg-accent-soft aria-pressed:ring-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
+          >
+            Show hike
+          </button>
+        )}
+      </div>
+      <p data-testid="hike-attribution" className="text-[10px] leading-snug text-muted">{hikeAttribution(hike.source)}</p>
+    </>
+  );
+}
+
+function TripRow({ stop, index, first, last, optimized, bestTime, arrival, role, onToggleVisited, onPriorityChange, onSelect, hikeShown, onToggleHike }: Pick<Props, "optimized" | "onToggleVisited" | "onPriorityChange" | "onSelect" | "onToggleHike"> & { hikeShown: boolean; stop: Stop; index: number; first: boolean; last: boolean; bestTime: BestTime; arrival: Date | null; role: "Start" | "End" | null }) {
   // The timeline line runs through the dot centre (22px down) and stops at the first/last dot.
   const line = first && last ? "hidden" : first ? "top-[22px] bottom-0" : last ? "top-0 h-[22px]" : "inset-y-0";
   return (
@@ -109,6 +144,7 @@ function TripRow({ stop, index, first, last, optimized, bestTime, arrival, role,
           {role && <span data-testid="stop-role" className="shrink-0 rounded-md bg-hover px-1.5 py-px text-xs font-medium text-muted">{role}</span>}
         </div>
         {optimized && <ArrivalLines stop={stop} bestTime={bestTime} arrival={arrival} />}
+        <HikeLines stop={stop} shown={hikeShown} onToggle={onToggleHike} />
       </div>
       {stop.lightPref !== "any" && (
         <div className="flex basis-full flex-wrap items-center gap-x-2 gap-y-0.5 pl-10 text-[11px] text-muted" title="Priority: how hard Optimize route works to land this stop in its light">

@@ -84,7 +84,7 @@ export function TripHeader({ trip, onSave, onShareChange, exportData }: { trip: 
 
   return (
     // On phones the form (~324 px) scrolls on its own, so Save stays reachable at the 175 px landscape sheet height (the sheet itself does not scroll its header).
-    <form onSubmit={(e) => { e.preventDefault(); void save(); }} onKeyDown={(e) => { if (e.key === "Escape" && !busy) setEditing(false); }} className="-mx-1 space-y-3 px-1 pb-2 max-lg:max-h-[40dvh] max-lg:overflow-y-auto">
+    <form onSubmit={(e) => { e.preventDefault(); void save(); }} onKeyDown={(e) => { if (e.key === "Escape" && !busy) setEditing(false); }} className="-mx-1 space-y-3 px-1 pb-2 max-lg:max-h-[40dvh] max-lg:overflow-y-auto short-landscape:max-h-none short-landscape:overflow-visible">
       <label className="block">
         <span className="text-sm text-muted">Trip name</span>
         <input ref={nameRef} required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />

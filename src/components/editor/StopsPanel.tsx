@@ -1,6 +1,7 @@
 "use client";
 
 import { focusFirst } from "@/lib/focus";
+import { useShortLandscape } from "@/lib/short-landscape";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
@@ -92,7 +93,9 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, trip, sug
     setTab(TABS[next]!);
     tabRefs.current[TABS[next]!]?.focus();
   }
-  const open = snap !== "collapsed";
+  // Short landscape: a side panel that is always fully open (no sheet heights), so the sheet controls are not shown.
+  const side = useShortLandscape();
+  const open = side || snap !== "collapsed";
   const tabClass = (t: Tab) =>
     `min-h-9 flex-1 rounded-lg px-3 py-1.5 text-center text-sm transition ${tab === t ? "bg-surface font-medium text-foreground shadow-sm" : "text-muted hover:text-foreground"}`;
   const arrowClass = "flex h-9 w-9 items-center justify-center rounded-full bg-hover text-2xl leading-none text-foreground ring-1 ring-border transition hover:bg-border focus-visible:outline-2 focus-visible:outline-accent-strong";
@@ -101,7 +104,7 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, trip, sug
     <aside
       aria-label="Trip panel"
       data-snap={snap}
-      className={`absolute inset-x-0 bottom-0 z-10 flex flex-col overflow-hidden rounded-t-2xl bg-surface text-foreground shadow-2xl ring-1 ring-border lg:inset-x-auto lg:left-3 lg:top-3 lg:w-[22.5rem] lg:rounded-2xl ${SNAP_CLASS[snap]}`}
+      className={`absolute inset-x-0 bottom-0 z-10 short-landscape:z-[16] lg:[@media(max-height:30rem)]:z-[16] flex flex-col overflow-hidden rounded-t-2xl bg-surface text-foreground shadow-2xl ring-1 ring-border lg:inset-x-auto lg:left-3 lg:top-3 lg:w-[22.5rem] lg:rounded-2xl short-landscape:inset-y-0 short-landscape:left-0 short-landscape:right-auto short-landscape:h-auto short-landscape:w-[clamp(17.5rem,40%,23.75rem)] short-landscape:overflow-y-auto short-landscape:overflow-x-hidden short-landscape:rounded-none short-landscape:pb-[env(safe-area-inset-bottom)] short-landscape:pl-[env(safe-area-inset-left)] ${SNAP_CLASS[snap]}`}
     >
       {/* Wraps (arrows drop below) only when the header could not keep a readable width beside them, e.g. 200% text on a phone. */}
       <div className="flex flex-wrap items-start gap-x-2 px-4 pb-1 pt-3">
@@ -111,7 +114,7 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, trip, sug
           <p className="min-w-0 flex-1 truncate py-2 text-sm font-medium">{collapsedSummary}</p>
         )}
         {/* One arrow per direction, so the arrow always does what it says. */}
-        <div className="ml-auto flex shrink-0">
+        {!side && <div className="ml-auto flex shrink-0">
           {SMALLER[snap] && (
             <button type="button" ref={shrinkRef} aria-label="Shrink panel" onClick={() => { refocus.current = "shrink"; setSnap(SMALLER[snap]!); }} className={arrowClass}>
               ▾
@@ -122,7 +125,7 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, trip, sug
               ▴
             </button>
           )}
-        </div>
+        </div>}
       </div>
       {open && (
         <>
@@ -138,7 +141,7 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, trip, sug
               {suggestionCount > 0 ? `Suggestions (${suggestionCount})` : "Suggestions"}
             </button>
           </div>
-          <div role="tabpanel" id={panelId} aria-labelledby={tabId(tab)} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-4 pt-3">
+          <div role="tabpanel" id={panelId} aria-labelledby={tabId(tab)} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-4 pt-3 short-landscape:min-h-fit short-landscape:flex-none short-landscape:overflow-visible">
             {tab === "stops" ? stops : tab === "trip" ? trip : suggestions}
           </div>
         </>

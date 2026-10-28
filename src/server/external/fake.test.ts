@@ -75,3 +75,19 @@ describe("fakeSearch / fakeRetrieve", () => {
     expect(fakeRetrieve("nope")).toBeNull();
   });
 });
+
+describe("fakeHike", () => {
+  it("gives a canned hike of about 1.2 mi ending at a point near the fake hike point", async () => {
+    const { fakeHike, FAKE_HIKE_POINT } = await import("./fake");
+    const h = fakeHike(FAKE_HIKE_POINT.lat + 0.01, FAKE_HIKE_POINT.lng - 0.01)!;
+    expect(h.source).toBe("osm");
+    expect(h.geometry.at(-1)).toEqual([FAKE_HIKE_POINT.lng - 0.01, FAKE_HIKE_POINT.lat + 0.01]);
+    expect(h.distanceMeters / 1609.344).toBeGreaterThan(1.15);
+    expect(h.distanceMeters / 1609.344).toBeLessThan(1.25);
+  });
+  it("gives none anywhere else", async () => {
+    const { fakeHike } = await import("./fake");
+    expect(fakeHike(36.2, -120.5)).toBeNull();
+    expect(fakeHike(37, -118.2)).toBeNull();
+  });
+});

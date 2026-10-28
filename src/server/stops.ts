@@ -1,3 +1,4 @@
+import { pinVisitedFirst } from "@/lib/visited-run";
 import type { Stop } from "@/lib/types";
 import type { NewStopInput, StopPatch } from "@/lib/validation";
 import { MAX_ROUTE_WAYPOINTS } from "@/lib/validation";
@@ -169,7 +170,7 @@ export async function reorderStops(
 ): Promise<Stop[] | null> {
   const trip = await prisma.trip.findFirst({
     where: { id: tripId, userId },
-    include: { stops: { select: { id: true } } },
+    include: { stops: { select: { id: true, visited: true, order: true }, orderBy: { order: "asc" } } },
   });
   if (!trip) return null;
   const existing = new Set(trip.stops.map((s) => s.id));
@@ -177,9 +178,11 @@ export async function reorderStops(
   if (given.size !== stopIds.length) throw new InvalidReorderError();
   // Well-formed but not this trip's stops any more: one was added or deleted elsewhere.
   if (given.size !== existing.size || stopIds.some((id) => !existing.has(id))) throw new StopsChangedError();
+  // Visited stops are behind the owner: they stay first, in their current order; the request only orders the rest.
+  const finalIds = pinVisitedFirst(trip.stops, stopIds);
   try {
     await prisma.$transaction(
-      stopIds.map((id, order) => prisma.stop.update({ where: { id }, data: { order } })),
+      finalIds.map((id, order) => prisma.stop.update({ where: { id }, data: { order } })),
     );
   } catch (e) {
     if (typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2025") throw new StopsChangedError();

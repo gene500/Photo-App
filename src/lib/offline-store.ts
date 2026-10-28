@@ -3,6 +3,7 @@
 // copies are wiped on sign-out and when a different user signs in, and everything is best-effort
 // (storage can be missing, full or blocked; nothing here ever throws).
 import { isDateOnly } from "@/lib/dates";
+import { clearAllSuggestions, removeSuggestions } from "@/lib/suggestions-store";
 import type { ShotItem, Stop, TripWithStops } from "@/lib/types";
 
 const PREFIX = "rtpp.offline.";
@@ -305,6 +306,7 @@ export function loadTripCopy(id: string): TripCopy | null {
 
 /** Removes every offline copy and the owner mark (sign-out, a different user, the settings button). */
 export function clearAllCopies(): void {
+  clearAllSuggestions(); // the saved suggestion lists are trip data too (sessionStorage)
   const s = storage();
   if (!s) return;
   try {
@@ -341,6 +343,7 @@ export function getOwner(): string | null {
 
 /** Deletes one trip's copy (the trip was deleted). */
 export function removeTripCopy(id: string): void {
+  removeSuggestions(id);
   const s = storage();
   if (s) dropEntry(s, id);
 }
@@ -350,6 +353,7 @@ export function pruneTripCopies(existingIds: string[]): void {
   const s = storage();
   if (!s) return;
   const keep = new Set(existingIds);
+  for (const e of readIndex(s)) if (!keep.has(e.id)) removeSuggestions(e.id);
   for (const e of readIndex(s)) if (!keep.has(e.id)) dropEntry(s, e.id);
 }
 

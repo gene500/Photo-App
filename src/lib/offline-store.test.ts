@@ -264,3 +264,18 @@ describe("offline-store", () => {
     expect(listTripCopies()).toEqual([]);
   });
 });
+
+describe("saved suggestion lists", () => {
+  it("are cleared with the offline copies and when a trip's copy is removed", async () => {
+    const { saveSuggestions, loadSuggestions } = await import("./suggestions-store");
+    const { clearAllCopies, removeTripCopy } = await import("./offline-store");
+    const list = { key: "[[1,2]]", items: [] };
+    saveSuggestions("t1", list);
+    saveSuggestions("t2", list);
+    removeTripCopy("t1");
+    expect(loadSuggestions("t1")).toBeNull();
+    expect(loadSuggestions("t2")).not.toBeNull();
+    clearAllCopies();
+    expect(loadSuggestions("t2")).toBeNull();
+  });
+});

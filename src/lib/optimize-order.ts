@@ -12,7 +12,9 @@ export function optimizeOrder(durations: number[][]): number[] {
   const identity = Array.from({ length: n }, (_, i) => i);
   if (n <= 2) return identity;
   const d = durations.map((row) => row.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : PENALTY)));
-  return n <= EXACT_MAX ? exact(d) : heuristic(d);
+  const best = n <= EXACT_MAX ? exact(d) : heuristic(d);
+  // A different order that gains nothing (e.g. stops at the same spot) is only churn: keep the order the owner has.
+  return pathCost(d, identity) <= pathCost(d, best) + 1e-9 ? identity : best;
 }
 
 const pathCost = (d: number[][], order: number[]) => {

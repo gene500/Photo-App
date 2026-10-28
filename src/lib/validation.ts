@@ -232,6 +232,8 @@ export const pointQuerySchema = z.object({
   lng: decimal.pipe(z.number().min(-180).max(180)),
 });
 
+export const hikeQuerySchema = pointQuerySchema;
+
 export const weatherQuerySchema = pointQuerySchema.extend({ date: dateOnlySchema });
 
 /** A handful of places' weather on one date (suggestion cards): the same point rules as the single lookup. */

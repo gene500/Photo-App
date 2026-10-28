@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Stop, Suggestion } from "@/lib/types";
 import { FakeMapPanel } from "./FakeMapPanel";
@@ -225,5 +225,102 @@ describe("FakeMapPanel sky lines", () => {
     expect(screen.queryByText("Fake Viewpoint")).toBeTruthy();
     fireEvent.keyDown(dot, { key: "Escape" });
     expect(screen.queryByText("Fake Viewpoint")).toBeNull();
+  });
+
+  it("fans out stops at identical coordinates so each is separately clickable", () => {
+    const onStopClick = vi.fn();
+    const a = { ...stop, id: "a", name: "A" };
+    const b = { ...stop, id: "b", name: "B" };
+    render(<FakeMapPanel {...base} onStopClick={onStopClick} stops={[a, b]} />);
+    const m1 = screen.getByRole("button", { name: "Stop 1: A" });
+    const m2 = screen.getByRole("button", { name: "Stop 2: B" });
+    expect(m1.style.left + m1.style.top).not.toBe(m2.style.left + m2.style.top);
+    fireEvent.click(m1);
+    fireEvent.click(m2);
+    expect(onStopClick.mock.calls).toEqual([["a"], ["b"]]);
+  });
+
+  it("does not move stops that are far apart", () => {
+    render(<FakeMapPanel {...base} stops={[{ ...stop, id: "a", name: "A" }, { ...stop, id: "b", name: "B", lat: 38, lng: -118 }]} />);
+    expect(parseFloat(screen.getByRole("button", { name: "Stop 1: A" }).style.left)).toBeCloseTo(66.667, 2);
+    expect(screen.getByRole("button", { name: "Stop 2: B" }).style.left).toBe("100%");
+  });
+
+  describe("route flow after Optimize", () => {
+    const route: [number, number][] = [[-120, 36.5], [-119, 37], [-118.5, 37.5]];
+    const two: Stop[] = [stop, { ...stop, id: "s2", lat: 37.5, lng: -118.5 }];
+    const flowProps = { ...base, stops: two, routeGeometry: route };
+    const mq = (reduce: boolean) =>
+      vi.stubGlobal("matchMedia", (q: string) => ({ matches: reduce && q.includes("reduced-motion"), media: q, addEventListener: vi.fn(), removeEventListener: vi.fn() }) as never);
+
+    afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+    it("shows nothing for the run id it mounts with, then runs and finishes for a new one", () => {
+      vi.useFakeTimers();
+      mq(false);
+      const { rerender } = render(<FakeMapPanel {...flowProps} routeFlowId={3} />);
+      expect(screen.getByTestId("map").hasAttribute("data-route-flow")).toBe(false);
+      rerender(<FakeMapPanel {...flowProps} routeFlowId={4} />);
+      expect(screen.getByTestId("map").getAttribute("data-route-flow")).toBe("running");
+      expect(screen.getByTestId("route-flow")).toBeTruthy();
+      act(() => { vi.advanceTimersByTime(3000); });
+      expect(screen.getByTestId("map").getAttribute("data-route-flow")).toBe("done");
+      expect(screen.queryByTestId("route-flow")).toBeNull();
+      rerender(<FakeMapPanel {...flowProps} routeFlowId={5} />);
+      expect(screen.getByTestId("map").getAttribute("data-route-flow")).toBe("running");
+    });
+
+    it("waits for the route, and is cancelled by an edit to the stops", () => {
+      vi.useFakeTimers();
+      mq(false);
+      const { rerender } = render(<FakeMapPanel {...base} stops={two} routeGeometry={null} routeFlowId={0} />);
+      rerender(<FakeMapPanel {...base} stops={two} routeGeometry={null} routeFlowId={1} />);
+      expect(screen.getByTestId("map").hasAttribute("data-route-flow")).toBe(false);
+      rerender(<FakeMapPanel {...flowProps} routeFlowId={1} />);
+      expect(screen.getByTestId("map").getAttribute("data-route-flow")).toBe("running");
+      rerender(<FakeMapPanel {...flowProps} stops={[two[1], two[0]]} routeFlowId={1} />);
+      expect(screen.getByTestId("map").getAttribute("data-route-flow")).toBe("done");
+    });
+
+    it("draws no sweep with reduced motion", () => {
+      mq(true);
+      const { rerender } = render(<FakeMapPanel {...flowProps} routeFlowId={0} />);
+      rerender(<FakeMapPanel {...flowProps} routeFlowId={1} />);
+      expect(screen.getByTestId("map").getAttribute("data-route-flow")).toBe("done");
+      expect(screen.queryByTestId("route-flow")).toBeNull();
+    });
+  });
+});
+
+describe("FakeMapPanel zoom to fit", () => {
+  it("is absent with no stops", () => {
+    render(<FakeMapPanel {...base} />);
+    expect(screen.queryByRole("button", { name: "Zoom to fit all stops" })).toBeNull();
+  });
+
+  it("counts presses in data-fit-count without dropping a pin", () => {
+    const onMapClick = vi.fn();
+    render(<FakeMapPanel {...base} stops={[stop]} onMapClick={onMapClick} />);
+    const btn = screen.getByRole("button", { name: "Zoom to fit all stops" });
+    expect(btn.getAttribute("type")).toBe("button");
+    expect(screen.getByTestId("map").getAttribute("data-fit-count")).toBe("0");
+    fireEvent.click(btn);
+    fireEvent.click(btn);
+    expect(screen.getByTestId("map").getAttribute("data-fit-count")).toBe("2");
+    expect(onMapClick).not.toHaveBeenCalled();
+  });
+
+  it("draws a dotted hike polyline per hike, with the stop id and point count as data attributes", () => {
+    const hikes = [{ id: "s1", geometry: [[-119.52, 36.99], [-119.51, 36.995], [-119.5, 37]] as [number, number][] }];
+    const { rerender } = render(<FakeMapPanel {...base} stops={[stop]} hikes={hikes} />);
+    const line = screen.getByTestId("hike-line");
+    expect(line.getAttribute("data-stop-id")).toBe("s1");
+    expect(line.getAttribute("data-points")).toBe("3");
+    expect(line.getAttribute("stroke-dasharray")).toBeTruthy();
+    expect(line.getAttribute("points")?.split(" ")).toHaveLength(3);
+    // It is not the route.
+    expect(screen.queryByTestId("route-line")).toBeNull();
+    rerender(<FakeMapPanel {...base} stops={[stop]} hikes={[]} />);
+    expect(screen.queryByTestId("hike-line")).toBeNull();
   });
 });

@@ -2,11 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { bearingEndpoint } from "@/lib/geo";
+import { fanOffsets } from "@/lib/marker-fan";
 import { latLngToPercent, pixelToLatLng, type Bounds } from "@/lib/map-bounds";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import { STOP_MARKER_CLASS, stopColor } from "@/lib/stop-style";
 import type { Suggestion } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
+import { FLOW_TOTAL_MS } from "./route-flow";
+import { ZOOM_FIT_LABEL, ZOOM_FIT_SVG } from "./zoom-fit";
 import { isHoverPointer } from "./hover-pointer";
 import { createSuggestionPopupContent } from "./suggestion-popup";
 
@@ -40,12 +43,37 @@ const SUNSET_COLOR = "#7b4fa3";
 const SKY_LINE_KM = 30;
 
 /** No-network stand-in for Mapbox GL: used in e2e and when no token is configured. */
-export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, readOnly, sky, onMapClick, onStopClick, onSuggestionClick, onCenterChange }: MapViewProps) {
+export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, readOnly, sky, hikes, routeFlowId, onMapClick, onStopClick, onSuggestionClick, onCenterChange }: MapViewProps) {
   // The suggestion whose dot is hovered or focused; the panel's highlighted card also opens its popup.
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // The fake viewport is fixed and already frames every stop, so "Zoom to fit" only counts the presses (e2e asserts on it).
+  const [fitCount, setFitCount] = useState(0);
   useEffect(() => {
     onCenterChange?.({ lat: 37, lng: -119.5 });
   }, [onCenterChange]);
+
+  // Water-flow after Optimize: "running" while the sweep plays, "done" after (at once with reduced motion, which draws no sweep).
+  // The fake viewport is fixed and already frames every stop, so there is no zoom to do. Edits to the stops or route end it early.
+  const hasRoute = (routeGeometry?.length ?? 0) >= 2;
+  const sig = `${stops.map((s) => `${s.id}:${s.lat},${s.lng}`).join("|")}#${routeGeometry ? `${routeGeometry.length}:${routeGeometry[0]}:${routeGeometry[routeGeometry.length - 1]}` : ""}`;
+  const [flowState, setFlowState] = useState<{ phase: "running" | "done" | null; handled: number; sig: string }>({ phase: null, handled: routeFlowId ?? 0, sig });
+  let cur = flowState;
+  if (cur.sig !== sig) {
+    cur = { ...cur, sig, phase: cur.phase === "running" ? "done" : cur.phase };
+    setFlowState(cur);
+  }
+  if (routeFlowId && routeFlowId !== cur.handled && hasRoute) {
+    const reduced = typeof window !== "undefined" && (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
+    cur = { phase: reduced ? "done" : "running", handled: routeFlowId, sig };
+    setFlowState(cur);
+  }
+  const flow = cur.phase;
+  const flowRun = cur.handled;
+  useEffect(() => {
+    if (flow !== "running") return;
+    const t = setTimeout(() => setFlowState((f) => (f.phase === "running" && f.handled === flowRun ? { ...f, phase: "done" } : f)), FLOW_TOTAL_MS);
+    return () => clearTimeout(t);
+  }, [flow, flowRun]);
 
   const bounds = FAKE_BOUNDS;
   const pos = (p: { lat: number; lng: number }) => latLngToPercent(bounds, p);
@@ -73,13 +101,18 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
       })
     : [];
 
+  // Display-only: stops whose markers overlap are fanned out (the fixed viewport is treated as 1000x600 px).
+  const fan = fanOffsets(stops.map((s) => { const p = pos(s); return { id: s.id, x: p.left * 10, y: p.top * 6 }; }));
+
   const popupId = hoveredId ?? highlightedSuggestionId;
   const popupSuggestion = suggestions.find((s) => s.osmId === popupId);
 
   return (
     <div
       data-testid="map"
-      className={`relative h-full min-h-[50vh] w-full overflow-hidden bg-[#d8d1bd] ${readOnly ? "" : "cursor-crosshair"}`}
+      data-route-flow={flow ?? undefined}
+      data-fit-count={fitCount}
+      className={`relative h-full min-h-[50vh] w-full overflow-hidden bg-[#d8d1bd] short-landscape:ml-[clamp(17.5rem,40%,23.75rem)] short-landscape:w-[calc(100%-clamp(17.5rem,40%,23.75rem))] ${readOnly ? "" : "cursor-crosshair"}`}
       onClick={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         onMapClick(pixelToLatLng(bounds, e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height));
@@ -88,6 +121,14 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
       <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
         {routePoints && <polyline data-testid="route-casing" points={routePoints} fill="none" stroke="#ffffff" strokeOpacity={0.85} strokeWidth={1.1} strokeLinecap="round" strokeLinejoin="round" />}
         {routePoints && <polyline data-testid="route-line" points={routePoints} fill="none" stroke="#a8834b" strokeWidth={0.6} strokeLinecap="round" strokeLinejoin="round" />}
+        {routePoints && flow === "running" && (
+          <polyline key={flowRun} data-testid="route-flow" className="route-flow-line" points={routePoints} pathLength={100} fill="none" stroke="#8fd3f7" strokeOpacity={0.9} strokeWidth={0.9} strokeLinecap="round" strokeLinejoin="round" />
+        )}
+        {(hikes ?? []).filter((h) => h.geometry.length >= 2).map((h) => (
+          <polyline key={h.id} data-testid="hike-line" data-stop-id={h.id} data-points={h.geometry.length}
+            points={h.geometry.map(([lng, lat]) => pos({ lat, lng })).map((p) => `${p.left},${p.top}`).join(" ")}
+            fill="none" stroke="#3f6b3a" strokeWidth={0.5} strokeDasharray="0.01 1.3" strokeLinecap="round" strokeLinejoin="round" />
+        ))}
         {skyLines.map((l) => (
           <g key={l.name}>
             <polyline data-testid={`sky-line-${l.name}`} data-bearing={l.bearing} points={l.points} fill="none" stroke={l.color} strokeWidth={0.5} strokeDasharray="1.5 1" strokeLinecap="round" />
@@ -97,6 +138,7 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
       </svg>
       {stops.map((s, i) => {
         const p = pos(s);
+        const o = fan.get(s.id);
         return (
           <button
             key={s.id}
@@ -107,7 +149,11 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
             className={`map-marker absolute -translate-x-1/2 -translate-y-1/2 ${STOP_MARKER_CLASS} ${s.visited ? "text-black/75" : "text-white"} ${
               s.id === selectedId ? "ring-2 ring-route" : ""
             }`}
-            style={{ left: `${p.left}%`, top: `${p.top}%`, background: stopColor(s) }}
+            style={{
+              left: o ? `calc(${p.left}% + ${o.dx.toFixed(1)}px)` : `${p.left}%`,
+              top: o ? `calc(${p.top}% + ${o.dy.toFixed(1)}px)` : `${p.top}%`,
+              background: stopColor(s),
+            }}
             onClick={(e) => {
               e.stopPropagation();
               onStopClick(s.id);
@@ -147,6 +193,11 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
           className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#3b3226] shadow-md"
           style={{ left: `${pos(pending).left}%`, top: `${pos(pending).top}%` }}
         />
+      )}
+      {stops.length > 0 && (
+        <div className="zoom-fit-ctrl zoom-fit-fake" onClick={(e) => e.stopPropagation()}>
+          <button type="button" aria-label={ZOOM_FIT_LABEL} title={ZOOM_FIT_LABEL} onClick={() => setFitCount((n) => n + 1)} dangerouslySetInnerHTML={{ __html: ZOOM_FIT_SVG }} />
+        </div>
       )}
       <p className="absolute bottom-1 right-1 text-xs text-[#4a4538]">Offline map preview</p>
     </div>

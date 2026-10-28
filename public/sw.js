@@ -2,16 +2,20 @@
 // without a network. It deliberately does NOT cache API responses or any page that can show a user's data:
 //   - /api/* and /s/* (share links) are never touched; the browser handles them as if there were no worker.
 //   - Navigations go to the network as normal; only if the network fails is the cached /offline page shown.
-//   - Only the /offline shell, /_next/static/* assets and /icons/* are ever written to the cache.
+//   - Only the /offline shell, /_next/static/* assets, /icons/* and the PDF fonts (/fonts/*.ttf) are ever written to the cache.
 // Only caches whose name starts with the prefix are ever deleted; bump the version suffix to drop older shells.
 const CACHE_PREFIX = "rtpp-offline-";
-const CACHE = CACHE_PREFIX + "v2";
+const CACHE = CACHE_PREFIX + "v3";
 const OFFLINE_URL = "/offline";
 // Dev builds reuse asset names between edits, so only production builds answer assets from the cache first.
 const IS_DEV = new URL(self.location.href).searchParams.has("dev");
 const MAX_STATIC_ENTRIES = 200;
 
 const isStaticAsset = (path) => path.startsWith("/_next/static/") || path.startsWith("/icons/");
+
+const isFont = (path) => path.startsWith("/fonts/") && path.endsWith(".ttf");
+// Only a real font body is stored: a 200 HTML page (or any text) in its place must never be cached.
+const isFontResponse = (res) => res.ok && res.status === 200 && res.type !== "opaque" && !/text\/|html|json/i.test(res.headers.get("content-type") ?? "");
 
 // Caching is best effort: a failed write (quota, eviction) must never break the live response.
 const quietly = (promise) => Promise.resolve(promise).catch(() => {});
@@ -116,6 +120,26 @@ self.addEventListener("fetch", (event) => {
             return res;
           }),
       ),
+    );
+    return;
+  }
+
+  if (isFont(path)) {
+    // PDF fonts (large, rarely change): answer from the cache when stored, refresh in the background; first fetch goes to the network
+    // and is stored so a later offline PDF still gets its Unicode text. pdf-fonts.ts still validates every file it receives.
+    event.respondWith(
+      caches.match(request).then((hit) => {
+        const network = fetch(request).then((res) => {
+          if (isFontResponse(res)) {
+            const copy = res.clone();
+            event.waitUntil(quietly(caches.open(CACHE).then((cache) => cache.put(request, copy))));
+          }
+          return res;
+        });
+        if (!hit) return network;
+        event.waitUntil(quietly(network));
+        return hit;
+      }),
     );
     return;
   }

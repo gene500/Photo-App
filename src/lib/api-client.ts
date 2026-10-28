@@ -1,5 +1,6 @@
 import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, SearchSuggestion, Stop, StopPriority, Suggestion, Trip, TripSummary, TripWithStops, WeatherForecast } from "./types";
 import { shapes } from "./api-shapes";
+import { isHike, type Hike } from "./hike";
 import type { NewStopInput, StopPatch, TripCreateInput, TripPatch } from "./validation";
 
 export class ApiError extends Error {
@@ -142,6 +143,12 @@ export const api = {
   /** Weather for up to 10 places on one date, in the same order; unavailable ones come back as unavailable. */
   weatherBatch: (date: string, points: { lat: number; lng: number }[]) =>
     request<{ forecasts: WeatherForecast[] }>("/api/weather/batch", send("POST", { date, points })),
+  /** The walk to a place from the nearest trailhead, or null when there is none. Decorative: callers swallow failures. */
+  hike: (p: { lat: number; lng: number }, signal?: AbortSignal) =>
+    request<{ hike: Hike | null }>(`/api/hike?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}`, { signal }, DEFAULT_TIMEOUT_MS, (b) => {
+      const h = (b as { hike?: unknown } | null)?.hike;
+      return h === null || isHike(h);
+    }),
   weather: (p: { lat: number; lng: number; date: string }) =>
     request<{ forecast: WeatherForecast }>(`/api/weather?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}&date=${p.date}`),
 };

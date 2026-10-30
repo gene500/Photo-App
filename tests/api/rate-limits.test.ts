@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/server/external/place-notices", () => ({ collectPlaceNotices: vi.fn(async () => []) }));
 vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
 import { getCurrentUserId } from "@/server/session";
 import { POST as optimize } from "@/app/api/optimize/route";

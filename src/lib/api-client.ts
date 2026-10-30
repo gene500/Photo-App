@@ -1,4 +1,4 @@
-import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, SearchSuggestion, Stop, StopPriority, Suggestion, Trip, TripSummary, TripWithStops, WeatherForecast } from "./types";
+import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, SearchSuggestion, Stop, PlaceNotice, StopPriority, Suggestion, Trip, TripSummary, TripWithStops, WeatherForecast } from "./types";
 import { shapes } from "./api-shapes";
 import { isHike, type Hike } from "./hike";
 import type { NewStopInput, StopPatch, TripCreateInput, TripPatch } from "./validation";
@@ -123,8 +123,8 @@ export const api = {
   removePhoto: (stopId: string) => request<{ stop: Stop }>(`/api/stops/${stopId}/photo`, send("DELETE"), DEFAULT_TIMEOUT_MS, shapes.stop),
   directions: (coordinates: LngLat[]) =>
     request<{ route: RouteResult }>("/api/directions", send("POST", { coordinates }), DEFAULT_TIMEOUT_MS, shapes.route),
-  optimizeOrder: (coordinates: LngLat[], light?: { stops: { lightPref: LightPref; priority?: StopPriority; dwellMinutes: number }[]; plannedDate: string; departAt?: string; focus?: "priority" | "time"; fixDeparture?: boolean }) =>
-    request<{ order: number[]; complete?: boolean; departAt?: string | null; misses?: { stopIndex: number; minutes: number; priority?: StopPriority }[]; dark?: { stopIndex: number; minutes: number; priority?: StopPriority }[]; polar?: number[] }>(
+  optimizeOrder: (coordinates: LngLat[], light?: { stops: { lightPref: LightPref; priority?: StopPriority; dwellMinutes: number }[]; plannedDate: string; departAt?: string; focus?: "priority" | "time"; fixDeparture?: boolean; origin?: { lat: number; lng: number } }) =>
+    request<{ order: number[]; complete?: boolean; departAt?: string | null; misses?: { stopIndex: number; minutes: number; priority?: StopPriority }[]; dark?: { stopIndex: number; minutes: number; priority?: StopPriority }[]; polar?: number[]; notices?: PlaceNotice[] }>(
       "/api/optimize",
       send("POST", { coordinates, ...light }),
       LONG_TIMEOUT_MS,

@@ -34,6 +34,7 @@ Fill in `.env`:
 | `NEXT_PUBLIC_MAPBOX_TOKEN` | The public `pk.*` token used by the browser map. Create a Mapbox account and token at [account.mapbox.com](https://account.mapbox.com). |
 | `MAPBOX_TOKEN` | Used server-side for Directions, the Matrix API (route optimization) and Geocoding. It can be the same `pk.*` token. |
 | `FLICKR_API_KEY` | **Optional**, server-only secret. Without it the app uses Wikimedia Commons + Wikipedia only (see [Photo sources](#photo-sources-attribution-and-licensing)). Flickr now restricts API keys to Pro accounts, so expect to leave it unset. |
+| `NPS_API_KEY` | **Optional**, server-only. A free National Park Service API key; without it Optimize skips park closure alerts (opening-hours notes need no key). |
 | `DATABASE_URL`, `NEXTAUTH_URL` | Already have working local defaults in `.env.example`. |
 
 Then set up the database and start the dev server:
@@ -156,7 +157,7 @@ The panel has three tabs: **Stops** (the places to go), **My trip** and **Sugges
 **My trip tab**
 
 - It holds the start time, **Optimize route** and Undo, the route totals (`62 mi · 1 h 0 min`) and the itinerary.
-- The itinerary has one row per stop with its number (the Visited toggle), name, Start/End badge and, for a stop with a best light, the **Priority** pill (Normal / High / Must).
+- The itinerary has one row per stop with its number inside a **Visited** checkbox (tick a stop when you have been there), name, Start/End badge and, for a stop with a best light, the **Priority** pill (Normal / High / Must).
 - Once the route is optimized each row also shows the light window or arrival, the weather and any poor-light warning.
 - Before that the totals read "Optimize the route to see drive times and the route line". If the stops or their settings changed since, it reads "Your stops changed. Optimize again to see the route."
 - The panel's collapsed one-liner shows the stop count and drive time only while optimized.
@@ -178,7 +179,7 @@ Stops added from a viewpoint or peak suggestion start as Golden hour; attraction
   - Sunset = start of evening golden hour until 20 min after sunset.
   - Golden hour = both.
   - In polar day or night there is no window and no constraint.
-- **Score.** Total drive seconds + 3 x 60 x minutes of missed light (one missed minute costs as much as three minutes of driving). A visit counts as met if `[arrival, arrival + time here]` overlaps a window; otherwise the miss is the gap to the nearest window.
+- **Score.** Total drive seconds + 60 x minutes of missed light (one missed minute costs as much as one minute of driving). For a Normal stop a miss counts in full up to an hour, then at 0.2 per extra minute, so a stop that cannot get its light anyway does not buy a long detour; High and Must stops are not capped. A minute in the dark counts three times a missed minute. A visit counts as met if `[arrival, arrival + time here]` overlaps a window; otherwise the miss is the gap to the nearest window.
 - **Search.**
   - Departures tried: the default (sunrise at the first stop) plus every 15 minutes from 1 h before it to 14 h after it.
   - Up to 7 free stops (8 total) the search is exact over all orders (8 stops held the server for about a second per request).
@@ -190,13 +191,16 @@ Stops added from a viewpoint or peak suggestion start as Golden hour; attraction
   - A stop with no sunrise or sunset that day (polar day or night) gets no daylight rule and is named in the note ("No sunrise or sunset that day at ..., so no daylight rule applies there."). It also does not make the start move, even when it asks for sunrise or sunset light.
   - A visit is checked against the solar day it arrives on.
 - **Visited stops.** Once stops are marked visited, Optimize re-plans only the stops after the last visited one and keeps the start time the editor shows (`fixDeparture: true` in the request). It does not search for a new start.
+- **Re-optimize when I tick a stop (Settings, per device, on by default).** About 600 ms after you tick or untick a stop, Optimize quietly re-plans the stops not yet visited: no busy state, no error message, Undo available. It only reorders: it never moves the start time. A manual Optimize cancels or waits for a quiet run, and a tick during a manual run is queued until it ends.
+- **Start from my location (Settings, per device, off by default).** When on, clicking Optimize asks the browser for your position (never on page load) and the drive starts there, so the first stop is chosen too. It is used only when nothing is visited yet, the trip is planned for today (your local date) and the position is within 500 km of a stop; otherwise it is left out (a short note says so when it is far away or unavailable). The position is sent for that one request only, is not stored or logged, and the Matrix response is not cached. If the browser never answers the permission prompt, Optimize carries on without it after 10 s. It cannot be combined with a fixed start time.
+- **Heads-ups.** Optimize also lists notices for your stops from free public data, shown under the button and in the status note: National Park Service alerts and closures near a stop (needs the optional `NPS_API_KEY`; only for a trip within about two weeks) and OpenStreetMap opening hours at the estimated arrival time ("Probably closed at arrival"). Only coordinates and the date leave the server, and the lookup never blocks or fails Optimize (3 s limit). The local time is estimated from the longitude (no time-zone database), so a "closed" note is only given when the place is closed throughout a 2.5 hour margin around the estimate, and a closed day is never named close to midnight. Only simple hours are understood (for example `Mo-Fr 09:00-17:00; Sa 10:00-14:00`, `24/7`, overnight ranges); anything else is ignored. Park matching is by nearby coordinates and can miss or mis-match small sites.
 - **No preferences.** It is exactly the shortest-drive order and the departure stays at sunrise.
 
 **Start time and results**
 
 - The chosen departure is saved on the trip (`departAt`); the panel shows "Starts 5:42 PM" with **Reset to sunrise**.
 - A start time you already saved is kept when it costs nothing (it is tried first and wins ties); the search window still follows sunrise.
-- The result (moved start time, stops that cannot be fitted) is announced to screen readers only; nothing shows under the button.
+- The result (moved start time, stops that cannot be fitted, heads-ups) is shown in a short note under the button and announced to screen readers.
 - **Undo** restores the previous order and departure.
 - Each row shows the window and arrival, or "Misses sunset by 40 min".
 
@@ -297,6 +301,7 @@ The **Export** menu in the trip header (enabled with 2+ stops) downloads a GPX 1
 
 **Download PDF** (editor Export menu and the public share page) builds a printable itinerary in the browser with jsPDF 4.2.1, loaded only when the button is clicked.
 
+- **Look:** the PDF uses the app's light theme colours, and the numbered stop discs match the map (manual, suggested and visited stops differ), on the editor and the share page alike.
 - **Contents:** a trip summary, a Mapbox Static Images map (route and numbered pins) and a stop schedule with arrival time, best light, weather (editor only) and notes.
 - **Map token:** it uses the public `NEXT_PUBLIC_MAPBOX_TOKEN`, one request per download, so it counts toward your Mapbox usage.
 - **Fallback map:** with no token, in fake-map mode, or when the map request fails (8 s timeout), a drawn fallback map is used instead. A URL-restricted public token may make the share page's static-map request fail (the page sends no Referer); the PDF then falls back to the drawn map.

@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState, type MouseEvent, type ReactNode } from "react";
+import { useId, useState, useSyncExternalStore, type MouseEvent, type ReactNode } from "react";
 import { IN_APP_KEY } from "@/components/InAppNavMarker";
 import { LegalLinks } from "@/components/legal/LegalPage";
 import { ChangePasswordButton, DeleteAccountButton, SignOutButton, SignOutEverywhereButton } from "@/components/SignOutButton";
 import { btnSecondary, card, inputClass } from "@/components/ui/styles";
+import { geolocationSupported } from "@/lib/geolocation";
 import { clearAllCopies } from "@/lib/offline-store";
 import { MAX_DWELL_MINUTES } from "@/lib/validation";
 import type { Settings } from "@/lib/settings";
@@ -67,6 +68,8 @@ export function SettingsView({ email, hasPassword = true }: { email: string | nu
   // The text being typed may be empty or out of range; only a valid number is saved, and blur snaps it back.
   const [dwellText, setDwellText] = useState<string | null>(null);
   const [cleared, setCleared] = useState(false);
+  // Server and first client render assume support, so the markup matches; the real answer follows.
+  const canLocate = useSyncExternalStore(() => () => {}, geolocationSupported, () => true);
 
   function onDwell(text: string) {
     setDwellText(text);
@@ -180,6 +183,29 @@ export function SettingsView({ email, hasPassword = true }: { email: string | nu
           options={[{ value: "priority", label: "Priority focus" }, { value: "time", label: "Time priority" }]}
           hint="Priority focus fits in as many High and Must stops (in their best light) as it can, even if the drive gets longer. Time priority treats every stop alike, so drive time and missed light decide the route. Takes effect the next time you optimize."
         />
+        <label className="flex items-start gap-3">
+          <input type="checkbox" checked={settings.autoReoptimize} onChange={(e) => update({ autoReoptimize: e.target.checked })} className="h-6 w-6 shrink-0 accent-[var(--accent-strong)]" />
+          <span className="text-sm">
+            <span className="font-medium">Re-optimize when I tick a stop</span>
+            <span className="block text-xs text-muted">A moment after you tick or untick a stop as visited, Optimize quietly re-plans the stops you have not visited yet. Visited stops never move. Undo is available.</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked={settings.startFromLocation && canLocate}
+            disabled={!canLocate}
+            onChange={(e) => update({ startFromLocation: e.target.checked })}
+            className="h-6 w-6 shrink-0 accent-[var(--accent-strong)]"
+          />
+          <span className="text-sm">
+            <span className="font-medium">Start from my location</span>
+            <span className="block text-xs text-muted">
+              When you run Optimize, your browser asks for your position and the route is planned from where you are, so the first stop is chosen for the drive from you. Your position is used once to plan the route and is not saved.
+              {!canLocate && " Not available here: your browser or this connection does not support location."}
+            </span>
+          </span>
+        </label>
       </Section>
 
       <Section title="Data">

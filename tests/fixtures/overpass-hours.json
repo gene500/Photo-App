@@ -1,0 +1,6 @@
+{"version":0.6,"elements":[
+{"type":"node","id":1,"lat":37.9000,"lon":-119.2600,"tags":{"opening_hours":"Mo-Su 09:00-17:00","name":"Cafe"}},
+{"type":"way","id":2,"center":{"lat":36.0,"lon":-118.0},"tags":{"opening_hours":"Mo-Fr 08:00-12:00"}},
+{"type":"node","id":3,"lat":10,"lon":10,"tags":{"opening_hours":5}},
+{"type":"node","id":4,"tags":{"opening_hours":"24/7"}}
+]}

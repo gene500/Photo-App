@@ -148,7 +148,7 @@ describe("optimizeSchedule", () => {
     const baseline = [0, ...[2, 6, 10, 1, 3, 4, 5, 7, 8, 9, 11]];
     expect(scheduleCost(input, r.order, r.departAt)).toBeLessThanOrEqual(scheduleCost(input, baseline, defaultDeparture));
     // Drive time is the same for every order here, so the cost difference is all missed light (weighted minutes).
-    const missed = (order: number[], at: Date) => (scheduleCost(input, order, at) - order.slice(1).reduce((sum, v, k) => sum + input.durations[order[k]!]![v]!, 0)) / 180;
+    const missed = (order: number[], at: Date) => (scheduleCost(input, order, at) - order.slice(1).reduce((sum, v, k) => sum + input.durations[order[k]!]![v]!, 0)) / 60;
     expect(missed(r.order, r.departAt)).toBeLessThanOrEqual(missed(baseline, defaultDeparture));
   });
 
@@ -440,5 +440,65 @@ describe("light windows across solar midnight", () => {
     const expected = missFrom(arrival.getTime(), [...winsOn("sunset", "2026-07-01"), ...winsOn("sunset", "2026-07-02")], 30);
     expect(expected).toBeLessThan(400);
     expect(r.misses[0]!.minutes).toBeCloseTo(expected, 5);
+  });
+});
+
+describe("lost-cause light misses do not pull the route into a detour (Yosemite, late October)", () => {
+  type Spot = { lat: number; lng: number; branch: "valley" | "glacier" | "tioga"; hub: number };
+  const spot = (lat: number, lng: number, branch: Spot["branch"], hub: number): Spot => ({ lat, lng, branch, hub });
+  // hub = minutes of road from the Valley floor; the Glacier Point and Tioga roads are separate spurs.
+  const spots: Spot[] = [
+    spot(37.8651, -119.5383, "tioga", 50), // 0 park centroid, the start
+    spot(37.716, -119.67, "valley", 0),
+    spot(37.7227, -119.637, "valley", 0),
+    spot(37.7305, -119.5737, "glacier", 62), // Glacier Point
+    spot(37.8836, -119.3593, "tioga", 105), // Lembert Dome, ~1 h east of the Valley
+    spot(37.7567, -119.5966, "valley", 0),
+    spot(37.7163, -119.6466, "valley", 0),
+    spot(37.7158, -119.6775, "valley", 0),
+    spot(37.7219, -119.5846, "glacier", 55),
+  ];
+  const km = (a: Spot, b: Spot) => {
+    const r = Math.PI / 180;
+    const x = Math.sin(((b.lat - a.lat) * r) / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(((b.lng - a.lng) * r) / 2) ** 2;
+    return 2 * 6371 * Math.asin(Math.sqrt(x));
+  };
+  const secs = (a: Spot, b: Spot) =>
+    a === b ? 0 : a.branch === b.branch && a.branch === "valley" ? Math.max(120, ((km(a, b) * 1.4) / 40) * 3600) : a.branch === b.branch ? Math.abs(a.hub - b.hub) * 60 + 120 : (a.hub + b.hub) * 60 + 120;
+  const d = spots.map((a) => spots.map((b) => secs(a, b)));
+  const day = "2026-10-28";
+  const mk = (priorities: StopPriority[] = []) =>
+    spots.map((s, i) => ({ lat: s.lat, lng: s.lng, lightPref: (i === 0 ? "any" : "golden") as LightPref, dwellMinutes: i === 0 ? 0 : 30, priority: priorities[i] ?? ("normal" as StopPriority) }));
+  const drive = (order: number[]) => order.slice(1).reduce((s, x, k) => s + d[order[k]!]![x]!, 0);
+
+  it("stays near the shortest drive instead of zigzagging to Lembert Dome mid-valley", () => {
+    const stops = mk();
+    const r = optimizeSchedule({ durations: d, stops, plannedDate: day, defaultDeparture: departureTime(stops[0]!, day) });
+    const best = drive(optimizeOrder(d));
+    expect(drive(r.order)).toBeLessThanOrEqual(best * 1.3);
+    // Lembert Dome (4) is first or last of the trip, never between valley stops.
+    const at = r.order.indexOf(4);
+    expect(at === 1 || at === r.order.length - 1).toBe(true);
+  });
+
+  it("still lets a Must stop pull the route far out of its way", () => {
+    const priorities: StopPriority[] = [];
+    priorities[4] = "must";
+    const stops = mk(priorities);
+    const r = optimizeSchedule({ durations: d, stops, plannedDate: day, defaultDeparture: departureTime(stops[0]!, day) });
+    expect(r.misses.find((m) => m.stopIndex === 4)).toBeUndefined(); // met whatever the drive
+  });
+
+  it("caps a Normal stop's miss but not a High or Must stop's", () => {
+    const noon = new Date(`${day}T20:00:00Z`); // far from any golden hour at Lembert Dome
+    const extra = (p: StopPriority) => {
+      const priorities: StopPriority[] = [];
+      priorities[4] = p;
+      const input = { durations: d, stops: mk(priorities), plannedDate: day, defaultDeparture: noon };
+      return scheduleCost(input, [0, 4], noon) - d[0]![4]!;
+    };
+    // Uncapped, a High miss costs exactly 8 x a Normal miss; the Normal one is capped, so the ratio is far larger.
+    expect(extra("high") / extra("normal")).toBeGreaterThan(8.5);
+    expect(extra("must") / extra("high")).toBeCloseTo(1000 / 8, 5);
   });
 });

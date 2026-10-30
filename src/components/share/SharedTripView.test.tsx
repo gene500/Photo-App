@@ -135,6 +135,14 @@ describe("SharedTripView Download PDF", () => {
     expect(JSON.stringify(stops)).toContain("Use a polarizer");
   });
 
+  it("colours the PDF discs like the map: a suggested stop differs from a manual one", async () => {
+    vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["x"]));
+    render(<SharedTripView trip={{ ...trip, stops: [stop(0, "Mine"), stop(1, "Idea", { source: "suggested" })] }} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
+    const stops = vi.mocked(createItineraryPdf).mock.calls[0]![0].input.stops;
+    expect(stops[0]!.color).not.toBe(stops[1]!.color);
+  });
+
   it("has no route line when routing was unavailable", async () => {
     vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["x"]));
     render(<SharedTripView trip={trip} />);

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { localDateOnly } from "@/lib/dates";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMemoryStorage } from "../../../tests/helpers/memory-storage";
@@ -103,8 +104,13 @@ const openStops = () => userEvent.click(screen.getByRole("tab", { name: "Stops" 
 const confirmDeleteStop = () =>
   userEvent.click(within(screen.getByRole("alertdialog", { name: "Delete stop?" })).getByRole("button", { name: "Delete" }));
 
+/** Moves the fake clock on without really waiting (the clock also ticks with real time, so waitFor and userEvent keep working). */
+const settle = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
 describe("TripEditor", () => {
+  afterEach(() => vi.useRealTimers());
   beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     window.sessionStorage.clear();
     installMemoryStorage();
     vi.clearAllMocks();
@@ -150,6 +156,7 @@ describe("TripEditor", () => {
 
       it("adds the place once through addStop", async () => {
         render(<TripEditor initialTrip={named} />);
+        await settle(1000);
         await waitFor(() => expect(api.addStop).toHaveBeenCalledTimes(1), { timeout: 3000 });
         expect(api.addStop).toHaveBeenCalledWith("t1", expect.objectContaining({ name: "Arches National Park", lat: 38.73, lng: -109.59, source: "manual" }));
         await waitFor(() => expect(screen.getByTestId("first-stop").textContent).toBe("38.73,-109.59"), { timeout: 3000 });
@@ -158,19 +165,22 @@ describe("TripEditor", () => {
 
       it("does not re-add after the stop is deleted or on a later open", async () => {
         const { unmount } = render(<TripEditor initialTrip={named} />);
+        await settle(1000);
         await waitFor(() => expect(api.addStop).toHaveBeenCalledTimes(1), { timeout: 3000 });
         unmount();
         render(<TripEditor initialTrip={named} />);
+        await settle(1000);
         await waitFor(() => expect(api.locate).toHaveBeenCalledTimes(2), { timeout: 3000 });
-        await new Promise((r) => setTimeout(r, 50));
+        await settle(50);
         expect(api.addStop).toHaveBeenCalledTimes(1);
       });
 
       it("does nothing when the lookup finds nothing or fails, and shows no error", async () => {
         vi.mocked(api.locate).mockRejectedValue(new Error("boom"));
         render(<TripEditor initialTrip={named} />);
+        await settle(1000);
         await waitFor(() => expect(api.locate).toHaveBeenCalled(), { timeout: 3000 });
-        await new Promise((r) => setTimeout(r, 50));
+        await settle(50);
         expect(api.addStop).not.toHaveBeenCalled();
         expect(screen.queryByRole("alert")).toBeNull();
       });
@@ -178,8 +188,9 @@ describe("TripEditor", () => {
       it("stays quiet when the automatic add itself fails, and may try again later", async () => {
         vi.mocked(api.addStop).mockRejectedValue(new Error("nope"));
         render(<TripEditor initialTrip={named} />);
+        await settle(1000);
         await waitFor(() => expect(api.addStop).toHaveBeenCalledTimes(1), { timeout: 3000 });
-        await new Promise((r) => setTimeout(r, 50));
+        await settle(50);
         expect(screen.queryByRole("alert")).toBeNull();
         expect(window.localStorage.getItem("autoFirstStop:t1")).toBeNull();
       });
@@ -187,8 +198,9 @@ describe("TripEditor", () => {
       it("adds nothing for a generic name such as a city or state, which only frames the map", async () => {
         vi.mocked(api.locate).mockResolvedValue({ area: arches, landmark: null });
         render(<TripEditor initialTrip={{ ...named, name: "Utah" }} />);
+        await settle(1000);
         await waitFor(() => expect(api.locate).toHaveBeenCalled(), { timeout: 3000 });
-        await new Promise((r) => setTimeout(r, 50));
+        await settle(50);
         expect(api.addStop).not.toHaveBeenCalled();
       });
 
@@ -198,6 +210,7 @@ describe("TripEditor", () => {
         let answer: (v: Awaited<ReturnType<typeof api.locate>>) => void = () => {};
         vi.mocked(api.locate).mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
         render(<TripEditor initialTrip={named} />);
+        await settle(1000);
         await waitFor(() => expect(api.locate).toHaveBeenCalledTimes(1), { timeout: 3000 });
         await userEvent.click(screen.getByRole("button", { name: "drop pin" }));
         await screen.findByRole("button", { name: "Add stop" });
@@ -219,7 +232,7 @@ describe("TripEditor", () => {
         await userEvent.click(await screen.findByRole("button", { name: /^Delete / }));
         await confirmDeleteStop();
         await waitFor(() => expect(screen.queryByTestId("first-stop")).toBeNull());
-        await new Promise((r) => setTimeout(r, 1200));
+        await settle(1200);
         expect(api.addStop).toHaveBeenCalledTimes(1);
         expect(window.localStorage.getItem("autoFirstStop:t1")).toBe("1");
       });
@@ -227,16 +240,19 @@ describe("TripEditor", () => {
       it("tries the lookup again when the connection comes back after a failure", async () => {
         vi.mocked(api.locate).mockRejectedValueOnce(new Error("offline"));
         render(<TripEditor initialTrip={named} />);
+        await settle(1000);
         await waitFor(() => expect(api.locate).toHaveBeenCalledTimes(1), { timeout: 3000 });
-        await new Promise((r) => setTimeout(r, 20));
+        await settle(20);
         act(() => { window.dispatchEvent(new Event("online")); });
+        await settle(1000);
         await waitFor(() => expect(api.locate).toHaveBeenCalledTimes(2), { timeout: 3000 });
+        await settle(1000);
         await waitFor(() => expect(api.addStop).toHaveBeenCalledTimes(1), { timeout: 3000 });
       });
 
       it("leaves a trip that already has stops alone", async () => {
         render(<TripEditor initialTrip={{ ...named, stops: seed }} />);
-        await new Promise((r) => setTimeout(r, 900));
+        await settle(900);
         expect(api.addStop).not.toHaveBeenCalled();
       });
     });
@@ -376,6 +392,7 @@ describe("TripEditor", () => {
     render(<TripEditor initialTrip={optimizedTrip(seed)} />);
     await screen.findByRole("alert");
     expect(api.directions).toHaveBeenCalledTimes(1);
+    await settle(100);
     act(() => { window.dispatchEvent(new Event("online")); });
     await waitFor(() => expect(api.directions).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
@@ -395,7 +412,7 @@ describe("TripEditor", () => {
     vi.mocked(api.directions).mockRejectedValue(new Error("No driving route found between these points"));
     render(<TripEditor initialTrip={withStops(seed)} />);
     await waitFor(() => expect(api.directions).toHaveBeenCalled());
-    await new Promise((r) => setTimeout(r, 20));
+    await settle(20);
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -630,7 +647,7 @@ describe("TripEditor", () => {
       render(<TripEditor initialTrip={withStops(seed)} />);
       await userEvent.click(screen.getByRole("tab", { name: /Suggestions/ }));
       expect(await screen.findAllByTestId("suggestion-card")).toHaveLength(3);
-      await new Promise((r) => setTimeout(r, 900)); // past the quiet-search delay
+      await settle(900); // past the quiet-search delay
       expect(api.suggestions).not.toHaveBeenCalled();
       expect(api.suggestionPopularity).not.toHaveBeenCalled();
       await userEvent.click(screen.getByRole("button", { name: "Dismiss Spot 1" }));
@@ -643,7 +660,7 @@ describe("TripEditor", () => {
       render(<TripEditor initialTrip={withStops([seed[0]])} />);
       await userEvent.click(screen.getByRole("tab", { name: /Suggestions/ }));
       expect(await screen.findAllByTestId("suggestion-card")).toHaveLength(2);
-      await new Promise((r) => setTimeout(r, 300));
+      await settle(300);
       expect(api.suggestions).not.toHaveBeenCalled();
     });
 
@@ -662,6 +679,7 @@ describe("TripEditor", () => {
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: six });
     vi.mocked(api.suggestionPopularity).mockResolvedValue({ counts: six.map(() => 7) });
     render(<TripEditor initialTrip={withStops(seed)} />);
+    await settle(1000);
     await waitFor(() => expect(api.suggestions).toHaveBeenCalledTimes(1), { timeout: 4000 });
     expect(api.suggestionPopularity).not.toHaveBeenCalled(); // popularity waits for the click
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
@@ -683,7 +701,7 @@ describe("TripEditor", () => {
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
     expect((await screen.findAllByTestId("suggestion-card")).length).toBeGreaterThan(0);
-    await new Promise((r) => setTimeout(r, 900)); // past the quiet-search delay
+    await settle(900); // past the quiet-search delay
     expect(api.suggestions).toHaveBeenCalledTimes(1);
   });
 
@@ -693,6 +711,7 @@ describe("TripEditor", () => {
     vi.mocked(api.suggestions).mockResolvedValueOnce({ suggestions: six, degraded: true }).mockResolvedValue({ suggestions: six, degraded: false });
     vi.mocked(api.suggestionPopularity).mockResolvedValue({ counts: six.map(() => 7) });
     render(<TripEditor initialTrip={withStops(seed)} />);
+    await settle(1000);
     await waitFor(() => expect(api.suggestions).toHaveBeenCalledTimes(1), { timeout: 4000 });
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
@@ -705,6 +724,7 @@ describe("TripEditor", () => {
     vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/1", name: "Tunnel View", lat: 37.7, lng: -119.7, kind: "viewpoint" }] });
     vi.mocked(api.suggestionPopularity).mockResolvedValue({ counts: [7] });
     render(<TripEditor initialTrip={withStops(seed)} />);
+    await settle(1000);
     await waitFor(() => expect(api.suggestions).toHaveBeenCalledTimes(1), { timeout: 4000 });
     await userEvent.click(screen.getByRole("tab", { name: "Suggestions" }));
     await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
@@ -1698,6 +1718,23 @@ describe("TripEditor", () => {
         await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("No sunrise or sunset that day at B, so no daylight rule applies there."));
       });
 
+      it("shows heads-ups from NPS and opening hours as non-blocking notes under the stop's name", async () => {
+        reorderEcho();
+        echoTrip();
+        vi.mocked(api.optimizeOrder).mockResolvedValue({
+          order: [0, 2, 1],
+          departAt: null,
+          misses: [],
+          dark: [],
+          notices: [{ stopIndex: 1, kind: "closed", text: "Tioga Road: closed for the season (NPS alert)", source: "NPS" }],
+        });
+        const user = userEvent.setup();
+        render(<TripEditor initialTrip={trip2(null)} />);
+        await openMyTrip();
+        await user.click(screen.getByRole("button", { name: "Optimize route" }));
+        await waitFor(() => expect(screen.getByTestId("optimize-status").textContent).toContain("B: Tioga Road: closed for the season (NPS alert)."));
+      });
+
       it("treats a searched start as light-aware when the answer carries a departure", async () => {
         echoTrip();
         vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], departAt: "2026-07-02T00:22:00Z", misses: [], dark: [] });
@@ -1890,6 +1927,124 @@ describe("TripEditor with saved settings", () => {
     await userEvent.click(screen.getByText("drop pin"));
     await userEvent.click(await screen.findByRole("button", { name: "Add stop" }));
     expect(freshApi.addStop).toHaveBeenCalledWith("t1", { dwellMinutes: 90, name: "Tunnel View", lat: 37.5, lng: -119.5, source: "manual" });
+  });
+
+  describe("start from my location", () => {
+    const three = [
+      newStop({ id: "a", order: 0, name: "A", lat: 36, lng: -119 }),
+      newStop({ id: "b", order: 1, name: "B", lat: 38, lng: -119 }),
+      newStop({ id: "c", order: 2, name: "C", lat: 37, lng: -119 }),
+    ];
+    const geo = (impl: (ok: PositionCallback, err: PositionErrorCallback) => void) => {
+      const fn = vi.fn(impl);
+      Object.defineProperty(navigator, "geolocation", { value: { getCurrentPosition: fn }, configurable: true });
+      return fn;
+    };
+    const todayTrip = (stops: Stop[]) => ({ ...withStops(stops), plannedDate: localDateOnly(new Date()) });
+    const granted = (ok: PositionCallback) => ok({ coords: { latitude: 35.5, longitude: -119.25 } } as GeolocationPosition);
+    afterEach(() => { vi.useRealTimers(); Object.defineProperty(navigator, "geolocation", { value: undefined, configurable: true }); });
+    async function setup() {
+      const { api: freshApi } = await import("@/lib/api-client");
+      vi.mocked(freshApi.directions).mockResolvedValue({ route });
+      vi.mocked(freshApi.updateTrip).mockImplementation(async (_id, patch) => ({ trip: { ...trip, ...patch } as never }));
+      vi.mocked(freshApi.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], departAt: null, misses: [] });
+      return freshApi;
+    }
+
+    it("never asks for the position on load, and sends none when the setting is off", async () => {
+      const get = geo(granted);
+      const freshApi = await setup();
+      await renderWith({ startFromLocation: false }, todayTrip(three));
+      await openMyTrip();
+      await userEvent.click(screen.getByRole("button", { name: "Optimize route" }));
+      await waitFor(() => expect(freshApi.optimizeOrder).toHaveBeenCalled());
+      expect(get).not.toHaveBeenCalled();
+      expect(vi.mocked(freshApi.optimizeOrder).mock.calls[0]![1]).not.toHaveProperty("origin");
+      expect(screen.queryByText("Using your location")).toBeNull();
+    });
+
+    it("with the setting on: no prompt on load, then the position goes in the optimize request only when Optimize runs", async () => {
+      const get = geo(granted);
+      const freshApi = await setup();
+      await renderWith({ startFromLocation: true }, todayTrip(three));
+      await openMyTrip();
+      expect(screen.getByText("Using your location")).toBeTruthy();
+      expect(get).not.toHaveBeenCalled();
+      await userEvent.click(screen.getByRole("button", { name: "Optimize route" }));
+      await waitFor(() => expect(freshApi.optimizeOrder).toHaveBeenCalled());
+      expect(get).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(freshApi.optimizeOrder).mock.calls[0]![1]).toMatchObject({ origin: { lat: 35.5, lng: -119.25 } });
+      expect(localStorage.getItem(SETTINGS_KEY)).not.toContain("35.5");
+    });
+
+    it("when the position is denied it optimizes as normal and shows a short notice", async () => {
+      geo((_ok, err) => err({ code: 1 } as GeolocationPositionError));
+      const freshApi = await setup();
+      vi.mocked(freshApi.optimizeOrder).mockResolvedValue({ order: [0, 2, 1], departAt: null, misses: [] });
+      vi.mocked(freshApi.reorderStops).mockImplementation(async (_t, ids) => ({ stops: ids.map((id, order) => ({ ...three.find((s) => s.id === id)!, order })) }));
+      await renderWith({ startFromLocation: true }, todayTrip(three));
+      await openMyTrip();
+      await userEvent.click(screen.getByRole("button", { name: "Optimize route" }));
+      await waitFor(() => expect(freshApi.optimizeOrder).toHaveBeenCalled());
+      expect(vi.mocked(freshApi.optimizeOrder).mock.calls[0]![1]).not.toHaveProperty("origin");
+      expect(await screen.findByText(/Couldn't get your location, optimized without it\./)).toBeTruthy();
+    });
+
+    it("ignores the position once a stop is visited (the last visited stop is the anchor)", async () => {
+      const get = geo(granted);
+      const freshApi = await setup();
+      const visited = three.map((s, i) => (i === 0 ? { ...s, visited: true } : s));
+      await renderWith({ startFromLocation: true }, todayTrip(visited));
+      await openMyTrip();
+      await userEvent.click(screen.getByRole("button", { name: "Optimize route" }));
+      await waitFor(() => expect(freshApi.optimizeOrder).toHaveBeenCalled());
+      expect(get).not.toHaveBeenCalled();
+      expect(vi.mocked(freshApi.optimizeOrder).mock.calls[0]![1]).not.toHaveProperty("origin");
+    });
+    it("only uses the position for a trip planned today: otherwise no prompt, no request origin, no 'Using your location'", async () => {
+      const get = geo(granted);
+      const freshApi = await setup();
+      await renderWith({ startFromLocation: true }, withStops(three)); // planned 2026-07-01, not today
+      await openMyTrip();
+      expect(screen.queryByText("Using your location")).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: "Optimize route" }));
+      await waitFor(() => expect(freshApi.optimizeOrder).toHaveBeenCalled());
+      expect(get).not.toHaveBeenCalled();
+      expect(vi.mocked(freshApi.optimizeOrder).mock.calls[0]![1]).not.toHaveProperty("origin");
+    });
+
+    it("does not say 'Using your location' when geolocation is unsupported or a stop is visited", async () => {
+      await setup();
+      await renderWith({ startFromLocation: true }, todayTrip(three)); // navigator.geolocation is undefined
+      await openMyTrip();
+      expect(screen.queryByText("Using your location")).toBeNull();
+    });
+
+    it("leaves a position far from every stop out, with a short notice", async () => {
+      geo((ok) => ok({ coords: { latitude: 40.7, longitude: -74 } } as GeolocationPosition)); // New York
+      const freshApi = await setup();
+      vi.mocked(freshApi.optimizeOrder).mockResolvedValue({ order: [0, 2, 1], departAt: null, misses: [] });
+      vi.mocked(freshApi.reorderStops).mockImplementation(async (_t, ids) => ({ stops: ids.map((id, order) => ({ ...three.find((s) => s.id === id)!, order })) }));
+      await renderWith({ startFromLocation: true }, todayTrip(three));
+      await openMyTrip();
+      await userEvent.click(screen.getByRole("button", { name: "Optimize route" }));
+      await waitFor(() => expect(freshApi.optimizeOrder).toHaveBeenCalled());
+      expect(vi.mocked(freshApi.optimizeOrder).mock.calls[0]![1]).not.toHaveProperty("origin");
+      expect(await screen.findByText(/Your location is far from this trip, so it was not used\./)).toBeTruthy();
+    });
+
+    it("does not stay busy forever when the browser never answers the permission prompt", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      geo(() => {}); // Firefox, prompt dismissed: neither callback is called
+      const freshApi = await setup();
+      await renderWith({ startFromLocation: true }, todayTrip(three));
+      await openMyTrip();
+      await userEvent.click(screen.getByRole("button", { name: "Optimize route" }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_500); });
+      await waitFor(() => expect(freshApi.optimizeOrder).toHaveBeenCalled());
+      expect(vi.mocked(freshApi.optimizeOrder).mock.calls[0]![1]).not.toHaveProperty("origin");
+      await waitFor(() => expect(screen.getByRole("button", { name: "Optimize route" })).toBeTruthy());
+    });
   });
 
   describe("F5 fixes", () => {

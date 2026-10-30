@@ -87,7 +87,7 @@ export async function createItineraryPdf(a: {
 }): Promise<Blob> {
   // The Unicode font is fetched only here, on click; null (offline, blocked) keeps the built-in fonts.
   const [map, fonts] = await Promise.all([
-    loadMapImage(staticMapUrl({ stops: a.stops, geometry: a.geometry, token: a.token })),
+    loadMapImage(staticMapUrl({ stops: a.stops.map((st, i) => ({ ...st, color: a.input.stops[i]?.color })), geometry: a.geometry, token: a.token })),
     loadPdfFonts({ text: itineraryText(a.input) }),
   ]);
   return renderItineraryPdf(a.input, map, a.geometry, a.stops, fonts);

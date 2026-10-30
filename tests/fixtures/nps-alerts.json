@@ -1,0 +1,7 @@
+{"total":"4","limit":"100","start":"0","data":[
+{"id":"1","url":"https://www.nps.gov/yose/planyourvisit/conditions.htm","title":"Tioga Road closed for the season","parkCode":"yose","category":"Park Closure","description":"Closed due to snow."},
+{"id":"2","url":"","title":"Glacier Point Road closed to vehicles past Badger Pass","parkCode":"yose","category":"Caution","description":"x"},
+{"id":"3","url":"","title":"Free entrance day this weekend","parkCode":"yose","category":"Information","description":"x"},
+{"id":"4","url":"","title":"Visitor center now open","parkCode":"seki","category":"Information","description":"x"},
+{"title":""},"junk",{"id":"9","title":"Road closed","parkCode":"yose","category":"Danger"}
+]}

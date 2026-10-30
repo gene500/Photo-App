@@ -1,7 +1,7 @@
 import { coordsLabel, haversineMeters } from "@/lib/geo";
 import { OSM_ATTRIBUTION, type Hike } from "@/lib/hike";
 import { addDays } from "@/lib/weather";
-import type { LngLat, Place, PlacePhoto, RouteResult, SearchSuggestion, Suggestion, WeatherForecast, WeatherHour } from "@/lib/types";
+import type { LngLat, Place, PlaceNotice, PlacePhoto, RouteResult, SearchSuggestion, Suggestion, WeatherForecast, WeatherHour } from "@/lib/types";
 
 /** EXTERNAL_APIS_FAKE=1 swaps Mapbox/Overpass for canned data (e2e tests, offline dev). */
 export function isFakeExternal(): boolean {
@@ -118,4 +118,13 @@ export function fakeHike(lat: number, lng: number): Hike | null {
   let distanceMeters = 0;
   for (let i = 1; i < geometry.length; i++) distanceMeters += haversineMeters({ lat: geometry[i - 1][1], lng: geometry[i - 1][0] }, { lat: geometry[i][1], lng: geometry[i][0] });
   return { distanceMeters: Math.round(distanceMeters / 10) * 10, geometry, source: "osm", attribution: OSM_ATTRIBUTION };
+}
+
+/** Fake heads-ups (no network): a stop near Tioga Pass (Yosemite) gets a closed-road notice, one near Horseshoe Bend a closed-at-arrival one. */
+export function fakePlaceNotices(stops: { lat: number; lng: number }[]): PlaceNotice[] {
+  return stops.flatMap((s, i): PlaceNotice[] => {
+    if (Math.abs(s.lat - 37.91) < 0.1 && Math.abs(s.lng + 119.26) < 0.1) return [{ stopIndex: i, kind: "closed", text: "Tioga Road: closed for the season (NPS alert)", source: "NPS" }];
+    if (Math.abs(s.lat - 36.8791) < 0.01 && Math.abs(s.lng + 111.51) < 0.01) return [{ stopIndex: i, kind: "hours", text: "Check the hours: open 09:00-17:00 (OpenStreetMap)", source: "OpenStreetMap" }];
+    return [];
+  });
 }

@@ -3,6 +3,7 @@
 import { downsampleRoute } from "./downsample";
 import { fanOffsets } from "./marker-fan";
 import { parseCmap, pdfText, type PdfFonts } from "./pdf-fonts";
+import { PDF_BORDER, PDF_RULE, PDF_THEME, hexToRgb, markerTextColor, safeStopColor, type Rgb } from "./pdf-theme";
 import type { ItineraryInput } from "./itinerary";
 import { STATIC_MAP_HEIGHT, STATIC_MAP_WIDTH } from "./static-map";
 import type { LngLat } from "./types";
@@ -35,10 +36,16 @@ function toBase64(buf: ArrayBuffer): string {
 }
 
 const MARGIN = 40;
+const MAP_RADIUS = 8;
 const MAP_ASPECT = STATIC_MAP_HEIGHT / STATIC_MAP_WIDTH;
 const FOOTER_SPACE = 30;
-const INDENT = 16;
-const GREY = 110;
+const MARKER_R = 9;
+const MARKER_GAP = 10;
+const STOP_INDENT = MARKER_R * 2 + MARKER_GAP;
+
+const fillRgb = (doc: Doc, c: Rgb | string) => { const [r, g, b] = typeof c === "string" ? hexToRgb(c) : c; doc.setFillColor(r, g, b); };
+const drawRgb = (doc: Doc, c: Rgb | string) => { const [r, g, b] = typeof c === "string" ? hexToRgb(c) : c; doc.setDrawColor(r, g, b); };
+const textRgb = (doc: Doc, c: Rgb | string) => { const [r, g, b] = typeof c === "string" ? hexToRgb(c) : c; doc.setTextColor(r, g, b); };
 
 type Doc = InstanceType<Awaited<typeof import("jspdf")>["jsPDF"]>;
 
@@ -55,10 +62,11 @@ function unwrapLongitudes(points: LngLat[]): LngLat[] {
   });
 }
 
-function drawFallbackMap(doc: Doc, family: string, x: number, y: number, w: number, h: number, geometry: LngLat[], stops: { lat: number; lng: number }[]) {
-  doc.setFillColor(243, 244, 246);
-  doc.setDrawColor(200, 200, 200);
-  doc.rect(x, y, w, h, "FD");
+function drawFallbackMap(doc: Doc, family: string, x: number, y: number, w: number, h: number, geometry: LngLat[], stops: { lat: number; lng: number }[], colors: string[]) {
+  fillRgb(doc, PDF_THEME.backdrop);
+  drawRgb(doc, PDF_BORDER);
+  doc.setLineWidth(1);
+  doc.roundedRect(x, y, w, h, MAP_RADIUS, MAP_RADIUS, "FD");
   const finite = (p: LngLat) => Number.isFinite(p[0]) && Number.isFinite(p[1]);
   const usable = geometry.filter(finite);
   const rawStops = stops.map((s): LngLat => [s.lng, s.lat]).filter(finite);
@@ -94,8 +102,8 @@ function drawFallbackMap(doc: Doc, family: string, x: number, y: number, w: numb
     const a = pts.map(at);
     const deltas: [number, number][] = [];
     for (let i = 1; i < a.length; i++) deltas.push([a[i][0] - a[i - 1][0], a[i][1] - a[i - 1][1]]);
-    doc.setDrawColor(37, 99, 235);
-    doc.setLineWidth(2);
+    drawRgb(doc, PDF_THEME.route);
+    doc.setLineWidth(2.5);
     doc.lines(deltas, a[0][0], a[0][1], [1, 1], "S", false);
   }
   doc.setFontSize(8);
@@ -106,13 +114,16 @@ function drawFallbackMap(doc: Doc, family: string, x: number, y: number, w: numb
     const o = fan.get(String(i));
     const cx = spots[i].x + (o?.dx ?? 0);
     const cy = spots[i].y + (o?.dy ?? 0);
-    doc.setFillColor(225, 29, 72);
+    const fill = safeStopColor(colors[i]);
+    fillRgb(doc, PDF_THEME.white);
+    doc.circle(cx, cy, 9.5, "F");
+    fillRgb(doc, fill);
     doc.circle(cx, cy, 8, "F");
-    doc.setTextColor(255, 255, 255);
+    textRgb(doc, markerTextColor(fill));
     doc.setFont(family, "bold");
     doc.text(String(i + 1), cx, cy + 2.8, { align: "center" });
   });
-  doc.setTextColor(0, 0, 0);
+  textRgb(doc, PDF_THEME.foreground);
   doc.setLineWidth(1);
 }
 
@@ -130,6 +141,14 @@ export async function renderItineraryPdf(
   const contentW = pageW - 2 * MARGIN;
   const limit = pageH - MARGIN - FOOTER_SPACE;
   let y = MARGIN;
+
+  // Every page gets the app's paper colour first, so later drawing lands on top of it.
+  const paintPage = () => {
+    fillRgb(doc, PDF_THEME.paper);
+    doc.rect(0, 0, pageW, pageH, "F");
+  };
+  paintPage();
+  const colors = input.stops.map((s) => safeStopColor(s.color));
 
   // With the Unicode font only its own gaps become "?"; without it (offline, failed fetch) the WinAnsi rule applies.
   let family = "helvetica";
@@ -188,6 +207,7 @@ export async function renderItineraryPdf(
   // A line drawn with its baseline at y needs a little room below it; otherwise it starts the next page.
   const startFresh = (ascent: number, restore: () => void) => {
     doc.addPage();
+    paintPage();
     y = MARGIN + ascent;
     restore();
   };
@@ -198,14 +218,19 @@ export async function renderItineraryPdf(
   const setInfoFont = (size: number) => () => {
     doc.setFont(family, "normal");
     doc.setFontSize(size);
-    doc.setTextColor(GREY);
+    textRgb(doc, PDF_THEME.muted);
   };
 
+  // Accent bar above the title, like the accent used for the app's highlights.
+  fillRgb(doc, PDF_THEME.accent);
+  doc.roundedRect(MARGIN, y, 56, 4, 2, 2, "F");
+  y += 10;
   setTitleFont();
+  textRgb(doc, PDF_THEME.foreground);
   const title = wrap(input.tripName, contentW);
   y += 20;
   for (const line of title) {
-    if (y + 8 > limit) startFresh(20, setTitleFont);
+    if (y + 8 > limit) startFresh(20, () => { setTitleFont(); textRgb(doc, PDF_THEME.foreground); });
     doc.text(line, MARGIN, y);
     y += 28;
   }
@@ -228,82 +253,115 @@ export async function renderItineraryPdf(
       y += 13;
     }
   }
-  doc.setTextColor(0, 0, 0);
   y += 6;
 
   const mapH = contentW * MAP_ASPECT;
   if (y + mapH > limit) {
     doc.addPage();
+    paintPage();
     y = MARGIN;
   }
   if (map.kind === "image") {
     const fmt = /^data:image\/jpe?g/i.test(map.dataUrl) ? "JPEG" : "PNG";
     try {
+      // Rounded frame: the image is clipped to it, then the border is drawn over the edge in the app's border colour.
+      doc.saveGraphicsState();
+      doc.roundedRect(MARGIN, y, contentW, mapH, MAP_RADIUS, MAP_RADIUS, null);
+      doc.clip();
+      doc.discardPath();
       doc.addImage(map.dataUrl, fmt, MARGIN, y, contentW, mapH);
+      doc.restoreGraphicsState();
+      drawRgb(doc, PDF_BORDER);
+      doc.setLineWidth(1);
+      doc.roundedRect(MARGIN, y, contentW, mapH, MAP_RADIUS, MAP_RADIUS, "S");
     } catch {
       // A corrupt image must not lose the whole itinerary: draw the map instead.
-      drawFallbackMap(doc, family, MARGIN, y, contentW, mapH, geometry, stops);
+      try { doc.restoreGraphicsState(); } catch { /* nothing saved */ }
+      drawFallbackMap(doc, family, MARGIN, y, contentW, mapH, geometry, stops, colors);
     }
   } else {
-    drawFallbackMap(doc, family, MARGIN, y, contentW, mapH, geometry, stops);
+    drawFallbackMap(doc, family, MARGIN, y, contentW, mapH, geometry, stops, colors);
   }
   y += mapH + 24;
 
   const newPage = () => {
     doc.addPage();
+    paintPage();
     y = MARGIN;
   };
 
-  for (const s of input.stops) {
+  input.stops.forEach((s, stopIdx) => {
     doc.setFontSize(12);
     doc.setFont(family, "bold");
     const arrival = safe(s.arrival);
     const arrivalW = doc.getTextWidth(arrival);
-    const heading = wrap(`${s.index}. ${s.name}`, contentW - arrivalW - 12);
+    const heading = wrap(s.name, contentW - STOP_INDENT - arrivalW - 12);
 
     doc.setFontSize(10);
     doc.setFont(family, "normal");
-    const details = [s.bestLight, s.weather, s.notes]
-      .filter((t): t is string => !!t && t.trim() !== "")
-      .map((t) => wrap(t.trim(), contentW - INDENT));
-    const firstDetail = details[0]?.length ? 13 : 0;
-    const headingH = heading.length * 15;
+    // Best-light hints use the app's sand colour; weather and notes stay muted.
+    const rawDetails: { text: string | null; color: string }[] = [
+      { text: s.bestLight, color: PDF_THEME.sand },
+      { text: s.weather, color: PDF_THEME.muted },
+      { text: s.notes, color: PDF_THEME.muted },
+    ];
+    const details = rawDetails
+      .filter((d): d is { text: string; color: string } => !!d.text && d.text.trim() !== "")
+      .map((d) => ({ lines: wrap(d.text.trim(), contentW - STOP_INDENT), color: d.color }));
+    const firstDetail = details[0]?.lines.length ? 13 : 0;
+    const headingH = Math.max(heading.length * 15, MARKER_R * 2);
     if (y + headingH + firstDetail > limit) newPage();
 
-    doc.setFontSize(12);
+    // Numbered disc in the stop's own colour, like the app's dots.
+    const fill = colors[stopIdx];
+    fillRgb(doc, fill);
+    doc.circle(MARGIN + MARKER_R, y + 2 + MARKER_R - 1, MARKER_R, "F");
+    textRgb(doc, markerTextColor(fill));
     doc.setFont(family, "bold");
+    doc.setFontSize(String(s.index).length > 2 ? 7 : 10);
+    doc.text(String(s.index), MARGIN + MARKER_R, y + 2 + MARKER_R - 1 + 3.2, { align: "center" });
+
+    doc.setFontSize(12);
+    textRgb(doc, PDF_THEME.foreground);
     heading.forEach((l, i) => {
-      doc.text(l, MARGIN, y + 11 + i * 15);
+      doc.text(l, MARGIN + STOP_INDENT, y + 11 + i * 15);
     });
+    textRgb(doc, PDF_THEME.accentStrong);
     doc.text(arrival, pageW - MARGIN, y + 11, { align: "right" });
     y += headingH + 2;
 
-    doc.setFontSize(10);
-    doc.setFont(family, "normal");
-    doc.setTextColor(GREY);
     for (const block of details) {
-      for (const l of block) {
+      for (const l of block.lines) {
         if (y + 13 > limit) {
           newPage();
-          doc.setFontSize(10);
-          doc.setFont(family, "normal");
-          doc.setTextColor(GREY);
         }
-        doc.text(l, MARGIN + INDENT, y + 9);
+        doc.setFontSize(10);
+        doc.setFont(family, "normal");
+        textRgb(doc, block.color);
+        doc.text(l, MARGIN + STOP_INDENT, y + 9);
         y += 13;
       }
       y += 2;
     }
-    doc.setTextColor(0, 0, 0);
-    y += 10;
-  }
+    y += 5;
+    // Divider between stops, not after the last one.
+    if (stopIdx < input.stops.length - 1 && y + 6 <= limit) {
+      drawRgb(doc, PDF_BORDER);
+      doc.setLineWidth(0.75);
+      doc.line(MARGIN, y, pageW - MARGIN, y);
+    }
+    y += 9;
+  });
 
   const total = doc.getNumberOfPages();
   for (let p = 1; p <= total; p++) {
     doc.setPage(p);
     doc.setFont(family, "normal");
     doc.setFontSize(9);
-    doc.setTextColor(GREY);
+    drawRgb(doc, PDF_RULE);
+    doc.setLineWidth(0.5);
+    doc.line(MARGIN, pageH - MARGIN - 4, pageW - MARGIN, pageH - MARGIN - 4);
+    textRgb(doc, PDF_THEME.muted);
     doc.text(`Page ${p} of ${total}`, pageW / 2, pageH - MARGIN + 6, { align: "center" });
   }
   return doc.output("blob");

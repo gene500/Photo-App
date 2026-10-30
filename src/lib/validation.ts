@@ -156,10 +156,22 @@ export const optimizeRequestSchema = z
     focus: z.enum(["priority", "time"]).optional(),
     /** Keep `departAt` as the start and only order the stops (a trip already under way). */
     fixDeparture: z.boolean().optional(),
+    /** The owner's live position (opt-in setting): the drive starts here, so the first stop is chosen too. Used for this one request only. */
+    origin: z.object({ lat, lng }).strict().optional(),
   })
   .refine((o) => !o.stops || o.stops.length === o.coordinates.length, {
     path: ["stops"],
     message: "stops must have one entry per coordinate",
+  })
+  // The start time is the time at the first stop, which the origin decides: a fixed start and an origin never go together.
+  .refine((o) => !(o.origin && o.fixDeparture), {
+    path: ["origin"],
+    message: "Start from your location cannot be combined with a fixed start time",
+  })
+  // The origin is one more point in the same Matrix call, so it counts against the same cap as a stop.
+  .refine((o) => !o.origin || o.coordinates.length < MAX_ROUTE_WAYPOINTS, {
+    path: ["coordinates"],
+    message: `Optimizing from your location supports at most ${MAX_ROUTE_WAYPOINTS - 1} stops`,
   });
 
 // Keep this far below the point count where @turf/simplify's recursive

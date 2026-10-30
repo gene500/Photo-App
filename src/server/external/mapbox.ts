@@ -107,13 +107,14 @@ type MatrixResponse = { code?: string; durations?: (number | null)[][] };
 const MAX_MATRIX_COORDINATES = 25; // Mapbox Matrix API driving profile limit
 
 /** Drive seconds between every pair of coords; unreachable pairs come back as Infinity. */
-export async function getDurationMatrix(coords: LngLat[], fetchImpl: typeof fetch = fetch): Promise<number[][]> {
+export async function getDurationMatrix(coords: LngLat[], fetchImpl: typeof fetch = fetch, opts: { noCache?: boolean } = {}): Promise<number[][]> {
   if (coords.length > MAX_MATRIX_COORDINATES) {
     throw new ExternalServiceError(`Route optimization supports at most ${MAX_MATRIX_COORDINATES} stops`);
   }
   if (isFakeExternal()) return fakeDurationMatrix(coords);
   const path = coords.map(([lng, lat]) => `${lng.toFixed(6)},${lat.toFixed(6)}`).join(";");
-  const cachedMatrix = matrixCache.get(path);
+  // noCache: a request that includes a person's live position is neither read from nor kept in the cache.
+  const cachedMatrix = opts.noCache ? undefined : matrixCache.get(path);
   if (cachedMatrix) return cachedMatrix;
   const url =
     `${MAPBOX_BASE}/directions-matrix/v1/mapbox/driving/${path}` +
@@ -127,7 +128,7 @@ export async function getDurationMatrix(coords: LngLat[], fetchImpl: typeof fetc
   // null means unreachable; anything else must be a plain non-negative number.
   if (!rows.every((row) => row.every((v) => v === null || isNonNegative(v)))) throw new ExternalServiceError(BAD_ROUTING_RESPONSE);
   const matrix = rows.map((row) => row.map((v) => (typeof v === "number" ? v : Infinity)));
-  matrixCache.set(path, matrix);
+  if (!opts.noCache) matrixCache.set(path, matrix);
   return matrix;
 }
 

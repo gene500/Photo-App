@@ -60,6 +60,38 @@ describe("SettingsView", () => {
     expect(saved().optimizeFocus).toBe("time");
   });
 
+  it("Re-optimize when I tick a stop is a checkbox: on by default, saves when off, reset turns it back on", async () => {
+    await setup();
+    const box = screen.getByRole("checkbox", { name: /Re-optimize when I tick a stop/ });
+    expect(box).toHaveProperty("checked", true);
+    await userEvent.click(box);
+    expect(saved().autoReoptimize).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
+    expect(screen.getByRole("checkbox", { name: /Re-optimize when I tick a stop/ })).toHaveProperty("checked", true);
+  });
+
+  it("Start from my location: off by default, saves, notes privacy, and reset turns it off", async () => {
+    Object.defineProperty(navigator, "geolocation", { value: { getCurrentPosition: vi.fn() }, configurable: true });
+    await setup();
+    const box = screen.getByRole("checkbox", { name: /Start from my location/ });
+    expect(box).toHaveProperty("checked", false);
+    expect(screen.getByText(/not saved/)).toBeTruthy();
+    await userEvent.click(box);
+    expect(saved().startFromLocation).toBe(true);
+    // Setting it never asks the browser for the position.
+    expect(vi.mocked(navigator.geolocation.getCurrentPosition)).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
+    expect(screen.getByRole("checkbox", { name: /Start from my location/ })).toHaveProperty("checked", false);
+    Object.defineProperty(navigator, "geolocation", { value: undefined, configurable: true });
+  });
+
+  it("Start from my location is disabled with a reason where location is not available", async () => {
+    Object.defineProperty(navigator, "geolocation", { value: undefined, configurable: true });
+    await setup();
+    expect(screen.getByRole("checkbox", { name: /Start from my location/ })).toHaveProperty("disabled", true);
+    expect(screen.getByText(/Not available here/)).toBeTruthy();
+  });
+
   it("Show hikes is a labelled checkbox: on by default, saves when switched off, and reset turns it back on", async () => {
     await setup();
     const box = screen.getByRole("checkbox", { name: /Show hikes/ });

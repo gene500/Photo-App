@@ -128,6 +128,43 @@ describe("renderItineraryPdf", () => {
   });
 });
 
+describe("app theme colours", () => {
+  // jsPDF writes colours as "r g b rg" (fill, text) and "r g b RG" (stroke) with components 0..1, rounded to 2 or 3 decimals.
+  const ops = (s: string, kind: "rg" | "RG") => [...s.matchAll(new RegExp(`^([\\d.]+) ([\\d.]+) ([\\d.]+) ${kind}$`, "gm"))].map((m) => [Number(m[1]), Number(m[2]), Number(m[3])]);
+  const has = (s: string, rgb: number[], kind: "rg" | "RG") => ops(s, kind).some((o) => o.every((v, i) => Math.abs(v * 255 - rgb[i]) < 1.5));
+  const hasFill = (s: string, rgb: number[]) => has(s, rgb, "rg");
+
+  it("paints every page with the paper colour and draws text in the app's colours", async () => {
+    const s = await render(input(40));
+    expect((s.match(/^0\. [\d.]+ 595\.[\d.]+ -841\.[\d.]+ re$/gm) ?? []).length).toBe(pageCount(s));
+    expect(hasFill(s, [247, 243, 233])).toBe(true); // paper
+    expect(hasFill(s, [31, 27, 20])).toBe(true); // foreground
+    expect(hasFill(s, [111, 90, 44])).toBe(true); // accent-strong times
+    expect(hasFill(s, [122, 95, 42])).toBe(true); // sand best-light hint
+    expect(hasFill(s, [101, 94, 79])).toBe(true); // muted
+    expect(hasFill(s, [212, 189, 143])).toBe(true); // accent bar
+  });
+
+  it("colours each stop's number disc with its own colour", async () => {
+    const stops = [stop(1, { color: "#b4572f" }), stop(2, { color: "#e0a98a" })];
+    const s = await render({ ...input(0), stops });
+    expect(hasFill(s, [180, 87, 47])).toBe(true);
+    expect(hasFill(s, [224, 169, 138])).toBe(true);
+  });
+
+  it("draws the route with the app's route colour, not blue", async () => {
+    const s = await render(input(2));
+    expect(has(s, [168, 131, 75], "RG")).toBe(true);
+    expect(has(s, [37, 99, 235], "RG")).toBe(false);
+  });
+
+  it("keeps an image map inside a rounded frame", async () => {
+    const s = await render(input(2), { kind: "image", dataUrl: noisePng() });
+    expect(s).toMatch(/^W$/m); // clip path
+    expect(has(s, [61 * 0.13 + 247 * 0.87, 48 * 0.13 + 243 * 0.87, 25 * 0.13 + 233 * 0.87], "RG")).toBe(true);
+  });
+});
+
 describe("note and large routes", () => {
   it("prints the note when given and nothing when null", async () => {
     expect(await render({ ...input(1), note: "Times are estimates notetext." })).toContain("Times are estimates notetext.");
@@ -182,8 +219,9 @@ describe("edge cases", () => {
     const blob = await renderItineraryPdf(input(1), fallback, [[179, 0], [-179, 1], [-178, 2]], [{ lat: 0, lng: 179 }, { lat: 2, lng: -178 }]);
     const s = Buffer.from(await blob.arrayBuffer()).toString("latin1");
     noNaN(s);
+    // The map pins are drawn before the stop rows, whose own numbered discs also print "1".
     const marks = placed(s).filter((t) => t.text === "1" || t.text === "2");
-    expect(marks).toHaveLength(2);
+    expect(marks).toHaveLength(3);
     const [a, b] = marks;
     // Unwrapped, the 3-degree hop fills the box in both directions; wrapped the other way it would be a flat line with the pins at its two ends.
     expect(b.x - a.x).toBeGreaterThan(250);
@@ -216,7 +254,7 @@ describe("edge cases", () => {
       expect(t.y, t.text).toBeLessThanOrEqual(841.89 - 40);
     }
     // The stops still follow the title and the footers count every page.
-    expect(body.some((t) => t.text === "1. Stopname1")).toBe(true);
+    expect(body.some((t) => t.text === "Stopname1")).toBe(true);
     expect(s).toContain(`Page ${pages} of ${pages}`);
   });
 

@@ -30,8 +30,8 @@ then the FINAL row. Board and rules are in `docs/HANDOFF.md` and `CLAUDE.md`.
 Stops now have a preferred light (`lightPref`: any/sunrise/golden/sunset) and a
 dwell time (`dwellMinutes`, default 30); trips have an optional `departAt`.
 "Optimize route" picks the order and the departure time together
-(`light-windows.ts`, `optimize-schedule.ts`: exact up to 8 free stops, local
-search above; objective = drive seconds + 3 x 60 x missed minutes). Arrival
+(`light-windows.ts`, `optimize-schedule.ts`: exact up to 7 free stops, local
+search above; objective = drive seconds + 60 x missed minutes (A61: was 3 x 60; a miss counts in full up to 60 min per stop, then at 0.2)). Arrival
 estimates now include dwell time at earlier stops (default 30 min shifts every
 displayed arrival after the first stop; one `best-time` test expectation changed
 for that). `POST /api/optimize` takes optional `stops` and `plannedDate` and

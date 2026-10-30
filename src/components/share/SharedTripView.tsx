@@ -64,7 +64,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
         departAt: trip.departAt ? new Date(trip.departAt) : null,
         totalDistanceM: route?.distance ?? null,
         totalDurationS: route?.duration ?? null,
-        stops: trip.stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: null, shotNotes: s.shotNotes, lightPref: s.lightPref, arrival: arrivals[i] ?? null })),
+        stops: trip.stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: null, shotNotes: s.shotNotes, lightPref: s.lightPref, source: s.source, arrival: arrivals[i] ?? null })),
         weather: trip.stops.map(() => null),
         note: route ? null : ESTIMATE_NOTE,
         timeFormat: tf,

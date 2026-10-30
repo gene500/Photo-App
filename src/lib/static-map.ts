@@ -7,8 +7,11 @@ export const STATIC_MAP_HEIGHT = 400;
 
 const MAX_SIDE = 1280;
 const START_POINTS = 1000;
-const ROUTE_COLOR = "2563eb";
-const PIN_COLOR = "e11d48";
+/** The app's route colour (--route) and manual stop colour, so the printed map matches the screen. */
+export const STATIC_MAP_ROUTE_COLOR = "a8834b";
+const PIN_COLOR = "3b3226";
+
+const pinColor = (c: string | undefined) => (c && /^#?[0-9a-f]{6}$/i.test(c) ? c.replace("#", "").toLowerCase() : PIN_COLOR);
 
 function encodeValue(value: number): string {
   let v = value < 0 ? ~(value << 1) : value << 1;
@@ -38,7 +41,7 @@ export function encodePolyline(points: LngLat[]): string {
 const clampSide = (n: number) => Math.max(1, Math.min(MAX_SIDE, Math.round(n)));
 
 export function staticMapUrl(a: {
-  stops: { lat: number; lng: number }[];
+  stops: { lat: number; lng: number; /** Hex pin colour such as "#b4572f"; defaults to the manual stop colour. */ color?: string }[];
   geometry: LngLat[];
   token: string | null;
   width?: number;
@@ -49,7 +52,7 @@ export function staticMapUrl(a: {
   const h = clampSide(a.height ?? STATIC_MAP_HEIGHT);
   const pins = a.stops.map((s, i) => {
     const label = i + 1 <= 99 ? `-${i + 1}` : "";
-    return `pin-s${label}+${PIN_COLOR}(${s.lng.toFixed(5)},${s.lat.toFixed(5)})`;
+    return `pin-s${label}+${pinColor(s.color)}(${s.lng.toFixed(5)},${s.lat.toFixed(5)})`;
   });
   const build = (path: string | null) =>
     `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${[...(path ? [path] : []), ...pins].join(",")}/auto/${w}x${h}@2x?access_token=${encodeURIComponent(a.token!)}`;
@@ -60,7 +63,7 @@ export function staticMapUrl(a: {
 
   for (let target = START_POINTS; target >= 2; target = Math.floor(target / 2)) {
     const pts = downsampleRoute(a.geometry, target);
-    const url = build(`path-4+${ROUTE_COLOR}-0.9(${encodeURIComponent(encodePolyline(pts))})`);
+    const url = build(`path-4+${STATIC_MAP_ROUTE_COLOR}-0.9(${encodeURIComponent(encodePolyline(pts))})`);
     if (url.length <= STATIC_MAP_MAX_URL) return url;
   }
   return noPath;

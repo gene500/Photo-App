@@ -95,4 +95,21 @@ describe("settings versioning", () => {
     expect(parseSettings({ optimizeFocus: "time" }).optimizeFocus).toBe("time");
     expect(parseSettings({ optimizeFocus: "fastest" }).optimizeFocus).toBe("priority");
   });
+
+  it("defaults autoReoptimize to on and accepts only booleans", () => {
+    expect(parseSettings({}).autoReoptimize).toBe(true);
+    expect(parseSettings({ autoReoptimize: false }).autoReoptimize).toBe(false);
+    expect(parseSettings({ autoReoptimize: "no" }).autoReoptimize).toBe(true);
+    expect(DEFAULT_SETTINGS.autoReoptimize).toBe(true);
+  });
+});
+
+describe("startFromLocation", () => {
+  it("defaults to off, accepts a boolean, rejects anything else and survives a stored round trip", () => {
+    expect(DEFAULT_SETTINGS.startFromLocation).toBe(false);
+    expect(parseSettings({}).startFromLocation).toBe(false);
+    expect(parseSettings({ startFromLocation: true }).startFromLocation).toBe(true);
+    expect(parseSettings({ startFromLocation: "yes" }).startFromLocation).toBe(false);
+    expect(parseStoredSettings(serializeSettings({ ...DEFAULT_SETTINGS, startFromLocation: true })).startFromLocation).toBe(true);
+  });
 });

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/server/external/place-notices", () => ({ collectPlaceNotices: vi.fn(async () => []) }));
 vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
 vi.mock("@/server/shared-limit", () => ({ enforcePaidLimit: vi.fn() }));
 vi.mock("@/server/external/mapbox", async (orig) => ({ ...(await orig<typeof import("@/server/external/mapbox")>()), getDurationMatrix: vi.fn() }));

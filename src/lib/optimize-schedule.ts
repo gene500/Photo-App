@@ -23,7 +23,17 @@ export type ScheduleDark = { stopIndex: number; minutes: number; priority: StopP
 export type Schedule = { order: number[]; departAt: Date; misses: ScheduleMiss[]; dark: ScheduleDark[]; timed: boolean; complete?: boolean };
 
 /** One minute of missed light costs as much as this many seconds of driving. */
-const MISS_WEIGHT_SECONDS_PER_MIN = 3 * 60;
+const MISS_WEIGHT_SECONDS_PER_MIN = 60;
+/**
+ * Past this many minutes a missed window costs much less: a stop that cannot get its light anyway (a golden-hour stop reached at
+ * midday) must not keep buying a long detour to shave its miss from 4 h to 3 h. Beyond it a minute counts MISS_TAIL_SLOPE.
+ * Only "normal" stops are capped: a "high" or "must" stop is worth a long detour for its light (unless every stop counts the same, under the time focus).
+ */
+const MISS_CAP_MIN = 60;
+/** Share of a missed minute beyond the cap that still counts: small, but it keeps hopeless orders ordered (nearer misses first). */
+const MISS_TAIL_SLOPE = 0.2;
+/** A minute in the dark counts as this many missed-light minutes, so darkness still costs 3 x 60 s of driving per minute (unchanged by the lighter miss weight). */
+const DARK_MINUTE_FACTOR = 3;
 /** Multiplier on a stop's missed minutes. "must" is large enough that no amount of driving outweighs missing it. */
 const PRIORITY_WEIGHT: Record<StopPriority, number> = { normal: 1, high: 8, must: 1000 };
 /** Time priority: every stop counts the same, so only drive time and missed light decide the route. */
@@ -43,7 +53,7 @@ type SunAround = { light: Interval[]; daylight: Interval[]; hasLight: boolean; h
 
 /**
  * Pick the visiting order (stop 0 stays first) and the departure time that minimise
- * drive seconds + 3 x 60 x minutes of missed preferred light or of a visit in the dark.
+ * drive seconds + 60 x minutes of missed preferred light (Normal stops: at most an hour counts in full) or 3 x that for a visit in the dark.
  * With no light preferences and no visit in the dark this is exactly the shortest-drive order at the default departure.
  * Under the time focus darkness is only reported, never traded against driving.
  */
@@ -142,6 +152,8 @@ class Evaluator {
   private readonly lastSun: (SunAround | undefined)[];
   private readonly constrained: boolean[];
   private readonly weight: number[];
+  /** Most missed minutes that count against a stop's light (no cap for a high or must stop). */
+  private readonly missCap: number[];
   /** Weight of a minute in the dark per stop: its priority weight, none under the time focus (darkness is then only reported). */
   private readonly darkWeight: number[];
   private readonly arrivalOffsets: Float64Array;
@@ -166,6 +178,7 @@ class Evaluator {
     this.constrained = stops.map((s) => s.lightPref !== "any");
     const weights = focus === "time" ? FLAT_WEIGHT : PRIORITY_WEIGHT;
     this.weight = stops.map((s) => weights[s.priority ?? "normal"]);
+    this.missCap = stops.map((s) => (focus !== "time" && (s.priority === "must" || s.priority === "high") ? Infinity : MISS_CAP_MIN));
     this.darkWeight = focus === "time" ? stops.map(() => 0) : this.weight;
     this.arrivalOffsets = new Float64Array(stops.length);
   }
@@ -270,10 +283,16 @@ class Evaluator {
     let total = 0;
     for (let k = 0; k < order.length; k++) {
       const i = order[k]!;
-      if (this.constrained[i]) total += this.weight[i]! * this.missAt(i, departMs + off[k]!);
-      if (this.darkWeight[i]) total += this.darkWeight[i]! * this.darkAt(i, departMs + off[k]!);
+      if (this.constrained[i]) total += this.weight[i]! * this.countedMiss(i, this.missAt(i, departMs + off[k]!));
+      if (this.darkWeight[i]) total += DARK_MINUTE_FACTOR * this.darkWeight[i]! * this.darkAt(i, departMs + off[k]!);
     }
     return total;
+  }
+
+  /** A miss as it counts against the cost: full up to the cap, then only a trickle (still enough to break ties between hopeless orders). */
+  private countedMiss(i: number, minutes: number): number {
+    const cap = this.missCap[i]!;
+    return minutes <= cap ? minutes : cap + (minutes - cap) * MISS_TAIL_SLOPE;
   }
 
   cost(order: number[], departMs: number): number {
@@ -380,7 +399,7 @@ const SPREAD_MAX_STOPS = 12;
  * (the server may additionally stop early on a time budget, see `optimizeScheduleAsync`); each restart costs more as stops
  * are added, so large trips get fewer. Kept modest: this runs on the request thread of a shared server.
  */
-const restartsFor = (n: number) => (n <= 12 ? 300 : Math.max(4, Math.floor(150 / n)));
+const restartsFor = (n: number) => (n <= 12 ? 500 : Math.max(4, Math.floor(150 / n)));
 
 /**
  * Local search: descents from several seeds (nearest-neighbour, window-sorted, must-stops-first, shortest drive), then

@@ -43,6 +43,10 @@ export type Settings = {
   defaultDwellMinutes: number;
   suggestionLightPref: SuggestionLightPref;
   optimizeFocus: OptimizeFocus;
+  /** On re-runs Optimize quietly (for the stops not yet visited) a moment after a stop is ticked or unticked. */
+  autoReoptimize: boolean;
+  /** On makes Optimize start from this device's position (asked for only when Optimize runs; never saved). */
+  startFromLocation: boolean;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -56,6 +60,8 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultDwellMinutes: 30,
   suggestionLightPref: "auto",
   optimizeFocus: "priority",
+  autoReoptimize: true,
+  startFromLocation: false,
 };
 
 function pick<T extends string>(allowed: readonly T[], value: unknown, fallback: T): T {
@@ -80,6 +86,8 @@ export function parseSettings(raw: unknown): Settings {
     defaultDwellMinutes: dwell,
     suggestionLightPref: pick(SUGGESTION_LIGHT_PREFS, o.suggestionLightPref, d.suggestionLightPref),
     optimizeFocus: pick(OPTIMIZE_FOCUSES, o.optimizeFocus, d.optimizeFocus),
+    autoReoptimize: typeof o.autoReoptimize === "boolean" ? o.autoReoptimize : d.autoReoptimize,
+    startFromLocation: typeof o.startFromLocation === "boolean" ? o.startFromLocation : d.startFromLocation,
   };
 }
 

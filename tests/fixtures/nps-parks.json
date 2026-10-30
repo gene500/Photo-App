@@ -1,0 +1,6 @@
+{"total":"3","data":[
+{"parkCode":"yose","fullName":"Yosemite National Park","latitude":"37.84883288","longitude":"-119.5571873"},
+{"parkCode":"seki","fullName":"Sequoia & Kings Canyon National Parks","latitude":"36.486","longitude":"-118.566"},
+{"parkCode":"bad","fullName":"No coordinates","latitude":"","longitude":""},
+{"parkCode":"zero","fullName":"Zero","latitude":"0","longitude":"0"}
+]}

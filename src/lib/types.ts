@@ -115,3 +115,12 @@ export type WeatherForecast =
   /** `typical`: averages of past years for this calendar date, not a forecast (used beyond the forecast horizon). */
   | { available: true; utcOffsetSeconds: number; hours: WeatherHour[]; typical?: true }
   | { available: false; reason: "out_of_range" | "unavailable" };
+
+/** A non-blocking heads-up about a stop from free public data (NPS alerts, OpenStreetMap opening hours). */
+export type PlaceNotice = {
+  /** Index into the submitted coordinates. */
+  stopIndex: number;
+  kind: "closed" | "hours" | "alert";
+  text: string;
+  source: "NPS" | "OpenStreetMap";
+};

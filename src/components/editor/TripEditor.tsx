@@ -1,5 +1,6 @@
 "use client";
 
+import { noticeNotes } from "@/lib/notice-notes";
 import { StartTimeControl } from "./StartTimeControl";
 import { retickTarget } from "./swap-undo";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -24,6 +25,7 @@ import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useOfflineCopy, type Freshness } from "@/lib/use-offline-copy";
 import { isExactOptimization } from "@/lib/optimize-schedule";
 import { leadingVisited, pinVisitedFirst } from "@/lib/visited-run";
+import { localDateOnly } from "@/lib/dates";
 import { routeSignature } from "@/lib/route-signature";
 import { defaultLightPref } from "@/lib/light-windows";
 import { formatDistance, formatDuration } from "@/lib/format";
@@ -38,6 +40,8 @@ import { SearchBar } from "./SearchBar";
 import { StopCard } from "./StopCard";
 import { StopDrawer } from "./StopDrawer";
 import { StopList } from "./StopList";
+import { geolocationSupported, getPosition, type PositionResult } from "@/lib/geolocation";
+import { originNearStops } from "@/lib/optimize-origin";
 import { TripPlan } from "./TripPlan";
 import { TripPlanList } from "./TripPlanList";
 import { StopsPanel } from "./StopsPanel";
@@ -259,7 +263,14 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const autoStopKey = `autoFirstStop:${trip.id}`;
   const stopCountRef = useRef(stops.length);
   const addStopRef = useRef<typeof addStop | null>(null);
-  const optimizeRef = useRef<((opts?: { departAt: string | null }) => Promise<void>) | null>(null);
+  const optimizeRef = useRef<((opts?: { departAt: string | null }, quiet?: boolean) => Promise<void>) | null>(null);
+  // Re-optimize after a stop is ticked: one debounced, quiet run at a time (see scheduleAutoOptimize).
+  const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoRunningRef = useRef(false);
+  const autoQueuedRef = useRef(false);
+  /** The quiet run in flight: a manual Optimize waits for it so the two never overwrite each other. */
+  const autoPromiseRef = useRef<Promise<void> | null>(null);
+  const autoRunRef = useRef<(() => Promise<void>) | null>(null);
   /** The start-time save in flight, if any: Optimize waits for it so it plans from the time just typed. It resolves to the saved departAt (undefined if the save failed). */
   const startSaveRef = useRef<Promise<string | null | undefined> | null>(null);
   /** Set from the Optimize click until the run ends, so a second click (while waiting for the start-time save) is ignored. */
@@ -268,11 +279,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   // Adds in progress (a manual one may be mid-flight when the name lookup answers) and whether the first start was saved.
   const addsInFlightRef = useRef(0);
   const firstStartSavedRef = useRef(false);
-  useEffect(() => {
-    stopCountRef.current = stops.length;
-    addStopRef.current = addStop;
-    optimizeRef.current = optimizeRoute;
-  });
+  useEffect(() => () => { if (autoTimerRef.current) clearTimeout(autoTimerRef.current); }, []);
   // Any stop (typed in by hand inside the 700 ms wait, say) settles the question for good: deleting it later must not
   // bring the landmark back as an auto stop, so write the marker as soon as the trip has a stop.
   useEffect(() => {
@@ -663,11 +670,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const reorderSeq = useRef(0);
 
   /** Resolves true when the new order was saved (false: reverted, error shown). */
-  async function reorder(ids: string[], announce = false, movedId?: string): Promise<boolean> {
-    return tracked(() => reorderInner(ids, announce, movedId));
+  async function reorder(ids: string[], announce = false, movedId?: string, quiet = false): Promise<boolean> {
+    return tracked(() => reorderInner(ids, announce, movedId, quiet));
   }
 
-  async function reorderInner(requested: string[], announce: boolean, movedId?: string): Promise<boolean> {
+  async function reorderInner(requested: string[], announce: boolean, movedId?: string, quiet = false): Promise<boolean> {
     // Visited stops stay first, as the server also enforces; only the unvisited ones take the requested order.
     const ids = pinVisitedFirst(stops, requested);
     const seq = ++reorderSeq.current;
@@ -687,7 +694,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       markStaleOn(e);
       if (seq !== reorderSeq.current) return false; // superseded: do not revert over the newer order
       applyOrder(previousOrderById);
-      setStopsError(errorMessage(e, "Couldn't save the new order"));
+      if (!quiet) setStopsError(errorMessage(e, "Couldn't save the new order"));
       return false;
     }
   }
@@ -707,7 +714,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }
 
   /** `opts.departAt` is a start time just saved that this render may not show yet; it is used instead of `trip.departAt`. */
-  async function optimizeRoute(opts?: { departAt: string | null }) {
+  async function optimizeRoute(opts?: { departAt: string | null }, quiet = false) {
     if (optimizing || stops.length < 2) return;
     const startKey = idsKey;
     const startWaypoints = waypointKey;
@@ -715,8 +722,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     const before = stops;
     const previousDepartAt = opts ? opts.departAt : trip.departAt;
     const previousOptimizedFor = trip.routeOptimizedFor ?? null;
-    setOptimizing(true);
-    setOptimizeNote(null);
+    // A background run (quiet) shows no busy state and no error: on any failure the order is simply left as it was.
+    if (!quiet) setOptimizing(true);
+    if (!quiet) setOptimizeNote(null);
     try {
       // Visited stops are behind the owner: they stay where they are, and the last of them is the fixed start of the re-plan.
       const done = leadingVisited(before);
@@ -727,6 +735,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const anchorArrival = done > 1 ? arrivals[anchor] : null;
       const planFrom = anchorArrival ? anchorArrival.toISOString() : (previousDepartAt ?? (done > 0 ? departAt : null));
       if (done >= before.length) {
+        if (quiet) return;
         setOptimizeNote({ moveAt: null, notes: ["Every stop is already visited, so there is nothing left to reorder"], idsKey: startKey });
         return;
       }
@@ -738,20 +747,32 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         setRouteFlowId((n) => n + 1);
         return;
       }
+      // Only a click-driven run with nothing visited yet starts from the owner's position (the browser asks now, never on load).
+      // With visited stops the last of them is the anchor and the position is ignored. Any failure just optimizes without it.
+      let position: PositionResult | null = null;
+      if (!quiet && locationWillBeUsed(done, tail.length)) position = await getPosition();
+      // A position far from every stop (a trip planned elsewhere) says nothing about where this trip starts: leave it out.
+      const farAway = !!position?.ok && !originNearStops(position, tail);
+      const origin = position?.ok && !farAway ? { lat: position.lat, lng: position.lng } : undefined;
+      const locationNote = farAway
+        ? "Your location is far from this trip, so it was not used."
+        : position && !position.ok ? "Couldn't get your location, optimized without it." : null;
       const result = await api.optimizeOrder(tail.map((s): LngLat => [s.lng, s.lat]), {
+        ...(origin ? { origin } : {}),
         stops: tail.map((s) => ({ lightPref: s.lightPref, priority: s.priority, dwellMinutes: s.dwellMinutes })),
         plannedDate: trip.plannedDate,
         ...(planFrom ? { departAt: planFrom } : {}),
         focus: settings.optimizeFocus,
         // A trip under way keeps its start: the order and the notes are worked out for the time that will actually apply.
-        ...(done > 0 ? { fixDeparture: true } : {}),
+        // A background run only reorders: it never moves the start time (nothing the owner asked for).
+        ...(done > 0 || quiet ? { fixDeparture: true } : {}),
       });
       if (
         idsKeyRef.current !== startKey ||
         waypointKeyRef.current !== startWaypoints ||
         prefsKeyRef.current !== startPrefs
       ) {
-        setStopsError("Your stops changed while optimizing, so the result was discarded. Try again.");
+        if (!quiet) setStopsError("Your stops changed while optimizing, so the result was discarded. Try again.");
         return;
       }
       const ids = [...head, ...result.order.map((i) => tail[i])].map((s) => s.id);
@@ -768,11 +789,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const darkNote = darkNames.length ? `Can't fit ${darkNames.length} ${darkNames.length === 1 ? "stop" : "stops"} in daylight: ${darkNames.join(", ")}` : null;
       const polarNames = (result.polar ?? []).flatMap((i) => (tail[i] ? [tail[i].name] : []));
       const polarNote = polarNames.length ? `No sunrise or sunset that day at ${polarNames.join(", ")}, so no daylight rule applies there` : null;
-      const notes = [missNote, mustNote, darkNote, polarNote];
+      const notes = [missNote, mustNote, darkNote, polarNote, locationNote, ...noticeNotes(result.notices, tail)];
       // null means the departure was not searched (no light preference and no dark visit): leave it alone.
       // The optimizer's pick is kept on the planned solar day too (at the first stop of the new order, as the server checks it): the trips API refuses a start time on a neighbouring day.
       // With visited stops the trip has already started, so its start time is left alone.
-      const nextDepartAt = result.departAt && done === 0 ? clampToSolarDay(new Date(result.departAt), trip.plannedDate, before[result.order[0] ?? 0].lng).toISOString() : previousDepartAt;
+      const nextDepartAt = result.departAt && done === 0 && !quiet ? clampToSolarDay(new Date(result.departAt), trip.plannedDate, before[result.order[0] ?? 0].lng).toISOString() : previousDepartAt;
       const orderChanged = ids.join(",") !== startKey;
       const departChanged = !sameInstant(nextDepartAt, previousDepartAt);
       // Marks the trip optimized for the new order, in the same save as the departure.
@@ -787,14 +808,14 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         return;
       }
       const previousIds = before.map((s) => s.id);
-      if (orderChanged && !(await reorder(ids))) return;
+      if (orderChanged && !(await reorder(ids, false, undefined, quiet))) return;
       let appliedDepartAt = previousDepartAt;
       try {
         await saveTrip({ ...(departChanged && { departAt: nextDepartAt }), routeOptimizedFor: optimizedFor });
         appliedDepartAt = nextDepartAt;
         setRouteFlowId((n) => n + 1); // the route is marked optimized: the map shows every stop and runs the water along it
       } catch (e) {
-        setStopsError(errorMessage(e, "Couldn't save the route"));
+        if (!quiet) setStopsError(errorMessage(e, "Couldn't save the route"));
       }
       setUndo({ previousIds, appliedIds: ids, previousDepartAt, appliedDepartAt, previousOptimizedFor });
       // Say so when the start time moved, so the change in the Start time field is not a surprise (written out when shown).
@@ -803,11 +824,74 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       setAnnouncement(moveAt || notes.some(Boolean) ? "" : OPTIMIZED_ANNOUNCEMENT);
       if (moveAt || notes.some(Boolean)) setOptimizeNote({ moveAt, notes, idsKey: ids.join(",") });
     } catch (e) {
-      setStopsError(errorMessage(e, "Couldn't optimize the route"));
+      if (!quiet) setStopsError(errorMessage(e, "Couldn't optimize the route"));
     } finally {
-      setOptimizing(false);
+      if (!quiet) setOptimizing(false);
     }
   }
+
+  /** Will Optimize ask for the owner's position? Only on a click, with the setting on, nothing visited, the trip planned for today (viewer's local date) and room for one more waypoint. */
+  function locationWillBeUsed(visitedCount: number, unvisitedCount: number) {
+    return settings.startFromLocation && visitedCount === 0 && unvisitedCount < 25 && trip.plannedDate === localDateOnly(new Date()) && geolocationSupported();
+  }
+
+  /** Ticking or unticking a stop re-plans the unvisited rest, after ~600 ms of quiet so a run of ticks makes one request. */
+  function scheduleAutoOptimize() {
+    if (!settings.autoReoptimize) return;
+    armAutoTimer();
+  }
+
+  function armAutoTimer() {
+    if (autoTimerRef.current) clearTimeout(autoTimerRef.current);
+    autoTimerRef.current = setTimeout(() => {
+      autoTimerRef.current = null;
+      void autoRunRef.current?.();
+    }, 600);
+  }
+
+  /** After a manual Optimize or Undo ends: run the re-plan that was held back while it was busy. */
+  function flushAutoQueue() {
+    if (autoQueuedRef.current && aliveRef.current) {
+      autoQueuedRef.current = false;
+      armAutoTimer();
+    }
+  }
+
+  async function runAutoOptimize() {
+    // One at a time: a tick that lands while a run is in flight queues exactly one more run for when it ends.
+    if (autoRunningRef.current) { autoQueuedRef.current = true; return; }
+    if (!settings.autoReoptimize || (typeof navigator !== "undefined" && navigator.onLine === false)) return;
+    // A manual Optimize or Undo in progress holds the run back; it is re-queued for when that ends.
+    if (optimizeClickRef.current || optimizing || undoing || optimizeWaiting) { autoQueuedRef.current = true; return; }
+    if (stops.filter((s) => !s.visited).length < 2) return;
+    autoRunningRef.current = true;
+    const run = (async () => {
+      try {
+        await optimizeRef.current?.(undefined, true);
+      } catch {
+        /* background run: stay silent */
+      }
+    })();
+    autoPromiseRef.current = run;
+    try {
+      await run;
+    } finally {
+      autoRunningRef.current = false;
+      autoPromiseRef.current = null;
+    }
+    if (autoQueuedRef.current && aliveRef.current) {
+      autoQueuedRef.current = false;
+      scheduleAutoOptimize();
+    }
+  }
+
+  // Latest-callback refs for timers and async continuations; assigned after the functions they point at are declared.
+  useEffect(() => {
+    stopCountRef.current = stops.length;
+    addStopRef.current = addStop;
+    optimizeRef.current = optimizeRoute;
+    autoRunRef.current = runAutoOptimize;
+  });
 
   async function undoOptimize() {
     if (!undo || undoing) return;
@@ -826,6 +910,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       setAnnouncement(fullyRestorable ? "Optimize undone. Your previous order is back." : "Optimize undone, but the previous order could not be fully restored because visited stops stay first.");
     } finally {
       setUndoing(false);
+      flushAutoQueue();
     }
   }
 
@@ -853,13 +938,18 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     if (optimizeClickRef.current || optimizing) return;
     optimizeClickRef.current = true;
     setOptimizeWaiting(true);
+    // A manual run supersedes a pending background re-plan, and waits for one already in flight.
+    if (autoTimerRef.current) { clearTimeout(autoTimerRef.current); autoTimerRef.current = null; }
+    autoQueuedRef.current = false;
     try {
+      if (autoPromiseRef.current) await autoPromiseRef.current;
       const pending = startSaveRef.current;
       const saved = pending ? await pending : undefined;
       await optimizeRef.current?.(saved === undefined ? undefined : { departAt: saved });
     } finally {
       optimizeClickRef.current = false;
       setOptimizeWaiting(false);
+      flushAutoQueue();
     }
   }
 
@@ -907,21 +997,23 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     );
   }
 
-  async function patchStop(id: string, patch: StopPatch) {
-    await tracked(async () => {
+  async function patchStop(id: string, patch: StopPatch): Promise<boolean> {
+    return tracked(async () => {
       try {
         applyStopResult(await api.updateStop(id, patch), Object.keys(patch) as (keyof Stop)[]);
         setStopsError(null);
+        return true;
       } catch (e) {
         markStaleOn(e);
         setStopsError(errorMessage(e, "Couldn't update the stop"));
+        return false;
       }
     });
   }
 
   /** Checking a stop checks every earlier one and unchecking it unchecks every later one. The server applies that in one step (so a stale tab cannot leave a gap) and answers with the stops it changed. */
   async function toggleVisited(id: string, visited: boolean) {
-    await patchStop(id, { visited });
+    if (await patchStop(id, { visited })) scheduleAutoOptimize();
   }
 
   /** Save from the drawer. Visited cascades on the server like the list; a stop deleted elsewhere is dropped. */
@@ -1272,7 +1364,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
             departAt: departAt ? new Date(departAt) : null,
             totalDistanceM: activeRoute?.distance ?? null,
             totalDurationS: activeRoute?.duration ?? null,
-            stops: stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: s.notes, shotNotes: s.shotNotes, lightPref: s.lightPref, arrival: arrivals[i] ?? null })),
+            stops: stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: s.notes, shotNotes: s.shotNotes, lightPref: s.lightPref, arrival: arrivals[i] ?? null, source: s.source, visited: s.visited })),
           },
         }} />}
         collapsedSummary={
@@ -1313,6 +1405,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
               status: optimizeStatus,
               statusParts: optimizeParts,
               reason: stops.length < 2 ? "Optimize route needs 2 stops" : undefined,
+              usingLocation: locationWillBeUsed(leadingVisited(stops), stops.filter((s) => !s.visited).length),
             }}
             routeStatus={
               !enoughForRoute

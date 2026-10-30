@@ -24,9 +24,16 @@ describe("staticMapUrl", () => {
     expect(url.startsWith("https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/")).toBe(true);
     expect(url).toContain("pin-s-1+");
     expect(url).toContain("pin-s-2+");
-    expect(url).toContain(`path-4+2563eb-0.9(${encodeURIComponent(encodePolyline(GEOM))})`);
+    expect(url).toContain(`path-4+a8834b-0.9(${encodeURIComponent(encodePolyline(GEOM))})`);
     expect(url.indexOf("path-")).toBeLessThan(url.indexOf("pin-s-1+"));
     expect(url.endsWith("/auto/640x400@2x?access_token=TOKEN")).toBe(true);
+  });
+
+  it("colours each pin with its stop colour when given and falls back for a bad value", () => {
+    const stops = [{ ...STOPS[0], color: "#B4572F" }, { ...STOPS[1], color: "red" }];
+    const url = staticMapUrl({ stops, geometry: [], token: "T" })!;
+    expect(url).toContain("pin-s-1+b4572f(");
+    expect(url).toContain("pin-s-2+3b3226(");
   });
 
   it("returns null without a token or with fewer than 2 stops", () => {
@@ -52,7 +59,7 @@ describe("staticMapUrl", () => {
     const url = staticMapUrl({ stops, geometry: [], token: "T" })!;
     expect(url).toContain("pin-s-99+");
     expect(url).not.toContain("pin-s-100");
-    expect(url).toContain("pin-s+e11d48");
+    expect(url).toContain("pin-s+3b3226");
   });
 
   it("clamps width and height to 1280", () => {

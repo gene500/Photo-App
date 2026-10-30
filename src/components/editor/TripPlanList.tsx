@@ -102,26 +102,20 @@ function TripRow({ stop, index, first, last, optimized, bestTime, arrival, role,
   return (
     <li data-testid="trip-row" className="relative flex flex-wrap items-start gap-x-3 gap-y-1 rounded-xl py-2 pr-1 text-foreground">
       <span aria-hidden className={`absolute left-[13px] w-px bg-border ${line}`} />
-      {/* The dot is the Visited toggle: a real checkbox laid invisibly over it. */}
+      {/* The dot only shows the stop number (a check once visited); the Visited checkbox at the right edge is the one control. */}
       <span
+        data-testid="stop-dot"
+        aria-hidden
         className={`relative z-[1] flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ring-4 ring-surface ${stop.visited ? "text-black/75" : "text-white"}`}
         style={{ background: stopColor(stop) }}
       >
-        <input
-          type="checkbox"
-          aria-label={`Visited: ${stop.name}`}
-          className="peer absolute inset-0 h-full w-full cursor-pointer opacity-0"
-          checked={stop.visited}
-          onChange={(e) => onToggleVisited(stop.id, e.target.checked)}
-        />
         {stop.visited ? (
           <svg aria-hidden viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 8.5l3.2 3.2L13 4.8" />
           </svg>
         ) : (
-          <span aria-hidden>{index + 1}</span>
+          <span>{index + 1}</span>
         )}
-        <span aria-hidden className="pointer-events-none absolute -inset-1 rounded-full ring-2 ring-accent-strong opacity-0 peer-focus-visible:opacity-100" />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-1.5">
@@ -133,6 +127,15 @@ function TripRow({ stop, index, first, last, optimized, bestTime, arrival, role,
         {optimized && <ArrivalLines stop={stop} bestTime={bestTime} arrival={arrival} />}
         <HikeLines stop={stop} />
       </div>
+      <label className="relative flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center">
+        <input
+          type="checkbox"
+          aria-label={`Visited: ${stop.name}`}
+          className="peer h-5 w-5 cursor-pointer accent-[var(--accent-strong)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-strong"
+          checked={stop.visited}
+          onChange={(e) => onToggleVisited(stop.id, e.target.checked)}
+        />
+      </label>
       {stop.lightPref !== "any" && (
         <div className="flex basis-full flex-wrap items-center gap-x-2 gap-y-0.5 pl-10 text-[11px] text-muted" title="Priority: how hard Optimize route works to land this stop in its light">
           <span className="shrink-0">Priority</span>

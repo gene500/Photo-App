@@ -25,6 +25,11 @@ const build = (stops: ItineraryStopSource[], extra: Partial<Parameters<typeof bu
   buildItinerary({ ...base, stops, ...extra });
 
 describe("buildItinerary", () => {
+  it("gives each stop the app's dot colour", () => {
+    const out = build([stop(), stop({ source: "suggested" }), stop({ source: "suggested", visited: true }), stop({ visited: true })]);
+    expect(out.stops.map((s) => s.color)).toEqual(["#3b3226", "#b4572f", "#e0a98a", "#b8a272"]);
+  });
+
   it("numbers stops from 1 and formats arrivals", () => {
     const a = new Date(2026, 9, 16, 6, 30);
     const b = new Date(2026, 9, 16, 18, 5);

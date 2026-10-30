@@ -5,7 +5,8 @@ import { exportBaseName } from "./export";
 import { formatDistance, formatDuration } from "./format";
 import { lightLabel } from "./light-windows";
 import type { DistanceUnit, TimeFormat } from "./settings";
-import type { LightPref } from "./types";
+import { stopColor } from "./stop-style";
+import type { LightPref, Stop } from "./types";
 import type { WeatherLine } from "./use-weather";
 import { weatherAriaLabel } from "./weather";
 
@@ -17,12 +18,17 @@ export type ItineraryStopSource = {
   shotNotes?: string | null;
   lightPref: LightPref;
   arrival: Date | null;
+  /** Colours the numbered disc like the app's dot; omitted means a manual, unvisited stop. */
+  source?: Stop["source"];
+  visited?: boolean;
 };
 
 /** One stop as printed; `index` is 1-based and null fields are left out of the PDF. */
 export type ItineraryStop = {
   index: number;
   name: string;
+  /** Hex colour of the numbered disc, from stopColor. */
+  color?: string;
   arrival: string;
   bestLight: string | null;
   weather: string | null;
@@ -73,6 +79,7 @@ export function buildItinerary(a: {
     stops: a.stops.map((s, i) => ({
       index: i + 1,
       name: s.name,
+      color: stopColor({ source: s.source ?? "manual", visited: s.visited ?? false }),
       arrival: s.arrival ? clock(s.arrival) : "Time not set",
       bestLight: s.lightPref === "any" ? null : `Best at ${lightLabel(s.lightPref).toLowerCase()}`,
       weather: weatherText(a.weather?.[i]),

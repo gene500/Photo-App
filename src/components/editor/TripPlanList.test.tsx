@@ -205,6 +205,29 @@ describe("TripPlanList", () => {
     expect(screen.getAllByRole("checkbox").map((c) => c.getAttribute("aria-label"))).toEqual(["Visited: Tunnel View", "Visited: Glacier Point"]);
   });
 
+  it("puts a visible Visited checkbox at the right edge of the card, after the name", () => {
+    render(<TripPlanList stops={[stop("a", "Tunnel View")]} optimized bestTimes={[null]} {...handlers} />);
+    const box = screen.getByRole("checkbox", { name: "Visited: Tunnel View" });
+    expect(box.className).not.toContain("opacity-0");
+    const row = screen.getByTestId("trip-row");
+    const name = screen.getByRole("button", { name: "1. Tunnel View" });
+    expect(name.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // a 24px+ hit target: the label wraps the input
+    expect(box.closest("label")?.className).toMatch(/min-h-7|h-7|h-8|h-9|h-10/);
+    expect(row.querySelectorAll('input[type="checkbox"]')).toHaveLength(1);
+  });
+
+  it("keeps the numbered dot display-only: the number, or a check once visited", () => {
+    const { rerender } = render(<TripPlanList stops={[stop("a", "A")]} optimized bestTimes={[null]} {...handlers} />);
+    expect(screen.getByRole("checkbox", { name: "Visited: A" })).toHaveProperty("checked", false);
+    expect(screen.getByTestId("stop-dot").textContent).toBe("1");
+    rerender(<TripPlanList stops={[{ ...stop("a", "A"), visited: true }]} optimized bestTimes={[null]} {...handlers} />);
+    expect(screen.getByRole("checkbox", { name: "Visited: A" })).toHaveProperty("checked", true);
+    expect(screen.getByTestId("stop-dot").textContent).toBe("");
+    expect(screen.getByTestId("stop-dot").querySelector("svg")).toBeTruthy();
+    expect(screen.getByTestId("stop-dot").getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("calls handlers for visited and select", async () => {
     render(<TripPlanList stops={[stop("a", "Tunnel View")]} optimized bestTimes={[null]} {...handlers} />);
     await userEvent.click(screen.getByLabelText("Visited: Tunnel View"));

@@ -1,6 +1,6 @@
 # F4 checklist: bugs found by T7 (10 Sonnet fiddlers, 2026-10-27)
 
-Tick an item only when it is fixed and verified. Raw findings are appended per tester. Known unticked items in docs/F2-CHECKLIST.md are not repeated here.
+Tick an item only when it is fixed and verified. Raw findings are appended per tester. Known unticked items in docs/archive/checklists/F2-CHECKLIST.md are not repeated here.
 
 ## T7 f2 (search, add stops, 25 cap, landmark stop, photo spots)
 
@@ -49,7 +49,7 @@ No High or Medium bugs.
 - [x] M Export menu runs off the bottom of the screen on phones: 25-stop trip, 360x640, tap Export -> 7 items (PDF, GPX, 2 Apple parts, 3 Google parts) from y=424 to 764 in a 640 px viewport, last Google parts cut off, no scrolling. Menu bottom vs viewport: 375x667 779/667, 390x844 876/844, 320x568 752/568. SHORT_SCREEN_POPOVER only covers landscape. ExportControl.tsx / use-popover.ts: cap max-height to the space below the button and scroll. FIXED: usePopover caps max-height to the room below the panel and scrolls (jsdom has no layout, so verified by code reasoning only).
 - [x] M Share popover also cut off on a short phone: 320x568 with a link shown, panel runs to y=600 of 568 ("Revoke link" may be hidden). Same cause (ShareControl.tsx). FIXED: same usePopover fix.
 - [x] M-L Printing the public share page loses most stops: /s/<token> A4 print, 25 stops -> 1 page, first screenful only; 5 stops -> one page with a big blank map gap and later stops cut off (fixed-height panel with inner scroll, no print styles). SharedTripView.tsx and globals.css (add @media print: static layout, show all stops, hide map). FIXED: print: classes make the page static, hide the map, show all stops. Class test in SharedTripView.test.tsx; real print output not verified in a browser.
-- [x] L-M PDFs show "?" for non-Latin text (editor PDF and share PDF): names like "日本語の場所 🏔️" and Arabic render as "? ?" (embedded Noto Sans is Latin only, src/lib/pdf-fonts.ts). Screen and GPX are fine. Fix the font set or note the limit. PARTLY FIXED (A47): Chinese, Japanese (common kanji + kana) and Korean now render, see docs/F5-CHECKLIST.md. Arabic, Hebrew, Thai, Indic scripts and emoji stay "?" by design.
+- [x] L-M PDFs show "?" for non-Latin text (editor PDF and share PDF): names like "日本語の場所 🏔️" and Arabic render as "? ?" (embedded Noto Sans is Latin only, src/lib/pdf-fonts.ts). Screen and GPX are fine. Fix the font set or note the limit. PARTLY FIXED (A47): Chinese, Japanese (common kanji + kana) and Korean now render, see docs/archive/checklists/F5-CHECKLIST.md. Arabic, Hebrew, Thai, Indic scripts and emoji stay "?" by design.
 - polish: an empty role="alert" element is left in the DOM after an action in the Share popover; stale second tab shows "Copied" for a revoked link (known).
 - Checked fine: GPX validity and escaping, filename sanitising, Apple/Google split links at 11/12 and 25 stops, share create/revoke/re-create/bad tokens, headers, live updates on the share page, privacy (no notes/email/photoUrl; shot notes and checklists public as documented), account delete -> 404, no overflow at 320-1280, offline revoke error.
 

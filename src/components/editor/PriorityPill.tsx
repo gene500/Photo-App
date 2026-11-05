@@ -40,7 +40,7 @@ export function PriorityPill({ name, value: saved, onChange }: { name: string; v
     select(next, true);
   };
   return (
-    <div role="radiogroup" aria-label={`Priority for ${name}`} className="relative grid w-48 min-w-[8.5rem] max-w-full grid-cols-3 rounded-full bg-hover p-0.5 ring-1 ring-border">
+    <div role="radiogroup" aria-label={`Priority for ${name}`} className="relative grid w-40 min-w-[8.5rem] max-w-full grid-cols-3 rounded-full bg-hover p-0.5 ring-1 ring-border">
       <span
         aria-hidden
         data-testid="priority-thumb"
@@ -59,7 +59,7 @@ export function PriorityPill({ name, value: saved, onChange }: { name: string; v
           tabIndex={p === value ? 0 : -1}
           onClick={() => select(i)}
           onKeyDown={onKeyDown}
-          className={`relative min-h-7 min-w-[2.75rem] truncate rounded-full px-0.5 text-[11px] font-medium focus-visible:outline-2 focus-visible:outline-accent-strong ${p === value ? "text-accent-foreground" : "text-muted hover:text-foreground"}`}
+          className={`relative min-h-6 min-w-[2.75rem] truncate rounded-full px-0.5 text-[11px] font-medium focus-visible:outline-2 focus-visible:outline-accent-strong ${p === value ? "text-accent-foreground" : "text-muted hover:text-foreground"}`}
         >
           {PRIORITY_SHORT[p]}
         </button>

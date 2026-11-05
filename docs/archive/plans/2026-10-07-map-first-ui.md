@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16 (App Router), React 19, TypeScript, Prisma 7 (SQLite locally, Turso on Vercel), Mapbox GL + Mapbox Geocoding/Directions, Tailwind v4, dnd-kit, Vitest + Testing Library, Playwright.
 
-**Spec:** `docs/superpowers/specs/2026-10-07-map-first-ui-design.md`
+**Spec:** `docs/design/2026-10-07-map-first-ui-design.md`
 
 ## Global Constraints
 

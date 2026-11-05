@@ -160,7 +160,7 @@ never push the feature branch; merge to `main` locally and push `main` only.
 ## 2026-10-07 (map-first UI: implementation plan written)
 
 Wrote the implementation plan via `superpowers:writing-plans`:
-`docs/superpowers/plans/2026-10-07-map-first-ui.md` (10 tasks, 4 phases:
+`docs/archive/plans/2026-10-07-map-first-ui.md` (10 tasks, 4 phases:
 data model/API, map shell and search, stops panel and editor, e2e/verify/
 docs). One deliberate deviation from the spec wording: the add-stop and
 stop "popups" are React cards under the search bar rather than anchored
@@ -176,7 +176,7 @@ e2e all pass.
 The human partner wanted the app to feel like Google Maps (plan everything
 on a map layout). Brainstormed via `superpowers:brainstorming`
 (architectural path); all four design sections approved in chat.
-Spec: `docs/superpowers/specs/2026-10-07-map-first-ui-design.md`.
+Spec: `docs/design/2026-10-07-map-first-ui-design.md`.
 
 Key decisions: trip has no start/end concept (ordered stops; first = start,
 last = end); full-screen map with search-as-you-type (proximity-biased),
@@ -263,7 +263,7 @@ Mapbox token. Nothing has been deployed.
 ## 2026-10-07 (final whole-branch review: ready to merge)
 
 All 24 tasks of the implementation plan are complete and reviewed-approved
-(per-task history in `docs/HISTORY.md`, full detail in the SDD ledger). Dispatched
+(per-task history in `docs/archive/HISTORY.md`, full detail in the SDD ledger). Dispatched
 the final whole-branch code review per `superpowers:subagent-driven-development`
 (Sonnet, per standing policy) across the full branch diff (58 commits, 134
 files, ~18,250 insertions since diverging from `main`).
@@ -402,7 +402,7 @@ auth pages, trip editor, map views).
 ## 2026-10-06 (implementation plan)
 
 - Wrote the implementation plan via `superpowers:writing-plans`:
-  `docs/superpowers/plans/2026-10-06-road-trip-photo-planner.md`.
+  `docs/archive/plans/2026-10-06-road-trip-photo-planner.md`.
   It has 24 TDD tasks in 5 phases:
   1. Foundation: scaffold, Prisma/SQLite, types/validation.
   2. Auth + data backend: users, next-auth, trip/stop data access and
@@ -440,7 +440,7 @@ auth pages, trip editor, map views).
   structure (no multi-day itinerary); calculated sunrise/golden
   hour/sunset per stop via `suncalc`.
 - Wrote and committed the design spec:
-  `docs/superpowers/specs/2026-10-06-road-trip-photo-planner-design.md`.
+  `docs/design/2026-10-06-road-trip-photo-planner-design.md`.
 - Next: write the implementation plan (`superpowers:writing-plans`),
   then execute it.
 

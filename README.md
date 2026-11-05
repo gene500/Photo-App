@@ -482,6 +482,7 @@ Tip: when setting variables from the CLI, use `vercel env add NAME production --
 ## Project files
 
 - `docs/HANDOFF.md`: the task board and handoff notes.
-- `docs/PROGRESS.md`: dated progress log.
-- `docs/HISTORY.md`: project history.
-- `docs/superpowers/`: design specs and implementation plans.
+- `docs/BACKLOG.md`: owner follow-ups and known gaps.
+- `docs/LOCAL-PLACES.md`: local map data for suggestions.
+- `docs/design/`: design specs and notes.
+- `docs/archive/`: history (progress log, old board rows, plans, test reports).

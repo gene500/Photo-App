@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16.4.0, React 19.3.0, TypeScript 5, Tailwind CSS 4, Prisma 7.10.0 + `@prisma/adapter-better-sqlite3` (SQLite), next-auth 4.24.15 (Credentials provider), bcryptjs, zod 4, suncalc 2, @turf/buffer + @turf/simplify, mapbox-gl 3, @dnd-kit (core/sortable), Vitest 4 + Testing Library + jsdom, Playwright.
 
-**Spec:** `docs/superpowers/specs/2026-10-06-road-trip-photo-planner-design.md`. Read it before starting. This plan implements it and does not revisit any of its decisions.
+**Spec:** `docs/design/2026-10-06-road-trip-photo-planner-design.md`. Read it before starting. This plan implements it and does not revisit any of its decisions.
 
 ## Global Constraints
 

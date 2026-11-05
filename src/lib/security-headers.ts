@@ -53,8 +53,8 @@ export function securityHeaders(): { key: string; value: string }[] {
     { key: "X-Frame-Options", value: "DENY" },
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-    // The app never asks for location, camera or microphone.
-    { key: "Permissions-Policy", value: "geolocation=(), camera=(), microphone=(), payment=(), usb=()" },
+    // Location is allowed for this origin only (Start from my location, asked on a click); camera, microphone and the rest stay off.
+    { key: "Permissions-Policy", value: "geolocation=(self), camera=(), microphone=(), payment=(), usb=()" },
     { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
   ];
 }

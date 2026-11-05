@@ -117,10 +117,10 @@ function TripRow({ stop, index, first, last, optimized, bestTime, arrival, role,
           <span>{index + 1}</span>
         )}
       </span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 space-y-0.5">
         <div className="flex min-w-0 items-center gap-1.5">
-          <button type="button" onClick={() => onSelect(stop.id)} className="block min-h-7 min-w-0 break-words text-left text-sm font-medium leading-7 hover:underline">
-            <span className="sr-only">{index + 1}.</span>{" "}{stop.name}
+          <button type="button" onClick={() => onSelect(stop.id)} title={stop.name} className="flex min-h-7 min-w-0 items-center text-left text-sm font-medium leading-5 hover:underline"><span className="line-clamp-2 break-words">
+            <span className="sr-only">{index + 1}.</span>{" "}{stop.name}</span>
           </button>
           {role && <span data-testid="stop-role" className="shrink-0 rounded-md bg-hover px-1.5 py-px text-xs font-medium text-muted">{role}</span>}
         </div>
@@ -137,7 +137,7 @@ function TripRow({ stop, index, first, last, optimized, bestTime, arrival, role,
         />
       </label>
       {stop.lightPref !== "any" && (
-        <div className="flex basis-full flex-wrap items-center gap-x-2 gap-y-0.5 pl-10 text-[11px] text-muted" title="Priority: how hard Optimize route works to land this stop in its light">
+        <div className="flex basis-full items-center gap-x-2 pl-10 text-[11px] text-muted" title="Priority: how hard Optimize route works to land this stop in its light">
           <span className="shrink-0">Priority</span>
           <PriorityPill name={stop.name} value={stop.priority} onChange={(p) => onPriorityChange(stop.id, p)} />
         </div>

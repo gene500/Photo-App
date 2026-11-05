@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js (client components), TypeScript, jsPDF 4.2.1 (new, exact pin), Vitest + Testing Library, Playwright.
 
-**Spec:** `docs/superpowers/specs/2026-10-16-pdf-itinerary-design.md`
+**Spec:** `docs/design/2026-10-16-pdf-itinerary-design.md`
 
 ## Global Constraints
 

@@ -41,7 +41,7 @@ describe("security headers", () => {
     expect(h["X-Frame-Options"]).toBe("DENY");
     expect(h["X-Content-Type-Options"]).toBe("nosniff");
     expect(h["Referrer-Policy"]).toBeTruthy();
-    expect(h["Permissions-Policy"]).toContain("geolocation=()");
+    expect(h["Permissions-Policy"]).toContain("geolocation=(self)");
     expect(h["Strict-Transport-Security"]).toMatch(/^max-age=\d+; includeSubDomains$/); // no preload: the app lives on a shared *.vercel.app domain
   });
 

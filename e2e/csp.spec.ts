@@ -20,7 +20,7 @@ test("pages carry the security headers and the map + photo popups raise no CSP v
   expect(h["x-frame-options"]).toBe("DENY");
   expect(h["x-content-type-options"]).toBe("nosniff");
   expect(h["referrer-policy"]).toBeTruthy();
-  expect(h["permissions-policy"]).toContain("geolocation=()");
+  expect(h["permissions-policy"]).toContain("geolocation=(self)");
   expect(h["strict-transport-security"]).toBeTruthy();
 
   await signUp(page, "e2e-csp");

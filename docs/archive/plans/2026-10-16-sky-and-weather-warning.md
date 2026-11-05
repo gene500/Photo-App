@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js (App Router, client components), TypeScript, `suncalc` (already installed), Mapbox GL (`MapPanel`), Vitest + Testing Library, Playwright.
 
-**Spec:** `docs/superpowers/specs/2026-10-16-sky-and-weather-warning-design.md`
+**Spec:** `docs/design/2026-10-16-sky-and-weather-warning-design.md`
 
 ## Global Constraints
 

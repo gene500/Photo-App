@@ -4,6 +4,7 @@ import {
   directionsRequestSchema,
   formatZodError,
   newStopSchema,
+  optimizeRequestSchema,
   signupSchema,
   stopPatchSchema,
   suggestionsRequestSchema,
@@ -254,5 +255,13 @@ describe("legacy stored text does not block unrelated edits", () => {
   it("lets an undo resend a legacy stop name", () => {
     const r = stopPatchSchema.safeParse({ name: "Tunnel\u0085 View" });
     expect(r.success && r.data.name).toBe("Tunnel View");
+  });
+});
+
+describe("formatZodError names array items", () => {
+  it("says which list and item instead of the bare index", () => {
+    const r = optimizeRequestSchema.safeParse({ coordinates: [[0, 1], [2, 91]] });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(formatZodError(r.error)).toBe("Coordinates (item 2) must be at most 90");
   });
 });

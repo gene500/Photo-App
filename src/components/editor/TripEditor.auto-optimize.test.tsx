@@ -145,6 +145,19 @@ describe("TripEditor: re-optimize when a stop is ticked", () => {
     expect(api.optimizeOrder).not.toHaveBeenCalled();
   });
 
+  it("re-plans once the connection is back after a tick made offline", async () => {
+    Object.defineProperty(window.navigator, "onLine", { value: false, configurable: true });
+    render(<TripEditor initialTrip={{ ...trip, stops: four }} />);
+    await openMyTrip();
+    await tick("A");
+    await waitFor(() => expect((screen.getByLabelText("Visited: A") as HTMLInputElement).checked).toBe(true));
+    await settle(1000);
+    expect(api.optimizeOrder).not.toHaveBeenCalled();
+    Object.defineProperty(window.navigator, "onLine", { value: true, configurable: true });
+    act(() => { window.dispatchEvent(new Event("online")); });
+    await waitFor(() => expect(api.optimizeOrder).toHaveBeenCalledTimes(1), WAIT);
+  });
+
   it("stays silent and leaves the order alone when the background run fails", async () => {
     vi.mocked(api.optimizeOrder).mockRejectedValue(new Error("Couldn't calculate drive times. Please try again."));
     render(<TripEditor initialTrip={{ ...trip, stops: four }} />);

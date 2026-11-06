@@ -27,9 +27,9 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
   const tf = settings.timeFormat;
   const [selected, setSelected] = useState<string | null>(null);
 
-  // The map takes Stop objects (a shared trip is a plan: nothing is visited); the keys are made from the order, never from database ids.
+  // The map takes Stop objects (visited stops show as visited); the keys are made from the order, never from database ids.
   const mapStops: Stop[] = useMemo(
-    () => trip.stops.map((s) => ({ ...s, id: `stop-${s.order}`, tripId: "", notes: null, photoUrl: null, visited: false })),
+    () => trip.stops.map((s) => ({ ...s, id: `stop-${s.order}`, tripId: "", notes: null, photoUrl: null })),
     [trip.stops],
   );
   // The page fetches the real driving route on the server; without one (routing down) the line is straight and the times are estimated from distance.
@@ -64,7 +64,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
         departAt: trip.departAt ? new Date(trip.departAt) : null,
         totalDistanceM: route?.distance ?? null,
         totalDurationS: route?.duration ?? null,
-        stops: trip.stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: null, shotNotes: s.shotNotes, lightPref: s.lightPref, source: s.source, arrival: arrivals[i] ?? null })),
+        stops: trip.stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: null, shotNotes: s.shotNotes, lightPref: s.lightPref, source: s.source, visited: s.visited, priority: s.priority, arrival: arrivals[i] ?? null })),
         weather: trip.stops.map(() => null),
         note: route ? null : ESTIMATE_NOTE,
         timeFormat: tf,
@@ -134,7 +134,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
                     </span>
                     <div className="min-w-0 flex-1 space-y-0.5">
                       <button type="button" onClick={() => setSelected(s.id === selected ? null : s.id)} className="block w-full break-words text-left text-sm font-medium leading-7 hover:underline">
-                        {s.name}
+                        {s.name}{s.visited && <span className="ml-1.5 text-xs font-normal text-muted">· Visited</span>}
                       </button>
                       {mounted && (
                         <p className="text-xs text-muted" data-testid="shared-time">

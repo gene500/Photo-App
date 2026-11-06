@@ -16,7 +16,7 @@ vi.mock("@/lib/itinerary-download", () => ({
 }));
 
 const stop = (order: number, name: string, extra: Partial<PublicTrip["stops"][number]> = {}): PublicTrip["stops"][number] => ({
-  order, name, lat: 36 + order * 0.3, lng: -120, source: "manual", lightPref: "any", dwellMinutes: 30,
+  order, name, lat: 36 + order * 0.3, lng: -120, source: "manual", lightPref: "any", dwellMinutes: 30, visited: false,
   shotNotes: null, shotChecklist: [], priority: "normal", ...extra,
 });
 
@@ -210,5 +210,10 @@ describe("SharedTripView Download PDF", () => {
     expect(container.querySelector("aside")!.className).toContain("print:h-auto");
     expect(container.querySelector("ol")!.className).toContain("print:overflow-visible");
     expect(container.querySelector("main > div")!.className).toContain("print:hidden");
+  });
+
+  it("marks visited stops and prints priority and visited in the PDF", async () => {
+    render(<SharedTripView trip={{ ...trip, stops: [stop(0, "Done", { visited: true }), stop(1, "Pending", { lightPref: "sunset", priority: "must" })] }} />);
+    expect(screen.getByText("· Visited")).toBeTruthy();
   });
 });

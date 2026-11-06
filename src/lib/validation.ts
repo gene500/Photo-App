@@ -112,7 +112,7 @@ export const stopPatchSchema = z
 export type StopPatch = z.infer<typeof stopPatchSchema>;
 
 export const reorderSchema = z.object({
-  stopIds: z.array(z.string().min(1)).min(1, "stopIds must not be empty"),
+  stopIds: z.array(z.string().min(1)).min(1, "stopIds must not be empty").max(1000, "Too many stops"), // a trip holds at most MAX_ROUTE_WAYPOINTS stops (addStop enforces it), so this only bounds the parse work
 });
 
 const newPasswordSchema = z
@@ -219,9 +219,14 @@ export const popularityRequestSchema = z.object({
 
 /** "tripName" -> "Trip name". */
 function fieldLabel(path: PropertyKey[]): string {
-  const key = String(path[path.length - 1] ?? "");
+  // An array item's path ends in an index ("coordinates", 1, 1): name the array and the item, never just "1".
+  let end = path.length;
+  while (end > 0 && typeof path[end - 1] === "number") end--;
+  const key = String(path[end - 1] ?? "");
   const words = key.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
-  return words ? words[0]!.toUpperCase() + words.slice(1) : "This field";
+  const label = words ? words[0]!.toUpperCase() + words.slice(1) : "This field";
+  const first = path[end];
+  return end > 0 && typeof first === "number" ? `${label} (item ${first + 1})` : label;
 }
 
 /**

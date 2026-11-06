@@ -1542,7 +1542,7 @@ describe("TripEditor", () => {
       expect(screen.queryByRole("button", { name: "Undo" })).toBeNull();
     });
 
-    it("does not claim the previous order is back when visited stops stay first", async () => {
+    it("hides Undo once visited stops stay first and the previous order cannot come back", async () => {
       reorderEcho();
       vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1] });
       const [a, , c] = three;
@@ -1554,8 +1554,8 @@ describe("TripEditor", () => {
       await waitFor(() => expect(rowNames()[1]).toContain("C"));
       await user.click(screen.getByLabelText("Visited: C"));
       await waitFor(() => expect((screen.getByLabelText("Visited: C") as HTMLInputElement).checked).toBe(true));
-      await user.click(await screen.findByRole("button", { name: "Undo" }));
-      await waitFor(() => expect(screen.getByTestId("announcer").textContent).toMatch(/could not be fully restored/));
+      // Undo would change nothing now, so it is not offered (it used to stay on screen and do nothing).
+      await waitFor(() => expect(screen.queryByRole("button", { name: "Undo" })).toBeNull());
     });
 
     describe("with light preferences", () => {

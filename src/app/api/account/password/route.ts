@@ -8,6 +8,8 @@ export const POST = handle(async (req: Request) => {
   const userId = await requireUserId();
   await enforceSharedLimit("password-change", userId);
   const { currentPassword, newPassword } = changePasswordSchema.parse(await readJson(req));
-  if (!(await changePassword(userId, currentPassword, newPassword))) throw new HttpError(403, "That password is not correct");
+  const result = await changePassword(userId, currentPassword, newPassword);
+  if (result === "conflict") throw new HttpError(409, "Your password was just changed somewhere else. Try again.");
+  if (!result) throw new HttpError(403, "That password is not correct");
   return new Response(null, { status: 204 });
 });

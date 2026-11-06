@@ -5,7 +5,8 @@ import type { LngLat, Place, PlaceNotice, PlacePhoto, RouteResult, SearchSuggest
 
 /** EXTERNAL_APIS_FAKE=1 swaps Mapbox/Overpass for canned data (e2e tests, offline dev). */
 export function isFakeExternal(): boolean {
-  return process.env.EXTERNAL_APIS_FAKE === "1";
+  // Never on Vercel (production or preview), even if the variable leaks into its environment (the e2e run is a local production build, where VERCEL is unset).
+  return process.env.EXTERNAL_APIS_FAKE === "1" && !process.env.VERCEL;
 }
 
 const FAKE_SPEED_MPS = 25; // ~90 km/h

@@ -56,7 +56,7 @@ describe("SettingsView", () => {
     await setup();
     expect(document.getElementById("optimize")).toBeTruthy();
     expect(screen.getByRole("radio", { name: "Priority focus" })).toHaveProperty("checked", true);
-    await userEvent.click(screen.getByRole("radio", { name: "Time priority" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Time focus" }));
     expect(saved().optimizeFocus).toBe("time");
   });
 

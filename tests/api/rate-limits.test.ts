@@ -15,10 +15,12 @@ import { prisma } from "@/server/db";
 import { clearAllLimits, POLICIES } from "@/server/rate-limit";
 import { idParams, jsonRequest } from "../helpers/requests";
 
-// Bodies that fail validation (400) still count against the limit, so no upstream API is needed here.
+// Most bodies here fail validation (400) and still count against the limit, so no upstream API is needed. Optimize and directions
+// validate first (so a malformed request does not use up the allowance) and so need a valid body; the fake Mapbox answers them.
+const twoStops = { coordinates: [[-112.1, 37.6], [-112.2, 37.7]] };
 const cases: [string, keyof typeof POLICIES, (n: number) => Promise<Response>][] = [
-  ["optimize", "optimize", () => optimize(jsonRequest("POST", "/api/optimize", {}))],
-  ["directions", "directions", () => directions(jsonRequest("POST", "/api/directions", {}))],
+  ["optimize", "optimize", () => optimize(jsonRequest("POST", "/api/optimize", twoStops))],
+  ["directions", "directions", () => directions(jsonRequest("POST", "/api/directions", twoStops))],
   ["suggestions", "suggestions", () => suggestions(jsonRequest("POST", "/api/suggestions", {}))],
   ["popularity", "popularity", () => popularity(jsonRequest("POST", "/api/suggestions/popularity", {}))],
   ["geocode", "geocode", () => geocodeGET(new Request("http://localhost/api/geocode?q=Paris&session=123e4567-e89b-42d3-a456-426614174000"))],

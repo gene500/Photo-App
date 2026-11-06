@@ -180,8 +180,8 @@ export function SettingsView({ email, hasPassword = true }: { email: string | nu
           name="optimizeFocus"
           value={settings.optimizeFocus}
           onChange={(optimizeFocus) => update({ optimizeFocus })}
-          options={[{ value: "priority", label: "Priority focus" }, { value: "time", label: "Time priority" }]}
-          hint="Priority focus fits in as many High and Must stops (in their best light) as it can, even if the drive gets longer. Time priority treats every stop alike, so drive time and missed light decide the route. Takes effect the next time you optimize."
+          options={[{ value: "priority", label: "Priority focus" }, { value: "time", label: "Time focus" }]}
+          hint="Priority focus fits in as many High and Must stops (in their best light) as it can, even if the drive gets longer. Time focus treats every stop alike, so drive time and missed light decide the route. Takes effect the next time you optimize."
         />
         <label className="flex items-start gap-3">
           <input type="checkbox" checked={settings.autoReoptimize} onChange={(e) => update({ autoReoptimize: e.target.checked })} className="h-6 w-6 shrink-0 accent-[var(--accent-strong)]" />

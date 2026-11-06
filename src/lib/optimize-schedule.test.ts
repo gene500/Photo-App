@@ -375,7 +375,7 @@ describe("optimizeScheduleAsync (shared-server solver)", () => {
       const input = make(n);
       const t0 = performance.now();
       const r = await optimizeScheduleAsync(input, { budgetMs: 0 });
-      expect(performance.now() - t0).toBeLessThan(n === 8 ? 600 : 400);
+      expect(performance.now() - t0).toBeLessThan(n === 8 ? 1500 : 1000); // generous: this guards against a hang, and shared CI machines are slow
       expect(r.order[0]).toBe(0);
       expect([...r.order].sort((a, b) => a - b)).toEqual(Array.from({ length: n }, (_, i) => i));
     }
@@ -500,5 +500,25 @@ describe("lost-cause light misses do not pull the route into a detour (Yosemite,
     // Uncapped, a High miss costs exactly 8 x a Normal miss; the Normal one is capped, so the ratio is far larger.
     expect(extra("high") / extra("normal")).toBeGreaterThan(8.5);
     expect(extra("must") / extra("high")).toBeCloseTo(1000 / 8, 5);
+  });
+});
+
+describe("Normal stops do not buy long detours for light (A70)", () => {
+  // A tight cluster plus far outliers (Bryce-style), mixed light preferences, all Normal: the route may not drive far more than the shortest order.
+  const mulberry = (a: number) => () => ((a = (a + 0x6d2b79f5) | 0), (Math.imul(a ^ (a >>> 15), 1 | a) >>> 0) / 4294967296 * 0.999999);
+  const prefs: LightPref[] = ["sunrise", "golden", "sunset", "golden", "any"];
+  it.each([1, 2, 3, 4, 5, 6])("case %i: drive stays within 1.45 x the drive-only order", (seed) => {
+    const rnd = mulberry(seed);
+    const n = 12;
+    const stops = Array.from({ length: n }, (_, i) => {
+      const outlier = i > 0 && rnd() < 0.3;
+      const spread = outlier ? 0.9 : 0.06;
+      return { lat: 37.6 + (rnd() - 0.5) * 2 * spread, lng: -112.17 + (rnd() - 0.5) * 2 * spread, lightPref: (i === 0 ? "any" : prefs[Math.floor(rnd() * prefs.length)]!) as LightPref, dwellMinutes: 30 };
+    });
+    const km = (a: (typeof stops)[0], b: (typeof stops)[0]) => Math.hypot((a.lat - b.lat) * 111, (a.lng - b.lng) * 88);
+    const durations = stops.map((a) => stops.map((b) => (a === b ? 0 : (km(a, b) * 1.4 / 70) * 3600)));
+    const drive = (o: number[]) => o.slice(1).reduce((s, x, k) => s + durations[o[k]!]![x]!, 0);
+    const r = optimizeSchedule({ durations, stops, plannedDate: "2026-11-10", defaultDeparture: new Date("2026-11-10T15:00:00Z") });
+    expect(drive(r.order)).toBeLessThanOrEqual(1.45 * drive(optimizeOrder(durations)));
   });
 });

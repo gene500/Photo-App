@@ -109,14 +109,16 @@ function rootScale(): number {
 }
 
 // Keep fitted/flown-to points clear of what floats over the map: the bottom sheet on phones, the left card on desktop.
+// The top clears the search bar that floats over the map plus a marker's radius (a stop at the edge was half hidden under it).
 // The shared (read-only) page uses a taller sheet (55% of the height), so it needs more room below the points.
 function viewPadding(readOnly = false): mapboxgl.PaddingOptions {
   // Short landscape: a side panel on the left and the whole height free, so frame the points in the map to its right.
   if (isShortLandscape()) return sideViewPadding(window.innerWidth, rootScale());
   const phone = typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
   return phone
-    ? { top: 72, right: 24, left: 24, bottom: Math.round(window.innerHeight * (readOnly ? 0.57 : 0.45)) }
-    : { top: 72, right: 64, bottom: 64, left: Math.round(400 * rootScale()) };
+    // Bottom adds a marker radius (the sheet's top edge would otherwise cut the lowest stop in half); right clears the map controls column.
+    ? { top: 96, right: 48, left: 24, bottom: Math.round(window.innerHeight * (readOnly ? 0.57 : 0.45)) + 18 }
+    : { top: 112, right: 64, bottom: 64, left: Math.round(400 * rootScale()) };
 }
 
 /** The theme in effect now: the Settings override on <html>, else the OS preference. */
@@ -320,7 +322,7 @@ export default function MapPanel({
       const points: LngLat[] = fit === "route" ? routeGeometry! : stops.map((s) => [s.lng, s.lat]);
       const bounds = new mapboxgl.LngLatBounds(points[0], points[0]);
       for (const c of points) bounds.extend(c);
-      map.fitBounds(bounds, { padding: viewPadding(readOnly), duration: 0 });
+      map.fitBounds(bounds, { padding: viewPadding(readOnly), duration: 0, maxZoom: 14 }); // stops almost on top of each other would otherwise zoom to the maximum
       fittedRef.current = true;
     }
     // Forgotten while no route is drawn, so the same route coming back (Undo) is framed again.

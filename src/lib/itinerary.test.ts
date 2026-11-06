@@ -47,6 +47,10 @@ describe("buildItinerary", () => {
 
   it("describes the preferred light, none for any", () => {
     expect(build([stop({ lightPref: "golden" })]).stops[0].bestLight).toBe("Best at golden hour");
+    expect(build([stop({ lightPref: "golden", priority: "must" })]).stops[0].bestLight).toBe("Best at golden hour · Must-have");
+    expect(build([stop({ lightPref: "golden", priority: "normal" })]).stops[0].bestLight).toBe("Best at golden hour");
+    expect(build([stop({ lightPref: "any", priority: "must" })]).stops[0].bestLight).toBeNull();
+    expect(build([stop({ name: "Arch", visited: true })]).stops[0].name).toBe("Arch (visited)");
     expect(build([stop({ lightPref: "any" })]).stops[0].bestLight).toBeNull();
   });
 

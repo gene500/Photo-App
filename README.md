@@ -179,14 +179,14 @@ Stops added from a viewpoint or peak suggestion start as Golden hour; attraction
   - Sunset = start of evening golden hour until 20 min after sunset.
   - Golden hour = both.
   - In polar day or night there is no window and no constraint.
-- **Score.** Total drive seconds + 60 x minutes of missed light (one missed minute costs as much as one minute of driving). For a Normal stop a miss counts in full up to an hour, then at 0.2 per extra minute, so a stop that cannot get its light anyway does not buy a long detour; High and Must stops are not capped. A minute in the dark counts three times a missed minute. A visit counts as met if `[arrival, arrival + time here]` overlaps a window; otherwise the miss is the gap to the nearest window.
+- **Score.** Total drive seconds + 20 x minutes of missed light (a missed minute costs 20 s of driving; changed from 60 in A70 because Normal stops were buying long out-and-back detours). A route whose drive exceeds 1.3 x the shortest drive-only order (1.6 x when, under Priority focus, a High or Must stop has a light preference) pays 4 s for every extra second, so light alone never justifies a big detour. For a Normal stop a miss counts in full up to an hour, then at 0.2 per extra minute, so a stop that cannot get its light anyway does not buy a long detour; High and Must stops are not capped. A minute in the dark counts three times a missed minute. A visit counts as met if `[arrival, arrival + time here]` overlaps a window; otherwise the miss is the gap to the nearest window.
 - **Search.**
   - Departures tried: the default (sunrise at the first stop) plus every 15 minutes from 1 h before it to 14 h after it.
   - Up to 7 free stops (8 total) the search is exact over all orders (8 stops held the server for about a second per request).
   - Above that it is a deterministic local search (swap, 2-opt, or-opt) seeded from nearest-neighbour and sunrise-first/sunset-last orders.
 - **Daylight.**
   - A visit that falls wholly in the dark (outside sunrise to sunset and outside the stop's own preferred light) is penalised like a missed window, weighted by the stop's priority, so the departure moves to keep stops lit.
-  - Under Time priority dark visits are only reported, not penalised.
+  - Under Time focus dark visits are only reported, not penalised.
   - The result names them ("Can't fit 2 stops in daylight: ...").
   - A stop with no sunrise or sunset that day (polar day or night) gets no daylight rule and is named in the note ("No sunrise or sunset that day at ..., so no daylight rule applies there."). It also does not make the start move, even when it asks for sunrise or sunset light.
   - A visit is checked against the solar day it arrives on.
@@ -204,10 +204,10 @@ Stops added from a viewpoint or peak suggestion start as Golden hour; attraction
 - **Undo** restores the previous order and departure.
 - Each row shows the window and arrival, or "Misses sunset by 40 min".
 
-**Optimize focus (Settings, per device).** Settings has an "Optimize route" section (`/settings#optimize`, also reached by the gear button beside Optimize route) with **Priority focus** (default) and **Time priority**.
+**Optimize focus (Settings, per device).** Settings has an "Optimize route" section (`/settings#optimize`, also reached by the gear button beside Optimize route) with **Priority focus** (default) and **Time focus**.
 
-- Priority focus weights missed light by each stop's priority (Normal 1, High 8, Must 1000), so the route may be longer to fit in higher-priority stops.
-- Time priority weights every stop the same, so the shortest schedule wins.
+- Priority focus weights missed light by each stop's priority (Normal 20 s of driving per missed minute, High 480, Must 60,000: the Normal weight can change, High and Must keep their strength), so the route may be longer to fit in higher-priority stops.
+- Time focus weights every stop the same, so the shortest schedule wins.
 - The choice is sent as `focus` to `POST /api/optimize`. It only matters for stops with a best-light preference.
 
 **Sun position.** Once a stop has an arrival time, My trip shows a line such as "Sun SW, 34° high" (`describeSunPosition` in `src/lib/sky.ts`), or "Sun below the horizon". The light hint reads like "Sunset 6:10-7:40 PM · arrive 6:25 PM", wrapping on narrow screens.

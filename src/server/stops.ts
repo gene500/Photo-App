@@ -168,28 +168,30 @@ export async function reorderStops(
   tripId: string,
   stopIds: string[],
 ): Promise<Stop[] | null> {
-  const trip = await prisma.trip.findFirst({
-    where: { id: tripId, userId },
-    include: { stops: { select: { id: true, visited: true, order: true }, orderBy: { order: "asc" } } },
-  });
-  if (!trip) return null;
-  const existing = new Set(trip.stops.map((s) => s.id));
-  const given = new Set(stopIds);
-  if (given.size !== stopIds.length) throw new InvalidReorderError();
-  // Well-formed but not this trip's stops any more: one was added or deleted elsewhere.
-  if (given.size !== existing.size || stopIds.some((id) => !existing.has(id))) throw new StopsChangedError();
-  // Visited stops are behind the owner: they stay first, in their current order; the request only orders the rest.
-  const finalIds = pinVisitedFirst(trip.stops, stopIds);
+  // The read and the writes share one transaction, so a stop deleted (and the rest renumbered) at the same moment cannot
+  // leave two stops with the same order.
   try {
-    await prisma.$transaction(
-      finalIds.map((id, order) => prisma.stop.update({ where: { id }, data: { order } })),
-    );
+    return await prisma.$transaction(async (tx) => {
+      const trip = await tx.trip.findFirst({
+        where: { id: tripId, userId },
+        include: { stops: { select: { id: true, visited: true, order: true }, orderBy: { order: "asc" } } },
+      });
+      if (!trip) return null;
+      const existing = new Set(trip.stops.map((s) => s.id));
+      const given = new Set(stopIds);
+      if (given.size !== stopIds.length) throw new InvalidReorderError();
+      // Well-formed but not this trip's stops any more: one was added or deleted elsewhere.
+      if (given.size !== existing.size || stopIds.some((id) => !existing.has(id))) throw new StopsChangedError();
+      // Visited stops are behind the owner: they stay first, in their current order; the request only orders the rest.
+      const finalIds = pinVisitedFirst(trip.stops, stopIds);
+      for (const [order, id] of finalIds.entries()) await tx.stop.update({ where: { id }, data: { order } });
+      const rows = await tx.stop.findMany({ where: { tripId }, orderBy: { order: "asc" } });
+      return rows.map(toStopDto);
+    }, { timeout: 20_000, maxWait: 5_000 }); // the default 5 s is too short for a trip with hundreds of stops on a remote database
   } catch (e) {
     if (typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2025") throw new StopsChangedError();
     throw e;
   }
-  const rows = await prisma.stop.findMany({ where: { tripId }, orderBy: { order: "asc" } });
-  return rows.map(toStopDto);
 }
 
 export async function findStopByPhotoUrl(userId: string, photoUrl: string): Promise<Stop | null> {

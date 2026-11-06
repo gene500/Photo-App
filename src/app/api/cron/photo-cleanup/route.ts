@@ -19,8 +19,14 @@ function authorized(req: Request): boolean {
  */
 export async function GET(req: Request) {
   if (!authorized(req)) return new Response(null, { status: 404 });
-  const photos = await retryPendingDeletions();
-  await sweepSharedLimits();
-  await sweepSuggestionCache(SUGGESTION_CACHE_TTL_MS + SUGGESTION_STALE_GRACE_MS);
-  return Response.json({ photos }, { headers: { "Cache-Control": "private, no-store" } });
+  try {
+    const photos = await retryPendingDeletions();
+    await sweepSharedLimits();
+    await sweepSuggestionCache(SUGGESTION_CACHE_TTL_MS + SUGGESTION_STALE_GRACE_MS);
+    return Response.json({ photos }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (e) {
+    // Log only the error name: a database message can carry query text or photo URLs.
+    console.error("photo-cleanup cron failed:", e instanceof Error ? e.name : "unknown error");
+    return Response.json({ error: "Cleanup failed" }, { status: 500, headers: { "Cache-Control": "private, no-store" } });
+  }
 }

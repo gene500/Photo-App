@@ -112,8 +112,11 @@ export async function revokeAllSessions(userId: string): Promise<void> {
   versions.delete(userId);
 }
 
-/** Sets a new password after checking the current one, and ends every session, this one included. */
-export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean> {
+/**
+ * Sets a new password after checking the current one, and ends every session, this one included.
+ * Returns false for a wrong current password and "conflict" when another change got in first (the current password was right).
+ */
+export async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<boolean | "conflict"> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || !user.passwordSet || !(await passwordMatches(currentPassword, user.passwordHash))) return false;
   // Compare-and-swap on the hash that was just checked: of several simultaneous changes only one wins.
@@ -122,7 +125,7 @@ export async function changePassword(userId: string, currentPassword: string, ne
     data: { passwordHash: await bcrypt.hash(newPassword, BCRYPT_COST), sessionVersion: { increment: 1 } },
   });
   versions.delete(userId);
-  return count === 1;
+  return count === 1 ? true : "conflict";
 }
 
 /** A Google-only account may be deleted only this long after the user last signed in. */

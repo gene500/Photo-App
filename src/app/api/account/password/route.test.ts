@@ -28,6 +28,10 @@ describe("POST /api/account/password", () => {
     vi.mocked(changePassword).mockResolvedValue(false);
     expect((await POST(post({ currentPassword: "nope-nope", newPassword: "long-enough-1" }))).status).toBe(403);
   });
+  it("answers 409 when another password change got in first", async () => {
+    vi.mocked(changePassword).mockResolvedValue("conflict");
+    expect((await POST(post({ currentPassword: "old-password", newPassword: "long-enough-1" }))).status).toBe(409);
+  });
   it("changes the password", async () => {
     vi.mocked(changePassword).mockResolvedValue(true);
     expect((await POST(post({ currentPassword: "old-password", newPassword: "long-enough-1" }))).status).toBe(204);

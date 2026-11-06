@@ -778,7 +778,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const ids = [...head, ...result.order.map((i) => tail[i])].map((s) => s.id);
       const missed = (result.misses ?? []).flatMap((m) => (tail[m.stopIndex] && !tail[m.stopIndex].visited ? [{ name: tail[m.stopIndex].name, must: m.priority === "must" }] : []));
       const misses = missed.map((m) => m.name);
-      const mustMisses = missed.filter((m) => m.must).map((m) => m.name);
+      // Under Time focus Must has no special weight, so there is no must-have note.
+      const mustMisses = settings.optimizeFocus === "time" ? [] : missed.filter((m) => m.must).map((m) => m.name);
       const missNote = misses.length
         ? `Can't fit ${misses.length} ${misses.length === 1 ? "stop in its light" : "stops in their light"}: ${misses.join(", ")}.`
         : null;
@@ -789,7 +790,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const darkNote = darkNames.length ? `Can't fit ${darkNames.length} ${darkNames.length === 1 ? "stop" : "stops"} in daylight: ${darkNames.join(", ")}` : null;
       const polarNames = (result.polar ?? []).flatMap((i) => (tail[i] ? [tail[i].name] : []));
       const polarNote = polarNames.length ? `No sunrise or sunset that day at ${polarNames.join(", ")}, so no daylight rule applies there` : null;
-      const notes = [missNote, mustNote, darkNote, polarNote, locationNote, ...noticeNotes(result.notices, tail)];
+      // The search ran out of time: say so, since a better order may exist (the unchanged case below already says "No faster order found").
+      const cutShortNote = result.complete === false ? "The search stopped at its time limit, so a better order may exist." : null;
+      const notes = [missNote, mustNote, darkNote, polarNote, locationNote, ...noticeNotes(result.notices, tail), cutShortNote];
       // null means the departure was not searched (no light preference and no dark visit): leave it alone.
       // The optimizer's pick is kept on the planned solar day too (at the first stop of the new order, as the server checks it): the trips API refuses a start time on a neighbouring day.
       // With visited stops the trip has already started, so its start time is left alone.
@@ -804,7 +807,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         const usesLight = tail.some((s) => s.lightPref !== "any") || result.departAt != null;
         // Two stops have no other order to compare, so there is no verdict to give, only the light notes.
         const verdict = tail.length < 3 ? null : isExactOptimization(tail.length, usesLight) && result.complete !== false ? "Already the fastest order" : "No faster order found";
-        if (verdict || notes.some(Boolean)) setOptimizeNote({ moveAt: null, notes: [verdict, ...notes], idsKey: startKey });
+        if (!quiet && (verdict || notes.some(Boolean))) setOptimizeNote({ moveAt: null, notes: [verdict, ...notes], idsKey: startKey });
         return;
       }
       const previousIds = before.map((s) => s.id);
@@ -821,8 +824,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       // Say so when the start time moved, so the change in the Start time field is not a surprise (written out when shown).
       const moveAt = !sameInstant(appliedDepartAt, previousDepartAt) && appliedDepartAt ? appliedDepartAt : null;
       // A note is read out by the notice's own live region; announcing here as well would say it twice.
-      setAnnouncement(moveAt || notes.some(Boolean) ? "" : OPTIMIZED_ANNOUNCEMENT);
-      if (moveAt || notes.some(Boolean)) setOptimizeNote({ moveAt, notes, idsKey: ids.join(",") });
+      setAnnouncement(!quiet && (moveAt || notes.some(Boolean)) ? "" : OPTIMIZED_ANNOUNCEMENT);
+      // A quiet (automatic) run shows no note: the order just updates.
+      if (!quiet && (moveAt || notes.some(Boolean))) setOptimizeNote({ moveAt, notes, idsKey: ids.join(",") });
     } catch (e) {
       if (!quiet) setStopsError(errorMessage(e, "Couldn't optimize the route"));
     } finally {
@@ -860,7 +864,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   async function runAutoOptimize() {
     // One at a time: a tick that lands while a run is in flight queues exactly one more run for when it ends.
     if (autoRunningRef.current) { autoQueuedRef.current = true; return; }
-    if (!settings.autoReoptimize || (typeof navigator !== "undefined" && navigator.onLine === false)) return;
+    if (!settings.autoReoptimize) return;
+    // Offline: hold the re-plan until the connection is back (the window's online event arms it again).
+    if (typeof navigator !== "undefined" && navigator.onLine === false) { autoQueuedRef.current = true; return; }
     // A manual Optimize or Undo in progress holds the run back; it is re-queued for when that ends.
     if (optimizeClickRef.current || optimizing || undoing || optimizeWaiting) { autoQueuedRef.current = true; return; }
     if (stops.filter((s) => !s.visited).length < 2) return;
@@ -884,6 +890,13 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       scheduleAutoOptimize();
     }
   }
+
+  // Back online: run the re-plan that was held back while offline.
+  useEffect(() => {
+    const onOnline = () => flushAutoQueue();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  });
 
   // Latest-callback refs for timers and async continuations; assigned after the functions they point at are declared.
   useEffect(() => {
@@ -961,7 +974,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     }
   }
 
-  const canUndo = undo !== null && undo.appliedIds.join(",") === idsKey && undo.appliedDepartAt === trip.departAt;
+  // Undo is offered only while it would change something: after ticking the remaining stops visited (they stay first) the old order cannot come back.
+  const undoChangesSomething = undo !== null && (pinVisitedFirst(stops, undo.previousIds).join(",") !== idsKey || undo.previousDepartAt !== trip.departAt);
+  const canUndo = undo !== null && undo.appliedIds.join(",") === idsKey && undo.appliedDepartAt === trip.departAt && undoChangesSomething;
   // Once the list or start time has moved on, this Undo is retired for good: matching them again must not revive it.
   // (Not while the optimize or the undo itself is writing, when the state is only briefly in between.)
   if (undo && !canUndo && !optimizing && !undoing) {
@@ -1364,7 +1379,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
             departAt: departAt ? new Date(departAt) : null,
             totalDistanceM: activeRoute?.distance ?? null,
             totalDurationS: activeRoute?.duration ?? null,
-            stops: stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: s.notes, shotNotes: s.shotNotes, lightPref: s.lightPref, arrival: arrivals[i] ?? null, source: s.source, visited: s.visited })),
+            stops: stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: s.notes, shotNotes: s.shotNotes, lightPref: s.lightPref, arrival: arrivals[i] ?? null, source: s.source, visited: s.visited, priority: s.priority })),
           },
         }} />}
         collapsedSummary={

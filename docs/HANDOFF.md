@@ -52,11 +52,7 @@ Last updated 2026-11-05
 
 | # | Task | Status | Est | Use | Notes |
 |---|---|---|---|---|---|
-| A68 | Zoom-to-fit a little more (8th stop clipped) | pending | 15 min | Light | Owner screenshot 2026-11-05 (Arches, 9 stops): stop 8 is partly hidden under the search bar after Optimize. Raise the top padding in the fit helper (map-fit / fitMapToPoints). |
-| A69 | Header: Edit/Export/Share wrap under long title | pending | 20 min | Light | Owner screenshot 2026-11-05: with a long trip name the three links drop to their own row, offset right. Make the layout tidy. |
-| F13 | Fix Opus FINAL-check findings M1, L1-L9 | pending | 60 min | Medium | M1 optimize slot held before body is read (src/app/api/optimize/route.ts:20); L1 directions limit before validation; L2 cron route unhandled error; L3 changePassword race gives 403; L4 reorderStops read outside transaction; L5 reorderSchema max length; L6 updateTrip not atomic; L7 refuse EXTERNAL_APIS_FAKE on Vercel production; L8 test-only exports; L9 migrate-before-build note. H1 (geolocation header) already fixed. |
-| A70 | Optimize: fix current algorithm, build a full revamp, compare, keep the better | pending | 3 h | Heavy | Owner screenshot 2026-11-05 (Bryce Canyon, 15 Normal stops, no priorities): stop order zigzags (1, then 2-5 cluster, 6 far NW, 7 far SE, 8 far S, 9-11 SW, 12-15 back in the cluster). Plan: reproduce with the same stops, make the targeted fixes, write a separate revamped optimizer, run both on the same cases (drive time, zigzag/out-and-back count, light hits), keep the better one. Opus for the comparison review. |
-| SEC | Security review of pending changes | pending | 15 min | Medium | Run after the items above. |
+| A71 | Check A67-A70 in a real browser (owner) | pending | 15 min | Light | Not eyeballed: zoom-fit top room (A68), header wrap (A69), stop card spacing (A67). Also check on a phone: Export/Share menu fully visible with a long trip name (F15-3), lowest stop clear of the sheet (F15-1). Also try the real Bryce/Arches trip with the new Optimize (A70) and Start from my location (geolocation header). |
 | FINAL | Opus full check, merge, push, Vercel + CI | pending | 30 min | Heavy | Always last. |
 
 ## Standing rules for this project (confirmed by the human partner)

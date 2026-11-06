@@ -5,8 +5,8 @@ import { handle, HttpError, readJson, requireUserId } from "@/server/http";
 
 export const POST = handle(async (req: Request) => {
   const userId = await requireUserId();
-  await enforcePaidLimit("directions", userId);
   const { coordinates } = directionsRequestSchema.parse(await readJson(req));
+  await enforcePaidLimit("directions", userId);
   try {
     return Response.json({ route: await getDirections(coordinates) }, { headers: { "Cache-Control": "private, max-age=300" } });
   } catch (e) {

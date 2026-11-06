@@ -22,21 +22,33 @@ export type ScheduleDark = { stopIndex: number; minutes: number; priority: StopP
  * `complete` is false when the time budget ended the search early, so the order is good but not necessarily the best the search could find. */
 export type Schedule = { order: number[]; departAt: Date; misses: ScheduleMiss[]; dark: ScheduleDark[]; timed: boolean; complete?: boolean };
 
-/** One minute of missed light costs as much as this many seconds of driving. */
-const MISS_WEIGHT_SECONDS_PER_MIN = 60;
 /**
- * Past this many minutes a missed window costs much less: a stop that cannot get its light anyway (a golden-hour stop reached at
- * midday) must not keep buying a long detour to shave its miss from 4 h to 3 h. Beyond it a minute counts MISS_TAIL_SLOPE.
- * Only "normal" stops are capped: a "high" or "must" stop is worth a long detour for its light (unless every stop counts the same, under the time focus).
+ * The numbers the cost function is built from. `OptimizeTuning` can override any of them per call (the benchmark in
+ * scripts/bench-optimize.ts compares settings this way); the app always uses DEFAULT_TUNING.
  */
-const MISS_CAP_MIN = 60;
-/** Share of a missed minute beyond the cap that still counts: small, but it keeps hopeless orders ordered (nearer misses first). */
-const MISS_TAIL_SLOPE = 0.2;
-/** A minute in the dark counts as this many missed-light minutes, so darkness still costs 3 x 60 s of driving per minute (unchanged by the lighter miss weight). */
-const DARK_MINUTE_FACTOR = 3;
-/** Multiplier on a stop's missed minutes. "must" is large enough that no amount of driving outweighs missing it. */
-const PRIORITY_WEIGHT: Record<StopPriority, number> = { normal: 1, high: 8, must: 1000 };
-/** Time priority: every stop counts the same, so only drive time and missed light decide the route. */
+export type OptimizeTuning = {
+  /** One minute of missed light costs as much as this many seconds of driving. */
+  missWeight: number;
+  /** Past this many missed minutes a Normal stop's miss counts only `tailSlope` per minute. */
+  missCap: number;
+  tailSlope: number;
+  /** A minute in the dark counts as this many missed-light minutes. */
+  darkFactor: number;
+  /** When finite, a route whose drive time exceeds this multiple of the shortest drive-only order pays `overSlope` seconds per extra second. */
+  driveBudgetRatio: number;
+  overSlope: number;
+  /** The drive budget used instead (a multiple of the shortest drive) when a High or Must stop has a light preference (Priority focus), so those stops keep most of their strength. Infinity = no budget. */
+  priorityBudgetRatio: number;
+};
+export const DEFAULT_TUNING: OptimizeTuning = { missWeight: 20, missCap: 60, tailSlope: 0.2, darkFactor: 3, driveBudgetRatio: 1.3, overSlope: 4, priorityBudgetRatio: 1.6 };
+// How the numbers in DEFAULT_TUNING are used (see OptimizeTuning above for what each one means):
+// - missCap/tailSlope: past missCap minutes a Normal stop's miss counts only tailSlope per minute, so a stop that cannot get its light anyway
+//   (a golden-hour stop reached at midday) does not keep buying a long detour. High and Must stops are not capped (unless every stop counts the same, under Time focus).
+// - darkFactor: a minute in the dark counts as darkFactor missed minutes. For a Normal stop that is 3 x 20 = 60 s of driving per minute
+//   (A70 lowered it from 180 s on purpose: the benchmark showed Normal stops buying long detours); High and Must keep their absolute weights below.
+/** Seconds of driving one missed minute is worth, per priority. Normal uses missWeight; "must" is large enough that no amount of driving outweighs missing it. */
+const PRIORITY_SECONDS_PER_MIN: Record<StopPriority, number | null> = { normal: null, high: 480, must: 60_000 };
+/** Time focus: every stop counts the same, so only drive time and missed light decide the route. */
 const FLAT_WEIGHT: Record<StopPriority, number> = { normal: 1, high: 1, must: 1 };
 const EXACT_MAX_STOPS = 7; // 8 stops (7! orders x ~65 departures) held the event loop for ~0.9 s per request
 const STEP_MS = 15 * 60_000;
@@ -97,6 +109,7 @@ type ScheduleInput = {
   focus?: "priority" | "time";
   /** Leave at `preferredDeparture` (else the default) and search only the order: for a trip already under way, whose start cannot move. */
   fixedDeparture?: boolean;
+  tuning?: Partial<OptimizeTuning>;
 };
 
 function plannedSearch(input: ScheduleInput):
@@ -105,7 +118,7 @@ function plannedSearch(input: ScheduleInput):
   const { durations, stops, defaultDeparture, preferredDeparture } = input;
   const n = stops.length;
   const d = sanitised(durations);
-  const ctx = new Evaluator(d, stops, defaultDeparture.getTime(), preferredDeparture?.getTime(), input.focus, input.fixedDeparture);
+  const ctx = new Evaluator(d, stops, defaultDeparture.getTime(), preferredDeparture?.getTime(), input.focus, input.fixedDeparture, input.tuning);
   if (n < 2) return { done: { order: optimizeOrder(durations), departAt: defaultDeparture, misses: [], dark: [], timed: false } };
   if (stops.every((s) => s.lightPref === "any")) {
     // Nothing to weigh but driving and darkness: when the shortest order is in daylight at the start in use, it is the answer.
@@ -132,13 +145,13 @@ const sanitised = (durations: number[][]) => durations.map((row) => row.map((v) 
 
 /** The objective optimizeSchedule minimises, for a given order and departure (for comparing searches). */
 export function scheduleCost(input: ScheduleInput, order: number[], departAt: Date): number {
-  const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus, input.fixedDeparture);
+  const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus, input.fixedDeparture, input.tuning);
   return ctx.cost(order, departAt.getTime());
 }
 
 /** Reference search over every order: slow beyond 8 stops (n! x departures), meant for checking the heuristic in tests. */
 export function optimizeScheduleExact(input: ScheduleInput): Schedule {
-  const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus, input.fixedDeparture);
+  const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus, input.fixedDeparture, input.tuning);
   const { order, departMs } = exactSearch(ctx, input.stops.length);
   return { order, departAt: new Date(departMs), misses: ctx.misses(order, departMs), dark: ctx.darkVisits(order, departMs), timed: true };
 }
@@ -157,6 +170,9 @@ class Evaluator {
   /** Weight of a minute in the dark per stop: its priority weight, none under the time focus (darkness is then only reported). */
   private readonly darkWeight: number[];
   private readonly arrivalOffsets: Float64Array;
+  private readonly t: OptimizeTuning;
+  /** Drive seconds beyond which the route pays extra (Infinity: no budget). */
+  private readonly driveBudget: number;
 
   constructor(
     readonly d: number[][],
@@ -165,7 +181,12 @@ class Evaluator {
     preferredMs?: number,
     focus: "priority" | "time" = "priority",
     fixed = false,
+    tuning: Partial<OptimizeTuning> = {},
   ) {
+    this.t = { ...DEFAULT_TUNING, ...tuning };
+    const prioritised = focus === "priority" && stops.some((s) => s.priority !== "normal" && s.lightPref !== "any");
+    const ratio = prioritised ? Math.max(this.t.driveBudgetRatio, this.t.priorityBudgetRatio) : this.t.driveBudgetRatio;
+    this.driveBudget = Number.isFinite(ratio) && stops.length > 2 ? ratio * this.drive(optimizeOrder(d)) : Infinity;
     // First wins ties: the preferred departure, then the default, then the grid around the default. A fixed start is the only one.
     this.candidates = fixed ? [preferredMs ?? defaultMs] : preferredMs !== undefined && preferredMs !== defaultMs ? [preferredMs, defaultMs] : [defaultMs];
     for (let t = defaultMs - 3_600_000; !fixed && t <= defaultMs + 14 * 3_600_000; t += STEP_MS) {
@@ -176,9 +197,11 @@ class Evaluator {
     this.lastDay = stops.map(() => NaN);
     this.lastSun = stops.map(() => undefined);
     this.constrained = stops.map((s) => s.lightPref !== "any");
-    const weights = focus === "time" ? FLAT_WEIGHT : PRIORITY_WEIGHT;
+    // High and Must keep their absolute strength (480 and 60,000 s of driving per missed minute) whatever the Normal weight is.
+    const priorityWeight = (p: StopPriority) => (PRIORITY_SECONDS_PER_MIN[p] ?? this.t.missWeight) / this.t.missWeight;
+    const weights = focus === "time" ? FLAT_WEIGHT : { normal: priorityWeight("normal"), high: priorityWeight("high"), must: priorityWeight("must") };
     this.weight = stops.map((s) => weights[s.priority ?? "normal"]);
-    this.missCap = stops.map((s) => (focus !== "time" && (s.priority === "must" || s.priority === "high") ? Infinity : MISS_CAP_MIN));
+    this.missCap = stops.map((s) => (focus !== "time" && (s.priority === "must" || s.priority === "high") ? Infinity : this.t.missCap));
     this.darkWeight = focus === "time" ? stops.map(() => 0) : this.weight;
     this.arrivalOffsets = new Float64Array(stops.length);
   }
@@ -284,7 +307,7 @@ class Evaluator {
     for (let k = 0; k < order.length; k++) {
       const i = order[k]!;
       if (this.constrained[i]) total += this.weight[i]! * this.countedMiss(i, this.missAt(i, departMs + off[k]!));
-      if (this.darkWeight[i]) total += DARK_MINUTE_FACTOR * this.darkWeight[i]! * this.darkAt(i, departMs + off[k]!);
+      if (this.darkWeight[i]) total += this.t.darkFactor * this.darkWeight[i]! * this.darkAt(i, departMs + off[k]!);
     }
     return total;
   }
@@ -292,21 +315,27 @@ class Evaluator {
   /** A miss as it counts against the cost: full up to the cap, then only a trickle (still enough to break ties between hopeless orders). */
   private countedMiss(i: number, minutes: number): number {
     const cap = this.missCap[i]!;
-    return minutes <= cap ? minutes : cap + (minutes - cap) * MISS_TAIL_SLOPE;
+    return minutes <= cap ? minutes : cap + (minutes - cap) * this.t.tailSlope;
   }
 
   cost(order: number[], departMs: number): number {
-    return this.drive(order) + MISS_WEIGHT_SECONDS_PER_MIN * this.missTotal(order, departMs);
+    return this.driveCost(order) + this.t.missWeight * this.missTotal(order, departMs);
+  }
+
+  /** Drive seconds, plus a surcharge for the part beyond the drive budget (a detour the light does not justify). */
+  private driveCost(order: number[]): number {
+    const drive = this.drive(order);
+    return drive > this.driveBudget ? drive + this.t.overSlope * (drive - this.driveBudget) : drive;
   }
 
   /** Best candidate departure for a fixed order (the default wins ties, then the earliest). */
   bestDeparture(order: number[]): { departMs: number; cost: number } {
     const off = this.offsets(order);
-    const drive = this.drive(order);
+    const drive = this.driveCost(order);
     let departMs = this.candidates[0]!;
     let best = Infinity;
     for (const t of this.candidates) {
-      const c = drive + MISS_WEIGHT_SECONDS_PER_MIN * this.missTotal(order, t, off);
+      const c = drive + this.t.missWeight * this.missTotal(order, t, off);
       if (c < best - EPS) {
         best = c;
         departMs = t;

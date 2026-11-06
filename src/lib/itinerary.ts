@@ -5,8 +5,8 @@ import { exportBaseName } from "./export";
 import { formatDistance, formatDuration } from "./format";
 import { lightLabel } from "./light-windows";
 import type { DistanceUnit, TimeFormat } from "./settings";
-import { stopColor } from "./stop-style";
-import type { LightPref, Stop } from "./types";
+import { PRIORITY_LABEL, stopColor } from "./stop-style";
+import type { LightPref, Stop, StopPriority } from "./types";
 import type { WeatherLine } from "./use-weather";
 import { weatherAriaLabel } from "./weather";
 
@@ -21,6 +21,8 @@ export type ItineraryStopSource = {
   /** Colours the numbered disc like the app's dot; omitted means a manual, unvisited stop. */
   source?: Stop["source"];
   visited?: boolean;
+  /** Printed after the light ("Best at sunset · Must-have") for a stop with a light preference; omitted or normal prints nothing. */
+  priority?: StopPriority;
 };
 
 /** One stop as printed; `index` is 1-based and null fields are left out of the PDF. */
@@ -78,10 +80,10 @@ export function buildItinerary(a: {
     note: a.note ?? null,
     stops: a.stops.map((s, i) => ({
       index: i + 1,
-      name: s.name,
+      name: s.visited ? `${s.name} (visited)` : s.name,
       color: stopColor({ source: s.source ?? "manual", visited: s.visited ?? false }),
       arrival: s.arrival ? clock(s.arrival) : "Time not set",
-      bestLight: s.lightPref === "any" ? null : `Best at ${lightLabel(s.lightPref).toLowerCase()}`,
+      bestLight: s.lightPref === "any" ? null : `Best at ${lightLabel(s.lightPref).toLowerCase()}${s.priority && s.priority !== "normal" ? ` · ${PRIORITY_LABEL[s.priority]}` : ""}`,
       weather: weatherText(a.weather?.[i]),
       notes: [s.notes, s.shotNotes].map((t) => t?.trim()).filter(Boolean).join("\n\n") || null,
     })),

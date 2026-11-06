@@ -16,10 +16,11 @@ import { handle, HttpError, readJson, requireUserId } from "@/server/http";
  */
 export const POST = handle(async (req: Request) => {
   const userId = await requireUserId();
-  // The concurrency slot comes first: a busy 503 must neither call Mapbox nor use up the user's per-minute allowance.
+  // The body is read before the slot is taken, so a client that sends it slowly cannot hold a slot (and starve everyone else).
+  const input = optimizeRequestSchema.parse(await readJson(req));
+  // The concurrency slot comes before the limit: a busy 503 must neither call Mapbox nor use up the user's per-minute allowance.
   const { body, noticeArgs } = await withOptimizeSlot(async () => {
     await enforcePaidLimit("optimize", userId);
-    const input = optimizeRequestSchema.parse(await readJson(req));
     const { coordinates, stops: prefs, plannedDate, departAt, focus, fixDeparture } = input;
     try {
       // The origin only ever helps: if the road network has no route from it to the chosen first stop, optimize without it.

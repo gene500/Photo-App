@@ -4,6 +4,13 @@ import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakePlacePhoto, fakeRe
 describe("fake externals", () => {
   afterEach(() => {
     delete process.env.EXTERNAL_APIS_FAKE;
+    delete process.env.VERCEL;
+  });
+
+  it("is never on Vercel, even if the variable leaks into its environment", () => {
+    process.env.EXTERNAL_APIS_FAKE = "1";
+    process.env.VERCEL = "1";
+    expect(isFakeExternal()).toBe(false);
   });
 
   it("is enabled only by EXTERNAL_APIS_FAKE=1", () => {

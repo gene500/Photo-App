@@ -11,7 +11,7 @@ and `docs/archive/PROGRESS.md` over memory. Where things are: this file = START 
 **Starting point (verify with `git status` and `git log`; trust them over this text):**
 - Repo `~/Photo-App` (older machine: `/Users/genestone/road-trip-photo-planner`), branch `main`, remote `gene500/Photo-App`. Last pushed code commit before F16-F19: `45b5b71`. The F16-F19 push is the commit on top of it (see `git log`).
 - **Pushed in `2ee3008` (nothing else uncommitted except this file):** A61 (optimizer: lost-cause light misses capped, so equal-priority routes stop zigzagging), A62 (Start from my location), A63 (NPS alerts + OSM opening-hours notices; `docs/design/A63-DESIGN.md` is untracked, owner decides whether to commit it), A64 (Visited checkbox + quiet auto re-optimize), A65 (themed PDF), F12 (fixes from the Opus FINAL review), plus test-stability edits (`tests/setup.ts` asyncUtilTimeout 5 s, optimize stall threshold 500 ms, fake timers in TripEditor tests).
-- Last verification (2026-10-29, my runs): tsc clean, lint clean, vitest 2101/2102 (the one failure was the wall-clock check "9 stops" taking 8 s under load; 1.1 s alone), e2e 58/59 (swap-undo failed under load; passed alone 2/2).
+- Last verification before F16-F19 (2026-10-29, my runs): tsc clean, lint clean, vitest 2101/2102 (the one failure was the wall-clock check "9 stops" taking 8 s under load; 1.1 s alone), e2e 58/59 (swap-undo failed under load; passed alone 2/2).
 
 **What needs to be done:** see the Open tasks below (A71 owner browser check; everything else is in the archive). Docs were reorganised on 2026-11-05 (A66). Owner follow-ups are in the paragraph below and in `docs/BACKLOG.md`.
 
@@ -41,11 +41,11 @@ and `docs/archive/PROGRESS.md` over memory. Where things are: this file = START 
 
 ## Current work (2026-11-08)
 
-**State:** HEAD is `45b5b71` (pushed). The working tree holds ALL of F16, F17, F18 and F19 UNCOMMITTED (about 140 changed or new files, including untracked ones such as `docs/STRESS-LOG.md`, `src/app/api/[...unknown]/`, `src/lib/{session-expired,safe-callback,map-errors,account-leftovers}.ts`, error/not-found pages and many tests). Nothing is stashed. When pushing, `git add -A` after checking `git status` has no scratch files or secrets.
+**State (updated after the push): F16-F19 are committed and pushed as `5e9c96f` on `main`; Vercel photo-app-pi2o success, CI check and e2e success. The text below describes the state before the push:** HEAD was `45b5b71`; the working tree held ALL of F16, F17, F18 and F19 UNCOMMITTED (about 140 changed or new files, including untracked ones such as `docs/STRESS-LOG.md`, `src/app/api/[...unknown]/`, `src/lib/{session-expired,safe-callback,map-errors,account-leftovers}.ts`, error/not-found pages and many tests). Nothing is stashed. When pushing, `git add -A` after checking `git status` has no scratch files or secrets.
 
 **Just finished:** T15 and T16 (24 Sonnet testers, findings in `docs/STRESS-LOG.md`), F16-F19 fixes, SEC (Opus, no high-confidence findings), FINAL Opus full check (no blockers). Verified by the lead on 2026-11-08: tsc clean, eslint clean, vitest 215 files / 2274 tests, e2e 59 pass (normal mode), `E2E_PROD=1 e2e/csp.spec.ts` pass, production-build proxy check (early 401 on a bodyless POST, 400 on bad `%` for pages and `/api`, JSON 404 on unknown `/api`).
 
-**Next:** the owner says "push": commit everything, push to `main`, check Vercel (project `photo-app-pi2o`) and CI (`check`, `e2e`), then `curl -i https://photo-app-pi2o.vercel.app/api/trips/%` (expect 400 JSON; the `/api/:rest(.*%.*)` proxy matcher is unconfirmed on Vercel) and upload one photo on the live site (proxy no longer matches `/api`). Then A71 (owner real-browser check, last by request).
+**Next (pre-push text, done except the live photo upload):** commit everything, push to `main`, check Vercel (project `photo-app-pi2o`) and CI (`check`, `e2e`), then `curl -i https://photo-app-pi2o.vercel.app/api/trips/%` (expect 400 JSON; the `/api/:rest(.*%.*)` proxy matcher is unconfirmed on Vercel) and upload one photo on the live site (proxy no longer matches `/api`). Then A71 (owner real-browser check, last by request).
 
 **Open owner decisions / follow-ups:** Priority-focus drive ratio (up to ~3.6x, left as is); forgot-password flow (H7, deferred); orphan photo file after a crash between file write and DB swap (needs schema/journal); optional server-side duplicate-accept guard; marker tab order; share-popover stale link across tabs; emoji "?" in PDFs (no emoji font). Standing parallel rule: independent tasks run in parallel automatically (global rule 14).
 
@@ -62,7 +62,6 @@ Last updated 2026-11-08
 
 | # | Task | Status | Est | Use | Notes |
 |---|---|---|---|---|---|
-| FINAL | Opus full check, merge, push, Vercel + CI | active | 30 min | Heavy | Opus full check done 2026-11-08 (no blockers; Should-fix items fixed in F19). Waiting for the owner to say "push". After push: confirm Vercel photo-app-pi2o + CI check/e2e, then `curl -i https://photo-app-pi2o.vercel.app/api/trips/%` (expect 400 JSON) and upload one photo on the live site. |
 | A71 | Check A67-A70 in a real browser (owner) | pending | 15 min | Light | Owner asked 2026-11-06: save for the very end (after FINAL, deliberate exception to "FINAL last"). Not eyeballed: zoom-fit top room (A68), header wrap (A69), stop card spacing (A67). Also check on a phone: Export/Share menu fully visible with a long trip name (F15-3), lowest stop clear of the sheet (F15-1). Also try the real Bryce/Arches trip with the new Optimize (A70) and Start from my location (geolocation header). |
 
 ## Standing rules for this project (confirmed by the human partner)

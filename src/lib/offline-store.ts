@@ -4,6 +4,7 @@
 // (storage can be missing, full or blocked; nothing here ever throws).
 import { isDateOnly } from "@/lib/dates";
 import { isObj } from "@/lib/guards";
+import { removeKeysWithPrefix } from "@/lib/storage-util";
 import { clearAllSuggestions, removeSuggestions } from "@/lib/suggestions-store";
 import type { ShotItem, Stop, TripWithStops } from "@/lib/types";
 
@@ -108,7 +109,8 @@ export function saveTripCopy(trip: TripWithStops, now: Date = new Date()): boole
   const payload = JSON.stringify({ savedAt, trip: sanitize(trip) } satisfies TripCopy);
   const entry: TripCopySummary = { id: trip.id, name: trip.name, plannedDate: trip.plannedDate, savedAt, stopCount: trip.stops.length };
   const previous = readIndex(s);
-  let index = [entry, ...previous.filter((e) => e.id !== trip.id)].sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+  // The entry just saved stays first even if the clock went backwards (else it would sort last and be evicted at once).
+  let index = [entry, ...previous.filter((e) => e.id !== trip.id).sort((a, b) => b.savedAt.localeCompare(a.savedAt))];
   const overCap = index.slice(MAX_COPIES);
   index = index.slice(0, MAX_COPIES);
   const write = (idx: TripCopySummary[]) => {
@@ -310,19 +312,14 @@ export function clearAllCopies(): void {
   const s = storage();
   if (!s) return;
   try {
-    const keys: string[] = [];
-    for (let i = 0; i < s.length; i++) {
-      const k = s.key(i);
-      if (k?.startsWith(PREFIX)) keys.push(k);
-    }
-    for (const k of keys) s.removeItem(k);
+    removeKeysWithPrefix(s, PREFIX);
   } catch {
     /* storage blocked: nothing more to do */
   }
 }
 
 /** True once a signed-in page has claimed this device's copies (cleared again by sign-out). */
-export function hasOwner(): boolean {
+function hasOwner(): boolean {
   const s = storage();
   try {
     return !!s && s.getItem(OWNER_KEY) !== null;

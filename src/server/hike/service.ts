@@ -5,7 +5,7 @@ import { fetchNpsTrails } from "./nps";
 import { fetchOsmTrails } from "./osm";
 
 /** Trails are looked for this far around the place (a trailhead farther away is not found: "small radius"). */
-export const HIKE_RADIUS_M = 2500;
+const HIKE_RADIUS_M = 2500;
 const HALF_DEG = HIKE_RADIUS_M / 111_320;
 export const HIKE_TTL_MS = 24 * 60 * 60_000;
 /** "No hike here" is remembered for an hour; a failed lookup for five minutes (Overpass is slow or busy: do not hammer it). */

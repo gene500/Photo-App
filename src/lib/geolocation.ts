@@ -4,10 +4,10 @@ export type PositionResult =
   | { ok: true; lat: number; lng: number }
   | { ok: false; reason: "unsupported" | "denied" | "unavailable" | "timeout" };
 
-export const GEOLOCATION_TIMEOUT_MS = 8_000;
-export const GEOLOCATION_MAX_AGE_MS = 60_000;
+const GEOLOCATION_TIMEOUT_MS = 8_000;
+const GEOLOCATION_MAX_AGE_MS = 60_000;
 /** Our own limit: some browsers (Firefox) call neither callback when the permission prompt is dismissed, so Optimize would stay busy forever. */
-export const GEOLOCATION_GIVE_UP_MS = 10_000;
+const GEOLOCATION_GIVE_UP_MS = 10_000;
 
 /** Geolocation only works on https (or localhost). */
 export function geolocationSupported(): boolean {

@@ -87,7 +87,7 @@ export type HoursCheck =
   | { status: "unclear" };
 
 /** Margin that absorbs the time-zone/DST approximation (up to about 2 h off) and a typical late opening. */
-export const HOURS_MARGIN_MIN = 150;
+const HOURS_MARGIN_MIN = 150;
 
 /** Open at `minute` of weekday `dayIndex`, where `minute` may fall outside 0..1439 (previous or next day). Overnight ranges carry into the next day. */
 function openAt(week: WeekHours, dayIndex: number, minute: number): boolean {

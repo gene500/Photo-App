@@ -8,7 +8,7 @@ export const STATIC_MAP_HEIGHT = 400;
 const MAX_SIDE = 1280;
 const START_POINTS = 1000;
 /** The app's route colour (--route) and manual stop colour, so the printed map matches the screen. */
-export const STATIC_MAP_ROUTE_COLOR = "a8834b";
+const STATIC_MAP_ROUTE_COLOR = "a8834b";
 const PIN_COLOR = "3b3226";
 
 const pinColor = (c: string | undefined) => (c && /^#?[0-9a-f]{6}$/i.test(c) ? c.replace("#", "").toLowerCase() : PIN_COLOR);

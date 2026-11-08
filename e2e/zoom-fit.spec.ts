@@ -1,16 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signUp } from "./helpers";
+import { newTripViaForm, signUp } from "./helpers";
 
 async function newTrip(page: Page, label: string) {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-zfit-${label}-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
-  await page.getByLabel("Trip name").fill("Fit me");
-  await page.getByLabel("Planned date").fill("2026-07-01");
-  await page.getByRole("button", { name: "Create trip" }).click();
-  await expect(page).toHaveURL(/\/trips\/[^/]+$/);
+  await signUp(page, `e2e-zfit-${label}`);
+  await newTripViaForm(page, "Fit me");
 }
 
 test("Zoom to fit: absent with no stops, then counts presses with every stop in view", async ({ page }) => {
@@ -39,7 +32,6 @@ test("Zoom to fit: absent with no stops, then counts presses with every stop in 
     expect(box.top).toBeGreaterThanOrEqual(0);
     expect(box.bottom).toBeLessThanOrEqual(vp.height);
   }
-  await page.screenshot({ path: process.env.ZFIT_SHOT ?? "test-results/zoom-fit.png" });
 });
 
 // The selected-stop card used to run under the control column (phone portrait and short landscape).
@@ -47,10 +39,7 @@ for (const [label, width, height] of [["phone portrait", 375, 667], ["short land
   test(`Zoom to fit stays reachable while a stop card is open (${label})`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     await signUp(page, `e2e-zfit-card-${width}`);
-    await page.getByLabel("Trip name").fill("Fit me");
-    await page.getByLabel("Planned date").fill("2026-07-01");
-    await page.getByRole("button", { name: "Create trip" }).click();
-    await expect(page).toHaveURL(/\/trips\/[^/]+$/);
+    await newTripViaForm(page, "Fit me");
     const tripId = page.url().split("/").pop()!;
     for (const [name, lat, lng] of [["Card A", 36.8, -119.8], ["Card B", 37.4, -119.0]] as const) {
       expect((await page.request.post(`/api/trips/${tripId}/stops`, { data: { name, lat, lng, source: "manual" } })).status()).toBe(201);

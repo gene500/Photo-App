@@ -6,7 +6,7 @@ import { round2, sharedTypical } from "./typical-weather";
 
 // Fixed host, no key. Only numbers and a validated date are interpolated into the query.
 const API = "https://api.open-meteo.com/v1/forecast";
-export const WEATHER_TIMEOUT_MS = 5000;
+const WEATHER_TIMEOUT_MS = 5000;
 export const WEATHER_CACHE_MAX = 500;
 export const WEATHER_TTL_MS = 30 * 60_000;
 /** An upstream failure is remembered briefly so a flapping Open-Meteo is not hammered. */
@@ -44,7 +44,7 @@ export async function fetchForecast(
 }
 
 /** One request for several points (Open-Meteo takes comma-separated coordinates and answers with an array). */
-export async function fetchForecastMany(
+async function fetchForecastMany(
   points: { lat: number; lng: number }[],
   start: string,
   end: string,

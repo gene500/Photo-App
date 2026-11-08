@@ -43,8 +43,8 @@ export function useHikes(points: readonly HikePoint[]): ReadonlyMap<string, Hike
   }, [stable, found]);
 }
 
-/** The hike for one place, or null (see useHikes). `enabled` false requests nothing. */
-export function useHike(id: string, lat: number, lng: number, enabled = true): Hike | null {
-  const points = useMemo(() => (enabled ? [{ id, lat, lng }] : []), [enabled, id, lat, lng]);
+/** The hike for one place, or null (see useHikes). */
+export function useHike(id: string, lat: number, lng: number): Hike | null {
+  const points = useMemo(() => [{ id, lat, lng }], [id, lat, lng]);
   return useHikes(points).get(id) ?? null;
 }

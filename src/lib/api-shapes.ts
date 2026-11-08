@@ -12,7 +12,6 @@ const withKey = (key: string, ok: (v: unknown) => boolean): Check => (b) => isOb
 export const shapes = {
   trip: withKey("trip", isTrip),
   tripWithStops: withKey("trip", (t) => isTrip(t) && Array.isArray((t as Record<string, unknown>).stops) && ((t as { stops: unknown[] }).stops).every(isStop)),
-  tripList: withKey("trips", (v) => Array.isArray(v) && v.every(isTrip)),
   /** `stops` is optional: the other stops a visited change carried along. */
   stop: (b: unknown) => withKey("stop", isStop)(b) && ((b as Record<string, unknown>).stops === undefined || (Array.isArray((b as Record<string, unknown>).stops) && ((b as { stops: unknown[] }).stops).every(isStop))),
   stops: withKey("stops", (v) => Array.isArray(v) && v.every(isStop)),

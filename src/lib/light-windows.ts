@@ -48,7 +48,7 @@ export function windowMissMinutes(arrival: Date, dwellMinutes: number, windows: 
 }
 
 /** Light windows for a stop on the solar day its arrival falls on (so multi-day drives work). */
-export function windowsForArrival(pref: LightPref, lat: number, lng: number, arrival: Date): LightWindow[] {
+function windowsForArrival(pref: LightPref, lat: number, lng: number, arrival: Date): LightWindow[] {
   if (pref === "any") return [];
   return lightWindows(pref, getSunWindows(lat, lng, solarDateAt(arrival, lng)));
 }

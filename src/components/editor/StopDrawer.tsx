@@ -13,7 +13,8 @@ import { AlternativesPanel } from "./AlternativesPanel";
 import { SkyCard } from "./SkyCard";
 import { FOCUSABLE } from "@/components/ui/Dialog";
 import type { SuggestionsStatus } from "./SuggestionsPanel";
-import { MAX_DWELL_MINUTES, MAX_STOP_NAME, MAX_SHOT_ITEMS, MAX_SHOT_NOTES, MAX_SHOT_TEXT, type StopPatch } from "@/lib/validation";
+import { MAX_DWELL_MINUTES, MAX_STOP_NAME, MAX_SHOT_ITEMS, MAX_SHOT_NOTES, MAX_SHOT_TEXT } from "@/lib/limits";
+import type { StopPatch } from "@/lib/validation";
 
 type Props = {
   stop: Stop;
@@ -95,6 +96,35 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
     if (focusLost() || !dialogRef.current?.contains(el)) dialogRef.current?.focus();
   }, [busy]);
 
+  // A page-level confirm (the "Discard edits?" dialog from another stop's row) hands focus back to the row that opened it when
+  // it is cancelled, which is outside this modal drawer. Put it back where it was inside the drawer (or on the drawer itself).
+  useEffect(() => {
+    let lastInside: HTMLElement | null = null;
+    let sawDialog = false;
+    function onFocusIn(e: FocusEvent) {
+      const t = e.target instanceof HTMLElement ? e.target : null;
+      const root = dialogRef.current;
+      if (!t || !root) return;
+      if (root.contains(t)) {
+        lastInside = t === root ? null : t;
+        sawDialog = false;
+      } else if (t.closest('[role="alertdialog"]')) {
+        sawDialog = true;
+      } else if (sawDialog && !document.querySelector('[role="alertdialog"]')) {
+        sawDialog = false;
+        const back = lastInside;
+        // Deferred so a confirmed discard (which replaces this drawer) is not fought over.
+        setTimeout(() => {
+          if (!mountedRef.current || !dialogRef.current || dialogRef.current.contains(document.activeElement)) return;
+          if (back && back.isConnected && dialogRef.current.contains(back)) back.focus();
+          else dialogRef.current.focus();
+        }, 0);
+      }
+    }
+    document.addEventListener("focusin", onFocusIn);
+    return () => document.removeEventListener("focusin", onFocusIn);
+  }, []);
+
   function keepEditing() {
     setConfirmDiscard(false);
     dialogRef.current?.focus(); // the buttons are about to unmount; keep keyboard focus (and Escape) inside the drawer
@@ -129,7 +159,7 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
   // Swapping replaces the stop and closes the drawer, which would silently throw typed edits away; so it waits for Save.
   const dirty =
     name !== initial.name || (notes.trim() === "" ? null : notes) !== initial.notes || visitedChanged || lightPref !== initial.lightPref ||
-    dwell !== String(stop.dwellMinutes) || (shotNotes.trim() === "" ? null : shotNotes) !== initial.shotNotes ||
+    dwell !== String(initial.dwellMinutes) || (shotNotes.trim() === "" ? null : shotNotes) !== initial.shotNotes ||
     JSON.stringify(plain(shots)) !== initial.shotChecklist || hasContent(newShot);
 
   useEffect(() => {

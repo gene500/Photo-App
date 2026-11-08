@@ -52,7 +52,7 @@ function patchData(patch: TripPatch, shiftedDepartAt: Date | null | undefined) {
   };
 }
 
-export const MAX_TRIPS_PER_USER = 100;
+const MAX_TRIPS_PER_USER = 100;
 
 export class TooManyTripsError extends Error {
   constructor() {
@@ -162,7 +162,8 @@ async function tryUpdateTrip(userId: string, tripId: string, patch: TripPatch): 
     if (guard && (await prisma.trip.findFirst({ where: { id: tripId, userId }, select: { id: true } }))) return "stale";
     return null;
   }
-  return toTripDto(await prisma.trip.findUniqueOrThrow({ where: { id: tripId } }));
+  const updated = await prisma.trip.findFirst({ where: { id: tripId, userId } });
+  return updated ? toTripDto(updated) : null; // deleted between the update and this read
 }
 
 export async function deleteTrip(

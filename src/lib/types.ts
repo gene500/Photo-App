@@ -69,7 +69,7 @@ export type TripWithStops = Trip & { stops: Stop[] };
 
 export type TripSummary = Trip & { stopCount: number; updatedAt: string };
 
-export type RouteLeg = { distance: number; duration: number };
+type RouteLeg = { distance: number; duration: number };
 
 export type RouteResult = {
   /** Full route line as [lng, lat] pairs. */

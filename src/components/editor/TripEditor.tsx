@@ -32,7 +32,8 @@ import { formatDistance, formatDuration } from "@/lib/format";
 import { coordsLabel, haversineMeters } from "@/lib/geo";
 import { getSkyInfo } from "@/lib/sky";
 import type { LightPref, LngLat, Place, RouteResult, Stop, StopSource, Suggestion, Trip, TripWithStops } from "@/lib/types";
-import { MAX_ROUTE_WAYPOINTS, MAX_STOP_NAME, type StopPatch, type TripPatch } from "@/lib/validation";
+import { MAX_ROUTE_WAYPOINTS, MAX_STOP_NAME } from "@/lib/limits";
+import type { StopPatch, TripPatch } from "@/lib/validation";
 import { MapView } from "./MapView";
 import { focusLost } from "@/lib/focus";
 import { PlaceCard } from "./PlaceCard";
@@ -291,6 +292,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const autoQueuedRef = useRef(false);
   /** The quiet run in flight: a manual Optimize waits for it so the two never overwrite each other. */
   const autoPromiseRef = useRef<Promise<void> | null>(null);
+  /** The order save of a quiet run while it is in flight (a visited tick waits for it, so the server cascades by the final order). */
+  const quietReorderRef = useRef<Promise<boolean> | null>(null);
   const autoRunRef = useRef<(() => Promise<void>) | null>(null);
   /** The start-time save in flight, if any: Optimize waits for it so it plans from the time just typed. It resolves to the saved departAt (undefined if the save failed). */
   const startSaveRef = useRef<Promise<string | null | undefined> | null>(null);
@@ -859,7 +862,15 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         return;
       }
       const previousIds = before.map((s) => s.id);
-      if (orderChanged && !(await reorder(ids, false, undefined, quiet))) return;
+      if (orderChanged) {
+        const saving = reorder(ids, false, undefined, quiet);
+        if (quiet) quietReorderRef.current = saving;
+        try {
+          if (!(await saving)) return;
+        } finally {
+          if (quietReorderRef.current === saving) quietReorderRef.current = null;
+        }
+      }
       let appliedDepartAt = previousDepartAt;
       try {
         await saveTrip({ ...(departChanged && { departAt: nextDepartAt }), routeOptimizedFor: optimizedFor });
@@ -895,13 +906,13 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   function locationSkipReason(visitedCount: number, unvisitedCount: number): string | null {
     if (trip.plannedDate !== localDateOnly(new Date())) return "Start from my location only applies to a trip planned for today, so it was not used.";
     if (visitedCount > 0) return "Start from my location is not used once a stop is visited.";
-    if (unvisitedCount >= 25) return "Start from my location needs room for one more waypoint, so it was not used.";
+    if (unvisitedCount >= MAX_ROUTE_WAYPOINTS) return "Start from my location needs room for one more waypoint, so it was not used.";
     return null;
   }
 
   /** Will Optimize ask for the owner's position? Only on a click, with the setting on, nothing visited, the trip planned for today (viewer's local date) and room for one more waypoint. */
   function locationWillBeUsed(visitedCount: number, unvisitedCount: number) {
-    return settings.startFromLocation && visitedCount === 0 && unvisitedCount < 25 && trip.plannedDate === localDateOnly(new Date()) && geolocationSupported();
+    return settings.startFromLocation && visitedCount === 0 && unvisitedCount < MAX_ROUTE_WAYPOINTS && trip.plannedDate === localDateOnly(new Date()) && geolocationSupported();
   }
 
   /** Ticking or unticking a stop re-plans the unvisited rest, after ~600 ms of quiet so a run of ticks makes one request. */
@@ -1099,6 +1110,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
 
   /** Checking a stop checks every earlier one and unchecking it unchecks every later one. The server applies that in one step (so a stale tab cannot leave a gap) and answers with the stops it changed. */
   async function toggleVisited(id: string, visited: boolean) {
+    // A quiet re-plan in flight is saving a new order: the server cascades by the order it holds, so send the tick after it lands.
+    if (quietReorderRef.current) await quietReorderRef.current;
     if (await patchStop(id, { visited })) scheduleAutoOptimize();
   }
 
@@ -1397,7 +1410,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const hikeStops = useMemo(() => stops.filter((s) => settings.showHikes || s.id === cardId), [stops, cardId, settings.showHikes]);
   const hikePoints = useMemo(() => hikeStops.map((s) => ({ id: s.id, lat: s.lat, lng: s.lng })), [hikeStops]);
   const hikeByStop = useHikes(hikePoints);
-  const mapHikes = useMemo(() => hikeStops.flatMap((s) => { const h = hikeByStop.get(s.id); return h ? [{ id: s.id, geometry: h.geometry }] : []; }), [hikeStops, hikeByStop]);
+  const mapHikes = useMemo(() => Array.from(hikeByStop, ([id, h]) => ({ id, geometry: h.geometry })), [hikeByStop]);
 
   return (
     <main id="main-content" tabIndex={-1} className="relative h-[calc(100dvh-3rem)] overflow-hidden outline-none">

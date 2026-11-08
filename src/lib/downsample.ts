@@ -1,7 +1,7 @@
 import type { LngLat } from "./types";
 
 /** Server cap is 2000 points; stay well under it. */
-export const SUGGESTIONS_TARGET_POINTS = 1500;
+const SUGGESTIONS_TARGET_POINTS = 1500;
 
 /** Evenly pick up to `target` points from a route line, always keeping the first and last. */
 export function downsampleRoute(points: LngLat[], target = SUGGESTIONS_TARGET_POINTS): LngLat[] {

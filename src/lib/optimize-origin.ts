@@ -19,7 +19,7 @@ export function stopIndexWithoutOrigin(i: number): number | null {
 }
 
 /** A position farther than this from every stop is not "from my location" for this trip (a trip planned elsewhere). */
-export const MAX_ORIGIN_DISTANCE_KM = 500;
+const MAX_ORIGIN_DISTANCE_KM = 500;
 
 /** Straight-line distance in km. */
 function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {

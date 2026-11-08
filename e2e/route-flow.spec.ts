@@ -1,15 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
+import { newTripViaForm, signUp } from "./helpers";
 
 async function setup(page: Page, label: string) {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-flow-${label}-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
-  await page.getByLabel("Trip name").fill("Flow me");
-  await page.getByLabel("Planned date").fill("2026-07-01");
-  await page.getByRole("button", { name: "Create trip" }).click();
-  await expect(page).toHaveURL(/\/trips\/[^/]+$/);
+  await signUp(page, `e2e-flow-${label}`);
+  await newTripViaForm(page, "Flow me");
   const myTrip = page.getByRole("tab", { name: "My trip" });
   let count = 0;
   for (const x of [500, 1000, 700, 850]) {

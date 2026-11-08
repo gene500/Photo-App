@@ -1,6 +1,6 @@
 import type { PlaceNotice } from "./types";
 
-export const MAX_NOTICE_NOTES = 5;
+const MAX_NOTICE_NOTES = 5;
 
 /** Optimize-status notes for the heads-ups: "Stop name: text". Visited stops and unknown indexes are skipped; extras are summarised. */
 export function noticeNotes(notices: PlaceNotice[] | undefined, stops: { name: string; visited?: boolean }[]): string[] {

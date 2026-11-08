@@ -57,13 +57,9 @@ describe("useHikes", () => {
 });
 
 describe("useHike", () => {
-  it("is null while loading, then the hike; nothing is requested when disabled", async () => {
+  it("is null while loading, then the hike", async () => {
     const { result } = renderHook(() => useHike("a", 37, -119.5));
     expect(result.current).toBeNull();
     await waitFor(() => expect(result.current).toEqual(HIKE));
-    subscribe.mockClear();
-    const off = renderHook(() => useHike("a", 37, -119.5, false));
-    expect(off.result.current).toBeNull();
-    expect(subscribe).not.toHaveBeenCalled();
   });
 });

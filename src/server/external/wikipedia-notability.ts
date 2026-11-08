@@ -1,5 +1,5 @@
 import { haversineMeters } from "@/lib/geo";
-import { nameScore } from "./photo-match";
+import { namesMatch } from "./photo-match";
 import { photoHeaders, type PlaceQuery } from "./photo-http";
 
 const API = "https://en.wikipedia.org/w/api.php";
@@ -41,7 +41,7 @@ export async function getWikipediaNotable(place: PlaceQuery, fetchImpl: typeof f
       if (!p.title) continue;
       const c = p.coordinates?.[0];
       const dist = typeof c?.lat === "number" && typeof c.lon === "number" ? haversineMeters(place, { lat: c.lat, lng: c.lon }) : SEARCH_RADIUS_M;
-      const named = place.name ? nameScore(place.name, p.title) > 0 : false;
+      const named = place.name ? namesMatch(place.name, p.title) : false;
       if (!named && dist > NEAREST_MAX_M) continue;
       const views = Object.values(p.pageviews ?? {}).reduce<number>((sum, v) => sum + (typeof v === "number" ? v : 0), 0);
       if (!best || views > best.views) best = { views };

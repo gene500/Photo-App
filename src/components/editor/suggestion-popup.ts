@@ -5,7 +5,7 @@ import type { PlacePhoto, Suggestion } from "@/lib/types";
 // Shared by the Mapbox popup and the offline map preview, so both look and behave the same.
 
 export const POPUP_PHOTO_WIDTH = 220;
-export const POPUP_PHOTO_HEIGHT = 140;
+const POPUP_PHOTO_HEIGHT = 140;
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);

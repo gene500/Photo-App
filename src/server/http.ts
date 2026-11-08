@@ -89,7 +89,7 @@ export async function requireUserId(): Promise<string> {
   return userId;
 }
 
-export const MAX_JSON_BYTES = 1024 * 1024;
+const MAX_JSON_BYTES = 1024 * 1024;
 
 /**
  * Reads the request body with a hard size cap: a declared Content-Length over the cap is refused before any

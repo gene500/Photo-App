@@ -1,17 +1,17 @@
-import { addDays } from "@/lib/weather";
+import { addDays, num } from "@/lib/weather";
 import type { WeatherForecast, WeatherHour } from "@/lib/types";
 import { PHOTO_USER_AGENT } from "./photo-http";
 
 // Fixed host, no key. Only numbers and validated dates are interpolated into the query.
 const API = "https://archive-api.open-meteo.com/v1/archive";
-export const TYPICAL_TIMEOUT_MS = 8000;
+const TYPICAL_TIMEOUT_MS = 8000;
 export const TYPICAL_YEARS = 3;
 /** Days either side of the calendar date that are averaged in, to smooth out single odd days. */
-export const TYPICAL_SPREAD_DAYS = 3;
+const TYPICAL_SPREAD_DAYS = 3;
 export const TYPICAL_TTL_MS = 24 * 60 * 60_000;
 /** A failed lookup is remembered briefly so a client looping over places cannot hammer the archive. */
 export const TYPICAL_FAILURE_TTL_MS = 60_000;
-export const TYPICAL_CACHE_MAX = 1000;
+const TYPICAL_CACHE_MAX = 1000;
 /** A day with at least this much precipitation counts as a wet day. */
 const WET_DAY_MM = 1;
 
@@ -20,7 +20,6 @@ export type TypicalProfile = { utcOffsetSeconds: number; cloud: (number | null)[
 
 /** Same ~1 km grid as the cache keys, so every request that shares a key asks upstream for the same point. */
 export const round2 = (n: number) => n.toFixed(2);
-const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 /** The same calendar day `years` earlier (29 Feb rolls to 1 Mar, which is close enough for an average). */
 export function sameDayInYear(date: string, year: number): string {
@@ -28,7 +27,7 @@ export function sameDayInYear(date: string, year: number): string {
   return new Date(Date.UTC(year, m - 1, d)).toISOString().slice(0, 10);
 }
 
-export const typicalCacheKey = (p: Point, date: string) => `${round2(p.lat)},${round2(p.lng)}|${date.slice(5)}`;
+const typicalCacheKey = (p: Point, date: string) => `${round2(p.lat)},${round2(p.lng)}|${date.slice(5)}`;
 
 const mean = (xs: number[]): number | null => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
@@ -86,7 +85,7 @@ export function profileToForecast(profile: TypicalProfile, date: string): Weathe
 }
 
 /** One archive request per past year for all points at once (Open-Meteo accepts comma-separated coordinates). */
-export async function fetchProfiles(points: Point[], date: string, today: string, fetchImpl: typeof fetch = fetch): Promise<(TypicalProfile | null)[]> {
+async function fetchProfiles(points: Point[], date: string, today: string, fetchImpl: typeof fetch = fetch): Promise<(TypicalProfile | null)[]> {
   const lastYear = Number(today.slice(0, 4)) - 1;
   const perYear = await Promise.all(
     Array.from({ length: TYPICAL_YEARS }, async (_, i) => {

@@ -1,18 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
+import { newTripViaForm, signUp } from "./helpers";
 
 // Phone held sideways (short landscape): popovers on top, whole panel scrolls, bounded drag autoscroll, outside drop cancels.
 const SIZES = [{ width: 568, height: 320 }, { width: 667, height: 375 }, { width: 844, height: 390 }];
 
 async function setup(page: Page, stopCount: number) {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-land-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
-  await page.getByLabel("Trip name").fill("Landscape");
-  await page.getByLabel("Planned date").fill("2026-07-01");
-  await page.getByRole("button", { name: "Create trip" }).click();
-  await expect(page).toHaveURL(/\/trips\/[^/]+$/);
+  await signUp(page, "e2e-land");
+  await newTripViaForm(page, "Landscape");
   // Add the stops at the full desktop size where the fake map is easy to click, then rotate.
   await page.setViewportSize({ width: 1280, height: 800 });
   const rows = page.getByTestId("stop-row");

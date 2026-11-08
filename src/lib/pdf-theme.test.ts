@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PDF_BORDER, PDF_RULE, PDF_THEME, blend, contrastRatio, hexToRgb, markerTextColor, rgbToHex, safeStopColor } from "./pdf-theme";
+import { PDF_BORDER, PDF_RULE, PDF_THEME, blend, contrastRatio, hexToRgb, markerTextColor, safeStopColor } from "./pdf-theme";
 import { STOP_COLORS } from "./stop-style";
 
 describe("pdf theme", () => {
@@ -15,7 +15,6 @@ describe("pdf theme", () => {
   it("converts hex and blends the translucent border onto paper", () => {
     expect(hexToRgb("#ff8000")).toEqual([255, 128, 0]);
     expect(hexToRgb("nope")).toEqual([0, 0, 0]);
-    expect(rgbToHex([255, 128, 0])).toBe("#ff8000");
     expect(blend([0, 0, 0], 0.5, [200, 100, 50])).toEqual([100, 50, 25]);
     const [r] = PDF_BORDER;
     expect(r).toBeLessThan(247);

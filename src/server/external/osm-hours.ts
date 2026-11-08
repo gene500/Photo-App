@@ -4,16 +4,17 @@ import { PHOTO_USER_AGENT } from "./photo-http";
 // One small Overpass query for all stops of an Optimize run, cached for a day. Public servers are for light use only:
 // https://wiki.openstreetmap.org/wiki/Overpass_API (identify the app, cache, back off 30 s after a 429).
 const DEFAULT_URL = "https://overpass-api.de/api/interpreter";
-export const OSM_HOURS_TIMEOUT_MS = 6000;
+const OSM_HOURS_TIMEOUT_MS = 6000;
 export const OSM_HOURS_TTL_MS = 24 * 60 * 60_000;
-export const OSM_FAILURE_TTL_MS = 5 * 60_000;
+const OSM_FAILURE_TTL_MS = 5 * 60_000;
 export const OSM_BACKOFF_MS = 30_000;
-export const OSM_MATCH_RADIUS_M = 40;
+const OSM_MATCH_RADIUS_M = 40;
 export const OSM_MAX_STOPS = 15;
 const MAX_RESULTS = 400;
+const MAX_CACHE_ENTRIES = 500;
 
 type Point = { lat: number; lng: number };
-export const osmHoursKey = (p: Point) => `${p.lat.toFixed(4)},${p.lng.toFixed(4)}`;
+const osmHoursKey = (p: Point) => `${p.lat.toFixed(4)},${p.lng.toFixed(4)}`;
 
 export function buildHoursQuery(points: Point[]): string {
   const parts = points.map((p) => `nwr(around:${OSM_MATCH_RADIUS_M},${p.lat.toFixed(5)},${p.lng.toFixed(5)})["opening_hours"];`);
@@ -89,7 +90,7 @@ export function createOsmHoursClient(opts: { fetchImpl?: typeof fetch; now?: () 
         cache.set(osmHoursKey(p), { hours, expiresAt: now() + ttl });
         out[i] = hours;
       }
-      while (cache.size > 500) cache.delete(cache.keys().next().value as string);
+      while (cache.size > MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value as string);
     } catch {
       /* no hours */
     }

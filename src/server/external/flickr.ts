@@ -1,13 +1,13 @@
 import type { PlacePhoto } from "@/lib/types";
 import { hitShared } from "../shared-limit";
-import { nameScore } from "./photo-match";
+import { namesMatch } from "./photo-match";
 import { allowedHttpsUrl, photoHeaders, PHOTO_TIMEOUT_MS, type PlaceQuery } from "./photo-http";
 
 const API = "https://api.flickr.com/services/rest/";
 /** Official flickr.photos.search docs: geo queries need a limiting parameter, so use a very old min_upload_date. */
 const MIN_UPLOAD_DATE = "1072915200"; // 2004-01-01
 /** Flickr licence ids we may show with credit (see flickr.photos.licenses.getInfo); everything else is excluded. */
-export const FLICKR_LICENSES: Readonly<Record<string, string>> = {
+const FLICKR_LICENSES: Readonly<Record<string, string>> = {
   "1": "CC BY-NC-SA 2.0",
   "2": "CC BY-NC 2.0",
   "3": "CC BY-NC-ND 2.0",
@@ -88,7 +88,7 @@ export async function getFlickrPhoto(place: PlaceQuery, fetchImpl: typeof fetch 
       });
     }
     // Most interesting first, but a photo whose title names the place wins (titles are free text, so this is a bonus only).
-    return valid.find((v) => nameScore(place.name, v.title) > 0) ?? valid[0] ?? null;
+    return valid.find((v) => namesMatch(place.name, v.title)) ?? valid[0] ?? null;
   } catch {
     return null;
   }

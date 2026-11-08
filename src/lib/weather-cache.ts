@@ -1,5 +1,5 @@
 import { api } from "./api-client";
-import { WEATHER_BATCH_MAX } from "./validation";
+import { WEATHER_BATCH_MAX } from "./limits";
 import type { WeatherForecast } from "./types";
 
 /** A failed lookup is remembered this long so a re-render or reselect doesn't refetch every time. */
@@ -36,7 +36,7 @@ export function holdWeather(): () => void {
 }
 
 /** Resolves once nothing holds weather. A microtask first, so holds set by a parent's effect (which runs after its children's, in the same flush) are seen. */
-export async function whenWeatherIdle(): Promise<void> {
+async function whenWeatherIdle(): Promise<void> {
   await Promise.resolve();
   if (holds === 0) return;
   await new Promise<void>((r) => waiters.push(r));

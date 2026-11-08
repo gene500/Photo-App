@@ -8,7 +8,7 @@ import { formatClock, getSunWindows } from "@/lib/best-time";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import { useWeatherLine } from "@/lib/use-weather";
 import { WeatherText } from "@/components/weather/WeatherIcon";
-import { MAX_ROUTE_WAYPOINTS } from "@/lib/validation";
+import { MAX_ROUTE_WAYPOINTS } from "@/lib/limits";
 import type { PlacePhoto } from "@/lib/types";
 
 /** Set when the place came from a suggestion: its photo is looked up lazily (shared cache with the map popup). */

@@ -35,6 +35,8 @@ Fill in `.env`:
 | `MAPBOX_TOKEN` | Used server-side for Directions, the Matrix API (route optimization) and Geocoding. It can be the same `pk.*` token. |
 | `FLICKR_API_KEY` | **Optional**, server-only secret. Without it the app uses Wikimedia Commons + Wikipedia only (see [Photo sources](#photo-sources-attribution-and-licensing)). Flickr now restricts API keys to Pro accounts, so expect to leave it unset. |
 | `NPS_API_KEY` | **Optional**, server-only. A free National Park Service API key; without it Optimize skips park closure alerts (opening-hours notes need no key). |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | **Optional**. Google sign-in; the Google button is hidden unless both are set. |
+| `CRON_SECRET` | **Optional** locally (needed on Vercel). Bearer secret for `/api/cron/photo-cleanup`; without it that route answers 404. |
 | `DATABASE_URL`, `NEXTAUTH_URL` | Already have working local defaults in `.env.example`. |
 
 Then set up the database and start the dev server:
@@ -129,11 +131,17 @@ Deleting a trip or a stop asks through an in-app, themed dialog (`src/components
 | --- | --- | --- |
 | `dev` | `next dev` | Start the local dev server |
 | `build` | `next build` | Production build |
+| `start` | `next start` | Serve the production build |
+| `vercel-build` | `node scripts/migrate-turso.mjs && next build` | Vercel build: migrate Turso, then build |
 | `test` | `vitest run` | Unit/API tests |
-| `e2e` | `playwright test` | Playwright end-to-end golden path |
-| `lint` | `eslint` | Lint the codebase |
+| `test:watch` | `vitest` | Unit/API tests in watch mode |
+| `e2e` | `playwright test` | Playwright end-to-end suite |
+| `e2e:server` | `node scripts/e2e-server.mjs` | The e2e server (fresh `e2e.db`, fake externals, port 3100); Playwright starts it for you |
+| `lint` | `eslint --max-warnings 0` | Lint the codebase |
 | `typecheck` | `next typegen && tsc --noEmit` | Type-check the codebase |
 | `db:migrate` | `prisma migrate dev` | Apply/create Prisma migrations |
+
+Limits: trip name 120 characters, stop name 200, stop notes 5000, 100 trips per user, 25 stops per trip.
 
 ## Optimize route
 
@@ -195,11 +203,11 @@ Stops added from a viewpoint or peak suggestion start as Golden hour; attraction
 - **Re-optimize when I tick a stop (Settings, per device, on by default).** About 600 ms after you tick or untick a stop, Optimize quietly re-plans the stops not yet visited: no busy state, no error message, Undo available. It only reorders: it never moves the start time. A manual Optimize cancels or waits for a quiet run, and a tick during a manual run is queued until it ends.
 - **Start from my location (Settings, per device, off by default).** When on, clicking Optimize asks the browser for your position (never on page load) and the drive starts there, so the first stop is chosen too. It is used only when nothing is visited yet, the trip is planned for today (your local date) and the position is within 500 km of a stop; otherwise it is left out (a short note says so when it is far away or unavailable). The position is sent for that one request only, is not stored or logged, and the Matrix response is not cached. If the browser never answers the permission prompt, Optimize carries on without it after 10 s. It cannot be combined with a fixed start time.
 - **Heads-ups.** Optimize also lists notices for your stops from free public data, shown under the button and in the status note: National Park Service alerts and closures near a stop (needs the optional `NPS_API_KEY`; only for a trip within about two weeks) and OpenStreetMap opening hours at the estimated arrival time ("Probably closed at arrival"). Only coordinates and the date leave the server, and the lookup never blocks or fails Optimize (3 s limit). The local time is estimated from the longitude (no time-zone database), so a "closed" note is only given when the place is closed throughout a 2.5 hour margin around the estimate, and a closed day is never named close to midnight. Only simple hours are understood (for example `Mo-Fr 09:00-17:00; Sa 10:00-14:00`, `24/7`, overnight ranges); anything else is ignored. Park matching is by nearby coordinates and can miss or mis-match small sites.
-- **No preferences.** It is exactly the shortest-drive order and the departure stays at sunrise.
+- **No preferences.** It is exactly the shortest-drive order and the departure stays at the start time the editor shows (now on the planned day, or the saved start time).
 
 **Start time and results**
 
-- The chosen departure is saved on the trip (`departAt`); the panel shows "Starts 5:42 PM" with **Reset to sunrise**.
+- The chosen departure is saved on the trip (`departAt`); the panel has a **Start time** field (it shows "Now" until a time is saved) with **Reset to now** once a time is saved.
 - A start time you already saved is kept when it costs nothing (it is tried first and wins ties); the search window still follows sunrise.
 - The result (moved start time, stops that cannot be fitted, heads-ups) is shown in a short note under the button and announced to screen readers.
 - **Undo** restores the previous order and departure.
@@ -308,7 +316,8 @@ The **Export** menu in the trip header (enabled with 2+ stops) downloads a GPX 1
 - **Fallback map:** with no token, in fake-map mode, or when the map request fails (8 s timeout), a drawn fallback map is used instead. A URL-restricted public token may make the share page's static-map request fail (the page sends no Referer); the PDF then falls back to the drawn map.
 - **Fonts:**
   - The PDF embeds Noto Sans (SIL OFL, `public/fonts/OFL.txt`; about 0.6 MB transferred, fetched only when you click Download PDF), so Latin (including Latin Extended and Vietnamese), Cyrillic and Greek names and notes print correctly.
-  - Other scripts (Chinese, Japanese, Korean, Arabic, Hebrew, Devanagari, Thai, emoji and so on) are not in the font: each run of such characters prints as a single "?".
+  - Chinese, Japanese (Simplified Chinese glyph forms) and Korean text also prints: when the trip text has Han, kana or Hangul, one extra font file (Noto Sans SC or KR, regular weight only) is fetched and the whole document uses that family (no bold). If that file cannot be loaded, those characters print as "?".
+  - Other scripts (Arabic, Hebrew, Devanagari, Thai, emoji and so on) are not in the font (no text shaping or right-to-left support): each run of such characters prints as a single "?".
   - If the font cannot be fetched (offline), the PDF is still produced with the built-in fonts, where anything outside Western European alphabets is "?".
 - The static map was verified against real Mapbox on 2026-10-16 from the editor and the share page with an unrestricted token.
 
@@ -323,7 +332,7 @@ The **Export** menu in the trip header (enabled with 2+ stops) downloads a GPX 1
 
 ### Photo sources, attribution and licensing
 
-`GET /api/place-photo` -> `src/server/external/place-photo.ts` tries providers in order and the first hit wins:
+`GET /api/place-photo` -> `src/server/external/place-photo.ts` queries the providers together and uses the first one in this order that has a photo:
 
 1. **Flickr** (only if `FLICKR_API_KEY` is set): `flickr.photos.search` within 300 m, most "interesting" first, restricted to Creative Commons / public-domain licences (ids 1,2,3,4,5,6,9,10; note 1-3 are NonCommercial variants, fine for a personal non-commercial project). Credit: `Photo: {owner} via Flickr (CC BY 2.0)`. Only https images on `*.staticflickr.com` are passed on.
 2. **Wikimedia Commons** file geosearch (300 m): featured/quality/valued images first, then name match, then nearest; only jpeg/png/webp. Credit: author and licence from the file metadata, e.g. `Photo: Jane Doe via Wikimedia Commons (CC BY-SA 3.0)`.
@@ -333,7 +342,7 @@ Notes:
 
 - No key means Commons + Wikipedia only.
 - Every photo is shown with its plain-text credit; any failure just means no photo.
-- Results are cached on the server (500 entries LRU, 6 h for hits, 15 min for misses, concurrent lookups shared) and in the browser; browser failures are remembered for 60 s.
+- Results are cached on the server (1500 entries LRU, 24 h for hits, 15 min for misses, concurrent lookups shared) and in the browser; browser failures are remembered for 60 s.
 - Names are matched strictly (an "Eagle Peak" never matches "Eagle Rock").
 - The lookup sends the stop's name and coordinates to these providers (no account details).
 - The Stops-row thumbnail skips it for a dropped pin named only by coordinates or a street address (`isAddressOrCoordsName`) and shows the placeholder.
@@ -350,7 +359,7 @@ After OpenStreetMap candidates are ranked and capped, the first 40 are enriched 
 
 Suggestions come from three layers (`src/server/suggestions/service.ts`), tried in order:
 
-1. **Local copy.** The `Place` table holds viewpoints, peaks and attractions imported from OpenStreetMap, looked up by a global grid (`places-grid.ts`). It covers the lower 48 states, Alaska, Canada south of 76 N, Mexico, South Korea and Japan (the rings in `src/server/suggestions/local-places.ts`). A query with fewer than 5 local places, or one outside the rings, falls through.
+1. **Local copy.** The `Place` table holds viewpoints, peaks and attractions imported from OpenStreetMap, looked up by a global grid (`places-grid.ts`). It covers the lower 48 states, Alaska, Hawaii, Canada south of 76 N, Mexico, South Korea and Japan (the rings in `src/server/suggestions/local-places.ts`). A query with fewer than 5 local places, or one outside the rings, falls through.
 2. **Overpass.** The public OpenStreetMap API: slow outside the local copy (tens of seconds) and it can fail with a 502 "Couldn't load suggestions".
 3. **Caches.** Overpass answers are cached in memory (30 min, served stale for up to 6 h more) and in the `SuggestionCache` table, shared by every server instance (a slow read falls back to Overpass after 800 ms). The daily cron (`/api/cron/photo-cleanup`) drops entries too old to serve.
 
@@ -377,8 +386,8 @@ Data comes from Open-Meteo (free, no key).
 
 - **Forecasts** (`api.open-meteo.com`) reach about 16 days ahead through the signed-in-only `GET /api/weather?lat&lng&date`. They are cached 30 minutes per ~1 km and day (failures 60 s); each request covers the day before to the day after.
 - **Typical weather** is shown for later dates (up to about two years ahead), labelled "Typical 18°C" beside the sky icon. These are averages of the same calendar date (plus or minus 3 days) over the previous 3 years from the Open-Meteo archive (`archive-api.open-meteo.com`), with "rain on ~N% of days" as the rain figure. Typical answers are cached 24 hours.
-- **Suggestion cards** use `POST /api/weather/batch` (up to 10 places per request, one upstream request per batch, 30 requests a minute per user).
-- Dates further out, or already past, show nothing; a failed lookup shows nothing.
+- **Suggestion cards** use `POST /api/weather/batch` (up to 10 places per request, one upstream request per batch, 20 requests a minute per user).
+- Dates beyond the typical range (about 800 days ahead) show "Forecast not available yet" on each row, without a request; dates already past, and failed lookups, show nothing.
 
 ### Weather is the last thing fetched
 
@@ -402,7 +411,7 @@ Data comes from Open-Meteo (free, no key).
 
 Each stop's best shooting window is derived, not stored.
 
-1. **Departure.** The trip's departure time is assumed to be sunrise at the first stop on the trip's planned date, unless the trip has a chosen departure (`departAt`, set by light-aware optimization).
+1. **Departure.** In the editor, a trip with no saved start time starts now (fixed when the editor opened) on the trip's planned day; a saved start (`departAt`, set in the Start time field or by light-aware optimization) wins. Where there is no `departAt` and no editor (server code), the departure falls back to sunrise at the first stop on the planned date. The shared page and its PDF use the viewer's clock when the page opens (like the editor) once it has mounted, and show sunrise only until then.
    - The API refuses a changed `departAt` that is not on the planned day at the first stop.
    - It accepts a value that equals the stored one, is on the stored one's day, or equals the server's shift of it on a date change, so old off-day rows stay editable.
    - A PATCH which also changes the planned date takes only the server's own shift of the stored value or a time on the new day.
@@ -446,6 +455,9 @@ The app runs on Vercel with a Turso database (hosted SQLite) and a Vercel Blob s
    | `NEXTAUTH_URL` | your site URL, e.g. `https://photo-app.vercel.app` |
    | `NEXT_PUBLIC_MAPBOX_TOKEN` | Mapbox `pk.*` token |
    | `MAPBOX_TOKEN` | same token |
+   | `CRON_SECRET` | any long random string (the maintenance cron answers 404 without it) |
+   | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | optional: Google sign-in (both or neither) |
+   | `FLICKR_API_KEY`, `NPS_API_KEY` | optional: Flickr photos, National Park Service alerts |
 
 4. Deploy. The build command (`npm run vercel-build`) applies database migrations to Turso, then builds. Every push to `main` redeploys.
 
@@ -461,9 +473,9 @@ Tip: when setting variables from the CLI, use `vercel env add NAME production --
   - Each migration runs in one transaction with its bookkeeping row, so a failed migration applies nothing.
   - Write migrations so the previous app version still works against the new schema (add columns and tables first, remove old ones in a later release).
 - **Restore.** Turso keeps point-in-time restore for your database: before a risky migration, note the time (or create a branch/fork of the database in the Turso dashboard) so you can restore if needed.
-- **Maintenance cron.** `vercel.json` schedules `/api/cron/photo-cleanup` daily. It retries photo-file deletions that failed earlier and clears expired rate-limit counters. Set `CRON_SECRET` (any long random string) in Vercel; without it the route answers 404 and does nothing.
+- **Maintenance cron.** `vercel.json` schedules `/api/cron/photo-cleanup` daily. It retries photo-file deletions that failed earlier, clears expired rate-limit counters and drops expired `SuggestionCache` rows. Set `CRON_SECRET` (any long random string) in Vercel; without it the route answers 404 and does nothing.
 - **Rate limits.**
-  - Limits for login, signup, password change, account deletion and every route that spends paid-service quota (geocoding, retrieve and reverse geocoding, directions, optimize, popularity/Flickr, place photos, and the app-wide Flickr budget) are counted in the database, so they hold across serverless instances.
+  - Limits for login, signup, password change, account deletion and every route that spends paid-service quota (geocoding, retrieve and reverse geocoding, locate, directions, optimize, popularity/Flickr, place photos, and the app-wide Flickr budget) are counted in the database, so they hold across serverless instances.
   - The paid routes fail closed: if the database cannot be reached they answer 503 with `Retry-After` instead of letting requests through.
   - The cheap limits (suggestions, weather, trip writes, photo reads, uploads, the `/s/[token]` page render limit of 300/min per address) stay per instance; put Vercel's WAF rate limiting in front if you need exact global limits.
   - The one exception among paid calls is the driving route the public share page fetches on the server: it is limited per share token and per owner (`directions` and `share-directions`), both in memory per instance, so it is a cap per instance, not exact.

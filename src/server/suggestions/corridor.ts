@@ -165,10 +165,10 @@ export function toOverpassPoly(ring: LngLat[]): string {
 export const OVERPASS_OUT_CAP = 500;
 
 /** One `poly:` ring, or several (a corridor across the date line is two). */
-export function buildOverpassQuery(poly: string | string[], timeoutSec = 25): string {
+export function buildOverpassQuery(poly: string | string[]): string {
   const polys = Array.isArray(poly) ? poly : [poly];
   return [
-    `[out:json][timeout:${timeoutSec}];`,
+    `[out:json][timeout:25];`,
     "(",
     ...polys.flatMap((p) => [
       `  nwr["tourism"~"^(viewpoint|attraction)$"](poly:"${p}");`,
@@ -183,10 +183,10 @@ export function buildOverpassQuery(poly: string | string[], timeoutSec = 25): st
  * Each kind gets its own output cap: one shared `out 500` keeps the lowest ids, so in a dense area
  * (a city's many attractions) it would crowd out the viewpoints and peaks we want most.
  */
-export function buildOverpassAroundQuery(lng: number, lat: number, radiusKm: number = AROUND_RADIUS_KM, timeoutSec = 25): string {
+export function buildOverpassAroundQuery(lng: number, lat: number, radiusKm: number = AROUND_RADIUS_KM): string {
   const around = `(around:${Math.round(radiusKm * 1000)},${lat.toFixed(5)},${lng.toFixed(5)})`;
   return [
-    `[out:json][timeout:${timeoutSec}];`,
+    `[out:json][timeout:25];`,
     `nwr["tourism"="viewpoint"]${around}->.vp;`,
     `node["natural"="peak"]["name"]${around}->.pk;`,
     `nwr["tourism"="attraction"]${around}->.at;`,

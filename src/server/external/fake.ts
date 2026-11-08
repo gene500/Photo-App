@@ -108,7 +108,7 @@ export function fakeWeather(p: { lat: number; lng: number }, start: string, end:
 
 /** The one place with a fake hike (the middle of the fake map). Any point within FAKE_HIKE_RADIUS_DEG of it has one; everywhere else has none. */
 export const FAKE_HIKE_POINT = { lat: 37, lng: -119.5 };
-export const FAKE_HIKE_RADIUS_DEG = 0.05;
+const FAKE_HIKE_RADIUS_DEG = 0.05;
 
 /** A canned hike of about 1.2 mi ending at the point, or null away from FAKE_HIKE_POINT. */
 export function fakeHike(lat: number, lng: number): Hike | null {

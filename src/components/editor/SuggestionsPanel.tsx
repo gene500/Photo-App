@@ -5,6 +5,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnAccent, btnGhost, btnSecondary } from "@/components/ui/styles";
 import { focusFirst, focusLost, softDisabled } from "@/lib/focus";
 import { formatPhotoCount } from "@/lib/format";
+import { MAX_ROUTE_WAYPOINTS } from "@/lib/limits";
 import { isHoverPointer } from "./hover-pointer";
 import { hasRoomBeside, SuggestionHoverPhoto } from "./SuggestionHoverPhoto";
 import { WeatherText } from "@/components/weather/WeatherIcon";
@@ -149,7 +150,7 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, noStop
               )}
             </div>
             <div className="flex shrink-0 gap-1">
-              <button type="button" data-action="accept" {...softDisabled(accepting.has(s.osmId) || full)} title={full ? "A trip can have at most 25 stops" : undefined} onClick={accepting.has(s.osmId) || full ? undefined : () => { setHover(null); keepFocus(s, "accept"); void accept(s); }} className={btnAccent} aria-label={`Accept ${s.name}`}>Accept</button>
+              <button type="button" data-action="accept" {...softDisabled(accepting.has(s.osmId) || full)} title={full ? `A trip can have at most ${MAX_ROUTE_WAYPOINTS} stops` : undefined} onClick={accepting.has(s.osmId) || full ? undefined : () => { setHover(null); keepFocus(s, "accept"); void accept(s); }} className={btnAccent} aria-label={`Accept ${s.name}`}>Accept</button>
               <button type="button" data-action="dismiss" onClick={() => { setHover(null); keepFocus(s, "dismiss"); onDismiss(s.osmId); }} className={btnGhost} aria-label={`Dismiss ${s.name}`}>Dismiss</button>
             </div>
           </li>

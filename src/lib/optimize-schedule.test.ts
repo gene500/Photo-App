@@ -400,7 +400,7 @@ describe("optimizeScheduleAsync (shared-server solver)", () => {
       const input = make(n);
       const t0 = performance.now();
       const r = await optimizeScheduleAsync(input, { budgetMs: 0 });
-      expect(performance.now() - t0).toBeLessThan(n === 8 ? 1500 : 1000); // generous: this guards against a hang, and shared CI machines are slow
+      expect(performance.now() - t0).toBeLessThan(1500); // generous: this guards against a hang, and shared CI machines are slow
       expect(r.order[0]).toBe(0);
       expect([...r.order].sort((a, b) => a - b)).toEqual(Array.from({ length: n }, (_, i) => i));
     }

@@ -87,6 +87,15 @@ describe("StopDrawer", () => {
     expect(onSave).toHaveBeenCalledWith({ notes: "x" });
   });
 
+  it("is not dirty when the stop's dwell time changes elsewhere while the drawer is open", () => {
+    const onDirtyChange = vi.fn();
+    const props = { plannedDate: "2026-07-01", onClose: vi.fn(), onSave: vi.fn(), onPhotoChange: vi.fn(), onDirtyChange };
+    const { rerender } = render(<StopDrawer {...props} stop={stop} />);
+    rerender(<StopDrawer {...props} stop={{ ...stop, dwellMinutes: 45 }} />);
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true);
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+
   it("treats a zero-width-space shot as blank, like names", async () => {
     const onSave = vi.fn(async () => {});
     render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
@@ -309,6 +318,39 @@ describe("StopDrawer", () => {
       unmount();
       expect(document.activeElement).toBe(opener);
       opener.remove();
+    });
+
+    it("returns focus into the drawer when a page-level confirm opened from outside is cancelled", async () => {
+      const row = document.createElement("button");
+      document.body.append(row);
+      render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+      const dialog = screen.getByRole("dialog");
+      const name = screen.getByDisplayValue(stop.name);
+      name.focus();
+      // The row takes focus, then a confirm dialog opens and later hands focus back to the row (as Dialog.tsx does).
+      row.focus();
+      const ask = document.createElement("div");
+      ask.setAttribute("role", "alertdialog");
+      const keep = document.createElement("button");
+      ask.append(keep);
+      document.body.append(ask);
+      keep.focus();
+      ask.remove();
+      row.focus();
+      await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
+      expect(document.activeElement).toBe(name);
+      expect(dialog.contains(document.activeElement)).toBe(true);
+      row.remove();
+    });
+
+    it("leaves focus alone when no confirm dialog was involved", async () => {
+      const row = document.createElement("button");
+      document.body.append(row);
+      render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+      row.focus();
+      await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
+      expect(document.activeElement).toBe(row);
+      row.remove();
     });
 
     it("keeps Tab and Shift+Tab inside the drawer", async () => {

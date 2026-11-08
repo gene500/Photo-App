@@ -5,7 +5,7 @@ import { useSyncExternalStore } from "react";
  * the trip panel becomes a side panel instead of a bottom sheet. Keep in sync with `@custom-variant short-landscape`
  * in app/globals.css (Tailwind cannot read this constant).
  */
-export const SHORT_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px) and (max-width: 1023px)";
+const SHORT_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px) and (max-width: 1023px)";
 
 function subscribe(onChange: () => void): () => void {
   if (typeof window === "undefined" || !window.matchMedia) return () => {};

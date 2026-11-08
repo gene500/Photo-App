@@ -7,7 +7,8 @@ import { softDisabled } from "@/lib/focus";
 import { isDateOnly, shiftDepartAtLocal } from "@/lib/dates";
 import type { ExportStop } from "@/lib/export";
 import type { LngLat, Trip } from "@/lib/types";
-import { inYearRange, type TripPatch } from "@/lib/validation";
+import { inYearRange, MAX_TRIP_NAME } from "@/lib/limits";
+import type { TripPatch } from "@/lib/validation";
 import { HeaderButtonLabel } from "./HeaderButtonLabel";
 import { ExportControl } from "./ExportControl";
 import { ShareControl } from "./ShareControl";
@@ -93,7 +94,7 @@ export function TripHeader({ trip, onSave, onShareChange, exportData, stopCount 
     <form onSubmit={(e) => { e.preventDefault(); void save(); }} onKeyDown={(e) => { if (e.key === "Escape" && !busy) setEditing(false); }} className="-mx-1 space-y-3 px-1 pb-2 max-lg:max-h-[40dvh] max-lg:overflow-y-auto short-landscape:max-h-none short-landscape:overflow-visible">
       <label className="block">
         <span className="text-sm text-muted">Trip name</span>
-        <input ref={nameRef} required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+        <input ref={nameRef} required maxLength={MAX_TRIP_NAME} value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
       </label>
       <label className="block">
         <span className="text-sm text-muted">Planned date</span>

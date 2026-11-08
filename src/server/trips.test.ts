@@ -25,6 +25,22 @@ describe("trips data access", () => {
     expect((await updateTrip(user.id, trip.id, { departAt: null }))?.departAt).toBeNull();
   });
 
+  it("answers not-found (null) when the trip is deleted between the update and the re-read", async () => {
+    const user = await createTestUser();
+    const trip = await createTrip(user.id, sampleTripInput);
+    const realUpdate = prisma.trip.updateMany.bind(prisma.trip);
+    const spy = vi.spyOn(prisma.trip, "updateMany").mockImplementation((async (args: Parameters<typeof realUpdate>[0]) => {
+      const r = await realUpdate(args);
+      await prisma.trip.delete({ where: { id: trip.id } });
+      return r;
+    }) as unknown as typeof prisma.trip.updateMany);
+    try {
+      expect(await updateTrip(user.id, trip.id, { name: "Renamed" })).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("stores and clears routeOptimizedFor", async () => {
     const user = await createTestUser();
     const trip = await createTrip(user.id, sampleTripInput);

@@ -6,7 +6,7 @@ export const HIKE_SOURCE = "hike-route";
 export const HIKE_LAYER = "hike-route";
 /** Matte, muted green for the hike's dotted line: dark enough to read on the beige map, no glow or casing. A hex because Mapbox paint cannot read CSS variables. */
 export const HIKE_COLOR = "#3f6b3a";
-export const HIKE_ATTRIBUTION = "Trail data © OpenStreetMap contributors, National Park Service";
+const HIKE_ATTRIBUTION = "Trail data © OpenStreetMap contributors, National Park Service";
 
 export function hikeData(hikes: MapViewProps["hikes"]): FeatureCollection {
   return {

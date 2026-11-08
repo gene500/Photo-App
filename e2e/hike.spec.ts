@@ -1,16 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
+import { newTripViaForm, signUp } from "./helpers";
 
 // Fake externals: a hike exists only near the middle of the fake map (37, -119.5); everywhere else has none.
 async function tripWithTwoStops(page: Page) {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-hike-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
-  await page.getByLabel("Trip name").fill("Hike check");
-  await page.getByLabel("Planned date").fill("2026-07-01");
-  await page.getByRole("button", { name: "Create trip" }).click();
-  await expect(page).toHaveURL(/\/trips\/[^/]+$/);
+  await signUp(page, "e2e-hike");
+  await newTripViaForm(page, "Hike check");
   const rows = page.getByTestId("stop-row");
   // First the stop at the fake hike point (the middle of the map), then one far away.
   await page.getByTestId("map").click();

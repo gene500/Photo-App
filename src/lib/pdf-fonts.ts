@@ -16,7 +16,7 @@ export type PdfFonts = {
 };
 
 const FONT_URLS = { regular: "/fonts/NotoSans-Regular.ttf", bold: "/fonts/NotoSans-Bold.ttf" };
-export const CJK_FONT_URLS: Record<CjkScript, string> = { sc: "/fonts/NotoSansSC-Regular.ttf", kr: "/fonts/NotoSansKR-Regular.ttf" };
+const CJK_FONT_URLS: Record<CjkScript, string> = { sc: "/fonts/NotoSansSC-Regular.ttf", kr: "/fonts/NotoSansKR-Regular.ttf" };
 const CJK_PROBE: Record<CjkScript, number> = { sc: 0x4eac, kr: 0xd55c }; // 京, 한: a file without it is the wrong file
 const CJK_MAX_BYTES = 6_000_000;
 

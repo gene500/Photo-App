@@ -8,7 +8,6 @@ export const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled])
 
 type Props = {
   open: boolean;
-  role?: "dialog" | "alertdialog";
   title: string;
   description?: ReactNode;
   /** Escape and a press on the backdrop. */
@@ -23,7 +22,7 @@ type Props = {
 };
 
 /** Modal card over a dimmed backdrop: focus trap, Escape, focus restored to the opener on close. */
-export function Dialog({ open, role = "alertdialog", title, description, onCancel, initialFocusRef, busy, backdropGraceMs = 0, children }: Props) {
+export function Dialog({ open, title, description, onCancel, initialFocusRef, busy, backdropGraceMs = 0, children }: Props) {
   const titleId = useId();
   const descId = useId();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -92,7 +91,7 @@ export function Dialog({ open, role = "alertdialog", title, description, onCance
     >
       <div
         ref={cardRef}
-        role={role}
+        role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descId : undefined}

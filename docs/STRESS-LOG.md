@@ -316,3 +316,44 @@ No High. Five Medium, nineteen Low. Fake map used, so real Mapbox behaviour is n
 - Leftovers for group 1: StopDrawer must send `shotChecklistBase` with `shotChecklist` (merge dormant until then); client `hasContent` in src/lib/text.ts must drop the bidi/invisible chars the server refuses; in-flight delete guard test and anti-churn guard tests (tester 15).
 - Not fixed: RSC double count of /s limit (accepted, stricter), /api/locate waiting on both parts, orphan file after crash (needs schema/journal: owner decision), server-side duplicate-accept guard, e2e for sign-out revocation, framework notes.
 - Verify in the full run: proxy matcher in a real production build (early 401/413, % path 400, nonce CSP on pages).
+
+# H8 (2026-11-08): five Opus read-only whole-repo sweeps
+Lenses: 1 dead code/duplication, 2 performance, 3 correctness, 4 error/edge handling, 5 consistency/docs/tests. No High findings. Fixed in F20 (output-identical items plus 3 Low bug fixes). Left for the owner (they change behavior):
+- Blob calls (put/get/del) have no timeouts; account/trip delete awaits unbounded parallel `del` and cleanup retries only 25/day (sweep 4 M1, M2). No DB query timeout (L1). One failing cleanup row aborts the daily cron (L2).
+- Weather hour may be an hour off across DST (sweeps 3 and 4); needs a real Open-Meteo check. NPS alerts cut at 100 (L4). 5 own-API responses not shape-checked (L5). Share page waits up to 10 s on Mapbox (L6). One unreachable leg drops all place notices (L7). Captive-portal 404 deletes the offline copy (L8). Shot text cut mid-emoji (L9).
+- Perf: uploaded photos are `no-store` (A); offline-copy verify re-fetches the trip after open (B). Login double read of one rate-limit row.
+- Consistency: search box should trim before the length check; stop Notes lacks maxLength 5000; dwell `step={5}` differs between drawer and Settings; "sign in" vs "Log in" strings; "Could not" vs "Couldn't"; "Manual pin" label for place-search stops; skip link duplicated 4 times; Accept-disabled reason only in `title`.
+- Dedup not done (risk/value): polyline length x3, Open-Meteo fetch x2, withDeadline x3, six TTL caches; `updateStop` test wrapper; `describeWeather` unit param.
+- CI: no trace upload, prod CSP spec not run in CI, tsconfig extras, tdd-guard reporter still configured.
+
+# T17 (2026-11-08): 16 Sonnet testers in the real app, uncommitted A72+F20 tree
+Areas: a1 limits/forms, a2 reorder/delete, a3 add stop/25 cap, a4 stop drawer, a5 offline copies, a6 trip updates, a7 hikes/map, a8 suggestions, a9 optimize, a10 sharing, a11 exports, a12 auth/account, a13 settings, a14 photos, a15 phone/popovers/a11y, a16 weather/dates (see below). Clean areas (no findings): a2, a3, a10, a13, a14. No data-loss, crash or auth/security finding in any area. The F20 changes held: only changed rows are written on reorder/delete (confirmed in the DB), 25-stop cap exact under parallel adds, drawer dirty check uses the snapshot, newest offline copy kept after a backwards clock, updateTrip gives a clean 404, no zod in client pages.
+
+## Medium (existing behavior, not caused by F20)
+- M1 (a15, a11, a12): phone Export menu "Download PDF" is covered by the floating search bar (SHORT_SCREEN_POPOVER top-[4.25rem] = 68 px; the search input spans y 64-112). Tap lands in the search box. Fails at 390x844, 360x640, 320x480, 768x1024, 200%/400% zoom; fine at landscape phone sizes. Share popover's only control is not covered. Fix: panel below the search bar (about top-[7.25rem]) with a smaller max-h. src/components/editor/use-popover.ts:12.
+- M2 (a15): header popovers run about 12 px off the left edge at 200%/400% zoom (w-56/w-72 + right-3 wider than the viewport).
+- M3 (a9): Visited tick while the optimize order PUT is in flight (slow DB) cascades by the server's old order, marking stops that were not ticked. TripEditor toggleVisited (~1100) vs quiet optimize reorder (~865).
+
+## Low
+- StopDrawer: after Cancel/Escape on the "Discard edits?" dialog opened from another stop's row, focus lands on that row, outside the drawer (a4).
+- Stale tab saving a date change overwrites a start time changed in another tab, silently (a6, trips.ts tryUpdateTrip ~130-145).
+- PATCH /api/trips/:id accepts Content-Type text/plain (a6; hardening only).
+- Reduce motion setting does not stop the Optimize water flow or fit animation (only the OS preference does): MapPanel.tsx:238,:415, FakeMapPanel.tsx:64 vs SuggestionsPanel.tsx:59 (a9).
+- Reload while the optimize second save (PATCH routeOptimizedFor) is in flight leaves the order saved but not marked optimized (a9). Unreachable legs silent (a9).
+- Hike credit shown when Show hikes is off (hike-layer.ts ensureHikeLayer) (a7). Hike memo does not hold across a reorder because the useHikes signature is order-dependent (use-hike.ts:15) (a7).
+- Export menu items 36 px tall; map markers and Zoom to fit 32 px; settings inputs at 320 px 24 px (a15). Long trip name clamped to 3 lines with no title (a15). Save trip below the fold at 320x480 (a15). Marker 6 under the app header (a15).
+- PDF: first export offline fails if the jsPDF chunk is not cached (a11); PDF omits shot checklist items (a11); README says CJK prints "?" but CJK renders now (a11).
+- Stop Notes has no maxLength (a1; owner decision, see H8). Error wording: "Text must be at most 120" for shots; "Name is not valid" for a non-string trip name. Date inputs lack min/max (a1).
+- Fake map only: a focused dot keeps its popup when another card is hovered (a8). Empty first search says "No more suggestions" (a8).
+- Offline: copies saved on a backwards clock lose to older real-clock copies on later saves (a5, acceptable). rtpp.panel.v1:/trips/<id> and nextauth.message storage keys survive sign-out/account delete; no user data (a5, a12). Escape does not close the Delete account inline form (a12, probably intended).
+- docs/BACKLOG.md still says the shared page always shows visited:false (a10); stale.
+
+## a16 weather, best times, sky and dates (no High, no Medium; fake externals only)
+- Low: shared page with no saved start time uses the viewer's current time (SharedTripView.tsx:44); README step 1 says sunrise at first stop. Code or README out of date.
+- Low: start-time edge cases near solar midnight and the 1970/2200 ends. Paris 00:00 on DST-change day saved as end of day; 1970-01-01 at lng 174.7 and 2200-12-31 at lng -118 show "Date must be between 1970 and 2200" (UTC-year check in departAtSchema validation.ts:69 / inYearRange limits.ts). Extreme-date edge only.
+- Low: valid cloud but null temperature gives an icon with empty text, or a bare "Typical" (use-weather.ts:25-35). Cosmetic.
+- Low: README says dates past 800 days show nothing; they show "Forecast not available yet".
+- Low: after a dwell change list rows lose arrival/sun/weather ("Optimize again") while the selected-stop card still shows a recomputed arrival; the two disagree.
+- Suspected, untested: /api/weather 60/min per user with one request per stop; a 25-stop trip loaded 3 times in a minute could hit 429 for some rows.
+- Passed: weather rows at 3/11/25 stops, forecast boundary +14/+800, units, 12h/24h, batch limits, hostile upstream data (no NaN/undefined), polar/antimeridian/leap/DST sky lines, calendar dates correct across 6 browser time zones, trip date range, dwell validation.
+- Not covered: real Open-Meteo (DST hour), real Mapbox lines, rate limiter, phone viewport, two tabs, PDF text, Offline view.

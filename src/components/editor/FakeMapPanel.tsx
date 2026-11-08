@@ -18,7 +18,7 @@ import { createSuggestionPopupContent } from "./suggestion-popup";
  * Fixed viewport so fake geocoding (lat 36-38, lng -121..-118) always lands on screen
  * and e2e clicks map to stable coordinates.
  */
-export const FAKE_BOUNDS: Bounds = { minLat: 36, maxLat: 38, minLng: -121, maxLng: -118 };
+const FAKE_BOUNDS: Bounds = { minLat: 36, maxLat: 38, minLng: -121, maxLng: -118 };
 
 /** Mounts the same DOM popup body the real map uses, so e2e exercises the real content builder. */
 function SuggestionPopup({ suggestion, left, top }: { suggestion: Suggestion; left: number; top: number }) {

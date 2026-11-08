@@ -2,7 +2,7 @@ import { getTimes } from "suncalc";
 import type { TimeFormat } from "./settings";
 import type { Stop } from "./types";
 
-export type BestTimeWindow = "sunrise" | "golden hour" | "midday" | "sunset";
+type BestTimeWindow = "sunrise" | "golden hour" | "midday" | "sunset";
 
 /** null means the sun never rises that day at that spot (polar night). */
 export type BestTime = { window: BestTimeWindow; at: Date } | null;

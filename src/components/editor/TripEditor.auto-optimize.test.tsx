@@ -95,6 +95,25 @@ describe("TripEditor: re-optimize when a stop is ticked", () => {
     await act(async () => release({ order: [0, 1, 2, 3] }));
   });
 
+  it("holds a tick back while the quiet re-plan's order save is in flight, then sends it", async () => {
+    vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 3, 2, 1], departAt: null, misses: [] });
+    let releaseReorder!: () => void;
+    vi.mocked(api.reorderStops).mockImplementation((_t, ids) => new Promise((res) => {
+      releaseReorder = () => res({ stops: ids.map((id, order) => ({ ...four.find((s) => s.id === id)!, order })) });
+    }));
+    render(<TripEditor initialTrip={{ ...trip, stops: four }} />);
+    await openMyTrip();
+    await tick("A");
+    await waitFor(() => expect(api.reorderStops).toHaveBeenCalledTimes(1), WAIT);
+    expect(vi.mocked(api.updateStop)).toHaveBeenCalledTimes(1); // A's tick
+    await tick("D"); // lands while the reorder PUT is pending
+    await settle(300);
+    expect(vi.mocked(api.updateStop)).toHaveBeenCalledTimes(1); // still held back
+    await act(async () => releaseReorder());
+    await waitFor(() => expect(vi.mocked(api.updateStop)).toHaveBeenCalledTimes(2), WAIT);
+    expect(vi.mocked(api.updateStop).mock.calls[1]).toEqual(["d", { visited: true }]);
+  });
+
   it("turns several quick ticks into one run", async () => {
     vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2, 3] });
     const five = [...four, mk("e", 4, 40)];

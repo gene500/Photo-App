@@ -15,7 +15,7 @@ import { TtlCache } from "./suggestions/cache";
 
 const KEY_PREFIX = "revoked-session:";
 const FALLBACK_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
-export const REVOKED_CHECK_TTL_MS = 15_000;
+const REVOKED_CHECK_TTL_MS = 15_000;
 
 // Same reasoning as the session-version cache: a revoke in a route handler must clear the entry the page side reads.
 const g = globalThis as unknown as { __notRevoked?: TtlCache<true>; __revokeEpoch?: { n: number } };

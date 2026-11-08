@@ -1,11 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
+import { newTripViaForm, signUp } from "./helpers";
 
 async function signup(page: Page, tag: string) {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-settings-${tag}-${Date.now()}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+  await signUp(page, `e2e-settings-${tag}`);
 }
 
 const bodyBg = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
@@ -50,10 +47,7 @@ test("settings: theme, text size, units and reset persist per device", async ({ 
   // Metric on a real trip.
   await page.getByRole("radio", { name: "Metric", exact: true }).check();
   await page.goto("/trips");
-  await page.getByLabel("Trip name").fill("Settings coast");
-  await page.getByLabel("Planned date").fill("2026-07-01");
-  await page.getByRole("button", { name: "Create trip" }).click();
-  await expect(page).toHaveURL(/\/trips\/[^/]+$/);
+  await newTripViaForm(page, "Settings coast");
   for (const x of [500, 800]) {
     await page.getByTestId("map").click({ position: { x, y: 450 } });
     await expect(page.getByText(/^Spot .* \(fake\)$/)).toBeVisible();
@@ -110,10 +104,7 @@ test("explicit theme beats the OS colour scheme in both directions", async ({ pa
 
 test("settings apply to the public share page without logging in", async ({ page, browser }) => {
   await signup(page, "share");
-  await page.getByLabel("Trip name").fill("Shared look");
-  await page.getByLabel("Planned date").fill("2026-07-01");
-  await page.getByRole("button", { name: "Create trip" }).click();
-  await expect(page).toHaveURL(/\/trips\/[^/]+$/);
+  await newTripViaForm(page, "Shared look");
   await page.getByRole("button", { name: "Share", exact: true }).click();
   await page.getByRole("button", { name: "Create link" }).click();
   const link = await page.getByLabel("Share link").inputValue();

@@ -5,6 +5,7 @@ import { MapView } from "@/components/editor/MapView";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { DownloadDialog } from "@/components/itinerary/DownloadDialog";
 import { useItineraryDownload } from "@/components/itinerary/use-itinerary-download";
+import { ShotListReadOnly } from "@/components/ui/ShotListReadOnly";
 import { btnGhost, card } from "@/components/ui/styles";
 import { computeArrivals, computeBestTimes, describeBestTime, formatClock } from "@/lib/best-time";
 import { appleMapsUrls, googleMapsUrl } from "@/lib/export";
@@ -157,16 +158,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
                           {s.priority !== "normal" && <> · {s.priority === "must" ? "Must-have" : "High priority"}</>}
                         </p>
                       )}
-                      {s.shotNotes && <p className="whitespace-pre-wrap break-words text-xs">{s.shotNotes}</p>}
-                      {s.shotChecklist.length > 0 && (
-                        <ul className="space-y-0.5 break-words text-xs">
-                          {s.shotChecklist.map((item, j) => (
-                            <li key={j} className={item.done ? "text-muted line-through" : ""}>
-                              <span aria-hidden>{item.done ? "☑" : "☐"}</span> {item.text}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                      <ShotListReadOnly notes={s.shotNotes} checklist={s.shotChecklist} />
                     </div>
                   </li>
                 );

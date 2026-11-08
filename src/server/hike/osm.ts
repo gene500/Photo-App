@@ -1,11 +1,11 @@
 import type { LngLat } from "@/lib/types";
 import { fetchOverpass } from "@/server/suggestions/overpass";
 
-export const OSM_TIMEOUT_MS = 12_000;
+const OSM_TIMEOUT_MS = 12_000;
 /** Overall limit for the Overpass step, whatever the mirrors do (the library may try each one and retry). */
 export const OSM_DEADLINE_MS = 15_000;
 /** A bigger answer than this (a dense city) makes Overpass give up, and the lookup counts as failed. */
-export const OSM_MAX_BYTES = 6_000_000;
+const OSM_MAX_BYTES = 6_000_000;
 const WALKABLE = "path|footway|track|steps|bridleway";
 /** A "track" named like this is a road a car can use, not a trail. */
 const ROADLIKE = /\b(road|rd|highway|hwy|drive|dr|street|st|avenue|ave|lane|ln|boulevard|blvd)\b\.?$/i;

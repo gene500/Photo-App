@@ -1,17 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
+import { newTripViaForm, signUp } from "./helpers";
 
 const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString().slice(0, 10);
 
 async function tripWithSunsetStop(page: Page, plannedDate: string) {
-  await page.goto("/signup");
-  await page.getByLabel("Email").fill(`e2e-weather-${Date.now()}-${Math.random().toString(36).slice(2, 6)}@example.com`);
-  await page.getByLabel("Password").fill("correct-horse-battery");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
-  await page.getByLabel("Trip name").fill("Weather check");
-  await page.getByLabel("Planned date").fill(plannedDate);
-  await page.getByRole("button", { name: "Create trip" }).click();
-  await expect(page).toHaveURL(/\/trips\/[^/]+$/);
+  await signUp(page, "e2e-weather");
+  await newTripViaForm(page, "Weather check", plannedDate);
 
   const rows = page.getByTestId("stop-row");
   let count = 0;

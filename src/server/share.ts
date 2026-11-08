@@ -6,7 +6,7 @@ import { toPublicTripDto } from "./mappers";
 /** 32 random bytes as base64url is exactly 43 characters. */
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 
-export const newShareToken = () => randomBytes(32).toString("base64url");
+const newShareToken = () => randomBytes(32).toString("base64url");
 
 /** The owner's share token, creating it on first use. Null when the trip is not theirs. */
 export async function createShareToken(userId: string, tripId: string): Promise<string | null> {

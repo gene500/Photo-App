@@ -7,9 +7,9 @@ import { npsClient } from "./nps-alerts";
 import { osmHoursClient, OSM_MAX_STOPS } from "./osm-hours";
 
 /** Optimize never waits longer than this for notices; whatever has not arrived is simply left out. */
-export const NOTICES_DEADLINE_MS = 3000;
+const NOTICES_DEADLINE_MS = 3000;
 /** Alerts describe today's situation, so they are only shown for a trip planned within this many days ahead. */
-export const NPS_HORIZON_DAYS = 14;
+const NPS_HORIZON_DAYS = 14;
 
 export type NoticeStop = { lat: number; lng: number; /** Estimated arrival (ms since epoch) for opening hours; omit to skip hours. */ arrivalMs?: number };
 type Alert = { kind: "closed" | "alert"; text: string };

@@ -8,7 +8,7 @@ import { ChangePasswordButton, DeleteAccountButton, SignOutButton, SignOutEveryw
 import { btnSecondary, card, inputClass } from "@/components/ui/styles";
 import { geolocationSupported } from "@/lib/geolocation";
 import { clearAllCopies } from "@/lib/offline-store";
-import { MAX_DWELL_MINUTES } from "@/lib/validation";
+import { MAX_DWELL_MINUTES } from "@/lib/limits";
 import type { Settings } from "@/lib/settings";
 import { useSettings } from "./SettingsProvider";
 

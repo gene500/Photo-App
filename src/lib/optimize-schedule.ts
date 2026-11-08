@@ -5,7 +5,7 @@ import type { LightPref, StopPriority } from "./types";
 
 export type ScheduleStop = { lat: number; lng: number; lightPref: LightPref; dwellMinutes: number; priority?: StopPriority };
 
-export type ScheduleMiss = {
+type ScheduleMiss = {
   /** Index in the submitted stop list. */
   stopIndex: number;
   minutes: number;
@@ -14,7 +14,7 @@ export type ScheduleMiss = {
 };
 
 /** A stop whose whole visit falls outside daylight (and outside its own preferred light); `minutes` is the gap to the nearest daylight. */
-export type ScheduleDark = { stopIndex: number; minutes: number; priority: StopPriority };
+type ScheduleDark = { stopIndex: number; minutes: number; priority: StopPriority };
 
 /**
  * `dark` lists the visits that miss daylight; `timed` is true when the departure was searched (so `departAt` is a
@@ -250,7 +250,7 @@ class Evaluator {
 
   /**
    * Light windows and daylight (epoch ms) of stop `i` around `arrivalMs`: the solar day it falls on plus the days either side,
-   * because just after solar midnight the evening that just ended is nearer than the morning ahead. `ownLight` and `ownDaylight`
+   * because just after solar midnight the evening that just ended is nearer than the morning ahead. `hasLight` and `hasDaylight`
    * are the arrival's own day alone: a day without a window (polar) has no light rule, whatever the neighbours have. Cached per day.
    */
   private sunDay(i: number, arrivalMs: number): SunAround {

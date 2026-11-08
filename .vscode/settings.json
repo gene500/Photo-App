@@ -9,7 +9,9 @@
   "search.exclude": {
     "**/.next": true,
     "**/.next-e2e": true,
-    "**/node_modules": true
+    "**/node_modules": true,
+    "**/test-results": true,
+    "**/.e2e-uploads": true
   },
   "files.exclude": {
     "**/.next-e2e": true

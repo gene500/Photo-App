@@ -107,7 +107,7 @@ export async function getCommonsPhoto(place: PlaceQuery, fetchImpl: typeof fetch
   }
 }
 
-export const COMMONS_COUNT_CAP = 50;
+const COMMONS_COUNT_CAP = 50;
 
 /** Geotagged Commons files within 250 m, capped at 50 (a weaker popularity signal than Flickr). undefined on failure. */
 export async function getCommonsPhotoCount(place: PlaceQuery, fetchImpl: typeof fetch = fetch, timeoutMs = 5000): Promise<number | undefined> {

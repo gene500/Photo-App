@@ -3,14 +3,14 @@ import { PHOTO_USER_AGENT } from "./photo-http";
 
 // Fixed host. The key is sent in the X-Api-Key header (never in the URL) and is never logged.
 const API = "https://developer.nps.gov/api/v1";
-export const NPS_TIMEOUT_MS = 8000;
+const NPS_TIMEOUT_MS = 8000;
 export const NPS_PARKS_TTL_MS = 24 * 60 * 60_000;
 export const NPS_ALERTS_TTL_MS = 60 * 60_000;
 /** A failure (including a 429) is remembered briefly so an NPS outage or a spent hourly allowance is not hammered. */
 export const NPS_FAILURE_TTL_MS = 5 * 60_000;
-export const NPS_MAX_PARKS_PER_REQUEST = 10;
+const NPS_MAX_PARKS_PER_REQUEST = 10;
 
-export const npsKey = (): string | null => process.env.NPS_API_KEY?.trim() || null;
+const npsKey = (): string | null => process.env.NPS_API_KEY?.trim() || null;
 
 type Entry<T> = { value: T; expiresAt: number };
 

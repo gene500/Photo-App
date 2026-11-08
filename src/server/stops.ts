@@ -71,8 +71,8 @@ export async function addStop(
   return prisma.$transaction(async (tx) => {
     const trip = await tx.trip.findFirst({ where: { id: tripId, userId }, select: { id: true } });
     if (!trip) return null;
-    if ((await tx.stop.count({ where: { tripId } })) >= MAX_ROUTE_WAYPOINTS) throw new TooManyStopsError();
-    const agg = await tx.stop.aggregate({ where: { tripId }, _max: { order: true } });
+    const agg = await tx.stop.aggregate({ where: { tripId }, _count: { _all: true }, _max: { order: true } });
+    if (agg._count._all >= MAX_ROUTE_WAYPOINTS) throw new TooManyStopsError();
     const row = await tx.stop.create({
       data: {
         tripId,
@@ -180,10 +180,10 @@ export async function deleteStop(
     const remaining = await tx.stop.findMany({
       where: { tripId: row.tripId },
       orderBy: { order: "asc" },
-      select: { id: true },
+      select: { id: true, order: true },
     });
     for (const [order, s] of remaining.entries()) {
-      await tx.stop.update({ where: { id: s.id }, data: { order } });
+      if (s.order !== order) await tx.stop.update({ where: { id: s.id }, data: { order } });
     }
     return { photoUrl: row.photoUrl };
   });
@@ -210,7 +210,10 @@ export async function reorderStops(
       if (given.size !== existing.size || stopIds.some((id) => !existing.has(id))) throw new StopsChangedError();
       // Visited stops are behind the owner: they stay first, in their current order; the request only orders the rest.
       const finalIds = pinVisitedFirst(trip.stops, stopIds);
-      for (const [order, id] of finalIds.entries()) await tx.stop.update({ where: { id }, data: { order } });
+      const was = new Map(trip.stops.map((s) => [s.id, s.order]));
+      for (const [order, id] of finalIds.entries()) {
+        if (was.get(id) !== order) await tx.stop.update({ where: { id }, data: { order } });
+      }
       const rows = await tx.stop.findMany({ where: { tripId }, orderBy: { order: "asc" } });
       return rows.map(toStopDto);
     }, { timeout: 20_000, maxWait: 5_000 }); // the default 5 s is too short for a trip with hundreds of stops on a remote database

@@ -52,7 +52,7 @@ export function buildGpx({ name, stops, route }: { name: string; stops: ExportSt
 }
 
 /** ASCII letters, digits, `_` and dashes only, at most 60 characters; empty when nothing usable is left. */
-export function fileSlug(name: string): string {
+function fileSlug(name: string): string {
   return name
     .replace(/[^A-Za-z0-9_]+/g, "-")
     .replace(/^-+|-+$/g, "")

@@ -13,7 +13,6 @@ export const PDF_THEME = {
   muted: "#655e4f",
   accent: "#d4bd8f",
   accentStrong: "#6f5a2c",
-  accentSoft: "#e6d9bb",
   sand: "#7a5f2a",
   route: "#a8834b",
   white: "#ffffff",
@@ -24,10 +23,6 @@ export function hexToRgb(hex: string): Rgb {
   if (!m) return [0, 0, 0];
   const n = parseInt(m[1], 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-export function rgbToHex([r, g, b]: Rgb): string {
-  return `#${[r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("")}`;
 }
 
 /** Colour of `fg` at `alpha` drawn over the opaque `bg`. */

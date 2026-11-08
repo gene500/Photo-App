@@ -91,9 +91,10 @@ test("suggestions stay after start time and a reorder", async ({ page }) => {
 
   // Start time on My trip.
   await page.getByRole("tab", { name: "My trip" }).click();
+  const startSaved = page.waitForResponse((r) => r.request().method() === "PATCH" && r.url().includes("/api/trips/"));
   await page.getByLabel(/start time/i).first().fill("07:30");
   await page.getByLabel(/start time/i).first().blur();
-  await page.waitForTimeout(800);
+  await startSaved;
   await stillThere("after start time");
 
   // Reorder on Stops with the keyboard.

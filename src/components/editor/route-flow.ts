@@ -5,12 +5,12 @@
 
 /** Time the water takes to run from the first stop to the last, then the time the glow takes to fade out. */
 export const FLOW_SWEEP_MS = 5000;
-export const FLOW_FADE_MS = 500;
+const FLOW_FADE_MS = 500;
 export const FLOW_TOTAL_MS = FLOW_SWEEP_MS + FLOW_FADE_MS;
 
 /** Fixed hexes like ROUTE_COLOR in MapPanel: a pale blue that reads over the brown route on light and dark maps. The route itself is uncovered behind the head (see hiddenRange), so the glow is only a short soft tail. */
-export const FLOW_TRAIL_COLOR = "rgba(120, 200, 245, 0.7)";
-export const FLOW_HEAD_COLOR = "rgba(235, 249, 255, 0.98)";
+const FLOW_TRAIL_COLOR = "rgba(120, 200, 245, 0.7)";
+const FLOW_HEAD_COLOR = "rgba(235, 249, 255, 0.98)";
 const FLOW_CLEAR = "rgba(120, 200, 245, 0)";
 
 /** How far past each end the head travels, as a share of the line, so it enters and leaves smoothly. */

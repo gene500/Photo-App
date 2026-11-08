@@ -85,7 +85,7 @@ export async function readPhoto(
 }
 
 /** Removes the stored file. True when it is gone (including already gone); false when removal failed. */
-export async function removeStoredPhoto(photoUrl: string | null | undefined): Promise<boolean> {
+async function removeStoredPhoto(photoUrl: string | null | undefined): Promise<boolean> {
   if (!photoUrl?.startsWith(PHOTO_URL_PREFIX)) return true;
   const name = photoUrl.slice(PHOTO_URL_PREFIX.length);
   if (!isValidPhotoName(name)) return true;
@@ -117,13 +117,14 @@ export async function deletePhotoFile(photoUrl: string | null | undefined): Prom
 }
 
 export const MAX_CLEANUP_ATTEMPTS = 8;
+const RETRY_BATCH = 25;
 
 /** Retries queued photo removals (oldest first). Safe to run repeatedly: a photo that is already gone counts as done. */
-export async function retryPendingDeletions(batch = 25): Promise<{ removed: number; failed: number; gaveUp: number }> {
+export async function retryPendingDeletions(): Promise<{ removed: number; failed: number; gaveUp: number }> {
   const rows = await prisma.pendingPhotoDeletion.findMany({
     where: { attempts: { lt: MAX_CLEANUP_ATTEMPTS } },
     orderBy: { createdAt: "asc" },
-    take: batch,
+    take: RETRY_BATCH,
   });
   let removed = 0;
   let failed = 0;

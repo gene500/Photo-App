@@ -16,7 +16,7 @@ export function latLngToPercent(b: Bounds, p: LatLng): { left: number; top: numb
 }
 
 /** Web Mercator cannot show the poles; fits are clamped to this latitude so a stop at 89.9 still frames. */
-export const MAX_FIT_LAT = 85;
+const MAX_FIT_LAT = 85;
 
 /**
  * Points ready for a min/max bounding box: longitudes are unwrapped so a trip across the antimeridian (179.5 and -179.5)

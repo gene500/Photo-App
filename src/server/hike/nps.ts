@@ -4,8 +4,8 @@ import { PHOTO_USER_AGENT } from "@/server/external/photo-http";
 
 // Fixed public ArcGIS layer, no key. Only numbers are interpolated into the query.
 const LAYER = "https://mapservices.nps.gov/arcgis/rest/services/NationalDatasets/NPS_Public_Trails/FeatureServer/0/query";
-export const NPS_TIMEOUT_MS = 6000;
-export const NPS_MAX_FEATURES = 500;
+const NPS_TIMEOUT_MS = 6000;
+const NPS_MAX_FEATURES = 500;
 
 const isPoint = (p: unknown): p is LngLat => Array.isArray(p) && p.length >= 2 && isNum(p[0]) && isNum(p[1]) && Math.abs(p[0]) <= 180 && Math.abs(p[1]) <= 90;
 

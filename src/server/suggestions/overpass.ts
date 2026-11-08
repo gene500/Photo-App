@@ -1,6 +1,6 @@
 /** D4 */
-export const OVERPASS_TIMEOUT_MS = 28_000;
-export const OVERPASS_RETRY_DELAY_MS = 1_000;
+const OVERPASS_TIMEOUT_MS = 28_000;
+const OVERPASS_RETRY_DELAY_MS = 1_000;
 
 export class OverpassError extends Error {
   constructor(message: string) {
@@ -31,7 +31,7 @@ function overpassUrls(): string[] {
 }
 
 /** How long a mirror gets before the next one is also started (the first answer wins). */
-export const OVERPASS_HEDGE_MS = 1_500;
+const OVERPASS_HEDGE_MS = 1_500;
 
 class FatalOverpassError extends OverpassError {}
 

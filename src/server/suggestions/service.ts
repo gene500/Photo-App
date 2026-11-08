@@ -15,7 +15,7 @@ type LngLatLiteral = { lat: number; lng: number };
 export const SUGGESTION_CACHE_TTL_MS = 30 * 60_000;
 
 /** Fewer places than this from the local copy is treated as "probably not loaded or not covered", so Overpass is asked too. */
-export const MIN_LOCAL_PLACES = 5;
+const MIN_LOCAL_PLACES = 5;
 
 /** Enriched (ranked by popularity) results, and the raw Overpass results they are built from. */
 /** A finished (enriched) result is served for up to this long past its TTL while a fresh one is built in the background. */
@@ -77,7 +77,7 @@ type Deps = {
 };
 
 /** How long a thin local answer waits for Overpass before being shown instead (Overpass keeps going and fills the cache). */
-export const THIN_LOCAL_GRACE_MS = 1_500;
+const THIN_LOCAL_GRACE_MS = 1_500;
 
 type Raw = { parsed: Suggestion[]; degraded: boolean };
 /** An Overpass answer; `truncated` when the output cap cut it short and the hole filter then dropped places (so it is not the whole corridor). */

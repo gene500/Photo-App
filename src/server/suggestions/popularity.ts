@@ -9,7 +9,7 @@ export const POPULARITY_MAX_CANDIDATES = 40;
 export const POPULARITY_CONCURRENCY = 5;
 export const POPULARITY_TIMEOUT_MS = 5000;
 /** Overall budget for the whole enrichment; counts not back by then are simply left out. */
-export const POPULARITY_BUDGET_MS = 4000;
+const POPULARITY_BUDGET_MS = 4000;
 
 type Counter = (s: Suggestion, fetchImpl: typeof fetch) => Promise<number | undefined>;
 type NotableCheck = (s: Suggestion, fetchImpl: typeof fetch) => Promise<boolean | undefined>;
@@ -24,7 +24,7 @@ export function defaultCounter(): Counter {
     : (s, f) => getCommonsPhotoCount(s, f, POPULARITY_TIMEOUT_MS);
 }
 
-export const COUNT_CACHE_TTL_MS = 24 * 3600_000;
+const COUNT_CACHE_TTL_MS = 24 * 3600_000;
 export const COUNT_CACHE_MAX = 5000;
 
 /**

@@ -56,8 +56,8 @@ describe("ExportControl", () => {
     render(<ExportControl tripName="T" stops={[stop(0), stop(1)]} route={null} />);
     await userEvent.click(screen.getByRole("button", { name: "Export" }));
     const menu = screen.getByRole("group", { name: "Export trip" });
-    expect(menu.className).toContain("[@media(max-height:30rem)]:fixed");
-    expect(menu.className).toContain("[@media(max-height:30rem)]:overflow-y-auto");
+    expect(menu.className).toContain("[@media(max-height:30rem)_and_(orientation:landscape)]:fixed");
+    expect(menu.className).toContain("[@media(max-height:30rem)_and_(orientation:landscape)]:overflow-y-auto");
   });
 
   describe("Download PDF", () => {

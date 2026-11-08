@@ -1,13 +1,23 @@
 import { readFileSync } from "node:fs";
 import { expect, type Page } from "@playwright/test";
 
-/** Creates a fresh account (email `<prefix>-<timestamp>@example.com`) and waits for the trips list. */
+/** Creates a fresh account (email `<prefix>-<timestamp>@example.com`), waits for the trips list and returns the email. */
 export async function signUp(page: Page, prefix: string) {
+  const email = `${prefix}-${Date.now()}@example.com`;
   await page.goto("/signup");
-  await page.getByLabel("Email").fill(`${prefix}-${Date.now()}@example.com`);
+  await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("correct-horse-battery");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL(/\/trips$/);
+  return email;
+}
+
+/** On the trips list: creates a trip through the form and waits for its editor. */
+export async function newTripViaForm(page: Page, name: string, plannedDate = "2026-07-01") {
+  await page.getByLabel("Trip name").fill(name);
+  await page.getByLabel("Planned date").fill(plannedDate);
+  await page.getByRole("button", { name: "Create trip" }).click();
+  await expect(page).toHaveURL(/\/trips\/[^/]+$/);
 }
 
 /** Signs up, creates a trip with one manual stop per name, and opens it. */

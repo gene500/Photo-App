@@ -2,6 +2,7 @@
 // Best-effort like offline-store: storage can be missing, full or blocked and nothing here ever throws.
 // Only a finished list is stored; whatever is read back is validated strictly and rebuilt field by field.
 import { isNum } from "@/lib/guards";
+import { removeKeysWithPrefix } from "@/lib/storage-util";
 import type { Suggestion, SuggestionKind } from "@/lib/types";
 
 const PREFIX = "rtpp.suggestions.";
@@ -104,12 +105,7 @@ export function clearAllSuggestions(): void {
   const s = storage();
   if (!s) return;
   try {
-    const keys: string[] = [];
-    for (let i = 0; i < s.length; i++) {
-      const k = s.key(i);
-      if (k?.startsWith(PREFIX)) keys.push(k);
-    }
-    for (const k of keys) s.removeItem(k);
+    removeKeysWithPrefix(s, PREFIX);
   } catch {
     /* storage blocked */
   }

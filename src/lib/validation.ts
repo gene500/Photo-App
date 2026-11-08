@@ -7,8 +7,20 @@ import { hasContent, stripNameChars, stripTextChars } from "./text";
 // in the browser console. In the browser the interpreter path is plenty fast for these small forms.
 if (typeof window !== "undefined") z.config({ jitless: true });
 
-export const MAX_ROUTE_WAYPOINTS = 25; // Mapbox Directions driving profile limit
-export const MAX_DWELL_MINUTES = 480;
+import {
+  inYearRange,
+  MAX_DWELL_MINUTES,
+  MAX_ROUTE_WAYPOINTS,
+  MAX_SHOT_ITEMS,
+  MAX_SHOT_NOTES,
+  MAX_SHOT_TEXT,
+  MAX_STOP_NAME,
+  MAX_STOP_NOTES,
+  MAX_TRIP_NAME,
+  WEATHER_BATCH_MAX,
+} from "./limits";
+
+export { inYearRange, MAX_DWELL_MINUTES, MAX_ROUTE_WAYPOINTS, MAX_SHOT_ITEMS, MAX_SHOT_NOTES, MAX_SHOT_TEXT, MAX_STOP_NAME, MAX_STOP_NOTES, MAX_TRIP_NAME, WEATHER_BATCH_MAX };
 
 const lat = z.number().min(-90).max(90);
 const lng = z.number().min(-180).max(180);
@@ -16,14 +28,11 @@ const lng = z.number().min(-180).max(180);
 /** The search session token the geocode routes pass to Mapbox (a client-made uuid). */
 export const sessionSchema = z.string().uuid("session must be a uuid");
 
-/** Longest stop name; search results and suggestions are cut to this so any of them can be added as a stop. */
-export const MAX_STOP_NAME = 200;
-
 /**
  * At most `max` UTF-16 units (what `.length` and an input's `maxLength` count). Zod's own `.max()` counts code points, so an
  * emoji would count once there and the server would allow twice what the browser field does; this keeps both the same.
  */
-export const maxUnits = (max: number) =>
+const maxUnits = (max: number) =>
   z.string().check((ctx) => {
     if (ctx.value.length > max) ctx.issues.push({ code: "too_big", origin: "string", maximum: max, inclusive: true, input: ctx.value });
   });
@@ -46,18 +55,13 @@ const nameText = (label: string, max: number) =>
 /** Multi-line free text: at most `max` characters; control characters other than newline, carriage return and tab are stripped. */
 const freeText = (max: number) => z.string().transform((s) => stripTextChars(wellFormed(s))).pipe(maxUnits(max));
 
-export const inYearRange = (ms: number) => {
-  const y = new Date(ms).getUTCFullYear();
-  return y >= 1970 && y <= 2200;
-};
-
 export const dateOnlySchema = z
   .string()
   .refine(isDateOnly, "Planned date must be a valid YYYY-MM-DD date")
   .refine((v) => inYearRange(Date.parse(`${v}T00:00:00Z`)), "Date must be between 1970 and 2200");
 
 export const tripInputSchema = z.object({
-  name: nameText("Trip name", 120),
+  name: nameText("Trip name", MAX_TRIP_NAME),
   plannedDate: dateOnlySchema,
 });
 
@@ -71,16 +75,13 @@ const departAtSchema = z.iso.datetime({ offset: true }).refine((v) => {
 export const tripCreateSchema = tripInputSchema.extend({ departAt: departAtSchema.optional() });
 export type TripCreateInput = z.infer<typeof tripCreateSchema>;
 
-export const MAX_SHOT_ITEMS = 20;
-export const MAX_SHOT_TEXT = 120;
-export const MAX_SHOT_NOTES = 2000;
 export const shotChecklistSchema = z
   .array(z.object({ text: nameText("Shot text", MAX_SHOT_TEXT), done: z.boolean() }))
   .max(MAX_SHOT_ITEMS, `A stop can have at most ${MAX_SHOT_ITEMS} shots`);
 export const shotNotesSchema = freeText(MAX_SHOT_NOTES);
 
-export const lightPrefSchema = z.enum(["any", "sunrise", "golden", "sunset"]);
-export const stopPrioritySchema = z.enum(["normal", "high", "must"]);
+const lightPrefSchema = z.enum(["any", "sunrise", "golden", "sunset"]);
+const stopPrioritySchema = z.enum(["normal", "high", "must"]);
 export const dwellMinutesSchema = z.number().int().min(0).max(MAX_DWELL_MINUTES);
 
 export const tripPatchSchema = tripInputSchema
@@ -98,7 +99,7 @@ export const newStopSchema = z.object({
   lat,
   lng,
   source: z.enum(["manual", "suggested"]),
-  notes: freeText(5000).nullable().optional(),
+  notes: freeText(MAX_STOP_NOTES).nullable().optional(),
   lightPref: lightPrefSchema.default("any"),
   priority: stopPrioritySchema.default("normal"),
   dwellMinutes: dwellMinutesSchema.default(30),
@@ -110,7 +111,7 @@ export type NewStopInput = z.input<typeof newStopSchema>;
 export const stopPatchSchema = z
   .object({
     name: nameText("Stop name", MAX_STOP_NAME),
-    notes: freeText(5000).nullable(),
+    notes: freeText(MAX_STOP_NOTES).nullable(),
     visited: z.boolean(),
     lightPref: lightPrefSchema,
     priority: stopPrioritySchema,
@@ -203,10 +204,10 @@ export const optimizeRequestSchema = z
 // overflow on adversarial input, while staying generous for this app's
 // real route geometries (routes are capped at MAX_ROUTE_WAYPOINTS = 25
 // waypoints, and Mapbox Directions is called with overview=full).
-export const MAX_SUGGESTIONS_COORDINATES = 2_000;
+const MAX_SUGGESTIONS_COORDINATES = 2_000;
 
 /** Coast to coast with detours is ~6,000 km; anything longer is not a real driving route (and would read most of the map data). */
-export const MAX_SUGGESTIONS_ROUTE_KM = 6_000;
+const MAX_SUGGESTIONS_ROUTE_KM = 6_000;
 
 function routeLengthKm(coords: readonly (readonly [number, number])[]): number {
   let m = 0;
@@ -214,7 +215,7 @@ function routeLengthKm(coords: readonly (readonly [number, number])[]): number {
   return m / 1000;
 }
 
-export const MAX_AROUND_RADIUS_KM = 30;
+const MAX_AROUND_RADIUS_KM = 30;
 
 export const suggestionsRequestSchema = z
   .object({
@@ -235,7 +236,7 @@ export const suggestionsRequestSchema = z
   .refine((v) => v.radiusKm === undefined || v.around !== undefined, { path: ["radiusKm"], message: "radiusKm only applies to a single point" });
 
 /** Popularity is looked up for at most this many places per request; the client asks in batches. */
-export const POPULARITY_BATCH_SIZE = 5;
+const POPULARITY_BATCH_SIZE = 5;
 
 export const popularityRequestSchema = z.object({
   places: z.array(z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), name: maxUnits(200).optional() })).min(1).max(POPULARITY_BATCH_SIZE),
@@ -278,12 +279,9 @@ export const pointQuerySchema = z.object({
   lng: decimal.pipe(z.number().min(-180).max(180)),
 });
 
-export const hikeQuerySchema = pointQuerySchema;
-
 export const weatherQuerySchema = pointQuerySchema.extend({ date: dateOnlySchema });
 
 /** A handful of places' weather on one date (suggestion cards): the same point rules as the single lookup. */
-export const WEATHER_BATCH_MAX = 10;
 export const weatherBatchSchema = z.object({
   date: dateOnlySchema,
   points: z.array(z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) })).min(1).max(WEATHER_BATCH_MAX),

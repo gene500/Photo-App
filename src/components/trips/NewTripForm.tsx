@@ -6,6 +6,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnPrimary, inputClass } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
 import { localDateOnly } from "@/lib/dates";
+import { MAX_TRIP_NAME } from "@/lib/limits";
 
 const noopSubscribe = () => () => {};
 
@@ -42,7 +43,7 @@ export function NewTripForm() {
       <h2 className="text-lg font-semibold">New trip</h2>
       <label className="block">
         <span className="text-sm text-muted">Trip name</span>
-        <input required maxLength={120} value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+        <input required maxLength={MAX_TRIP_NAME} value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
       </label>
       <label className="block">
         <span className="text-sm text-muted">Planned date</span>

@@ -11,7 +11,7 @@ const NEAREST_MAX_M = 300;
 export const WIKIMEDIA_IMAGE_HOSTS = ["upload.wikimedia.org", "thumb.wikimedia.org"] as const;
 
 type GeoHit = { pageid?: number; title?: string; lat?: number; lon?: number; dist?: number };
-type Page = { pageid?: number; title?: string; fullurl?: string; thumbnail?: { source?: string } };
+type Page = { title?: string; fullurl?: string; thumbnail?: { source?: string } };
 type Candidate = { title: string; dist: number; thumb: string; pageUrl: string };
 
 const safeImageUrl = (raw: unknown) => allowedHttpsUrl(raw, { hosts: WIKIMEDIA_IMAGE_HOSTS });

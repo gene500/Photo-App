@@ -5,7 +5,7 @@ import type { LightPref, WeatherForecast, WeatherHour } from "./types";
  * date. So the newest day we ask for is UTC today + 14 (15 would be past the horizon where the local date lags);
  * inForecastRange and forecastSpan share this limit. Yesterday is also allowed, see inForecastRange.
  */
-export const FORECAST_DAYS = 14;
+const FORECAST_DAYS = 14;
 /** An hour further than this from the asked instant is "no data" rather than a stale guess. */
 const MAX_GAP_MS = 90 * 60_000;
 
@@ -55,7 +55,7 @@ export function hourInstant(localTime: string, utcOffsetSeconds: number): number
   return Date.UTC(y, mo - 1, d, h, mi) - utcOffsetSeconds * 1000;
 }
 
-const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+export const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 /** Parse an Open-Meteo `/v1/forecast` response (hourly + utc_offset_seconds); anything malformed is unavailable. */
 export function parseOpenMeteo(json: unknown): WeatherForecast {

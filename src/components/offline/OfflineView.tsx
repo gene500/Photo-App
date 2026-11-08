@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useSettings } from "@/components/settings/SettingsProvider";
+import { ShotListReadOnly } from "@/components/ui/ShotListReadOnly";
 import { btnGhost, card } from "@/components/ui/styles";
 import { computeBestTimes, describeBestTime, formatClock, tripDeparture } from "@/lib/best-time";
 import { formatDateOnly, formatInstantDate } from "@/lib/dates";
@@ -135,16 +136,7 @@ function TripCopyView({ copy, onBack, online }: { copy: NonNullable<ReturnType<t
                 </p>
                 {s.lightPref !== "any" && <p className="text-xs text-muted">Best at {lightLabel(s.lightPref).toLowerCase()}</p>}
                 {s.notes && <p className="whitespace-pre-wrap break-words text-xs">{s.notes}</p>}
-                {s.shotNotes && <p className="whitespace-pre-wrap break-words text-xs">{s.shotNotes}</p>}
-                {s.shotChecklist.length > 0 && (
-                  <ul className="space-y-0.5 break-words text-xs">
-                    {s.shotChecklist.map((item, j) => (
-                      <li key={j} className={item.done ? "text-muted line-through" : ""}>
-                        <span aria-hidden>{item.done ? "☑" : "☐"}</span> {item.text}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <ShotListReadOnly notes={s.shotNotes} checklist={s.shotChecklist} />
               </div>
             </li>
           ))}

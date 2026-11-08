@@ -1,6 +1,6 @@
 import type { LngLat, Stop, Suggestion } from "@/lib/types";
 
-export type LatLng = { lat: number; lng: number };
+type LatLng = { lat: number; lng: number };
 
 export type MapViewProps = {
   /** Public share view: markers cannot be dragged. */

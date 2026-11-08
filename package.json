@@ -7,7 +7,7 @@
     "build": "next build",
     "vercel-build": "node scripts/migrate-turso.mjs && next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint --max-warnings 0",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

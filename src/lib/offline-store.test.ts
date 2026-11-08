@@ -129,6 +129,16 @@ describe("offline-store", () => {
     expect(listTripCopies()).toEqual([]);
   });
 
+  it("keeps a copy saved after the clock went backwards instead of evicting it at once", () => {
+    for (let i = 0; i < MAX_COPIES; i++) saveTripCopy(trip(`t${i}`), at(100 + i));
+    expect(saveTripCopy(trip("early"), at(1))).toBe(true);
+    const ids = listTripCopies().map((e) => e.id);
+    expect(ids[0]).toBe("early");
+    expect(ids).toHaveLength(MAX_COPIES);
+    expect(loadTripCopy("early")).not.toBeNull();
+    expect(loadTripCopy("t0")).toBeNull(); // the oldest of the others made room
+  });
+
   it("clearAllCopies removes every offline key but nothing else", () => {
     saveTripCopy(trip("a"));
     claimOwner("u1");

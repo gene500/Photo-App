@@ -153,13 +153,13 @@ describe("api client", () => {
 
   it("explains non-JSON 5xx and 429 answers instead of showing 'Request failed (500)'", async () => {
     fetchMock.mockResolvedValueOnce(new Response("<html>boom</html>", { status: 500 }));
-    await expect(api.listTrips()).rejects.toThrow("The server had a problem. Try again in a moment.");
+    await expect(api.getTrip("x")).rejects.toThrow("The server had a problem. Try again in a moment.");
     fetchMock.mockResolvedValueOnce(new Response("slow down", { status: 429 }));
-    await expect(api.listTrips()).rejects.toThrow(/too many requests/i);
+    await expect(api.getTrip("x")).rejects.toThrow(/too many requests/i);
     fetchMock.mockResolvedValueOnce(new Response("<html>too big</html>", { status: 413 }));
-    await expect(api.listTrips()).rejects.toThrow("That file or request is too large.");
+    await expect(api.getTrip("x")).rejects.toThrow("That file or request is too large.");
     fetchMock.mockResolvedValueOnce(new Response("x", { status: 418 }));
-    await expect(api.listTrips()).rejects.toThrow("Request failed (418)");
+    await expect(api.getTrip("x")).rejects.toThrow("Request failed (418)");
   });
 
   it("says the session expired on a 401", async () => {

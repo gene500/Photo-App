@@ -4,7 +4,7 @@ import { MAX_STOP_NAME } from "@/lib/validation";
 import { clampText, stripNameChars } from "@/lib/text";
 
 export const SUGGESTION_CAP = 40;
-export const DUPLICATE_RADIUS_M = 100;
+const DUPLICATE_RADIUS_M = 100;
 
 export function classifyKind(tags: Record<string, string>): SuggestionKind | null {
   if (tags.tourism === "viewpoint") return "viewpoint";
@@ -26,7 +26,7 @@ const DEFAULT_NAME: Record<SuggestionKind, string> = {
   attraction: "Attraction",
 };
 
-export const KIND_RANK: Record<SuggestionKind, number> = { viewpoint: 0, peak: 1, attraction: 2 };
+const KIND_RANK: Record<SuggestionKind, number> = { viewpoint: 0, peak: 1, attraction: 2 };
 
 type OverpassElement = {
   type?: string;

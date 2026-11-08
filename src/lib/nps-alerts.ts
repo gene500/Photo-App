@@ -4,7 +4,7 @@ export type NpsPark = { parkCode: string; name: string; lat: number; lng: number
 export type NpsAlert = { parkCode: string; title: string; category: string };
 
 /** Park centres are points, so only a stop reasonably close to one is matched; parks are big, towns just outside are not. */
-export const NPS_MATCH_RADIUS_M = 35_000;
+const NPS_MATCH_RADIUS_M = 35_000;
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null;
 

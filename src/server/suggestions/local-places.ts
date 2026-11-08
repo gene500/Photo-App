@@ -63,9 +63,9 @@ export function inLocalCoverage(lat: number, lng: number): boolean {
 /** Rows of consecutive cells are read with one `cell BETWEEN a AND b` term each; a statement carries at most this many terms. */
 export const RUNS_PER_QUERY = 100;
 /** A corridor covering more cells than this is refused by the local copy. */
-export const MAX_RING_CELLS = 20_000;
-export const CELL_CACHE_TTL_MS = 30 * 60_000;
-export const CELL_CACHE_MAX = 3000;
+const MAX_RING_CELLS = 20_000;
+const CELL_CACHE_TTL_MS = 30 * 60_000;
+const CELL_CACHE_MAX = 3000;
 
 export type CellReader = (cells: number[]) => Promise<PlaceRow[]>;
 

@@ -11,7 +11,16 @@ const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]), texta
  * tall in landscape, and a portrait peek state cut a long header's menu off at the bottom), so the panel leaves the sheet
  * (fixed to the top right of the window, just under the floating search bar so it never covers the search input) and scrolls if it is still too tall.
  */
-export const SHORT_SCREEN_POPOVER = "max-lg:fixed max-lg:right-3 max-lg:top-[4.25rem] max-lg:mt-0 max-lg:max-h-[calc(100dvh-5.5rem)] max-lg:overflow-y-auto [@media(max-height:30rem)]:fixed [@media(max-height:30rem)]:right-3 [@media(max-height:30rem)]:top-[4.25rem] [@media(max-height:30rem)]:mt-0 [@media(max-height:30rem)]:max-h-[calc(100dvh-5.5rem)] [@media(max-height:30rem)]:overflow-y-auto";
+export const SHORT_SCREEN_POPOVER = [
+  // Phones and tablets (max-lg) in any height: fixed to the top right, capped to the window width so it never overhangs the left edge when zoomed.
+  "max-lg:fixed max-lg:right-3 max-lg:top-[4.25rem] max-lg:mt-0 max-lg:max-h-[calc(100dvh-5.5rem)] max-lg:max-w-[calc(100vw-1.5rem)] max-lg:overflow-y-auto",
+  // Taller than the short-landscape layout: the floating search bar spans down to ~112 px here, so the panel sits below it (and scrolls in what is left).
+  "max-lg:[@media(min-height:30.0625rem)]:top-[7.25rem] max-lg:[@media(min-height:30.0625rem)]:max-h-[calc(100dvh-8.5rem)]",
+  // A portrait screen at or under 30rem tall (e.g. 320x480, or 400% zoom) is not the landscape layout either.
+  "max-lg:[@media(max-height:30rem)_and_(orientation:portrait)]:top-[7.25rem] max-lg:[@media(max-height:30rem)_and_(orientation:portrait)]:max-h-[calc(100dvh-8.5rem)]",
+  // Short landscape screens (landscape phones, any width): unchanged layout just under the search bar.
+  "[@media(max-height:30rem)_and_(orientation:landscape)]:fixed [@media(max-height:30rem)_and_(orientation:landscape)]:right-3 [@media(max-height:30rem)_and_(orientation:landscape)]:top-[4.25rem] [@media(max-height:30rem)_and_(orientation:landscape)]:mt-0 [@media(max-height:30rem)_and_(orientation:landscape)]:max-h-[calc(100dvh-5.5rem)] [@media(max-height:30rem)_and_(orientation:landscape)]:max-w-[calc(100vw-1.5rem)] [@media(max-height:30rem)_and_(orientation:landscape)]:overflow-y-auto",
+].join(" ");
 
 /**
  * Plain disclosure behaviour for a header popover: Escape and an outside press close it, focus moves into the

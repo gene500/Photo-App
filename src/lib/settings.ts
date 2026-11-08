@@ -1,6 +1,6 @@
 // Per-device display settings, kept in localStorage (never sent to the server). Pure helpers only: the React
 // provider lives in components/settings. The same key and shape are read by SETTINGS_INIT_SCRIPT before first paint.
-import { MAX_DWELL_MINUTES } from "./validation";
+import { MAX_DWELL_MINUTES } from "./limits";
 
 export const SETTINGS_KEY = "rtpp.settings.v1";
 /**
@@ -11,23 +11,23 @@ export const SETTINGS_KEY = "rtpp.settings.v1";
  */
 export const SETTINGS_VERSION = 2;
 
-export const THEMES = ["system", "light", "dark"] as const;
-export const TEXT_SIZES = ["default", "large", "xlarge"] as const;
-export const DISTANCE_UNITS = ["km", "mi"] as const;
+const THEMES = ["system", "light", "dark"] as const;
+const TEXT_SIZES = ["default", "large", "xlarge"] as const;
+const DISTANCE_UNITS = ["km", "mi"] as const;
 /** "auto" keeps today's clock (en-US 12-hour); the others force it. */
-export const TIME_FORMATS = ["auto", "12h", "24h"] as const;
-export const MAP_STYLES = ["beige", "standard"] as const;
-export const SUGGESTION_LIGHT_PREFS = ["auto", "any"] as const;
+const TIME_FORMATS = ["auto", "12h", "24h"] as const;
+const MAP_STYLES = ["beige", "standard"] as const;
+const SUGGESTION_LIGHT_PREFS = ["auto", "any"] as const;
 /** What Optimize weighs first: priority stops (may cost a longer drive) or the shortest route. */
-export const OPTIMIZE_FOCUSES = ["priority", "time"] as const;
+const OPTIMIZE_FOCUSES = ["priority", "time"] as const;
 
 export type Theme = (typeof THEMES)[number];
-export type TextSize = (typeof TEXT_SIZES)[number];
+type TextSize = (typeof TEXT_SIZES)[number];
 export type DistanceUnit = (typeof DISTANCE_UNITS)[number];
 export type TimeFormat = (typeof TIME_FORMATS)[number];
-export type MapStyle = (typeof MAP_STYLES)[number];
+type MapStyle = (typeof MAP_STYLES)[number];
 export type SuggestionLightPref = (typeof SUGGESTION_LIGHT_PREFS)[number];
-export type OptimizeFocus = (typeof OPTIMIZE_FOCUSES)[number];
+type OptimizeFocus = (typeof OPTIMIZE_FOCUSES)[number];
 
 export type Settings = {
   theme: Theme;

@@ -1,9 +1,8 @@
-import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, SearchSuggestion, Stop, PlaceNotice, StopPriority, Suggestion, Trip, TripSummary, TripWithStops, WeatherForecast } from "./types";
+import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, SearchSuggestion, Stop, PlaceNotice, StopPriority, Suggestion, Trip, TripWithStops, WeatherForecast } from "./types";
 import { shapes } from "./api-shapes";
 import { isHike, type Hike } from "./hike";
 import type { NewStopInput, StopPatch, TripCreateInput, TripPatch } from "./validation";
 import { SESSION_EXPIRED } from "./session-expired";
-export { SESSION_EXPIRED };
 
 export class ApiError extends Error {
   readonly status: number;
@@ -103,7 +102,6 @@ export const api = {
   /** Permanently deletes the signed-in account and everything in it; the password confirms it. */
   changePassword: (currentPassword: string, newPassword: string) => request<void>("/api/account/password", send("POST", { currentPassword, newPassword })),
   deleteAccount: (proof: { password?: string; confirmEmail?: string }) => request<void>("/api/account", send("DELETE", proof)),
-  listTrips: () => request<{ trips: TripSummary[] }>("/api/trips", {}, DEFAULT_TIMEOUT_MS, shapes.tripList),
   createTrip: (input: TripCreateInput) => request<{ trip: Trip }>("/api/trips", send("POST", input), DEFAULT_TIMEOUT_MS, shapes.trip),
   updateTrip: (id: string, patch: TripPatch) => request<{ trip: Trip }>(`/api/trips/${id}`, send("PATCH", patch), DEFAULT_TIMEOUT_MS, shapes.trip),
   getTrip: (id: string) => request<{ trip: TripWithStops }>(`/api/trips/${id}`, {}, DEFAULT_TIMEOUT_MS, shapes.tripWithStops),

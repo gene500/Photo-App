@@ -44,6 +44,17 @@ describe("StopDrawer", () => {
     expect(screen.queryByTestId("light-warning")).toBeNull();
   });
 
+  it("limits the name to the server maximum and reports its own error once", async () => {
+    const onErrorChange = vi.fn();
+    const onSave = vi.fn(async () => { throw new Error("You're offline or the server can't be reached"); });
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onErrorChange={onErrorChange} onPhotoChange={vi.fn()} />);
+    expect(screen.getByLabelText("Name").getAttribute("maxlength")).toBe("200");
+    await userEvent.type(screen.getByLabelText("Name"), "x");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(/You're offline/)).toBeTruthy();
+    expect(onErrorChange).toHaveBeenLastCalledWith("You're offline or the server can't be reached");
+  });
+
   it("saves edits (blank notes become null) and closes", async () => {
     const onSave = vi.fn(async () => {});
     const onClose = vi.fn();
@@ -123,6 +134,7 @@ describe("StopDrawer", () => {
     expect(onSave).toHaveBeenCalledWith({
       shotNotes: "Bring tripod",
       shotChecklist: [{ text: "Wide from the rail", done: true }, { text: "Detail of bark", done: false }],
+      shotChecklistBase: [],
     });
   });
 
@@ -131,7 +143,7 @@ describe("StopDrawer", () => {
     const { unmount } = render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
     await userEvent.type(screen.getByLabelText("Add a shot"), "Last light");
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(onSave).toHaveBeenCalledWith({ shotChecklist: [{ text: "Last light", done: false }] });
+    expect(onSave).toHaveBeenCalledWith({ shotChecklist: [{ text: "Last light", done: false }], shotChecklistBase: [] });
     unmount();
     onSave.mockClear();
     render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
@@ -349,5 +361,38 @@ describe("StopDrawer sky card", () => {
     await userEvent.click(screen.getByLabelText("Visited"));
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(onSave).toHaveBeenCalledWith({ visited: true });
+  });
+
+  it("refuses an empty name before sending anything, with the message next to the field", async () => {
+    const onSave = vi.fn();
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    await userEvent.clear(screen.getByLabelText("Name"));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByText("Stop name is required")).toBeTruthy();
+    await userEvent.type(screen.getByLabelText("Name"), "X");
+    expect(screen.queryByText("Stop name is required")).toBeNull();
+  });
+
+  it("reports unsaved edits to the page, and clears the report on close", async () => {
+    const onDirtyChange = vi.fn();
+    const { unmount } = render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={vi.fn()} onDirtyChange={onDirtyChange} onPhotoChange={vi.fn()} />);
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    await userEvent.type(screen.getByLabelText("Notes"), "x");
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    unmount();
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("sends the checklist as loaded (shotChecklistBase) with an edited one, so another tab's ticks are merged", async () => {
+    const onSave = vi.fn();
+    const loaded = { ...stop, shotChecklist: [{ text: "Silhouette", done: false }] };
+    render(<StopDrawer plannedDate="2026-07-01" stop={loaded} onClose={vi.fn()} onSave={onSave} onPhotoChange={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText("Add a shot"), "Detail{enter}");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSave).toHaveBeenCalledWith({
+      shotChecklist: [{ text: "Silhouette", done: false }, { text: "Detail", done: false }],
+      shotChecklistBase: [{ text: "Silhouette", done: false }],
+    });
   });
 });

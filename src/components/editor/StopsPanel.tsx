@@ -97,8 +97,8 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, trip, sug
   const side = useShortLandscape();
   const open = side || snap !== "collapsed";
   const tabClass = (t: Tab) =>
-    `min-h-9 flex-1 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-center text-sm transition min-[400px]:px-3 ${tab === t ? "bg-surface font-medium text-foreground shadow-sm" : "text-muted hover:text-foreground"}`;
-  const arrowClass = "flex h-9 w-9 items-center justify-center rounded-full bg-hover text-2xl leading-none text-foreground ring-1 ring-border transition hover:bg-border focus-visible:outline-2 focus-visible:outline-accent-strong";
+    `min-h-9 touch:min-h-11 flex-1 whitespace-nowrap rounded-lg px-1.5 py-1.5 text-center text-sm transition min-[400px]:px-3 ${tab === t ? "bg-surface font-medium text-foreground shadow-sm" : "text-muted hover:text-foreground"}`;
+  const arrowClass = "flex h-9 w-9 touch:h-11 touch:w-11 items-center justify-center rounded-full bg-hover text-2xl leading-none text-foreground ring-1 ring-border transition hover:bg-border focus-visible:outline-2 focus-visible:outline-accent-strong";
 
   return (
     <aside
@@ -114,7 +114,7 @@ export function StopsPanel({ header, collapsedSummary, summary, stops, trip, sug
           <p className="min-w-0 flex-1 truncate py-2 text-sm font-medium">{collapsedSummary}</p>
         )}
         {/* One arrow per direction, so the arrow always does what it says. */}
-        {!side && <div className="ml-auto flex shrink-0">
+        {!side && <div className="ml-auto flex shrink-0 gap-2">
           {SMALLER[snap] && (
             <button type="button" ref={shrinkRef} aria-label="Shrink panel" onClick={() => { refocus.current = "shrink"; setSnap(SMALLER[snap]!); }} className={arrowClass}>
               ▾

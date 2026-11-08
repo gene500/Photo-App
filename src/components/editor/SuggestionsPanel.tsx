@@ -18,6 +18,10 @@ type Props = {
   suggestions: Suggestion[];
   error: string | null;
   canSearch: boolean;
+  /** The trip has no stops at all: the panel says to add one first. */
+  noStops?: boolean;
+  /** The trip is at its stop limit: Accept would be refused. */
+  full?: boolean;
   onFind: () => void;
   onAccept: (s: Suggestion) => void | Promise<void>;
   onDismiss: (osmId: string) => void;
@@ -36,7 +40,7 @@ function keyboardFocus(el: HTMLElement): boolean {
   }
 }
 
-export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind, onAccept, onDismiss, onDismissError, onHover, weather }: Props) {
+export function SuggestionsPanel({ status, suggestions, error, canSearch, noStops, full, onFind, onAccept, onDismiss, onDismissError, onHover, weather }: Props) {
   // Accepts in flight, per suggestion. The ref guards synchronously (two clicks can land
   // before a re-render); the state disables the button.
   const inFlight = useRef(new Set<string>());
@@ -117,7 +121,7 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
           {status === "loading" ? "Searching…" : "Find photo spots"}
         </button>
       </div>
-      {!canSearch && <p className="text-xs text-muted">Suggestions need a route first.</p>}
+      {!canSearch && <p className="text-xs text-muted">{noStops ? "Add a stop first, then find photo spots near it." : "Suggestions need a route first."}</p>}
       {status === "error" && error && (
         <div className="space-y-1">
           <ErrorBanner message={error} onDismiss={onDismissError} />
@@ -145,7 +149,7 @@ export function SuggestionsPanel({ status, suggestions, error, canSearch, onFind
               )}
             </div>
             <div className="flex shrink-0 gap-1">
-              <button type="button" data-action="accept" {...softDisabled(accepting.has(s.osmId))} onClick={accepting.has(s.osmId) ? undefined : () => { setHover(null); keepFocus(s, "accept"); void accept(s); }} className={btnAccent} aria-label={`Accept ${s.name}`}>Accept</button>
+              <button type="button" data-action="accept" {...softDisabled(accepting.has(s.osmId) || full)} title={full ? "A trip can have at most 25 stops" : undefined} onClick={accepting.has(s.osmId) || full ? undefined : () => { setHover(null); keepFocus(s, "accept"); void accept(s); }} className={btnAccent} aria-label={`Accept ${s.name}`}>Accept</button>
               <button type="button" data-action="dismiss" onClick={() => { setHover(null); keepFocus(s, "dismiss"); onDismiss(s.osmId); }} className={btnGhost} aria-label={`Dismiss ${s.name}`}>Dismiss</button>
             </div>
           </li>

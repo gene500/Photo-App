@@ -3,7 +3,7 @@ import { readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { NextRequest } from "next/server";
 import { clearAllLimits, POLICIES } from "@/server/rate-limit";
-import { config, proxy } from "./proxy";
+import { config, hasBadPercentEncoding, proxy } from "./proxy";
 
 const req = (path = "/s/abc", headers: Record<string, string> = {}) => new NextRequest(`http://localhost${path}`, { headers });
 
@@ -21,7 +21,16 @@ describe("proxy: public share page render limit", () => {
   it("runs on pages but not on the API or build assets", () => {
     const re = new RegExp(`^${config.matcher[0]}$`);
     for (const path of ["/", "/login", "/trips/abc", "/s/abc", "/offline", "/privacy", "/apiary", "/icons-guide", "/fonts-we-love"]) expect(re.test(path), path).toBe(true);
-    for (const path of ["/api/optimize", "/api", "/_next/static/chunks/a.js", "/_next/image"]) expect(re.test(path), path).toBe(false);
+    for (const path of ["/_next/static/chunks/a.js", "/_next/image"]) expect(re.test(path), path).toBe(false);
+    // The API is not buffered by the proxy: its first matcher skips it, so 401 / 413 still come from the headers alone.
+    for (const path of ["/api/optimize", "/api", "/api/trips/abc/stops", "/api/stops/x/photo"]) expect(re.test(path), path).toBe(false);
+  });
+
+  it("matches API paths only when they hold a percent sign (for the bad-encoding check)", () => {
+    const re = new RegExp("^/api/(.*%.*)$"); // what `/api/:rest(.*%.*)` compiles to (checked against next/dist/compiled/path-to-regexp)
+    expect(config.matcher[1]).toBe("/api/:rest(.*%.*)");
+    for (const path of ["/api/trips/%", "/api/trips/%E0%A4%A", "/api/x%41"]) expect(re.test(path), path).toBe(true);
+    for (const path of ["/api/trips", "/api/trips/abc/stops", "/api", "/login"]) expect(re.test(path), path).toBe(false);
   });
 
   it("skips the public files, so only pages and share links reach the proxy", () => {
@@ -74,5 +83,63 @@ describe("proxy: Content-Security-Policy nonce", () => {
     expect((await proxy(req("/s/abc", h))).status).toBe(429);
     process.env.RATE_LIMIT_DISABLED = "1";
     vi.unstubAllEnvs();
+  });
+});
+
+describe("proxy: malformed URLs", () => {
+  it("answers 400 JSON for bad percent-encoding under /api and plain 400 elsewhere", async () => {
+    for (const path of ["/api/trips/%", "/api/stops/%E0%A4%A", "/api/uploads/%FF"]) {
+      const res = await proxy(req(path));
+      expect(res.status, path).toBe(400);
+      expect(res.headers.get("content-type")).toContain("application/json");
+      expect(await res.json()).toEqual({ error: "Invalid URL" });
+    }
+    for (const path of ["/s/%E0%A4%A", "/trips/%E0%A4%A", "/%"]) {
+      const res = await proxy(req(path));
+      expect(res.status, path).toBe(400);
+      expect(res.headers.get("content-type")).toContain("text/plain");
+    }
+  });
+
+  it("lets well-formed encodings through, and does not add a page CSP to the API", async () => {
+    expect((await proxy(req("/trips/caf%C3%A9"))).status).toBe(200);
+    const api = await proxy(req("/api/trips/a%20b"));
+    expect(api.status).toBe(200);
+    expect(api.headers.get("content-security-policy")).toBeNull();
+    expect(hasBadPercentEncoding("/a%2Fb")).toBe(false);
+    expect(hasBadPercentEncoding("/a%zz")).toBe(true);
+  });
+});
+
+describe("proxy: upgrade-insecure-requests", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const csp = async (url: string, headers: Record<string, string> = {}) =>
+    (await proxy(new NextRequest(url, { headers }))).headers.get("content-security-policy") ?? "";
+
+  it("is added in production over https only", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    expect(await csp("https://example.com/login")).toContain("upgrade-insecure-requests");
+    expect(await csp("http://localhost/login", { "x-forwarded-proto": "https" })).toContain("upgrade-insecure-requests");
+    expect(await csp("http://localhost/login")).not.toContain("upgrade-insecure-requests");
+    vi.stubEnv("NODE_ENV", "development");
+    expect(await csp("https://example.com/login")).not.toContain("upgrade-insecure-requests");
+  });
+});
+
+describe("proxy: bad percent-encoding and cache headers", () => {
+  it("answers 400 JSON with no-store under /api and text with no-store elsewhere", async () => {
+    const api = await proxy(req("/api/trips/%"));
+    expect(api.status).toBe(400);
+    expect(api.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(api.headers.get("content-type")).toContain("application/json");
+    const page = await proxy(req("/s/%E0%A4%A"));
+    expect(page.status).toBe(400);
+    expect(page.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(page.headers.get("content-type")).toContain("text/plain");
+  });
+  it("lets a good-encoding API path through without a CSP (the API has its own)", async () => {
+    const res = await proxy(req("/api/trips/%41"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-security-policy")).toBeNull();
   });
 });

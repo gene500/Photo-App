@@ -15,6 +15,12 @@ describe("toStopDto shot list", () => {
     expect(out).toHaveLength(20);
     expect(out[0].text).toHaveLength(120);
   });
+  it("never cuts a surrogate pair when capping an item (encodeURIComponent must not throw)", () => {
+    const text = "x".repeat(119) + "\u{1F600}"; // the pair straddles the 120-unit cap
+    const out = parseShotChecklist(JSON.stringify([{ text, done: false }]));
+    expect(out[0].text).toBe("x".repeat(119));
+    expect(() => encodeURIComponent(out[0].text)).not.toThrow();
+  });
   it("round-trips the stored JSON checklist", () => {
     const list = [{ text: "Wide", done: true }, { text: "Detail", done: false }];
     expect(toStopDto({ ...row, shotChecklist: JSON.stringify(list) })).toMatchObject({ shotNotes: "Tripod", shotChecklist: list });
@@ -23,6 +29,8 @@ describe("toStopDto shot list", () => {
     expect(parseShotChecklist("not json")).toEqual([]);
     expect(parseShotChecklist('{"a":1}')).toEqual([]);
     expect(parseShotChecklist('[{"text":"ok","done":true},{"text":1},null,"x"]')).toEqual([{ text: "ok", done: true }]);
+    // Items holding only invisible characters would make the next save return 400, so they are dropped on read.
+    expect(parseShotChecklist(JSON.stringify([{ text: "\u200B\u00AD", done: false }, { text: "  ", done: true }, { text: "ok", done: false }]))).toEqual([{ text: "ok", done: false }]);
   });
 });
 

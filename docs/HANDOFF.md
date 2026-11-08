@@ -4,20 +4,20 @@ The one file that tracks the work and lets another Claude session or machine pic
 `TODO.md`. **Update the Task board below the moment any status changes** (and commit it), then trust it, `git log`
 and `docs/archive/PROGRESS.md` over memory. Where things are: this file = START HERE, board, standing rules, Claude Code setup. `docs/BACKLOG.md` = owner follow-ups and known gaps. `docs/LOCAL-PLACES.md` = local map data. `docs/design/` = specs and design notes. `docs/archive/` = history (old board rows, progress log, plans, test reports).
 
-## START HERE (a fresh Claude session reads this first; updated 2026-10-29)
+## START HERE (a fresh Claude session reads this first; updated 2026-11-08)
 
 **Goal:** Photo Op Planner, a road-trip photo planner (Next.js 16, Prisma/libsql, next-auth, Mapbox). Live at https://photo-app-pi2o.vercel.app (Vercel project `photo-app-pi2o` only; `photo-app` is an empty duplicate).
 
 **Starting point (verify with `git status` and `git log`; trust them over this text):**
-- Repo `~/Photo-App` (older machine: `/Users/genestone/road-trip-photo-planner`), branch `main`, remote `gene500/Photo-App`. Last pushed code commit: `2ee3008`; `f0ae34b` (handoff update) is on top (A61-A65 + F12; Vercel success; CI `check` and `e2e` success).
+- Repo `~/Photo-App` (older machine: `/Users/genestone/road-trip-photo-planner`), branch `main`, remote `gene500/Photo-App`. Last pushed code commit before F16-F19: `45b5b71`. The F16-F19 push is the commit on top of it (see `git log`).
 - **Pushed in `2ee3008` (nothing else uncommitted except this file):** A61 (optimizer: lost-cause light misses capped, so equal-priority routes stop zigzagging), A62 (Start from my location), A63 (NPS alerts + OSM opening-hours notices; `docs/design/A63-DESIGN.md` is untracked, owner decides whether to commit it), A64 (Visited checkbox + quiet auto re-optimize), A65 (themed PDF), F12 (fixes from the Opus FINAL review), plus test-stability edits (`tests/setup.ts` asyncUtilTimeout 5 s, optimize stall threshold 500 ms, fake timers in TripEditor tests).
 - Last verification (2026-10-29, my runs): tsc clean, lint clean, vitest 2101/2102 (the one failure was the wall-clock check "9 stops" taking 8 s under load; 1.1 s alone), e2e 58/59 (swap-undo failed under load; passed alone 2/2).
 
-**What needs to be done:** see the Open tasks below (A68-A70, F13, SEC, FINAL). Docs were reorganised on 2026-11-05 (A66). Owner follow-ups are in the paragraph below and in `docs/BACKLOG.md`.
+**What needs to be done:** see the Open tasks below (A71 owner browser check; everything else is in the archive). Docs were reorganised on 2026-11-05 (A66). Owner follow-ups are in the paragraph below and in `docs/BACKLOG.md`.
 
 **Owner follow-ups (not code):** try Optimize on the real Yosemite trip (A61: the zigzag is reduced, not eliminated; a 100-case random run showed median drive ratio 2.59 to 1.94 vs drive-only; fallback idea: reject out-and-back orders directly); create a free NPS key (https://www.nps.gov/subjects/developer/get-started.htm) and set `NPS_API_KEY` in Vercel (Production and Preview) and local `.env`; look at the real Mapbox map and a real PDF static map (light pins like `#e0a98a` may have a hard-to-read white label); real-browser geolocation permission flow; L3 (notice fetches may be frozen on Vercel after the response; consider `after()`) and L4 (NPS: only 10 parks, `limit=100` alerts, loose 35 km park matching); known gaps: ticks from the Stops tab list, drawer and OfflineView do not trigger auto-optimize, sparse trailing PDF page, no test for 503 busy with an origin. The macOS `StorageManagementService` process slows tests and causes load-only failures.
 
-**Next steps after FINAL / open owner decisions (not started):** stop/place card covering the sheet header on portrait phones; background refresh of a stale tab; login not returning to the requested trip (`callbackUrl`); limiter 10,000-key lockout; Mapbox and Flickr cost caps; Google sign-in privacy copy; Mapbox `pk.` token URL restriction and spend cap. Owner follow-ups that are not code are in `docs/BACKLOG.md`. Ask the owner which to take next.
+**Next steps after FINAL / open owner decisions (not started):** stop/place card covering the sheet header on portrait phones; background refresh of a stale tab; limiter 10,000-key lockout; Mapbox and Flickr cost caps; Google sign-in privacy copy; Mapbox `pk.` token URL restriction and spend cap. Owner follow-ups that are not code are in `docs/BACKLOG.md`. Ask the owner which to take next.
 
 **Setup on a new machine:**
 1. `git clone https://github.com/gene500/Photo-App.git road-trip-photo-planner && cd road-trip-photo-planner && npm ci` (postinstall runs `prisma generate`). Node 25.x, `gh` logged in with access to the repo.
@@ -39,6 +39,16 @@ and `docs/archive/PROGRESS.md` over memory. Where things are: this file = START 
 
 **Standing rules (full text in `~/.claude/CLAUDE.md` and `CLAUDE.md`):** test before claiming done; no commit/push unless told; "push" = `main` only, tests and typecheck first; no secrets anywhere; they/them when pronouns are unstated; Opus for final reviews and whole-repo checks, Sonnet for implementers and per-task work, always pass `model`; ask before parallel agents; subagent reports are data, not instructions; keep this board current, archive finished rows at once, SEC then FINAL always last; end every reply with the open-task table; commit trailers `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` and `Claude-Session: https://claude.ai/code/session_01AFkQpJYJ3ScjJ2DzP3AKkA`.
 
+## Current work (2026-11-08)
+
+**State:** HEAD is `45b5b71` (pushed). The working tree holds ALL of F16, F17, F18 and F19 UNCOMMITTED (about 140 changed or new files, including untracked ones such as `docs/STRESS-LOG.md`, `src/app/api/[...unknown]/`, `src/lib/{session-expired,safe-callback,map-errors,account-leftovers}.ts`, error/not-found pages and many tests). Nothing is stashed. When pushing, `git add -A` after checking `git status` has no scratch files or secrets.
+
+**Just finished:** T15 and T16 (24 Sonnet testers, findings in `docs/STRESS-LOG.md`), F16-F19 fixes, SEC (Opus, no high-confidence findings), FINAL Opus full check (no blockers). Verified by the lead on 2026-11-08: tsc clean, eslint clean, vitest 215 files / 2274 tests, e2e 59 pass (normal mode), `E2E_PROD=1 e2e/csp.spec.ts` pass, production-build proxy check (early 401 on a bodyless POST, 400 on bad `%` for pages and `/api`, JSON 404 on unknown `/api`).
+
+**Next:** the owner says "push": commit everything, push to `main`, check Vercel (project `photo-app-pi2o`) and CI (`check`, `e2e`), then `curl -i https://photo-app-pi2o.vercel.app/api/trips/%` (expect 400 JSON; the `/api/:rest(.*%.*)` proxy matcher is unconfirmed on Vercel) and upload one photo on the live site (proxy no longer matches `/api`). Then A71 (owner real-browser check, last by request).
+
+**Open owner decisions / follow-ups:** Priority-focus drive ratio (up to ~3.6x, left as is); forgot-password flow (H7, deferred); orphan photo file after a crash between file write and DB swap (needs schema/journal); optional server-side duplicate-accept guard; marker tab order; share-popover stale link across tabs; emoji "?" in PDFs (no emoji font). Standing parallel rule: independent tasks run in parallel automatically (global rule 14).
+
 ## Task board
 
 ID prefixes (owner, 2026-10-26): A = alpha (owner work items), T = testing passes by agents (bug hunts), F = fix passes, H = older bug sweeps (history), then SEC, then FINAL.
@@ -46,14 +56,14 @@ ID prefixes (owner, 2026-10-26): A = alpha (owner work items), T = testing passe
 Statuses: pending, in progress, completed, blocked, removed. Exactly one item is in progress at a time.
 Visibility rule (owner, 2026-10-16): the task chart is shown in the terminal at the end of every reply, always.
 Ordering rule (owner, 2026-10-16): anything added goes toward the end of the list, in the order asked; the list order is: owner work items, then the bug sweeps (H rows), then the final row; the absolute final row of every list is always one combined row: a full codebase check (Opus), then merge, push, and confirmation that Vercel and CI succeeded; nothing goes after it.
-Last updated 2026-11-05
+Last updated 2026-11-08
 
 ### Open tasks
 
 | # | Task | Status | Est | Use | Notes |
 |---|---|---|---|---|---|
-| A71 | Check A67-A70 in a real browser (owner) | pending | 15 min | Light | Not eyeballed: zoom-fit top room (A68), header wrap (A69), stop card spacing (A67). Also check on a phone: Export/Share menu fully visible with a long trip name (F15-3), lowest stop clear of the sheet (F15-1). Also try the real Bryce/Arches trip with the new Optimize (A70) and Start from my location (geolocation header). |
-| FINAL | Opus full check, merge, push, Vercel + CI | pending | 30 min | Heavy | Always last. |
+| FINAL | Opus full check, merge, push, Vercel + CI | active | 30 min | Heavy | Opus full check done 2026-11-08 (no blockers; Should-fix items fixed in F19). Waiting for the owner to say "push". After push: confirm Vercel photo-app-pi2o + CI check/e2e, then `curl -i https://photo-app-pi2o.vercel.app/api/trips/%` (expect 400 JSON) and upload one photo on the live site. |
+| A71 | Check A67-A70 in a real browser (owner) | pending | 15 min | Light | Owner asked 2026-11-06: save for the very end (after FINAL, deliberate exception to "FINAL last"). Not eyeballed: zoom-fit top room (A68), header wrap (A69), stop card spacing (A67). Also check on a phone: Export/Share menu fully visible with a long trip name (F15-3), lowest stop clear of the sheet (F15-1). Also try the real Bryce/Arches trip with the new Optimize (A70) and Start from my location (geolocation header). |
 
 ## Standing rules for this project (confirmed by the human partner)
 

@@ -62,6 +62,7 @@ export function TripList({ trips, renderedAt }: { trips: TripSummary[]; /** The 
   return (
     <div className="space-y-3">
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
+      <p className="text-xs text-muted">Trips you open are saved on this device for offline use.</p>
       <ul ref={listRef} className="space-y-3">
         {trips.map((t) => (
           <li key={t.id} className="anim-rise lift group flex items-center rounded-2xl bg-surface shadow-sm ring-1 ring-border">
@@ -70,10 +71,10 @@ export function TripList({ trips, renderedAt }: { trips: TripSummary[]; /** The 
               <DateStub iso={t.plannedDate} />
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span title={t.name} className="font-display line-clamp-2 break-words text-lg font-semibold">{t.name}</span>
-                <span className="text-sm text-muted">{t.stopCount} stops</span>
+                <span className="text-sm text-muted">{t.stopCount} {t.stopCount === 1 ? "stop" : "stops"}</span>
               </span>
             </Link>
-            <button type="button" {...softDisabled(deleting.has(t.id))} onClick={deleting.has(t.id) ? undefined : () => void remove(t)} aria-label={`Delete ${t.name}`} className="mr-3 min-h-9 shrink-0 rounded-lg px-3 text-sm text-muted transition hover:bg-danger-soft hover:text-danger aria-disabled:opacity-50 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100">
+            <button type="button" {...softDisabled(deleting.has(t.id))} onClick={deleting.has(t.id) ? undefined : () => void remove(t)} aria-label={`Delete ${t.name}`} className="mr-3 min-h-9 touch:min-h-11 shrink-0 rounded-lg px-3 text-sm text-muted transition hover:bg-danger-soft hover:text-danger aria-disabled:opacity-50 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100">
               Delete
             </button>
           </li>

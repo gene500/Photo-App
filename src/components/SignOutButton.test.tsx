@@ -183,7 +183,7 @@ describe("DeleteAccountButton and ChangePasswordButton finish with the awaited s
     await userEvent.type(screen.getByLabelText("Password"), "pw");
     await userEvent.click(screen.getByRole("button", { name: "Delete my account" }));
     await vi.waitFor(() => expect(assign).toHaveBeenCalledWith("/login"));
-    expect(signOut).toHaveBeenCalledWith({ callbackUrl: "/login", redirect: false });
+    expect(signOut).toHaveBeenCalledWith({ callbackUrl: "/login?message=account-deleted", redirect: false });
   });
 
   it("delete account: a failing sign-out is shown, not swallowed", async () => {

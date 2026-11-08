@@ -34,10 +34,12 @@ export function sniffImageType(bytes: Uint8Array): PhotoType | null {
 export type PhotoCheck = { ok: true; type: PhotoType; bytes: Uint8Array } | { ok: false; error: string };
 
 export function validatePhoto(file: { type: string; size: number }, bytes: Uint8Array): PhotoCheck {
-  const error = checkPhotoFile({ type: file.type, size: bytes.length });
-  if (error) return { ok: false, error };
+  // Some browsers report no type for a file with an unknown extension: the contents decide then.
   const sniffed = sniffImageType(bytes);
-  if (!sniffed || sniffed !== file.type) {
+  const declared = file.type === "" && sniffed ? sniffed : file.type;
+  const error = checkPhotoFile({ type: declared, size: bytes.length });
+  if (error) return { ok: false, error };
+  if (!sniffed || sniffed !== declared) {
     return { ok: false, error: "File contents don't match an allowed image type" };
   }
   const clean = sanitizePhoto(bytes, sniffed);
@@ -125,6 +127,7 @@ export async function retryPendingDeletions(batch = 25): Promise<{ removed: numb
   });
   let removed = 0;
   let failed = 0;
+  let newlyGaveUp = 0;
   for (const row of rows) {
     if (await removeStoredPhoto(row.photoUrl)) {
       await prisma.pendingPhotoDeletion.deleteMany({ where: { photoUrl: row.photoUrl } });
@@ -132,9 +135,11 @@ export async function retryPendingDeletions(batch = 25): Promise<{ removed: numb
     } else {
       await prisma.pendingPhotoDeletion.update({ where: { photoUrl: row.photoUrl }, data: { attempts: { increment: 1 } } });
       failed++;
+      if (row.attempts + 1 >= MAX_CLEANUP_ATTEMPTS) newlyGaveUp++;
     }
   }
   const gaveUp = await prisma.pendingPhotoDeletion.count({ where: { attempts: { gte: MAX_CLEANUP_ATTEMPTS } } });
-  if (gaveUp > 0) console.error(`photo cleanup: ${gaveUp} file(s) still could not be removed after ${MAX_CLEANUP_ATTEMPTS} tries`);
+  // Logged once, on the run where a row reaches the cap; rows past the cap stay (for the owner to inspect) but are not retried or re-logged.
+  if (newlyGaveUp > 0) console.error(`photo cleanup: ${newlyGaveUp} file(s) could not be removed after ${MAX_CLEANUP_ATTEMPTS} tries and will not be retried (${gaveUp} in total)`);
   return { removed, failed, gaveUp };
 }

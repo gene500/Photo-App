@@ -20,5 +20,9 @@ export function clampText(s: string, max: number): string {
 /** Zero-width characters are legal inside a name (joiners in emoji and some scripts) but do not count as content. */
 export const ZERO_WIDTH = /[\u200B-\u200D\u2060\uFEFF]/g;
 
+/** Characters that draw nothing: bidi marks and isolates, soft hyphen, Mongolian vowel separator, invisible operators, combining grapheme joiner,
+ *  Hangul and Khmer fillers, Braille blank, variation selectors, and tag characters. A name made only of these looks blank. */
+const INVISIBLE = /[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\u{1D159}\u{1D173}-\u{1D17A}\u{E0000}-\u{E01EF}]/gu;
+
 /** True when the text holds something visible: zero-width characters and whitespace do not count (same rule as names). */
-export const hasContent = (s: string) => s.replace(ZERO_WIDTH, "").trim().length > 0;
+export const hasContent = (s: string) => s.replace(INVISIBLE, "").trim().length > 0;

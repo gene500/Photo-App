@@ -5,8 +5,10 @@
  * style-src keeps 'unsafe-inline' because Mapbox GL and React set inline style attributes. Everything else is locked
  * down: no framing, no plugins, no foreign form targets, and outbound connections / images only to the hosts
  * the app really uses (Mapbox, and the Wikimedia / Flickr image hosts for place photos).
+ * `upgradeInsecure` adds upgrade-insecure-requests; the proxy sets it only for production requests that arrived over https,
+ * so the plain-http production build the e2e suite runs against keeps working.
  */
-export function contentSecurityPolicy(dev: boolean, nonce?: string): string {
+export function contentSecurityPolicy(dev: boolean, nonce?: string, upgradeInsecure = false): string {
   const directives: Record<string, string[]> = {
     "default-src": ["'self'"],
     "script-src": ["'self'", ...(nonce ? [`'nonce-${nonce}'`, "'strict-dynamic'"] : []), ...(dev ? ["'unsafe-eval'"] : [])],
@@ -38,9 +40,10 @@ export function contentSecurityPolicy(dev: boolean, nonce?: string): string {
     "base-uri": ["'self'"],
     "form-action": ["'self'"],
     "frame-ancestors": ["'none'"],
+    ...(upgradeInsecure ? { "upgrade-insecure-requests": [] } : {}),
   };
   return Object.entries(directives)
-    .map(([name, values]) => `${name} ${values.join(" ")}`)
+    .map(([name, values]) => [name, ...values].join(" "))
     .join("; ");
 }
 
@@ -55,6 +58,12 @@ export function securityHeaders(): { key: string; value: string }[] {
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
     // Location is allowed for this origin only (Start from my location, asked on a click); camera, microphone and the rest stay off.
     { key: "Permissions-Policy", value: "geolocation=(self), camera=(), microphone=(), payment=(), usb=()" },
+    // Own window group: a page another site opened cannot reach this one through window.opener. Google sign-in is a full-page
+    // redirect (next-auth signIn), not a popup, so same-origin is safe; use same-origin-allow-popups if a popup flow is added.
+    { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+    // Only this origin may embed our responses (pages, JSON, uploaded photos are all loaded same-origin). Third-party images we
+    // show (Wikimedia, Flickr, Mapbox) are their responses, so this does not affect them.
+    { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
     { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
   ];
 }

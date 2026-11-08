@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { btnGhost, card } from "@/components/ui/styles";
 import { computeBestTimes, describeBestTime, formatClock, tripDeparture } from "@/lib/best-time";
+import { formatDateOnly, formatInstantDate } from "@/lib/dates";
 import { formatSavedAt } from "@/lib/format";
 import { lightLabel } from "@/lib/light-windows";
 import { listTripCopies, loadTripCopy } from "@/lib/offline-store";
@@ -78,7 +79,7 @@ export function OfflineView() {
                   <span className="min-w-0">
                     <span className="block break-words font-medium">{s.name}</span>
                     <span className="block text-xs text-muted">
-                      {s.plannedDate} · {s.stopCount} {s.stopCount === 1 ? "stop" : "stops"} · saved {new Date(s.savedAt).toLocaleDateString()}
+                      {formatDateOnly(s.plannedDate) || s.plannedDate} · {s.stopCount} {s.stopCount === 1 ? "stop" : "stops"} · saved {formatInstantDate(s.savedAt)}
                     </span>
                   </span>
                   <span aria-hidden className="text-muted">›</span>
@@ -108,7 +109,7 @@ function TripCopyView({ copy, onBack, online }: { copy: NonNullable<ReturnType<t
         {online ? "Showing your saved copy from " : "You're offline - showing your saved copy from "}{formatSavedAt(copy.savedAt, tf)}
       </p>
       <p className="text-sm text-muted">
-        Planned for {trip.plannedDate}
+        Planned for {formatDateOnly(trip.plannedDate) || trip.plannedDate}
         {departs && <> · Leaves {trip.departAt ? "" : "~"}{formatClock(departs, undefined, tf)}</>}
       </p>
       {trip.stops.length === 0 ? (

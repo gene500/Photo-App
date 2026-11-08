@@ -50,28 +50,33 @@ export const POST = handle(async (req: Request) => {
         };
       });
       // Yields to other requests while it works, and stops at a time budget.
+      const preferredMs = departAt ? new Date(departAt).getTime() - (origin ? nearestLegMs(durations) : 0) : undefined;
       const result = await optimizeScheduleAsync(
         {
           durations,
           stops,
           plannedDate: date,
           defaultDeparture: departureTime(stops[0]!, date),
-          // The saved start is the time at the first stop, which is not known until the order is: with an origin it is not a tie-break.
-          preferredDeparture: departAt && !origin ? new Date(departAt) : undefined,
+          // The saved start is the time at the first stop, which is not known until the order is. With an origin the search departs
+          // from the origin, so the saved start is taken back by the shortest drive from it: the dark/daylight check and the kept
+          // start then still follow the time the trip is shown to begin.
+          preferredDeparture: preferredMs !== undefined ? new Date(preferredMs) : undefined,
           focus,
           fixedDeparture: fixDeparture,
         },
         { budgetMs: optimizeBudgetMs() },
       );
       // A kept start time stays as saved; a new one is floored to the minute, as the Start time field shows it (sunrise has seconds).
-      const keptSaved = departAt !== undefined && result.departAt.getTime() === new Date(departAt).getTime();
-      let departMs = keptSaved ? result.departAt.getTime() : Math.floor(result.departAt.getTime() / 60_000) * 60_000;
+      // With an origin the search kept the preferred departure (saved start minus the nearest drive), which is not the saved start itself,
+      // and the first leg it chose may differ from the nearest one: compare against the preferred departure and keep the saved start as is.
+      const keptSaved = departAt !== undefined && result.departAt.getTime() === preferredMs;
+      let departMs = keptSaved ? new Date(departAt!).getTime() : Math.floor(result.departAt.getTime() / 60_000) * 60_000;
       // The search departs from the origin; the trip's start time is the time at its first stop, one drive later.
       const order = origin ? orderWithoutOrigin(result.order) : result.order;
       // Drive seconds from the origin to the first stop; Infinity when the road network has no route (Mapbox null).
       const firstLeg = origin && result.order[1] !== undefined ? durations[0]![result.order[1]] : undefined;
       if (origin && firstLeg !== undefined && !Number.isFinite(firstLeg)) return null;
-      if (origin && result.timed && firstLeg !== undefined) {
+      if (origin && result.timed && firstLeg !== undefined && !keptSaved) {
         departMs = Math.floor((result.departAt.getTime() + firstLeg * 1000) / 60_000) * 60_000;
       }
       const reindex = <T extends { stopIndex: number }>(rows: T[]) =>
@@ -132,4 +137,11 @@ async function placeNoticesFor(
   } catch {
     return [];
   }
+}
+
+/** Shortest drive (ms) from the origin (search index 0) to any stop; 0 when none is reachable. */
+function nearestLegMs(durations: number[][]): number {
+  const row = durations[0] ?? [];
+  const legs = row.slice(1).filter((d) => Number.isFinite(d) && d > 0);
+  return legs.length ? Math.min(...legs) * 1000 : 0;
 }

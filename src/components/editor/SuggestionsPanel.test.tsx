@@ -16,6 +16,18 @@ describe("SuggestionsPanel", () => {
     expect(screen.getByText("Suggestions need a route first.")).toBeTruthy();
   });
 
+  it("says to add a stop when the trip has none, and keeps Accept off (with the reason) at the stop limit", async () => {
+    const onAccept = vi.fn();
+    const { rerender } = render(<SuggestionsPanel {...base} status="idle" canSearch={false} noStops />);
+    expect(screen.getByText("Add a stop first, then find photo spots near it.")).toBeTruthy();
+    rerender(<SuggestionsPanel {...base} status="done" suggestions={[s]} onAccept={onAccept} full />);
+    const accept = screen.getByRole("button", { name: /^Accept/ });
+    expect(accept.getAttribute("aria-disabled")).toBe("true");
+    expect(accept.getAttribute("title")).toBe("A trip can have at most 25 stops");
+    await userEvent.click(accept);
+    expect(onAccept).not.toHaveBeenCalled();
+  });
+
   it("renders cards with accept and dismiss", async () => {
     const onAccept = vi.fn();
     const onDismiss = vi.fn();

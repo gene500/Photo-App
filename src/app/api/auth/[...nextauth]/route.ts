@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import NextAuth from "next-auth";
 import { authOptions } from "@/server/auth";
-import { guardAuthPost, sanitizeAuthRequest } from "@/server/login-guard";
+import { authGetRefusal, guardAuthPost, sanitizeAuthRequest } from "@/server/login-guard";
 
 const handler = NextAuth(authOptions);
 
@@ -13,7 +13,7 @@ const clean = async (req: NextRequest) => {
 
 // An unparseable callbackUrl is dropped first, so NextAuth falls back to the default instead of answering a 500.
 export async function GET(req: NextRequest, ctx: { params: Promise<{ nextauth: string[] }> }) {
-  return handler(await clean(req), ctx);
+  return authGetRefusal(req) ?? handler(await clean(req), ctx);
 }
 
 // POSTs (sign-in, sign-out) pass the cross-site check and the login throttles first.

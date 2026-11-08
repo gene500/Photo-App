@@ -53,4 +53,18 @@ describe("GET /api/hike", () => {
     expect(res.status).toBe(429);
     expect(res.headers.get("Retry-After")).toBeTruthy();
   });
+
+  it("answers { hike: null } within the deadline when the lookup hangs", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(getHike).mockReturnValue(new Promise(() => {}));
+      const p = get("lat=37&lng=-119.5");
+      await vi.advanceTimersByTimeAsync(12_000);
+      const res = await p;
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ hike: null });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

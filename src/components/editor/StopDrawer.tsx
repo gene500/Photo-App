@@ -13,7 +13,7 @@ import { AlternativesPanel } from "./AlternativesPanel";
 import { SkyCard } from "./SkyCard";
 import { FOCUSABLE } from "@/components/ui/Dialog";
 import type { SuggestionsStatus } from "./SuggestionsPanel";
-import { MAX_DWELL_MINUTES, MAX_SHOT_ITEMS, MAX_SHOT_NOTES, MAX_SHOT_TEXT, type StopPatch } from "@/lib/validation";
+import { MAX_DWELL_MINUTES, MAX_STOP_NAME, MAX_SHOT_ITEMS, MAX_SHOT_NOTES, MAX_SHOT_TEXT, type StopPatch } from "@/lib/validation";
 
 type Props = {
   stop: Stop;
@@ -25,6 +25,10 @@ type Props = {
   onSave: (patch: StopPatch) => Promise<void>;
   /** A save that failed after the drawer was already closed: the editor shows the message, since the drawer cannot. */
   onSaveError?: (message: string) => void;
+  /** The drawer's own banner text (null when none), so the page can avoid showing the same message a second time behind it. */
+  onErrorChange?: (message: string | null) => void;
+  /** Whether the drawer holds unsaved edits, so the page can ask before replacing it with another stop. */
+  onDirtyChange?: (dirty: boolean) => void;
   onPhotoChange: (stop: Stop) => void;
   /** Nearby alternatives for this stop; the panel is shown only when the editor provides it. */
   alternatives?: { status: SuggestionsStatus; items: Suggestion[]; error: string | null; onFind: () => void; onSwap: (s: Suggestion) => void | Promise<void>; onDismissError: () => void };
@@ -39,7 +43,7 @@ const plain = (rows: ShotRow[]): ShotItem[] => rows.map(({ text, done }) => ({ t
 
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
-export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, onPhotoChange, alternatives, arrival }: Props) {
+export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, onErrorChange, onDirtyChange, onPhotoChange, alternatives, arrival }: Props) {
   const [initial] = useState({ name: stop.name, notes: stop.notes ?? null, visited: stop.visited, lightPref: stop.lightPref, dwellMinutes: stop.dwellMinutes, shotNotes: stop.shotNotes, shotChecklist: JSON.stringify(stop.shotChecklist) });
   const [name, setName] = useState(stop.name);
   const [notes, setNotes] = useState(stop.notes ?? "");
@@ -55,6 +59,13 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
   const [shots, setShots] = useState<ShotRow[]>(() => stop.shotChecklist.map((s, i) => ({ ...s, id: i })));
   const [newShot, setNewShot] = useState("");
   const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    onErrorChange?.(error);
+  }, [error, onErrorChange]);
+  useEffect(() => () => onErrorChange?.(null), [onErrorChange]);
+  const [nameError, setNameError] = useState<string | null>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const dwellRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -121,8 +132,18 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
     dwell !== String(stop.dwellMinutes) || (shotNotes.trim() === "" ? null : shotNotes) !== initial.shotNotes ||
     JSON.stringify(plain(shots)) !== initial.shotChecklist || hasContent(newShot);
 
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+
   async function save() {
     if (busy) return;
+    if (!hasContent(name)) {
+      setNameError("Stop name is required");
+      nameRef.current?.focus();
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -131,6 +152,7 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
       const dwellMinutes = Number(dwell);
       if (dwell.trim() === "" || !Number.isInteger(dwellMinutes) || dwellMinutes < 0 || dwellMinutes > MAX_DWELL_MINUTES) {
         setError(`Time here must be a whole number of minutes from 0 to ${MAX_DWELL_MINUTES}`);
+        dwellRef.current?.focus();
         return;
       }
       const patch: StopPatch = {};
@@ -145,7 +167,11 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
       // A shot typed but not yet confirmed with Enter is kept rather than silently dropped.
       const pending = hasContent(newShot) ? newShot.trim() : "";
       const nextShots = plain(pending !== "" && shots.length < MAX_SHOT_ITEMS ? [...shots, { id: -1, text: pending.slice(0, MAX_SHOT_TEXT), done: false }] : shots);
-      if (JSON.stringify(nextShots) !== initial.shotChecklist) patch.shotChecklist = nextShots;
+      if (JSON.stringify(nextShots) !== initial.shotChecklist) {
+        patch.shotChecklist = nextShots;
+        // The list as it was loaded: the server merges with what another tab or device changed meanwhile instead of replacing it.
+        patch.shotChecklistBase = JSON.parse(initial.shotChecklist) as ShotItem[];
+      }
       if (Object.keys(patch).length > 0) await onSave(patch);
       if (mountedRef.current) onClose();
     } catch (e) {
@@ -222,8 +248,9 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
       )}
       <label className="block">
         <span className="text-sm text-muted">Name</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+        <input ref={nameRef} value={name} maxLength={MAX_STOP_NAME} aria-invalid={nameError ? true : undefined} onChange={(e) => { setName(e.target.value); setNameError(null); }} className={inputClass} />
       </label>
+      {nameError && <p role="alert" className="-mt-3 text-sm text-danger">{nameError}</p>}
       <label className="block">
         <span className="text-sm text-muted">Notes</span>
         <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
@@ -231,7 +258,7 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="text-sm text-muted">Best light</span>
-          <select value={lightPref} onChange={(e) => setLightPref(e.target.value as LightPref)} className={inputClass}>
+          <select value={lightPref} onChange={(e) => setLightPref(e.target.value as LightPref)} className={`${inputClass} touch:min-h-11`}>
             {LIGHT_OPTIONS.map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
@@ -239,7 +266,7 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
         </label>
         <label className="block">
           <span className="text-sm text-muted">Time here (min)</span>
-          <input type="number" inputMode="numeric" min={0} max={MAX_DWELL_MINUTES} step={5} value={dwell} onChange={(e) => setDwell(e.target.value)} className={inputClass} />
+          <input ref={dwellRef} type="number" inputMode="numeric" min={0} max={MAX_DWELL_MINUTES} step={5} value={dwell} onChange={(e) => setDwell(e.target.value)} className={inputClass} />
         </label>
       </div>
       {weather?.warning && <p data-testid="light-warning" className="text-xs text-sand">{weather.warning}</p>}

@@ -54,6 +54,8 @@ const EXACT_MAX_STOPS = 7; // 8 stops (7! orders x ~65 departures) held the even
 const STEP_MS = 15 * 60_000;
 const DAY_MS = 86_400_000;
 const EPS = 1e-9;
+/** Cost (seconds of driving) the search must gain before it may change the order the owner already has. */
+const CHURN_EPS = 1e-6;
 
 /** Whether the order for `stopCount` stops is provably the best one (exact search), rather than the best a heuristic found. */
 export function isExactOptimization(stopCount: number, usesLight: boolean): boolean {
@@ -130,14 +132,21 @@ function plannedSearch(input: ScheduleInput):
   }
   return {
     steps: (over) => (n - 1 <= EXACT_MAX_STOPS ? exactSteps(ctx, n, over) : localSteps(ctx, n, over)),
-    finish: ({ order, departMs }) => ({
-      order,
-      departAt:
-        departMs === preferredDeparture?.getTime() ? preferredDeparture : departMs === defaultDeparture.getTime() ? defaultDeparture : new Date(departMs),
-      misses: ctx.misses(order, departMs),
-      dark: ctx.darkVisits(order, departMs),
-      timed: true,
-    }),
+    finish: (found) => {
+      // Anti-churn (as optimizeOrder has): a different order that scores no better (stops at the same spot, say) is only churn,
+      // so keep the order the owner has unless the search found one better by more than a small margin.
+      const identity = Array.from({ length: n }, (_, i) => i);
+      const keep = found.order.some((v, i) => v !== i) && ctx.cost(identity, found.departMs) <= found.cost + CHURN_EPS;
+      const { order, departMs } = keep ? { order: identity, departMs: found.departMs } : found;
+      return {
+        order,
+        departAt:
+          departMs === preferredDeparture?.getTime() ? preferredDeparture : departMs === defaultDeparture.getTime() ? defaultDeparture : new Date(departMs),
+        misses: ctx.misses(order, departMs),
+        dark: ctx.darkVisits(order, departMs),
+        timed: true,
+      };
+    },
   };
 }
 

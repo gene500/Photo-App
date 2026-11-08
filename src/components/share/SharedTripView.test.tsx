@@ -216,4 +216,9 @@ describe("SharedTripView Download PDF", () => {
     render(<SharedTripView trip={{ ...trip, stops: [stop(0, "Done", { visited: true }), stop(1, "Pending", { lightPref: "sunset", priority: "must" })] }} />);
     expect(screen.getByText("· Visited")).toBeTruthy();
   });
+
+  it("with no saved start shows the same default start as the editor (now on the trip day), not sunrise", async () => {
+    render(<SharedTripView trip={{ ...trip, departAt: null }} />);
+    expect(await screen.findByText(/Starts \d{1,2}:\d{2}/)).toBeTruthy();
+  });
 });

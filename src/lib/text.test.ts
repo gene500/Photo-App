@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampText, stripNameChars, stripTextChars } from "./text";
+import { hasContent, clampText, stripNameChars, stripTextChars } from "./text";
 
 describe("text hygiene", () => {
   it("strips control and bidi characters from names but keeps zero-width joiners and emoji", () => {
@@ -22,5 +22,12 @@ describe("text hygiene", () => {
     expect(clampText(s, 200)).toBe("a".repeat(199));
     expect(clampText("abc", 200)).toBe("abc");
     expect(clampText("abcd", 2)).toBe("ab");
+  });
+
+  it("hasContent ignores bidi marks, variation selectors, tag characters and other invisible characters", () => {
+    for (const blank of ["\u200E", "\u202E", "\uFE0F", "\u{E0020}", "\u00AD", "\u2800", "\u3164", "\u180E", " \u200B \uFE0F"]) expect(hasContent(blank)).toBe(false);
+    expect(hasContent("A")).toBe(true);
+    expect(hasContent("\u2764\uFE0F")).toBe(true); // an emoji with a variation selector is visible
+    expect(hasContent("\u200E\u0627")).toBe(true);
   });
 });

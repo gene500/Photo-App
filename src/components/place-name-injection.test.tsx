@@ -60,7 +60,7 @@ describe("hostile place names are rendered as text", () => {
 
   it("offline copy", async () => {
     const trip: TripWithStops = { id: "t1", name: EVIL, plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [stop(0)] };
-    saveTripCopy(trip, new Date("2026-06-20T12:00:00Z"));
+    saveTripCopy(trip, new Date());
     const { container } = render(<SettingsProvider><OfflineView /></SettingsProvider>);
     await userEvent.click(await screen.findByRole("button", { name: new RegExp(EVIL.slice(0, 10).replace(/[<>]/g, "\\$&")) }));
     expect(container.textContent).toContain(EVIL);

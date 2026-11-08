@@ -12,7 +12,7 @@ test("sign up → new trip → search + click to add stops → suggestion → re
   await expect(page).toHaveURL(/\/trips\/[^/]+$/);
   await expect(page.getByTestId("empty-hint")).toBeVisible();
   await page.getByRole("tab", { name: "My trip" }).click();
-  await expect(page.getByTestId("route-status")).toHaveText("Add 2 stops to plan the route");
+  await expect(page.getByTestId("route-status")).toHaveText("Add your first stop to start planning");
   await page.getByRole("tab", { name: "Stops" }).click();
 
   // Stop 1: search as you type, pick the result, add it

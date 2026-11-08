@@ -4,6 +4,7 @@ import Link from "next/link";
 import { LegalLinks } from "@/components/legal/LegalPage";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { safeCallbackPath } from "@/lib/safe-callback";
 import { softDisabled } from "@/lib/focus";
 import { clearAllCopies, enableOfflineSaving } from "@/lib/offline-store";
 import { btnPrimary, inputClass } from "@/components/ui/styles";
@@ -11,7 +12,7 @@ import { GoogleButton, loginErrorMessage } from "./GoogleButton";
 import { signInWithCredentials } from "./credentials-login";
 
 
-export function LoginForm({ google = false, urlError = null }: { google?: boolean; urlError?: string | null }) {
+export function LoginForm({ google = false, urlError = null, returnTo = null, notice = null }: { google?: boolean; urlError?: string | null; returnTo?: string | null; notice?: string | null }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,14 +37,15 @@ export function LoginForm({ google = false, urlError = null }: { google?: boolea
       return;
     }
     enableOfflineSaving();
-    router.push("/trips");
+    router.push(safeCallbackPath(returnTo) ?? "/trips");
     router.refresh();
   }
 
   return (
     <form method="post" onSubmit={(e) => { e.preventDefault(); void submit(); }} className="mx-auto mt-[12vh] w-full max-w-sm space-y-4 rounded-2xl bg-surface p-7 shadow-lg ring-1 ring-border">
       <h1 className="text-2xl font-semibold">Log in</h1>
-      {google && <GoogleButton />}
+      {notice && !error && <p role="status" className="rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent-foreground dark:text-foreground">{notice}</p>}
+      {google && <GoogleButton returnTo={returnTo} />}
       <label className="block">
         <span className="text-sm text-muted">Email</span>
         <input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />

@@ -50,8 +50,13 @@ export function sanitizePhoto(bytes: Uint8Array, type: PhotoType): SanitizedPhot
 
 /** The EXIF orientation (2..8) of an APP1 payload, or null. Bounds-checked: any oddity means "none". */
 function exifOrientation(p: Uint8Array): number | null {
-  if (!startsWith(p, 0, "Exif\0\0") || p.length < 6 + 8) return null;
-  const t = p.subarray(6);
+  if (!startsWith(p, 0, "Exif\0\0")) return null;
+  return tiffOrientation(p.subarray(6));
+}
+
+/** The orientation (2..8) in a bare TIFF block (what PNG eXIf and WebP EXIF chunks hold), or null. */
+function tiffOrientation(t: Uint8Array): number | null {
+  if (t.length < 8) return null;
   const little = ascii(t, 0, 2) === "II";
   if (!little && ascii(t, 0, 2) !== "MM") return null;
   const u16 = (o: number) => (little ? t[o] | (t[o + 1] << 8) : (t[o] << 8) | t[o + 1]);
@@ -72,8 +77,11 @@ function exifOrientation(p: Uint8Array): number | null {
 }
 
 /** An APP1 segment holding nothing but the orientation, so a rotated phone photo still shows upright. */
+/** A bare TIFF block holding only the orientation tag. */
+const minimalTiff = (orientation: number) => [0x4d, 0x4d, 0, 42, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, orientation, 0, 0, 0, 0, 0, 0];
+
 function orientationSegment(orientation: number): Uint8Array {
-  const payload = [0x45, 0x78, 0x69, 0x66, 0, 0, 0x4d, 0x4d, 0, 42, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, orientation, 0, 0, 0, 0, 0, 0];
+  const payload = [0x45, 0x78, 0x69, 0x66, 0, 0, ...minimalTiff(orientation)];
   const len = payload.length + 2;
   return Uint8Array.from([0xff, 0xe1, len >> 8, len & 255, ...payload]);
 }
@@ -190,8 +198,39 @@ function sanitizeJpeg(b: Uint8Array): SanitizedPhoto {
 
 const PNG_KEEP = new Set(["IHDR", "PLTE", "IDAT", "IEND", "tRNS", "gAMA", "cHRM", "sRGB", "iCCP", "sBIT", "pHYs", "bKGD", "cICP", "mDCV", "cLLI", "acTL", "fcTL", "fdAT"]);
 
+let crcTable: Uint32Array | null = null;
+function crc32(bytes: Uint8Array): number {
+  if (!crcTable) {
+    crcTable = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      crcTable[n] = c >>> 0;
+    }
+  }
+  let c = 0xffffffff;
+  for (const x of bytes) c = crcTable[(c ^ x) & 255] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+/** A PNG eXIf chunk holding only the orientation, so a rotated photo still shows upright. */
+function pngOrientationChunk(orientation: number): Uint8Array {
+  const data = minimalTiff(orientation);
+  const out = new Uint8Array(12 + data.length);
+  out[3] = data.length;
+  out.set([0x65, 0x58, 0x49, 0x66], 4); // "eXIf"
+  out.set(data, 8);
+  const crc = crc32(out.subarray(4, 8 + data.length));
+  out[8 + data.length] = crc >>> 24;
+  out[9 + data.length] = (crc >>> 16) & 255;
+  out[10 + data.length] = (crc >>> 8) & 255;
+  out[11 + data.length] = crc & 255;
+  return out;
+}
+
 function sanitizePng(b: Uint8Array): SanitizedPhoto {
   const parts: Uint8Array[] = [b.subarray(0, 8)];
+  let orientation: number | null = null;
   let pos = 8;
   let width = 0;
   let height = 0;
@@ -211,10 +250,18 @@ function sanitizePng(b: Uint8Array): SanitizedPhoto {
       first = false;
     } else if (name === "IHDR") return BAD;
     if (name === "IDAT") idat = true;
-    if (PNG_KEEP.has(name)) parts.push(b.subarray(pos, end));
+    if (name === "eXIf" && !idat) orientation ??= tiffOrientation(b.subarray(pos + 8, pos + 8 + len));
+    if (PNG_KEEP.has(name)) {
+      parts.push(b.subarray(pos, end));
+      if (name === "IHDR" && !idat) parts.push(new Uint8Array(0)); // placeholder: the orientation chunk goes here
+    }
     else if (name[0] >= "A" && name[0] <= "Z") return BAD; // unknown critical chunk
     pos = end;
-    if (name === "IEND") return idat ? { ok: true, bytes: concat(parts), width, height } : BAD; // trailing bytes dropped
+    if (name === "IEND") {
+      if (!idat) return BAD;
+      if (orientation) parts[2] = pngOrientationChunk(orientation); // right after IHDR, before any image data
+      return { ok: true, bytes: concat(parts), width, height }; // trailing bytes dropped
+    }
   }
   return BAD;
 }
@@ -230,6 +277,8 @@ function sanitizeWebp(b: Uint8Array): SanitizedPhoto {
   const parts: Uint8Array[] = [];
   let size: { width: number; height: number } | null = null;
   let image = false;
+  let orientation: number | null = null;
+  let vp8xAt = -1;
   let pos = 12;
   while (pos < total) {
     if (pos + 8 > total) return BAD;
@@ -242,10 +291,15 @@ function sanitizeWebp(b: Uint8Array): SanitizedPhoto {
       if (len < 10 || parts.length > 0) return BAD;
       size = { width: 1 + (data[4] | (data[5] << 8) | (data[6] << 16)), height: 1 + (data[7] | (data[8] << 8) | (data[9] << 16)) };
       const fixed = Uint8Array.from(b.subarray(pos, end));
-      fixed[8] &= ~0x0c; // EXIF and XMP flags
+      fixed[8] &= ~0x0c; // EXIF and XMP flags (the EXIF one is set again below when an orientation is kept)
+      vp8xAt = parts.length;
       parts.push(fixed);
     } else if (!WEBP_KEEP.has(name)) {
-      // EXIF, XMP and any unknown (vendor) chunk: dropped
+      // EXIF, XMP and any unknown (vendor) chunk: dropped, except that the EXIF orientation is remembered
+      if (name === "EXIF") {
+        const tiff = startsWith(data, 0, "Exif\0\0") ? data.subarray(6) : data;
+        orientation ??= tiffOrientation(tiff);
+      }
     } else {
       if (name === "VP8 ") {
         if (len < 10 || data[3] !== 0x9d || data[4] !== 0x01 || data[5] !== 0x2a) return BAD;
@@ -264,6 +318,11 @@ function sanitizeWebp(b: Uint8Array): SanitizedPhoto {
   if (!size || !image) return BAD;
   const problem = sizeProblem(size.width, size.height);
   if (problem) return problem;
+  if (orientation && vp8xAt >= 0) {
+    const tiff = minimalTiff(orientation);
+    parts[vp8xAt][8] |= 0x08;
+    parts.push(Uint8Array.from([0x45, 0x58, 0x49, 0x46, tiff.length, 0, 0, 0, ...tiff])); // "EXIF" chunk, even length
+  }
   const body = concat(parts);
   const out = new Uint8Array(12 + body.length);
   out.set(b.subarray(0, 12));

@@ -43,7 +43,7 @@ export function StopCard({ stop, bestTime, arrival, onToggleVisited, onOpenDetai
         </p>
       )}
       <div className="flex items-center justify-between">
-        <label className="flex min-h-9 items-center gap-2 text-sm">
+        <label className="flex min-h-9 touch:min-h-11 items-center gap-2 text-sm">
           <input type="checkbox" className="h-4 w-4 accent-accent-strong" checked={stop.visited} onChange={(e) => onToggleVisited(e.target.checked)} />
           Visited
         </label>

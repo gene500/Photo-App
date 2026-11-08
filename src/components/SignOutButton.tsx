@@ -4,6 +4,7 @@ import { signIn, signOut } from "next-auth/react";
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api-client";
 import { softDisabled } from "@/lib/focus";
+import { clearAccountLeftovers, clearAuthMessage } from "@/lib/account-leftovers";
 import { clearAllCopies, disableOfflineSaving } from "@/lib/offline-store";
 
 const SIGN_OUT_FAILED = "Couldn't sign out. Check your connection and try again.";
@@ -13,10 +14,10 @@ const SIGN_OUT_FAILED = "Couldn't sign out. Check your connection and try again.
  * answer is known. next-auth does not expose the status, so a 500 shows up as an answer without a redirect url
  * (its JSON error body) and a CSRF or server failure as a redirect to an error/csrf url; none of those counts as signed out.
  */
-async function requestSignOut(): Promise<string | null> {
+async function requestSignOut(callbackUrl: string): Promise<string | null> {
   let result: { url?: unknown } | undefined;
   try {
-    result = await signOut({ callbackUrl: "/login", redirect: false });
+    result = await signOut({ callbackUrl, redirect: false });
   } catch {
     return null;
   }
@@ -31,13 +32,13 @@ async function requestSignOut(): Promise<string | null> {
  */
 function useDeviceSignOut() {
   const [error, setError] = useState<string | null>(null);
-  async function run(beforeLeaving?: () => void): Promise<boolean> {
+  async function run(beforeLeaving?: () => void, callbackUrl = "/login"): Promise<boolean> {
     setError(null);
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
       setError("You're offline: sign-out needs a connection.");
       return false;
     }
-    const url = await requestSignOut();
+    const url = await requestSignOut(callbackUrl);
     if (url === null) {
       setError(SIGN_OUT_FAILED);
       return false;
@@ -53,6 +54,7 @@ const wipeDevice = () => {
   // Saving is switched off first so a pending autosave cannot bring a copy back before the page leaves.
   disableOfflineSaving();
   clearAllCopies();
+  clearAuthMessage();
 };
 
 /** Signing out on a shared device must not leave this user's trips behind (see below). */
@@ -93,7 +95,7 @@ export function SignOutButton({ className }: { className?: string }) {
   const { error, run } = useDeviceSignOut();
   return (
     <>
-      <button type="button" onClick={() => void run(wipeDevice)} className={className ?? "inline-flex min-h-9 items-center rounded-lg px-3 text-sm text-muted transition hover:bg-hover hover:text-foreground"}>
+      <button type="button" onClick={() => void run(wipeDevice)} className={className ?? "inline-flex min-h-9 touch:min-h-11 items-center rounded-lg px-3 text-sm text-muted transition hover:bg-hover hover:text-foreground"}>
         Sign out
       </button>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
@@ -126,9 +128,10 @@ export function DeleteAccountButton({ className, hasPassword = true }: { classNa
       }
       setDeleted(true);
       wipeDevice();
+      clearAccountLeftovers();
     }
     // The account is gone; if this tab cannot sign out, say so and let the user retry without deleting again.
-    if (!(await deviceSignOut.run())) setPending(false);
+    if (!(await deviceSignOut.run(undefined, "/login?message=account-deleted"))) setPending(false);
   }
   if (!open) {
     return (
@@ -191,7 +194,7 @@ export function ChangePasswordButton({ className }: { className?: string }) {
       setChanged(true);
       wipeDevice();
     }
-    if (!(await deviceSignOut.run())) setPending(false);
+    if (!(await deviceSignOut.run(undefined, "/login?message=password-changed"))) setPending(false);
   }
   if (!open) {
     return (

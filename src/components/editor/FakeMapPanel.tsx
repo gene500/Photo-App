@@ -147,7 +147,7 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
             aria-label={`Stop ${i + 1}: ${s.name}`}
             aria-pressed={s.id === selectedId}
             title={s.name}
-            className={`map-marker absolute -translate-x-1/2 -translate-y-1/2 ${STOP_MARKER_CLASS} ${s.visited ? "text-black/75" : "text-white"} ${
+            className={`map-marker absolute -translate-x-1/2 -translate-y-1/2 ${STOP_MARKER_CLASS} touch:before:absolute touch:before:-inset-[9px] touch:before:content-[''] ${s.visited ? "text-black/75" : "text-white"} ${
               s.id === selectedId ? "ring-2 ring-route" : ""
             }`}
             style={{
@@ -170,7 +170,7 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
           type="button"
           aria-label={`Suggestion: ${s.name}`}
           title={s.name}
-          className={`map-marker absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-accent shadow ${
+          className={`map-marker absolute -translate-x-1/2 -translate-y-1/2 touch:before:absolute touch:before:-inset-[17px] touch:before:content-[''] rounded-full border-2 border-white bg-accent shadow ${
             s.osmId === highlightedSuggestionId ? "h-5 w-5 opacity-100" : "h-3.5 w-3.5 opacity-70"
           }`}
           style={{ left: `${pos(s).left}%`, top: `${pos(s).top}%` }}

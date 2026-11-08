@@ -1,6 +1,6 @@
 import type { Stop as StopRow, Trip as TripRow } from "@/generated/prisma/client";
 import { utcToDateOnly } from "@/lib/dates";
-import { stripNameChars, stripTextChars } from "@/lib/text";
+import { clampText, hasContent, stripNameChars, stripTextChars } from "@/lib/text";
 import type { LightPref, PublicStop, PublicTrip, ShotItem, Stop, StopPriority, StopSource, Trip } from "@/lib/types";
 
 export function toTripDto(row: TripRow): Trip {
@@ -17,17 +17,18 @@ export function toTripDto(row: TripRow): Trip {
 const MAX_READ_ITEMS = 20;
 const MAX_READ_TEXT = 120;
 
-/** The checklist is stored as JSON text; anything unreadable degrades to an empty list, and an oversized one is capped (20 items, 120 chars each). */
+/** The checklist is stored as JSON text; anything unreadable degrades to an empty list, and an oversized one is capped (20 items, 120 chars each); items with no visible text are dropped. */
 export function parseShotChecklist(raw: string): ShotItem[] {
   try {
     const v: unknown = JSON.parse(raw);
     if (!Array.isArray(v)) return [];
     return v
-      .flatMap((i) =>
-        typeof i === "object" && i !== null && typeof i.text === "string" && typeof i.done === "boolean"
-          ? [{ text: stripNameChars(i.text).slice(0, MAX_READ_TEXT), done: i.done }]
-          : [],
-      )
+      .flatMap((i) => {
+        if (typeof i !== "object" || i === null || typeof i.text !== "string" || typeof i.done !== "boolean") return [];
+        const text = clampText(stripNameChars(i.text), MAX_READ_TEXT);
+        // Old items with nothing visible are dropped: the client would send them back and the server refuses blank shot text.
+        return hasContent(text) ? [{ text, done: i.done }] : [];
+      })
       .slice(0, MAX_READ_ITEMS);
   } catch {
     return [];

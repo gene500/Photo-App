@@ -6,12 +6,14 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
 import { diffIds } from "@/lib/diff-ids";
 import { bearingEndpoint, wrapLng } from "@/lib/geo";
+import { unwrapForFit } from "@/lib/map-bounds";
+import { isMapFatalError, type MapErrorEvent } from "@/lib/map-errors";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { applyMapTheme } from "@/lib/map-theme";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import { isShortLandscape, sideViewPadding } from "@/lib/short-landscape";
 import { SUNRISE_COLOR, SUNSET_COLOR } from "@/lib/sky";
-import { decideFit, routeKey, selectionPadding } from "./map-fit";
+import { decideFit, routeKey, selectionPadding, sheetBottomPadding } from "./map-fit";
 import { fitMapToPoints, startRouteFlow } from "./route-flow-map";
 import { fitTargets, ZoomFitControl } from "./zoom-fit";
 import { casingLineWidth, firstLabelLayerId, routeLineWidth, simplifyBucket, simplifyRoute, simplifyToleranceDeg } from "./route-style";
@@ -27,12 +29,19 @@ const ROUTE_SOURCE = "route";
 /** Mapbox paint can't read CSS variables; this is the light-theme `--route` token. */
 const ROUTE_COLOR = "#a8834b"; // the light-theme --route token
 const SKY_SOURCE = "sky";
+/** The names live in their own source: if the glyph font fails to load, the lines and arrows still draw. */
+const SKY_LABEL_SOURCE = "sky-labels";
 /** The direction lines are this long on screen, whatever the zoom. */
 const SKY_LINE_PX = 90;
 const MARKER_CLASS = "map-marker";
 const DEFAULT_CENTER: LngLat = [-98.5, 39.8];
 // Visited markers are light, so they get dark numerals; the rest get white.
 const textClass = (visited: boolean) => (visited ? "text-black/75" : "text-white");
+/** A second click within this long is a double-click (a zoom), not a second pin. */
+const DOUBLE_CLICK_MS = 280;
+/** On touch screens the dot keeps its look but its tap area grows to 44px (an invisible ring around it). */
+const TOUCH_HIT_DOT = "touch:before:absolute touch:before:-inset-[17px] touch:before:content-['']"; // 10px inside the border
+const TOUCH_HIT_STOP = "touch:before:absolute touch:before:-inset-[9px] touch:before:content-['']"; // 26px inside the border
 const PENDING_CLASS = "h-5 w-5 rounded-full border-2 border-white bg-[#3b3226] shadow-md";
 
 /** Draws the route, smoothed to the map's current zoom so switchbacks and parallel roads don't clump when zoomed out. */
@@ -74,10 +83,11 @@ function emptySky(): FeatureCollection {
 }
 
 /** A line and a label point per known bearing, each SKY_LINE_PX long on screen at this zoom and latitude. */
-function skyData(sky: MapViewProps["sky"], zoom: number): FeatureCollection {
-  if (!sky) return emptySky();
+function skyData(sky: MapViewProps["sky"], zoom: number): { lines: FeatureCollection; labels: FeatureCollection } {
+  if (!sky) return { lines: emptySky(), labels: emptySky() };
   const km = (SKY_LINE_PX * 78271.51696 * Math.cos((sky.lat * Math.PI) / 180)) / 2 ** zoom / 1000;
   const features: Feature[] = [];
+  const labels: Feature[] = [];
   for (const [kind, name, bearing] of [["sunrise", "Sunrise", sky.sunrise], ["sunset", "Sunset", sky.sunset]] as const) {
     if (bearing === null) continue;
     const end = bearingEndpoint(sky, bearing, km);
@@ -86,10 +96,10 @@ function skyData(sky: MapViewProps["sky"], zoom: number): FeatureCollection {
     features.push(
       { type: "Feature", properties: { kind, arrow: true, rotation: (bearing + 180) % 360 }, geometry: { type: "Point", coordinates: arrowAt } },
       { type: "Feature", properties: { kind }, geometry: { type: "LineString", coordinates: [[sky.lng, sky.lat], end] } },
-      { type: "Feature", properties: { kind, name }, geometry: { type: "Point", coordinates: end } },
     );
+    labels.push({ type: "Feature", properties: { kind, name }, geometry: { type: "Point", coordinates: end } });
   }
-  return { type: "FeatureCollection", features };
+  return { lines: { type: "FeatureCollection", features }, labels: { type: "FeatureCollection", features: labels } };
 }
 
 function markerElement(className: string, label: string, text = ""): HTMLButtonElement {
@@ -116,8 +126,9 @@ function viewPadding(readOnly = false): mapboxgl.PaddingOptions {
   if (isShortLandscape()) return sideViewPadding(window.innerWidth, rootScale());
   const phone = typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
   return phone
-    // Bottom adds a marker radius (the sheet's top edge would otherwise cut the lowest stop in half); right clears the map controls column.
-    ? { top: 96, right: 48, left: 24, bottom: Math.round(window.innerHeight * (readOnly ? 0.57 : 0.45)) + 18 }
+    // Bottom adds a marker radius (the sheet's top edge would otherwise cut the lowest stop in half).
+    // The sheet's real top edge is measured, so the full snap is cleared as well as the half one; right leaves room for the map controls column.
+    ? { top: 96, right: 64, left: 24, bottom: sheetBottomPadding({ height: window.innerHeight, sheetTop: document.querySelector('[aria-label="Trip panel"]')?.getBoundingClientRect().top ?? null, readOnly, top: 96 }) }
     : { top: 112, right: 64, bottom: 64, left: Math.round(400 * rootScale()) };
 }
 
@@ -130,8 +141,11 @@ function isDarkNow(): boolean {
 
 export default function MapPanel({
   stops, routeGeometry, pending, suggestions = [], highlightedSuggestionId, selectedId, flyTo, readOnly, sky, hikes, drawerOpen, routeFlowId,
-  onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange,
-}: MapViewProps) {
+  onMapClick, onStopClick, onStopMove, onSuggestionClick, onCenterChange, onUnavailable,
+}: MapViewProps & { onUnavailable?: () => void }) {
+  const [tilesFailed, setTilesFailed] = useState(false);
+  const failedRef = useRef(false);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { settings } = useSettings();
   // Read when the map is created: a change in Settings applies on the next load (the route layers are added once).
   const mapStyleRef = useRef(settings.mapStyle);
@@ -179,14 +193,33 @@ export default function MapPanel({
   // Create the map once.
   useEffect(() => {
     if (!containerRef.current) return;
-    const map = new mapboxgl.Map({
-      container: containerRef.current,
-      accessToken: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
-      style: mapStyleRef.current === "standard" && isDarkNow() ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/light-v11",
-      center: initialRef.current.center,
-      zoom: initialRef.current.zoom,
-      attributionControl: false,
-      logoPosition: "top-right",
+    // No WebGL (old device, blocked GPU): hand over to the offline preview instead of taking the whole page down.
+    let map: mapboxgl.Map;
+    try {
+      if (typeof mapboxgl.supported === "function" && !mapboxgl.supported()) throw new Error("WebGL unavailable");
+      map = new mapboxgl.Map({
+        container: containerRef.current,
+        accessToken: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
+        style: mapStyleRef.current === "standard" && isDarkNow() ? "mapbox://styles/mapbox/dark-v11" : "mapbox://styles/mapbox/light-v11",
+        center: initialRef.current.center,
+        zoom: initialRef.current.zoom,
+        attributionControl: false,
+        logoPosition: "top-right",
+      });
+    } catch {
+      onUnavailable?.();
+      return;
+    }
+    // A rejected token or failing tiles leave a blank map; say so once. Ordinary per-tile errors are ignored.
+    // The notice clears when a tile does load (a later style swap or a recovered network).
+    map.on("error", (e) => {
+      if (isMapFatalError(e as unknown as MapErrorEvent)) { failedRef.current = true; setTilesFailed(true); }
+    });
+    map.on("data", (e) => {
+      if (failedRef.current && (e as { dataType?: string; tile?: unknown }).dataType === "source" && (e as { tile?: unknown }).tile) {
+        failedRef.current = false;
+        setTilesFailed(false);
+      }
     });
     // Top-right (offset below the search bar on phones, see globals.css) so the bottom sheet never covers them.
     // Set by a drag, scroll or pinch of the viewer's own (those events carry `originalEvent`), never by a flyTo.
@@ -198,7 +231,7 @@ export default function MapPanel({
     // Added last, so it stacks directly under the (i). Fits every stop and the route; never starts the Optimize animation.
     const zoomFit = new ZoomFitControl(() => {
       const { stops: s, routeGeometry: r, readOnly: ro } = fitDataRef.current;
-      const points = fitTargets(s, r);
+      const points = unwrapForFit(fitTargets(s, r));
       if (points.length === 0) return;
       flowRef.current?.cancel();
       flowRef.current = null;
@@ -266,10 +299,11 @@ export default function MapPanel({
           },
         });
       }
+      map.addSource(SKY_LABEL_SOURCE, { type: "geojson", data: emptySky() });
       map.addLayer({
         id: "sky-names",
         type: "symbol",
-        source: SKY_SOURCE,
+        source: SKY_LABEL_SOURCE,
         filter: ["has", "name"],
         layout: {
           "text-field": ["get", "name"],
@@ -289,6 +323,18 @@ export default function MapPanel({
       setLoaded(true);
       reportCenter();
     });
+    // Rotating or resizing re-frames the stops, unless the viewer has moved the map themselves.
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+    const onResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const { stops: s, routeGeometry: r, readOnly: ro } = fitDataRef.current;
+        if (userMovedRef.current || !fittedRef.current || flowRef.current || s.length === 0) return;
+        fitMapToPoints(map, unwrapForFit(fitTargets(s, r)), viewPadding(ro), { duration: 0 });
+      }, 200);
+    };
+    window.addEventListener("resize", onResize);
+    map.on("remove", () => { clearTimeout(resizeTimer); window.removeEventListener("resize", onResize); });
     map.on("moveend", reportCenter);
     // Redraw the (zoom-smoothed) route when the zoom level changes; the saved geometry is never altered.
     map.on("zoomend", () => {
@@ -297,10 +343,18 @@ export default function MapPanel({
     map.on("click", (e) => {
       const target = e.originalEvent.target as HTMLElement | null;
       if (target?.closest(`.${MARKER_CLASS}`)) return; // marker clicks select, they don't drop pins
-      handlersRef.current.onMapClick({ lat: e.lngLat.lat, lng: wrapLng(e.lngLat.lng) });
+      // A double-click/tap zooms: the pin waits a moment and is dropped only if no second click follows.
+      const at = { lat: e.lngLat.lat, lng: wrapLng(e.lngLat.lng) };
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = setTimeout(() => { clickTimerRef.current = null; handlersRef.current.onMapClick(at); }, DOUBLE_CLICK_MS);
+    });
+    map.on("dblclick", () => {
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
     });
     mapRef.current = map;
     return () => {
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
       popupRef.current?.remove();
       popupRef.current = null;
       flowRef.current?.cancel();
@@ -308,6 +362,8 @@ export default function MapPanel({
       map.remove();
       mapRef.current = null;
     };
+    // Created once; onUnavailable is only used at creation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Route line; fit the view the first time a route arrives.
@@ -319,7 +375,7 @@ export default function MapPanel({
     const fit = decideFit({ prevCount: prevStopCountRef.current, count: stops.length, route: key, fittedRoute: fittedRouteRef.current, fitted: fittedRef.current });
     if (fit) {
       // A route frames itself; without one (before Optimize) the stops are framed.
-      const points: LngLat[] = fit === "route" ? routeGeometry! : stops.map((s) => [s.lng, s.lat]);
+      const points: LngLat[] = unwrapForFit(fit === "route" ? routeGeometry! : stops.map((s): LngLat => [s.lng, s.lat]));
       const bounds = new mapboxgl.LngLatBounds(points[0], points[0]);
       for (const c of points) bounds.extend(c);
       map.fitBounds(bounds, { padding: viewPadding(readOnly), duration: 0, maxZoom: 14 }); // stops almost on top of each other would otherwise zoom to the maximum
@@ -355,7 +411,7 @@ export default function MapPanel({
     }
     flowHandledRef.current = id;
     flowRef.current?.cancel();
-    const points: LngLat[] = [...stops.map((s): LngLat => [s.lng, s.lat]), ...routeGeometry];
+    const points: LngLat[] = unwrapForFit([...stops.map((s): LngLat => [s.lng, s.lat]), ...routeGeometry]);
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const run = startRouteFlow(map, {
       points,
@@ -388,7 +444,11 @@ export default function MapPanel({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loaded) return;
-    const update = () => (map.getSource(SKY_SOURCE) as mapboxgl.GeoJSONSource | undefined)?.setData(skyData(sky, map.getZoom()));
+    const update = () => {
+      const data = skyData(sky, map.getZoom());
+      (map.getSource(SKY_SOURCE) as mapboxgl.GeoJSONSource | undefined)?.setData(data.lines);
+      (map.getSource(SKY_LABEL_SOURCE) as mapboxgl.GeoJSONSource | undefined)?.setData(data.labels);
+    };
     update();
     map.on("zoomend", update);
     return () => {
@@ -428,14 +488,16 @@ export default function MapPanel({
         el.style.background = stopColor(s);
         el.setAttribute("aria-label", label);
         el.setAttribute("aria-pressed", String(selected));
+        el.setAttribute("role", "button"); // Mapbox sets role=img on markers, which would drop the button semantics
         el.title = label;
       } else if (addSet.has(s.id)) {
-        const el = markerElement(`${STOP_MARKER_CLASS} ${textClass(s.visited)} ${selected ? "ring-2 ring-route" : ""}`, label, String(i + 1));
+        const el = markerElement(`${STOP_MARKER_CLASS} ${TOUCH_HIT_STOP} ${textClass(s.visited)} ${selected ? "ring-2 ring-route" : ""}`, label, String(i + 1));
         el.style.background = stopColor(s);
         el.setAttribute("aria-pressed", String(selected));
         const id = s.id;
         el.addEventListener("click", () => handlersRef.current.onStopClick(id));
         const marker = new mapboxgl.Marker({ element: el, draggable: !readOnly }).setLngLat([s.lng, s.lat]).addTo(map);
+        el.setAttribute("role", "button");
         marker.on("dragstart", () => draggingRef.current.add(id));
         marker.on("dragend", () => {
           draggingRef.current.delete(id);
@@ -517,7 +579,7 @@ export default function MapPanel({
       seenSuggestionsRef.current.add(s.osmId);
       const big = s.osmId === highlightedSuggestionId;
       const el = markerElement(
-        `rounded-full border-2 border-white bg-accent shadow ${big ? "h-5 w-5" : "h-3.5 w-3.5 opacity-70"}`,
+        `${TOUCH_HIT_DOT} rounded-full border-2 border-white bg-accent shadow ${big ? "h-5 w-5" : "h-3.5 w-3.5 opacity-70"}`,
         `Suggestion: ${s.name}`,
       );
       if (isNew) {
@@ -589,6 +651,11 @@ export default function MapPanel({
   return (
     <div className="absolute inset-0">
       <div ref={containerRef} data-testid="map" className="h-full w-full" />
+      {tilesFailed && (
+        <p role="status" className="pointer-events-none absolute left-1/2 top-[4.5rem] z-10 max-w-[calc(100%-6rem)] -translate-x-1/2 rounded-full bg-surface px-3 py-1 text-center text-xs text-muted shadow ring-1 ring-border lg:bottom-3 lg:top-auto">
+          Map tiles could not be loaded.
+        </p>
+      )}
     </div>
   );
 }

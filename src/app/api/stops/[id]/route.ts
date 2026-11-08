@@ -10,10 +10,10 @@ export const PATCH = handle(async (req: Request, { params }: Ctx) => {
   const userId = await requireUserId();
   enforceLimit("trip-write", userId);
   const { id } = await params;
-  const { photoUrl, ...patch } = stopPatchSchema.parse(await readJson(req));
+  const { photoUrl, shotChecklistBase, ...patch } = stopPatchSchema.parse(await readJson(req));
   const before = photoUrl === null ? await getOwnedStop(userId, id) : null;
   const result = Object.keys(patch).length > 0
-    ? await updateStopCascade(userId, id, patch)
+    ? await updateStopCascade(userId, id, patch, shotChecklistBase)
     : await getOwnedStop(userId, id).then((stop) => (stop ? { stop, cascaded: [] } : null));
   if (!result) throw new HttpError(404, "Stop not found");
   // Other stops whose visited flag changed with this one (the visited run rule), so the client can show them without guessing.

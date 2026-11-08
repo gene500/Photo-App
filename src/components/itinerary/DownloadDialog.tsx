@@ -30,7 +30,7 @@ export function DownloadDialog({ download }: { download: ReturnType<typeof useIt
         </>
       ) : (
         <>
-          <button key="cancel" ref={cancelRef} type="button" className={btnSecondary} onClick={cancel}>Cancel</button>
+          <button key="cancel" ref={cancelRef} type="button" className={btnSecondary} onClick={cancel}>{ready ? "Close" : "Cancel"}</button>
           {ready && <button key="save" ref={saveRef} type="button" className={btnPrimary} onClick={save}>Download</button>}
         </>
       )}

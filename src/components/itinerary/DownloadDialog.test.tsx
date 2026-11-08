@@ -48,6 +48,8 @@ describe("DownloadDialog", () => {
     const dl = screen.getByRole("button", { name: "Download" });
     expect(document.activeElement).toBe(dl);
     expect(screen.getByRole("alertdialog").textContent).toContain("Your PDF is ready.");
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy(); // not "Cancel" once there is nothing left to cancel
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
     await userEvent.click(dl);
     expect(saveBlob).toHaveBeenCalledTimes(1); // no waitFor: the save is not deferred
     expect(screen.queryByRole("alertdialog")).toBeNull();

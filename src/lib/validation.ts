@@ -20,19 +20,31 @@ export const sessionSchema = z.string().uuid("session must be a uuid");
 export const MAX_STOP_NAME = 200;
 
 /**
- * A trimmed one-line name: required (zero-width characters do not count) and at most `max` characters.
+ * At most `max` UTF-16 units (what `.length` and an input's `maxLength` count). Zod's own `.max()` counts code points, so an
+ * emoji would count once there and the server would allow twice what the browser field does; this keeps both the same.
+ */
+export const maxUnits = (max: number) =>
+  z.string().check((ctx) => {
+    if (ctx.value.length > max) ctx.issues.push({ code: "too_big", origin: "string", maximum: max, inclusive: true, input: ctx.value });
+  });
+
+/** A lone surrogate cannot be encoded (encodeURIComponent throws on it); it becomes U+FFFD, as the browser client does. */
+const wellFormed = (s: string) => s.toWellFormed();
+
+/**
+ * A trimmed one-line name: required (zero-width and other invisible characters do not count) and at most `max` UTF-16 units.
  * Control and bidi characters are stripped rather than rejected, so older stored text never blocks an unrelated edit.
  */
 const nameText = (label: string, max: number) =>
-  z.string().transform(stripNameChars).pipe(
+  z.string().transform((s) => stripNameChars(wellFormed(s))).pipe(
     z.string().trim()
       .min(1, `${label} is required`)
       .refine(hasContent, `${label} is required`)
-      .max(max),
+      .pipe(maxUnits(max)),
   );
 
 /** Multi-line free text: at most `max` characters; control characters other than newline, carriage return and tab are stripped. */
-const freeText = (max: number) => z.string().transform(stripTextChars).pipe(z.string().max(max));
+const freeText = (max: number) => z.string().transform((s) => stripTextChars(wellFormed(s))).pipe(maxUnits(max));
 
 export const inYearRange = (ms: number) => {
   const y = new Date(ms).getUTCFullYear();
@@ -49,7 +61,11 @@ export const tripInputSchema = z.object({
   plannedDate: dateOnlySchema,
 });
 
-const departAtSchema = z.iso.datetime({ offset: true }).refine((v) => inYearRange(Date.parse(v)), "Date must be between 1970 and 2200");
+// The year is checked as written (the planned date), not as the UTC instant: "2200-12-31T23:59:59-12:00" is a valid 2200 date.
+const departAtSchema = z.iso.datetime({ offset: true }).refine((v) => {
+  const year = Number(v.slice(0, 4));
+  return year >= 1970 && year <= 2200 && Number.isFinite(Date.parse(v));
+}, "Date must be between 1970 and 2200");
 
 /** A new trip may carry its start time; the app sends the current time on the trip's day. */
 export const tripCreateSchema = tripInputSchema.extend({ departAt: departAtSchema.optional() });
@@ -60,7 +76,7 @@ export const MAX_SHOT_TEXT = 120;
 export const MAX_SHOT_NOTES = 2000;
 export const shotChecklistSchema = z
   .array(z.object({ text: nameText("Shot text", MAX_SHOT_TEXT), done: z.boolean() }))
-  .max(MAX_SHOT_ITEMS);
+  .max(MAX_SHOT_ITEMS, `A stop can have at most ${MAX_SHOT_ITEMS} shots`);
 export const shotNotesSchema = freeText(MAX_SHOT_NOTES);
 
 export const lightPrefSchema = z.enum(["any", "sunrise", "golden", "sunset"]);
@@ -101,6 +117,11 @@ export const stopPatchSchema = z
     dwellMinutes: dwellMinutesSchema,
     shotNotes: shotNotesSchema.nullable(),
     shotChecklist: shotChecklistSchema,
+    /**
+     * The checklist the editor started from. With it, a save made from a stale copy (another tab or device ticked shots
+     * meanwhile) is merged with the stored list instead of replacing it. Never stored.
+     */
+    shotChecklistBase: shotChecklistSchema,
     lat,
     lng,
     source: z.enum(["manual", "suggested"]),
@@ -120,6 +141,9 @@ const newPasswordSchema = z
   .min(8, "Password must be at least 8 characters")
   .max(200, "Password is too long")
   .refine((p) => p.trim().length > 0, "Password cannot be only spaces")
+  // bcrypt stops reading at a NUL byte, so passwords differing after one would be the same password. Only new passwords
+  // are checked (sign-up, change); login accepts anything so no existing account can be locked out.
+  .refine((p) => !p.includes("\0"), "Password cannot contain a null character")
   // bcrypt only reads the first 72 bytes, so anything longer would silently not count.
   .refine((p) => new TextEncoder().encode(p).length <= 72, "Password must be at most 72 bytes");
 
@@ -214,7 +238,7 @@ export const suggestionsRequestSchema = z
 export const POPULARITY_BATCH_SIZE = 5;
 
 export const popularityRequestSchema = z.object({
-  places: z.array(z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), name: z.string().max(200).optional() })).min(1).max(POPULARITY_BATCH_SIZE),
+  places: z.array(z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180), name: maxUnits(200).optional() })).min(1).max(POPULARITY_BATCH_SIZE),
 });
 
 /** "tripName" -> "Trip name". */
@@ -237,6 +261,7 @@ export function formatZodError(error: z.ZodError): string {
   const issue = error.issues[0];
   if (!issue) return "Invalid request";
   if (!/^(Too (big|small)|Invalid )/.test(issue.message)) return issue.message;
+  if (issue.path.length === 0 && issue.code === "invalid_type" && issue.expected === "object") return "Request body must be a JSON object";
   const label = fieldLabel(issue.path);
   const chars = (n: unknown) => `${n} character${n === 1 ? "" : "s"}`;
   if (issue.code === "too_big" && issue.origin === "string") return `${label} must be at most ${chars(issue.maximum)}`;

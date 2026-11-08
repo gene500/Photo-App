@@ -20,9 +20,19 @@ async function changeDate(trip: Trip, date: string) {
 }
 
 describe("TripHeader date change across a DST change", () => {
-  it("sends the start time at the same clock time on the new date", async () => {
+  it("keeps the viewer's local clock time on the new day (07:00 PDT stays 07:00 PST)", async () => {
     const onSave = await changeDate(base, "2026-11-06");
-    expect(onSave).toHaveBeenCalledWith({ plannedDate: "2026-11-06", departAt: "2026-11-06T15:00:00.000Z" }); // 07:00 PST
+    expect(onSave).toHaveBeenCalledWith({ plannedDate: "2026-11-06", departAt: "2026-11-06T15:00:00.000Z" });
+  });
+
+  it("falls back to whole UTC days when the clock time would be off the first stop's solar day", async () => {
+    const onSave = vi.fn(async () => {});
+    const trip: Trip = { ...base, plannedDate: "2026-11-02", departAt: "2026-11-02T08:30:00.000Z" }; // 00:30 PST
+    render(<TripHeader trip={trip} onSave={onSave} exportData={{ stops: [{ name: "A", lat: 34, lng: -118.2, notes: null }], route: null }} />);
+    await userEvent.click(screen.getByRole("button", { name: "Edit trip" }));
+    fireEvent.change(screen.getByLabelText("Planned date"), { target: { value: "2026-10-20" } });
+    await userEvent.click(screen.getByRole("button", { name: "Save trip" }));
+    expect(onSave).toHaveBeenCalledWith({ plannedDate: "2026-10-20", departAt: "2026-10-20T08:30:00.000Z" });
   });
 
   it("is unchanged without a DST change (whole days)", async () => {

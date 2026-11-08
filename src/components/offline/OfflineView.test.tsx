@@ -32,6 +32,9 @@ beforeEach(() => {
   localStorage.setItem("rtpp.offline.owner", "u1"); // a signed-in page has claimed the device
 });
 
+// Saved a few days ago, so the copy is inside the 60-day limit whenever the tests run.
+const recentDate = (h: number, m: number) => { const d = new Date(Date.now() - 3 * 86_400_000); d.setUTCHours(h, m, 0, 0); return d; };
+
 describe("OfflineView", () => {
   it("explains when nothing is saved", async () => {
     render(<OfflineView />);
@@ -39,7 +42,7 @@ describe("OfflineView", () => {
   });
 
   it("does not say you are offline while the browser is online, and has a skip link", async () => {
-    saveTripCopy(trip, new Date("2026-06-20T12:00:00Z"));
+    saveTripCopy(trip, recentDate(12, 0));
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
     render(<OfflineView />);
     expect(screen.getByRole("link", { name: "Skip to content" }).getAttribute("href")).toBe("#main-content");
@@ -50,7 +53,7 @@ describe("OfflineView", () => {
   });
 
   it("lists saved trips and opens one read-only with the banner, notes, shot list and dwell", async () => {
-    saveTripCopy(trip, new Date("2026-06-20T12:00:00Z"));
+    saveTripCopy(trip, recentDate(12, 0));
     const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     render(<OfflineView />);
     await userEvent.click(await screen.findByRole("button", { name: /Yosemite loop/ }));
@@ -68,7 +71,7 @@ describe("OfflineView", () => {
     expect(first.getByText(/Stay 45 min/)).toBeTruthy();
     expect(first.getByText(/Best at sunrise/)).toBeTruthy();
     expect(within(rows[1]).getByText("Visited")).toBeTruthy();
-    expect(screen.getByText(/Planned for 2026-07-01/)).toBeTruthy();
+    expect(screen.getByText(/Planned for Jul 1, 2026/)).toBeTruthy();
     expect(screen.getByText(/Drive times need a connection/)).toBeTruthy();
     // Read-only: nothing to edit or delete.
     expect(screen.queryByRole("textbox")).toBeNull();
@@ -89,7 +92,7 @@ describe("OfflineView", () => {
 
   it("shows the saved time in the chosen time format", async () => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({ timeFormat: "24h" }));
-    saveTripCopy(trip, new Date("2026-06-20T15:07:00Z"));
+    saveTripCopy(trip, recentDate(15, 7));
     render(<SettingsProvider><OfflineView /></SettingsProvider>);
     await userEvent.click(await screen.findByRole("button", { name: /Yosemite loop/ }));
     const banner = screen.getByRole("status").textContent ?? "";

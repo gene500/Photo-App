@@ -122,20 +122,23 @@ function StopRow({ stop, index, locked, onDelete, onSelect }: Handlers & { stop:
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={`group relative flex items-center gap-3 rounded-xl px-1 py-1.5 text-foreground ${isDragging ? "z-10 bg-surface opacity-70 shadow-lg" : ""}`}
     >
-      <button type="button" onClick={() => onSelect(stop.id)} className="min-w-0 flex-1 break-words text-left text-sm font-medium hover:underline">
-        <span className="sr-only">{index + 1}.</span>{" "}{stop.name}
+      <button type="button" onClick={() => onSelect(stop.id)} title={stop.name} className="min-w-0 flex-1 break-words text-left text-sm font-medium hover:underline touch:py-2">
+        {/* The clamp sits on an inner span so the touch padding is outside the clamped box (no partial 4th line). */}
+        <span className="line-clamp-3">
+          <span className="mr-1 font-normal tabular-nums text-muted">{index + 1}.</span>{" "}{stop.name}
+        </span>
       </button>
-      <div className={`flex shrink-0 items-center transition-opacity ${REVEAL}`}>
+      <div className={`flex shrink-0 items-center touch:gap-1 transition-opacity ${REVEAL}`}>
         {locked ? (
-          <button type="button" data-testid="drag-handle" disabled aria-label={`${stop.name} is visited and stays in place`} title="Visited stops stay in place" className="flex h-9 w-8 cursor-not-allowed items-center justify-center rounded-lg text-muted opacity-40">
+          <button type="button" data-testid="drag-handle" aria-disabled="true" aria-label={`${stop.name} is visited and stays in place`} title="Visited stops stay in place" className="flex h-9 w-8 touch:h-11 touch:w-11 cursor-not-allowed items-center justify-center rounded-lg text-muted opacity-40">
             ⋮⋮
           </button>
         ) : (
-          <button type="button" data-testid="drag-handle" title="Drag to reorder" aria-label={`Reorder ${stop.name}`} className="flex h-9 w-8 cursor-grab touch-none items-center justify-center rounded-lg text-muted hover:bg-hover" {...attributes} {...listeners}>
+          <button type="button" data-testid="drag-handle" title="Drag to reorder" aria-label={`Reorder ${stop.name}`} className="flex h-9 w-8 touch:h-11 touch:w-11 cursor-grab touch-none items-center justify-center rounded-lg text-muted hover:bg-hover" {...attributes} {...listeners}>
             ⋮⋮
           </button>
         )}
-        <button type="button" onClick={() => onDelete(stop.id)} aria-label={`Delete ${stop.name}`} className="flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-danger-soft hover:text-danger">
+        <button type="button" onClick={() => onDelete(stop.id)} aria-label={`Delete ${stop.name}`} className="flex h-9 w-9 touch:h-11 touch:w-11 items-center justify-center rounded-lg text-muted hover:bg-danger-soft hover:text-danger">
           <svg aria-hidden viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
             <path d="M4 4l8 8M12 4l-8 8" />
           </svg>

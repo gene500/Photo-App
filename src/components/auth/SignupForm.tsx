@@ -66,7 +66,7 @@ export function SignupForm({ formToken, google = false }: { formToken?: string; 
         Have an account? <Link href="/login" className="font-medium text-foreground underline underline-offset-2">Log in</Link>
       </p>
       <p className="text-xs text-muted">
-        By creating an account you agree to the <Link href="/terms" className="underline underline-offset-2">Terms</Link> and <Link href="/privacy" className="underline underline-offset-2">Privacy Policy</Link>.
+        By creating an account you agree to the <Link href="/terms" className="underline underline-offset-2 touch:inline-block touch:py-2.5">Terms</Link> and <Link href="/privacy" className="underline underline-offset-2 touch:inline-block touch:py-2.5">Privacy Policy</Link>.
       </p>
     </form>
   );

@@ -6,7 +6,7 @@ vi.mock("next/server", () => ({ after: (fn: () => unknown) => fn() }));
 import { getCurrentUserId } from "@/server/session";
 import { CorridorError } from "@/server/suggestions/corridor";
 import { OverpassError } from "@/server/suggestions/overpass";
-import { findSuggestions } from "@/server/suggestions/service";
+import { findSuggestions, findSuggestionsAround } from "@/server/suggestions/service";
 import { POST } from "./route";
 
 const post = (body: unknown) =>
@@ -26,5 +26,33 @@ describe("POST /api/suggestions", () => {
   it("answers 502 when the upstream search fails", async () => {
     vi.mocked(findSuggestions).mockRejectedValue(new OverpassError("down"));
     expect((await POST(post(route))).status).toBe(502);
+  });
+  it("answers 502 within 25 s when the search hangs", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(findSuggestions).mockReturnValue(new Promise(() => {}));
+      const p = POST(post(route));
+      await vi.advanceTimersByTimeAsync(25_000);
+      const res = await p;
+      expect(res.status).toBe(502);
+      expect(await res.json()).toEqual({ error: "Couldn't load suggestions. Please retry." });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("answers 502 within 25 s when the single-point (around) search hangs, with and without a radius", async () => {
+    for (const body of [{ around: [-120, 37] }, { around: [-120, 37], radiusKm: 5 }]) {
+      vi.useFakeTimers();
+      try {
+        vi.mocked(findSuggestionsAround).mockReturnValue(new Promise(() => {}));
+        const p = POST(post(body));
+        await vi.advanceTimersByTimeAsync(25_000);
+        const res = await p;
+        expect(res.status).toBe(502);
+        expect(await res.json()).toEqual({ error: "Couldn't load suggestions. Please retry." });
+      } finally {
+        vi.useRealTimers();
+      }
+    }
   });
 });

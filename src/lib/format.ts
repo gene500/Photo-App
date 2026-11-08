@@ -1,3 +1,4 @@
+import { formatInstantDate } from "./dates";
 import { formatClock } from "./best-time";
 import type { DistanceUnit, TimeFormat } from "./settings";
 
@@ -28,9 +29,9 @@ export function formatPhotoCount(n: number | undefined): string | null {
   return `≈${short} photos nearby`;
 }
 
-/** "6/20/2026, 3:00 PM" (or 15:00) for a saved-at ISO timestamp, honouring the time-format setting; "" when unparseable. */
+/** "Jun 20, 2026, 3:00 PM" (or 15:00) for a saved-at ISO timestamp, honouring the time-format setting; "" when unparseable. */
 export function formatSavedAt(iso: string, timeFormat: TimeFormat = "auto"): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return `${d.toLocaleDateString()}, ${formatClock(d, undefined, timeFormat)}`;
+  return `${formatInstantDate(iso)}, ${formatClock(d, undefined, timeFormat)}`;
 }

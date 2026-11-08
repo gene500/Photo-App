@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 vi.mock("./session", () => ({ getCurrentUserId: vi.fn() }));
 import { getCurrentUserId } from "./session";
-import { assertSameOrigin, handle, HttpError, readBodyBytes, readJson, requireUserId } from "./http";
+import { assertSameOrigin, handle, HttpError, readBodyBytes, readJson, requireUserId, withDeadline } from "./http";
 
 describe("handle", () => {
   it("passes through successful responses", async () => {
@@ -89,6 +89,31 @@ describe("readJson", () => {
   });
 });
 
+describe("readJson encoding", () => {
+  it("refuses a body that is not valid UTF-8 instead of storing replacement characters", async () => {
+    const req = new Request("http://localhost/x", { method: "POST", body: new Uint8Array([0x7b, 0x22, 0x61, 0x22, 0x3a, 0x22, 0xff, 0x22, 0x7d]) });
+    await expect(readJson(req)).rejects.toMatchObject({ status: 400, message: "Invalid JSON body" });
+    expect(await readJson(new Request("http://localhost/x", { method: "POST", body: JSON.stringify({ a: "é😀" }) }))).toEqual({ a: "é😀" });
+  });
+});
+
+describe("assertSameOrigin and X-Forwarded-Host", () => {
+  const post = () =>
+    new Request("http://localhost:3000/x", { method: "POST", headers: { origin: "https://evil.example", "x-forwarded-host": "evil.example" } });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("ignores X-Forwarded-Host unless behind a trusted proxy", () => {
+    vi.stubEnv("VERCEL", "");
+    vi.stubEnv("TRUST_PROXY_HEADERS", "");
+    expect(() => assertSameOrigin(post())).toThrow(HttpError);
+  });
+
+  it("believes it behind a trusted proxy", () => {
+    vi.stubEnv("TRUST_PROXY_HEADERS", "1");
+    expect(() => assertSameOrigin(post())).not.toThrow();
+  });
+});
+
 describe("readJson size cap", () => {
   it("refuses a declared oversize body with 413 before reading it", async () => {
     const req = new Request("http://localhost/x", { method: "POST", headers: { "content-length": "2000000" }, body: "{}" });
@@ -161,5 +186,59 @@ describe("HttpError module", () => {
     expect(fromHttp).toBe(fromLeaf);
     expect(readFileSync("src/server/http-error.ts", "utf8")).not.toMatch(/^import /m);
     expect(readFileSync("src/server/rate-limit.ts", "utf8")).not.toMatch(/from "\.\/http"/);
+  });
+});
+
+describe("withDeadline", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("answers with the work when it finishes first", async () => {
+    vi.useFakeTimers();
+    await expect(withDeadline(Promise.resolve(5), 1000, () => 9)).resolves.toBe(5);
+  });
+  it("uses onTimeout's value when the work hangs", async () => {
+    vi.useFakeTimers();
+    const p = withDeadline(new Promise<number>(() => {}), 1000, () => 9);
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(p).resolves.toBe(9);
+  });
+  it("rejects with what onTimeout throws, and a late rejection is swallowed", async () => {
+    vi.useFakeTimers();
+    let fail!: (e: Error) => void;
+    const work = new Promise<number>((_, rej) => { fail = rej; });
+    const p = withDeadline(work, 1000, () => { throw new Error("slow"); });
+    const caught = expect(p).rejects.toThrow("slow");
+    await vi.advanceTimersByTimeAsync(1000);
+    await caught;
+    fail(new Error("late"));
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  it("leaves no timer behind once the work wins, or once the deadline fires", async () => {
+    vi.useFakeTimers();
+    await withDeadline(Promise.resolve(1), 1000, () => 2);
+    expect(vi.getTimerCount()).toBe(0);
+    const p = withDeadline(new Promise<number>(() => {}), 1000, () => 2);
+    await vi.advanceTimersByTimeAsync(1000);
+    await p;
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  it("never reports an unhandled rejection when the abandoned work fails after the deadline", async () => {
+    const seen: unknown[] = [];
+    const listener = (e: unknown) => seen.push(e);
+    process.on("unhandledRejection", listener);
+    try {
+      vi.useFakeTimers();
+      let fail!: (e: Error) => void;
+      const work = new Promise<number>((_, rej) => { fail = rej; });
+      const p = withDeadline(work, 1000, () => 9);
+      await vi.advanceTimersByTimeAsync(1000);
+      await expect(p).resolves.toBe(9);
+      fail(new Error("late"));
+      vi.useRealTimers();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(seen).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", listener);
+    }
   });
 });

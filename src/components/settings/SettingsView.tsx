@@ -39,7 +39,7 @@ function Segmented<K extends keyof Settings>({ legend, hint, name, value, option
         {options.map((o) => (
           <label key={o.value} className="relative min-w-0 flex-1">
             <input type="radio" name={name} value={o.value} checked={value === o.value} onChange={() => onChange(o.value)} className="peer absolute inset-0 m-0 h-full w-full cursor-pointer opacity-0" />
-            <span className="flex min-h-9 cursor-pointer items-center justify-center rounded-lg px-3 py-1.5 text-center text-sm text-muted transition hover:text-foreground peer-checked:bg-surface peer-checked:font-medium peer-checked:text-foreground peer-checked:shadow-sm peer-focus-visible:outline-2 peer-focus-visible:outline-accent-strong">
+            <span className="flex min-h-9 touch:min-h-11 cursor-pointer items-center justify-center rounded-lg px-3 py-1.5 text-center text-sm text-muted transition hover:text-foreground peer-checked:bg-surface peer-checked:font-medium peer-checked:text-foreground peer-checked:shadow-sm peer-focus-visible:outline-2 peer-focus-visible:outline-accent-strong">
               {o.label}
             </span>
           </label>
@@ -83,7 +83,7 @@ export function SettingsView({ email, hasPassword = true }: { email: string | nu
     <main id="main-content" tabIndex={-1} className="mx-auto max-w-2xl space-y-5 px-4 py-8 outline-none">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Settings</h1>
-        <Link href="/trips" onClick={goBack} className="inline-flex min-h-9 items-center rounded-lg px-2 text-sm text-muted hover:bg-hover hover:text-foreground">‹ Back</Link>
+        <Link href="/trips" onClick={goBack} className="inline-flex min-h-9 touch:min-h-11 items-center rounded-lg px-2 text-sm text-muted hover:bg-hover hover:text-foreground">‹ Back</Link>
       </div>
       <p className="text-sm text-muted">These are saved on this device only.</p>
 

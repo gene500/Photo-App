@@ -145,6 +145,11 @@ export function enforceLimit(name: PolicyName, key: string, now = Date.now()): v
   if (!r.ok) throw new HttpError(429, POLICIES[name].message, r.retryAfter);
 }
 
+/** True where a proxy we trust sets the forwarding headers (Vercel, or TRUST_PROXY_HEADERS=1). */
+export function isBehindTrustedProxy(): boolean {
+  return Boolean(process.env.VERCEL) || process.env.TRUST_PROXY_HEADERS === "1";
+}
+
 /**
  * Client address for per-IP limits. Client-supplied headers are only believed where a trusted proxy sets them:
  * - on Vercel (VERCEL is set): x-vercel-forwarded-for, else the LAST x-forwarded-for entry (the one Vercel appends);

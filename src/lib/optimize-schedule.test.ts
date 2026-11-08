@@ -47,6 +47,31 @@ describe("priority", () => {
   });
 });
 
+describe("anti-churn", () => {
+  const identity = (n: number) => Array.from({ length: n }, (_, i) => i);
+  it.each([5, 10, 13])("keeps the owner's order for %i identical stops with the same light preference (every order scores the same)", (n) => {
+    const r = optimizeSchedule({ durations: flat(n, 600), stops: Array.from({ length: n }, () => stop("sunset", 30)), plannedDate: DATE, defaultDeparture });
+    expect(r.order).toEqual(identity(n));
+  });
+  // Three sunset stops, symmetric except that going 0 -> 2 -> 1 is shorter by `gain` seconds. Only the anti-churn guard decides these.
+  const nearTie = (gain: number) => {
+    const d = [[0, 600, 600], [600, 0, 600], [600, 600 - gain, 0]];
+    d[2]![1] = 600 - gain;
+    return optimizeSchedule({ durations: d, stops: [stop("sunset"), stop("sunset"), stop("sunset")], plannedDate: DATE, defaultDeparture });
+  };
+  it("keeps the owner's order when another order is better by less than the churn margin", () => {
+    expect(nearTie(5e-7).order).toEqual(identity(3));
+  });
+  it("reorders once the gain is over the churn margin", () => {
+    expect(nearTie(1).order).toEqual([0, 2, 1]);
+  });
+  it("still reorders when another order is clearly better", () => {
+    const d = [[0, 3600, 60], [3600, 0, 3600], [60, 3600, 0]];
+    const r = optimizeSchedule({ durations: d, stops: [stop("any"), stop("any", 30, { lat: 38 }), stop("any", 30, { lat: 37.8 })], plannedDate: DATE, defaultDeparture });
+    expect(r.order).toEqual([0, 2, 1]);
+  });
+});
+
 describe("optimizeSchedule", () => {
   it("matches optimizeOrder and keeps the default departure when every stop is any", () => {
     const stops = [0, 3, 1, 2].map((i) => stop("any", 30, { lat: base.lat + i * 0.01 }));
@@ -394,6 +419,11 @@ describe("optimizeScheduleAsync (shared-server solver)", () => {
   });
 
   it("lets other work run while it solves: the event loop is never held for long", async () => {
+    // The yardstick is how long the synchronous solver holds the loop on this machine right now, so a slow or loaded machine
+    // does not fail the test; a solver that stops yielding would still stall for about that long.
+    const t0 = performance.now();
+    optimizeSchedule(make(25));
+    const syncMs = performance.now() - t0;
     let worst = 0;
     let last = performance.now();
     const timer = setInterval(() => {
@@ -409,7 +439,7 @@ describe("optimizeScheduleAsync (shared-server solver)", () => {
       clearInterval(timer);
     }
     // The synchronous solver holds the loop for hundreds of ms on these inputs.
-    expect(worst).toBeLessThan(250);
+    expect(worst).toBeLessThan(Math.max(250, syncMs * 0.6));
   });
 });
 

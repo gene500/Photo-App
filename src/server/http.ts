@@ -2,6 +2,7 @@ import { ZodError } from "zod";
 import { formatZodError } from "@/lib/validation";
 import { HttpError } from "./http-error";
 import { getCurrentUserId } from "./session";
+import { isBehindTrustedProxy } from "./rate-limit";
 
 export { HttpError };
 
@@ -17,7 +18,10 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 /**
  * Cross-site request guard for state-changing routes, on top of SameSite cookies. Browsers always send
  * Sec-Fetch-Site (and Origin on cross-origin POSTs); a request that says it came from another site is refused.
- * Requests with neither header (curl, server-to-server, tests) carry no ambient browser cookies, so they pass.
+ * Requests with neither header (curl, server-to-server, tests) carry no ambient browser cookies, so they pass. That is by
+ * design: browsers always send one of them, and the session cookie is SameSite=Lax as a second layer.
+ * X-Forwarded-Host is only believed behind a trusted proxy (the same condition clientIp uses); otherwise a client could
+ * name any host in it.
  */
 export function assertSameOrigin(req: Request): void {
   if (SAFE_METHODS.has(req.method.toUpperCase())) return;
@@ -32,7 +36,8 @@ export function assertSameOrigin(req: Request): void {
     throw new HttpError(403, "Cross-site request refused"); // includes the literal "null" origin
   }
   const hosts = new Set<string>([new URL(req.url).host]);
-  for (const h of [req.headers.get("host"), req.headers.get("x-forwarded-host")]) if (h) hosts.add(h.split(",")[0]!.trim());
+  const hostHeaders = [req.headers.get("host"), ...(isBehindTrustedProxy() ? [req.headers.get("x-forwarded-host")] : [])];
+  for (const h of hostHeaders) if (h) hosts.add(h.split(",")[0]!.trim());
   if (!hosts.has(originHost)) throw new HttpError(403, "Cross-site request refused");
 }
 
@@ -121,8 +126,33 @@ export async function readBodyBytes(req: Request, maxBytes: number): Promise<Uin
 export async function readJson(req: Request, maxBytes = MAX_JSON_BYTES): Promise<unknown> {
   const bytes = await readBodyBytes(req, maxBytes);
   try {
-    return JSON.parse(new TextDecoder().decode(bytes));
+    // fatal: a body that is not valid UTF-8 is refused instead of being stored with U+FFFD replacement characters.
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
     throw new HttpError(400, "Invalid JSON body");
+  }
+}
+
+/** Route deadlines (ms): the client gives up after its timeout for that route (20 s; 60 s for suggestions), so no route may take longer than these to answer or fail. */
+export const DEADLINE_FAST_MS = 12_000;
+export const DEADLINE_SUGGESTIONS_MS = 25_000;
+
+/**
+ * Settles with `work` or, once `ms` have passed, with `onTimeout()` (which returns a value or throws).
+ * Several sequential upstream timeouts can add up past the client's limit; this caps the total.
+ * The abandoned work keeps its own per-call timeouts and is simply not waited for.
+ */
+export async function withDeadline<T>(work: Promise<T>, ms: number, onTimeout: () => T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<T>((resolve, reject) => {
+    timer = setTimeout(() => {
+      try { resolve(onTimeout()); } catch (e) { reject(e); }
+    }, ms);
+  });
+  work.catch(() => undefined); // an abandoned rejection must not surface as unhandled
+  try {
+    return await Promise.race([work, late]);
+  } finally {
+    clearTimeout(timer);
   }
 }

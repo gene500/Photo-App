@@ -32,7 +32,21 @@ export const POST = handle(async (req: Request, { params }: Ctx) => {
   if (!check.ok) throw new HttpError(400, check.error);
 
   const photoUrl = await savePhoto(check.bytes, check.type);
-  const swap = await swapStopPhoto(userId, id, stop.photoUrl, photoUrl);
+  let swap: Awaited<ReturnType<typeof swapStopPhoto>>;
+  try {
+    swap = await swapStopPhoto(userId, id, stop.photoUrl, photoUrl);
+  } catch (e) {
+    // The reply may have been lost after the database committed (timeout): if the stop already points at the new file, keep it.
+    const now = await getOwnedStop(userId, id).catch(() => "unknown" as const);
+    if (now === "unknown") throw e; // cannot tell: keeping a possible orphan is safer than deleting a file the stop may use
+    if (now?.photoUrl === photoUrl) {
+      await deletePhotoFile(stop.photoUrl);
+      return Response.json({ stop: now });
+    }
+    // Not committed: remove the new file (best effort) so no orphan remains.
+    await deletePhotoFile(photoUrl).catch(() => undefined);
+    throw e;
+  }
   if (swap.status === "gone") {
     // The stop was deleted while we were saving: don't leave the new file orphaned.
     await deletePhotoFile(photoUrl);

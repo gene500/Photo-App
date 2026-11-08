@@ -2,14 +2,15 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
+import { safeCallbackPath } from "@/lib/safe-callback";
 import { btnSecondary } from "@/components/ui/styles";
 
 /** "Continue with Google" with an "or" divider; the page only renders it when Google sign-in is configured. */
-export function GoogleButton() {
+export function GoogleButton({ returnTo = null }: { returnTo?: string | null }) {
   const [pending, setPending] = useState(false);
   return (
     <div className="space-y-3">
-      <button type="button" disabled={pending} onClick={() => { setPending(true); void signIn("google", { callbackUrl: "/trips" }); }} className={`${btnSecondary} w-full`}>
+      <button type="button" disabled={pending} onClick={() => { setPending(true); void signIn("google", { callbackUrl: safeCallbackPath(returnTo) ?? "/trips" }); }} className={`${btnSecondary} w-full`}>
         {pending ? "Opening Google…" : "Continue with Google"}
       </button>
       <p aria-hidden className="flex items-center gap-3 text-xs text-muted before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border">or</p>

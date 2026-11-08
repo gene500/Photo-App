@@ -2,6 +2,10 @@
 
 /* Phone in landscape: the trip panel becomes a side panel. Keep in sync with SHORT_LANDSCAPE_QUERY in lib/short-landscape.ts. */
 @custom-variant short-landscape (@media (orientation: landscape) and (max-height: 500px) and (max-width: 1023px));
+@custom-variant touch {
+  @media (max-width: 1023px) { @slot; }
+  @media (pointer: coarse) { @slot; }
+}
 
 /* `dark:` follows the Settings theme: explicit dark, or the OS when the theme is "system". */
 @custom-variant dark {
@@ -238,7 +242,7 @@ body {
   border-radius: 50%;
   background: var(--surface);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.12), 0 0 0 1px var(--border);
-  overflow: hidden;
+  overflow: visible;
 }
 :root .zoom-fit-ctrl[hidden] { display: none; }
 :root .zoom-fit-ctrl button {
@@ -253,6 +257,11 @@ body {
   background: transparent;
   color: var(--foreground);
   cursor: pointer;
+}
+/* Phones: the 32px visual circle keeps its look; an invisible ring extends the hit area to 44px. */
+@media (max-width: 1023px), (pointer: coarse) {
+  :root .zoom-fit-ctrl button { position: relative; }
+  :root .zoom-fit-ctrl button::after { content: ""; position: absolute; inset: -6px; }
 }
 :root .zoom-fit-ctrl button:hover { background: var(--hover); }
 :root .zoom-fit-ctrl button:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--accent-strong); }

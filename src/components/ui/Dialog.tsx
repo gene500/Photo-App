@@ -101,7 +101,7 @@ export function Dialog({ open, role = "alertdialog", title, description, onCance
         className={`${card} w-full max-w-sm p-5`}
       >
         <h2 id={titleId} className="text-base font-semibold">{title}</h2>
-        {description && <p id={descId} className="mt-2 text-sm text-muted">{description}</p>}
+        {description && <p id={descId} className="mt-2 break-words text-sm text-muted">{description}</p>}
         <div className="mt-5 flex flex-wrap justify-end gap-2">{children}</div>
       </div>
     </div>,

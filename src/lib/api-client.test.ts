@@ -156,6 +156,8 @@ describe("api client", () => {
     await expect(api.listTrips()).rejects.toThrow("The server had a problem. Try again in a moment.");
     fetchMock.mockResolvedValueOnce(new Response("slow down", { status: 429 }));
     await expect(api.listTrips()).rejects.toThrow(/too many requests/i);
+    fetchMock.mockResolvedValueOnce(new Response("<html>too big</html>", { status: 413 }));
+    await expect(api.listTrips()).rejects.toThrow("That file or request is too large.");
     fetchMock.mockResolvedValueOnce(new Response("x", { status: 418 }));
     await expect(api.listTrips()).rejects.toThrow("Request failed (418)");
   });

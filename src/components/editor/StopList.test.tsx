@@ -52,7 +52,8 @@ describe("StopList", () => {
   it("disables the drag handle of visited rows with a reason", () => {
     render(<StopList stops={[stop("a", "A", { visited: true }), stop("b", "B"), stop("c", "C")]} {...handlers} />);
     const a = screen.getByRole("button", { name: "A is visited and stays in place" }) as HTMLButtonElement;
-    expect(a.disabled).toBe(true);
+    expect(a.getAttribute("aria-disabled")).toBe("true");
+    expect(a.title).toBe("Visited stops stay in place");
     expect((screen.getByRole("button", { name: "Reorder B" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -121,5 +122,16 @@ describe("StopList", () => {
     expect(live?.textContent).toBe("Picked up Beta.");
     await userEvent.keyboard("{Escape}");
     expect(document.querySelector('[role="status"][aria-live]')?.textContent).not.toMatch(/cmvq/);
+  });
+});
+
+describe("StopList name button", () => {
+  it("clamps the name on an inner span, so the touch padding is not inside the clamped box", () => {
+    render(<StopList stops={[stop("a", "A very long name ".repeat(20))]} {...handlers} />);
+    const button = screen.getByTitle(/A very long name/);
+    expect(button.className).toContain("break-words");
+    expect(button.className).toContain("touch:py-2");
+    expect(button.className).not.toContain("line-clamp");
+    expect(button.querySelector(".line-clamp-3")).not.toBeNull();
   });
 });

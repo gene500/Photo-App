@@ -13,6 +13,7 @@ import { createItineraryPdf, mapTokenFromEnv } from "@/lib/itinerary-download";
 import { describeLightHint, lightLabel } from "@/lib/light-windows";
 import { estimateLegDurations } from "@/lib/straight-line";
 import { useMounted } from "@/lib/use-mounted";
+import { fromTimeValue, toTimeValue } from "@/components/editor/StartTimeControl";
 import { stopColor } from "@/lib/stop-style";
 import type { LngLat, PublicTrip, RouteResult, Stop } from "@/lib/types";
 
@@ -35,16 +36,23 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
   // The page fetches the real driving route on the server; without one (routing down) the line is straight and the times are estimated from distance.
   const line: LngLat[] = useMemo(() => route?.geometry ?? trip.stops.map((s) => [s.lng, s.lat]), [route, trip.stops]);
   const legs = useMemo(() => (route ? route.legs.map((l) => l.duration) : estimateLegDurations(trip.stops)), [route, trip.stops]);
-  const timesInput = { plannedDate: trip.plannedDate, departAt: trip.departAt, stops: trip.stops };
+  // With no saved start the editor shows "now" (the time it was opened) on the trip's day at the first stop; the same default is used here
+  // so the page and the PDF show the times the owner sees. Until mounted (the viewer's clock is unknown) it falls back to sunrise.
+  const [openedAt] = useState(() => new Date().toISOString());
+  const departAt = useMemo(
+    () => trip.departAt ?? (mounted ? fromTimeValue(trip.plannedDate, toTimeValue(openedAt), trip.stops[0]?.lng) : null),
+    [trip.departAt, mounted, trip.plannedDate, openedAt, trip.stops],
+  );
+  const timesInput = { plannedDate: trip.plannedDate, departAt, stops: trip.stops };
   const arrivals = useMemo(
     () => computeArrivals(timesInput, legs),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- timesInput is rebuilt from these each render
-    [trip.plannedDate, trip.departAt, trip.stops, legs],
+    [trip.plannedDate, departAt, trip.stops, legs],
   );
   const bestTimes = useMemo(
     () => computeBestTimes(timesInput, legs),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- timesInput is rebuilt from these each render
-    [trip.plannedDate, trip.departAt, trip.stops, legs],
+    [trip.plannedDate, departAt, trip.stops, legs],
   );
 
   // Stop notes are never shared, so the links are built from names and coordinates only.
@@ -61,7 +69,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
       const input = buildItinerary({
         tripName: trip.name,
         plannedDate: trip.plannedDate,
-        departAt: trip.departAt ? new Date(trip.departAt) : null,
+        departAt: departAt ? new Date(departAt) : null,
         totalDistanceM: route?.distance ?? null,
         totalDurationS: route?.duration ?? null,
         stops: trip.stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: null, shotNotes: s.shotNotes, lightPref: s.lightPref, source: s.source, visited: s.visited, priority: s.priority, arrival: arrivals[i] ?? null })),
@@ -90,7 +98,8 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
       </div>
 
       <aside aria-label="Trip panel" className={`absolute inset-x-0 bottom-0 z-10 flex h-[55dvh] flex-col overflow-hidden rounded-b-none rounded-t-2xl lg:inset-x-auto lg:bottom-3 lg:left-3 lg:top-3 lg:h-auto lg:w-[23.75rem] lg:rounded-2xl short-landscape:inset-y-0 short-landscape:left-0 short-landscape:right-auto short-landscape:h-auto short-landscape:w-[clamp(17.5rem,40%,23.75rem)] short-landscape:overflow-y-auto short-landscape:overflow-x-hidden short-landscape:rounded-none short-landscape:pb-[env(safe-area-inset-bottom)] short-landscape:pl-[env(safe-area-inset-left)] print:static print:h-auto print:w-auto print:overflow-visible print:rounded-none print:border-0 print:shadow-none ${card}`}>
-        <header className="space-y-0.5 px-4 pb-2 pt-3">
+        {/* On a phone the header never takes more than 40% of the sheet and scrolls on its own, so the stop list stays reachable at large text sizes. */}
+        <header className="max-lg:max-h-[40%] max-lg:shrink-0 max-lg:overflow-y-auto space-y-0.5 px-4 pb-2 pt-3 short-landscape:max-h-none short-landscape:overflow-visible print:max-h-none print:overflow-visible">
           <div className="flex flex-wrap items-start justify-between gap-x-2">
             <h1 className="min-w-0 max-w-full flex-1 basis-28 break-words text-lg font-semibold">{trip.name}</h1>
             {canDownload && (
@@ -99,17 +108,17 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
           </div>
           <p className="text-sm text-muted">
             View only · planned for {trip.plannedDate}
-            {mounted && trip.departAt && <> · Starts {formatClock(new Date(trip.departAt), undefined, tf)}</>}
+            {mounted && departAt && <> · Starts {formatClock(new Date(departAt), undefined, tf)}</>}
           </p>
           {mapLinks.apple.length > 0 && (
             <p className="flex flex-wrap gap-x-3 gap-y-1 pt-1 text-sm print:hidden" data-testid="open-in-maps">
               {mapLinks.apple.map((a) => (
-                <a key={a.url} href={a.url} target="_blank" rel="noopener noreferrer" className="font-medium underline underline-offset-2 hover:text-accent-strong">
+                <a key={a.url} href={a.url} target="_blank" rel="noopener noreferrer" className="inline-flex touch:min-h-11 items-center font-medium underline underline-offset-2 hover:text-accent-strong">
                   Open in Apple Maps{a.label && ` (${a.label})`}
                 </a>
               ))}
               {mapLinks.google.map((g) => (
-                <a key={g.url} href={g.url} target="_blank" rel="noopener noreferrer" className="font-medium underline underline-offset-2 hover:text-accent-strong">
+                <a key={g.url} href={g.url} target="_blank" rel="noopener noreferrer" className="inline-flex touch:min-h-11 items-center font-medium underline underline-offset-2 hover:text-accent-strong">
                   Open in Google Maps{g.label && ` (${g.label})`}
                 </a>
               ))}
@@ -133,7 +142,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
                       {i + 1}
                     </span>
                     <div className="min-w-0 flex-1 space-y-0.5">
-                      <button type="button" onClick={() => setSelected(s.id === selected ? null : s.id)} className="block w-full break-words text-left text-sm font-medium leading-7 hover:underline">
+                      <button type="button" onClick={() => setSelected(s.id === selected ? null : s.id)} className="block w-full break-words text-left text-sm font-medium leading-7 touch:min-h-11 touch:py-2 hover:underline">
                         {s.name}{s.visited && <span className="ml-1.5 text-xs font-normal text-muted">· Visited</span>}
                       </button>
                       {mounted && (

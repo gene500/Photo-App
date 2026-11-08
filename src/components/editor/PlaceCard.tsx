@@ -53,7 +53,7 @@ export function PlaceCard({ name, resolving, busy, suggestion, visit, onAdd, onC
         <p title={name} className={`line-clamp-3 break-words text-sm font-medium ${resolving ? "text-muted" : ""}`}>{name}</p>
         {golden && weather && (
           <p data-testid="place-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-sand" : "text-muted"}`}>
-            Golden hour {formatClock(golden, undefined, settings.timeFormat)} · <WeatherText line={weather} />
+            Golden hour {formatClock(golden, undefined, settings.timeFormat)} <span className="whitespace-nowrap">· <WeatherText line={weather} /></span>
           </p>
         )}
         {full && <p data-testid="place-full" className="text-xs text-muted">This trip already has the maximum of {MAX_ROUTE_WAYPOINTS} stops.</p>}

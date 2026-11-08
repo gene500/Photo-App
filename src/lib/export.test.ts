@@ -199,3 +199,11 @@ describe("appleMapsUrls", () => {
     expect(previousEnd).toBe("44.4,-124.4");
   });
 });
+
+describe("buildGpx line breaks", () => {
+  it("writes only LF, even for notes typed with CRLF", () => {
+    const gpx = buildGpx({ name: "T", stops: [{ name: "A", lat: 1, lng: 2, notes: "one\r\ntwo\rthree" }] });
+    expect(gpx).not.toContain("\r");
+    expect(gpx).toContain("one\ntwo\nthree");
+  });
+});

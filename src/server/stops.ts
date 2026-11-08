@@ -1,9 +1,9 @@
 import { pinVisitedFirst } from "@/lib/visited-run";
-import type { Stop } from "@/lib/types";
+import type { ShotItem, Stop } from "@/lib/types";
 import type { NewStopInput, StopPatch } from "@/lib/validation";
-import { MAX_ROUTE_WAYPOINTS } from "@/lib/validation";
+import { MAX_ROUTE_WAYPOINTS, MAX_SHOT_ITEMS } from "@/lib/validation";
 import { prisma } from "./db";
-import { toStopDto } from "./mappers";
+import { parseShotChecklist, toStopDto } from "./mappers";
 
 export class InvalidReorderError extends Error {
   constructor() {
@@ -42,6 +42,25 @@ function toStopData({ shotChecklist, shotNotes, notes, ...rest }: StopUpdate) {
     ...(shotNotes === undefined ? {} : { shotNotes: cleanShotNotes(shotNotes) }),
     ...(shotChecklist === undefined ? {} : { shotChecklist: JSON.stringify(shotChecklist) }),
   };
+}
+
+/**
+ * Three-way merge of the shot list by shot text, for a save made from a stale copy: `base` is what the editor started from,
+ * `incoming` what it now sends, `stored` what is in the database. A tick the editor did not touch takes the stored value
+ * (so another tab's ticks are not undone), a shot added elsewhere is kept, a shot the editor removed stays removed.
+ */
+export function mergeShotChecklist(stored: ShotItem[], base: ShotItem[], incoming: ShotItem[]): ShotItem[] {
+  const done = (list: ShotItem[]) => new Map(list.map((i) => [i.text, i.done] as const).reverse());
+  const baseDone = done(base);
+  const storedDone = done(stored);
+  const merged = incoming.map((i) => {
+    const b = baseDone.get(i.text);
+    const s = storedDone.get(i.text);
+    return b !== undefined && s !== undefined && i.done === b && s !== b ? { text: i.text, done: s } : i;
+  });
+  const known = new Set([...baseDone.keys(), ...incoming.map((i) => i.text)]);
+  for (const s of stored) if (!known.has(s.text)) merged.push(s);
+  return merged.slice(0, MAX_SHOT_ITEMS);
 }
 
 export async function addStop(
@@ -86,12 +105,19 @@ export type StopUpdateResult = { stop: Stop; /** Other stops whose visited flag 
  * together with its cascade in one transaction (checking a stop checks every earlier one, unchecking it unchecks
  * every later one). Enforced here so a stale tab cannot leave a gap.
  */
-export async function updateStopCascade(userId: string, stopId: string, patch: StopUpdate): Promise<StopUpdateResult | null> {
+export async function updateStopCascade(
+  userId: string,
+  stopId: string,
+  patch: StopUpdate,
+  /** The checklist the editor started from; see mergeShotChecklist. */
+  shotBase?: ShotItem[],
+): Promise<StopUpdateResult | null> {
   try {
     return await prisma.$transaction(async (tx) => {
       const row = await tx.stop.findFirst({ where: { id: stopId, trip: { userId } } });
       if (!row) return null;
-      const updated = await tx.stop.update({ where: { id: stopId }, data: toStopData(patch) });
+      const data = toStopData(shotBase && patch.shotChecklist ? { ...patch, shotChecklist: mergeShotChecklist(parseShotChecklist(row.shotChecklist), shotBase, patch.shotChecklist) } : patch);
+      const updated = await tx.stop.update({ where: { id: stopId }, data });
       const cascaded: Stop[] = [];
       if (patch.visited !== undefined) {
         const visited = patch.visited;

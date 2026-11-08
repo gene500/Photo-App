@@ -208,3 +208,36 @@ describe("sanitizePhoto: WebP", () => {
     expect(sanitizePhoto(riff(vp8(0, 5)), "image/webp").ok).toBe(false);
   });
 });
+
+describe("sanitizePhoto: orientation survives in PNG and WebP", () => {
+  const tiff = (orientation: number) => u8("MM", be16(42), be32(8), be16(2), [...be16(0x0112), ...be16(3), ...be32(1), ...be16(orientation), 0, 0], [...be16(0x8825), ...be16(4), ...be32(1), ...be32(0x40)], be32(0), new Array(0x20).fill(0x41));
+  it("PNG: keeps a minimal eXIf chunk with the orientation right after IHDR, drops GPS, and is stable", () => {
+    const r = sanitizePhoto(png({ extra: [chunk("eXIf", [...tiff(6)])] }), "image/png");
+    if (!r.ok) throw new Error(r.error);
+    const out = text(r.bytes);
+    expect(out).toContain("eXIf");
+    expect(out).not.toContain("AAAA");
+    expect(out.indexOf("eXIf")).toBeGreaterThan(out.indexOf("IHDR"));
+    expect(out.indexOf("eXIf")).toBeLessThan(out.indexOf("IDAT"));
+    const again = sanitizePhoto(r.bytes, "image/png");
+    if (!again.ok) throw new Error(again.error);
+    expect(Buffer.from(again.bytes).equals(Buffer.from(r.bytes))).toBe(true);
+  });
+  it("PNG without an orientation gets no eXIf chunk", () => {
+    const r = sanitizePhoto(png({ extra: [chunk("eXIf", [...u8("GPSDATA")])] }), "image/png");
+    if (!r.ok) throw new Error(r.error);
+    expect(text(r.bytes)).not.toContain("eXIf");
+  });
+  it("WebP: keeps only the orientation in a fresh EXIF chunk and sets the VP8X flag", () => {
+    const r = sanitizePhoto(riff(vp8x(0x08, 64, 48), vp8(64, 48), wchunk("EXIF", [...tiff(8)])), "image/webp");
+    if (!r.ok) throw new Error(r.error);
+    expect(text(r.bytes)).toContain("EXIF");
+    expect(text(r.bytes)).not.toContain("AAAA");
+    expect(r.bytes[20] & 0x08).toBe(0x08);
+    const size = r.bytes[4] | (r.bytes[5] << 8) | (r.bytes[6] << 16) | (r.bytes[7] << 24);
+    expect(size).toBe(r.bytes.length - 8);
+    const again = sanitizePhoto(r.bytes, "image/webp");
+    if (!again.ok) throw new Error(again.error);
+    expect(Buffer.from(again.bytes).equals(Buffer.from(r.bytes))).toBe(true);
+  });
+});

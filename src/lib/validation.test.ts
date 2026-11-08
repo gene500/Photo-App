@@ -5,6 +5,7 @@ import {
   formatZodError,
   newStopSchema,
   optimizeRequestSchema,
+  shotNotesSchema,
   signupSchema,
   stopPatchSchema,
   suggestionsRequestSchema,
@@ -192,6 +193,24 @@ describe("signupSchema limits", () => {
     const email = `${"a".repeat(64)}@${"b".repeat(60)}.${"c".repeat(60)}.${"d".repeat(60)}.${"e".repeat(60)}.com`;
     expect(email.length).toBeGreaterThan(254);
     expect(signupSchema.safeParse({ email, password: "correct-horse" }).success).toBe(false);
+  });
+
+  it("rejects a NUL byte in a new password (bcrypt stops reading there)", () => {
+    expect(signupSchema.safeParse({ email: "a@example.com", password: "abcdefgh\0ijk" }).success).toBe(false);
+    expect(signupSchema.safeParse({ email: "a@example.com", password: "abcdefghijk" }).success).toBe(true);
+  });
+
+  it("counts length in UTF-16 units, like the browser's maxLength", () => {
+    expect(shotNotesSchema.safeParse("😀".repeat(1000)).success).toBe(true);
+    expect(shotNotesSchema.safeParse("😀".repeat(1001)).success).toBe(false); // 2002 units
+    expect(tripInputSchema.safeParse({ name: "😀".repeat(61), plannedDate: "2026-07-01" }).success).toBe(false);
+    expect(tripInputSchema.safeParse({ name: "😀".repeat(60), plannedDate: "2026-07-01" }).success).toBe(true);
+  });
+
+  it("explains a body that is not an object", () => {
+    const r = signupSchema.safeParse([]);
+    expect(r.success).toBe(false);
+    if (!r.success) expect(formatZodError(r.error)).toBe("Request body must be a JSON object");
   });
 
   it("rejects a password over bcrypt's 72-byte limit (bcrypt would silently ignore the rest)", () => {

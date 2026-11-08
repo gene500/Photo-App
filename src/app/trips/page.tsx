@@ -1,16 +1,20 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { RefreshWhenStale } from "@/components/RefreshWhenStale";
 import { NewTripForm } from "@/components/trips/NewTripForm";
 import { TripMapBackdrop } from "@/components/trips/TripMapBackdrop";
 import { TripList } from "@/components/trips/TripList";
+import { loginUrl } from "@/lib/safe-callback";
 import { getCurrentUserId } from "@/server/session";
 import { listTrips } from "@/server/trips";
+
+export const metadata: Metadata = { title: "Your trips · Photo Op Planner" };
 
 const renderStamp = () => Date.now();
 
 export default async function TripsPage() {
   const userId = await getCurrentUserId();
-  if (!userId) redirect("/login");
+  if (!userId) redirect(loginUrl("/trips"));
   const trips = await listTrips(userId);
   const renderedAt = renderStamp();
   return (

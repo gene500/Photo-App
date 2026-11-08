@@ -42,7 +42,16 @@ describe("security headers", () => {
     expect(h["X-Content-Type-Options"]).toBe("nosniff");
     expect(h["Referrer-Policy"]).toBeTruthy();
     expect(h["Permissions-Policy"]).toContain("geolocation=(self)");
+    expect(h["Cross-Origin-Opener-Policy"]).toBe("same-origin");
+    expect(h["Cross-Origin-Resource-Policy"]).toBe("same-origin");
     expect(h["Strict-Transport-Security"]).toMatch(/^max-age=\d+; includeSubDomains$/); // no preload: the app lives on a shared *.vercel.app domain
+  });
+
+  it("adds upgrade-insecure-requests only when asked", () => {
+    expect(csp).not.toContain("upgrade-insecure-requests");
+    const up = contentSecurityPolicy(false, "n", true);
+    expect(up.split("; ")).toContain("upgrade-insecure-requests");
+    expect(up).not.toContain("upgrade-insecure-requests ");
   });
 
   it("has no inline-script allowance: only 'self', plus a nonce and strict-dynamic when given one", () => {

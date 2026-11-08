@@ -30,6 +30,23 @@ describe("LoginForm", () => {
     expect(signIn).toHaveBeenCalledWith("google", { callbackUrl: "/trips" });
   });
 
+  it("returns to the safe path it was given after logging in, and ignores an unsafe one", async () => {
+    vi.mocked(signIn).mockResolvedValue({ error: undefined, ok: true, status: 200, url: "/trips" } as never);
+    const { unmount } = render(<LoginForm returnTo="/trips/abc" />);
+    await submit();
+    expect(push).toHaveBeenCalledWith("/trips/abc");
+    unmount();
+    push.mockClear();
+    render(<LoginForm returnTo="//evil.example" />);
+    await submit();
+    expect(push).toHaveBeenCalledWith("/trips");
+  });
+
+  it("shows the notice after a password change", () => {
+    render(<LoginForm notice="Password changed. Log in again with your new password." />);
+    expect(screen.getByRole("status").textContent).toContain("Password changed");
+  });
+
   it("submits by POST if the form is used before the page is interactive, so a password never lands in the URL", () => {
     const { container } = render(<LoginForm />);
     expect(container.querySelector("form")?.getAttribute("method")).toBe("post");

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ExternalServiceError, locateArea, locateLandmark } from "@/server/external/mapbox";
-import { handle, HttpError, requireUserId } from "@/server/http";
+import { DEADLINE_FAST_MS, handle, HttpError, requireUserId, withDeadline } from "@/server/http";
 import { enforcePaidLimit } from "@/server/shared-limit";
 
 const querySchema = z.string().trim().min(2, "Type at least 2 characters").max(200, "Search text must be at most 200 characters");
@@ -11,16 +11,21 @@ export const GET = handle(async (req: Request) => {
   // Validate first so a malformed request never uses up paid-API quota.
   const q = querySchema.parse(new URL(req.url).searchParams.get("q") ?? "");
   await enforcePaidLimit("locate", userId);
-  let area: Awaited<ReturnType<typeof locateArea>> = null;
-  let areaError: ExternalServiceError | null = null;
-  try {
-    area = await locateArea(q);
-  } catch (e) {
-    if (!(e instanceof ExternalServiceError)) throw e;
-    areaError = e;
-  }
+  // Both lookups run under one deadline so their separate timeouts never add up past the client's limit.
+  // Whatever finished by then is used; a lookup still hanging counts as failed.
+  let areaRes: { area: Awaited<ReturnType<typeof locateArea>>; areaError: ExternalServiceError | null } | undefined;
+  let landmark = null as Awaited<ReturnType<typeof locateLandmark>>;
+  const areaWork = locateArea(q).then(
+    (a) => { areaRes = { area: a, areaError: null }; },
+    (e) => {
+      if (!(e instanceof ExternalServiceError)) throw e;
+      areaRes = { area: null, areaError: e };
+    },
+  );
   // A landmark lookup that fails must never fail the request: the map still pans to the area.
-  const landmark = await locateLandmark(q).catch(() => null);
+  const landmarkWork = locateLandmark(q).then((l) => { landmark = l; }, () => undefined);
+  await withDeadline(Promise.all([areaWork, landmarkWork]), DEADLINE_FAST_MS, () => [undefined, undefined] as [void, void]);
+  const { area, areaError } = areaRes ?? { area: null, areaError: new ExternalServiceError("Couldn't reach the place search service") };
   // The area lookup failing only fails the request when the landmark cannot stand in for it.
   if (areaError && !landmark) throw new HttpError(502, areaError.message);
   return Response.json({ area: area ?? (landmark ? { lat: landmark.lat, lng: landmark.lng } : null), landmark });

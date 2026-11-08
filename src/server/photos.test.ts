@@ -29,6 +29,11 @@ describe("photos", () => {
     expect(validatePhoto({ type: "image/png", size: 8 }, PNG_BYTES.slice(0, 8))).toMatchObject({ ok: false });
   });
 
+  it("accepts a file with an empty browser-reported type when the contents are an image, still refuses other contents", () => {
+    expect(validatePhoto({ type: "", size: PNG_BYTES.length }, PNG_BYTES)).toEqual({ ok: true, type: "image/png", bytes: PNG_BYTES });
+    expect(validatePhoto({ type: "", size: 12 }, new TextEncoder().encode("hello world!"))).toMatchObject({ ok: false, error: "Photo must be a JPEG, PNG, or WebP image" });
+  });
+
   it("saves, reads back, and deletes a photo", async () => {
     const url = await savePhoto(PNG_BYTES, "image/png");
     expect(url.startsWith(PHOTO_URL_PREFIX)).toBe(true);

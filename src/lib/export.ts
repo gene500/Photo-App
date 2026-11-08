@@ -10,6 +10,7 @@ const ILLEGAL_XML = /[^\u0009\u000A\u000D -퟿-�\u{10000}-\u{10FFFF}]/gu;
 function esc(text: string): string {
   return text
     .replace(ILLEGAL_XML, "")
+    .replace(/\r\n?/g, "\n") // one line-break style, whatever the notes were typed with
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

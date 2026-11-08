@@ -1,8 +1,9 @@
 import type { NextAuthOptions, Session } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { clientIp } from "./rate-limit";
+import { isSessionRevoked, revokeSession } from "./session-revocation";
 import { hitShared, isBlockedShared, peekShared, resetShared } from "./shared-limit";
 import { EMAIL_IN_USE, findOrCreateGoogleUser, getSessionVersion, verifyCredentials } from "./users";
 
@@ -124,18 +125,35 @@ export const authOptions: NextAuthOptions = {
       ? [GoogleProvider({ clientId: process.env.GOOGLE_CLIENT_ID!, clientSecret: process.env.GOOGLE_CLIENT_SECRET! })]
       : []),
   ],
+  events: {
+    // Runs on POST /api/auth/signout with the token from the cookie being signed out: record it so a copy stops working.
+    async signOut({ token }) {
+      if (typeof token?.sid !== "string") return;
+      try {
+        await revokeSession(token.sid, typeof token.exp === "number" ? token.exp : undefined);
+      } catch (e) {
+        console.error("[auth] Could not record the sign-out; the cookie is cleared but a copy of it stays valid until it expires.", e);
+      }
+    },
+  },
   callbacks: {
     async signIn({ user, account, profile }) {
       if (account?.provider !== "google") return true;
       return handleGoogleSignIn(user, profile as { sub?: string; email?: string; email_verified?: boolean } | undefined);
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.sub = user.id;
         // When the user actually authenticated; set only here, never on ordinary token reads.
         token.authTime = Date.now();
         // Stamp the token with the user's current session version; bumping it later revokes this token.
         token.sv = (await getSessionVersion(user.id)) ?? 0;
+        // Unique per sign-in, so signing out can revoke this one token without touching the user's other sessions.
+        token.sid = randomUUID();
+      } else if (!account && typeof token.sid === "string" && (await isSessionRevoked(token.sid))) {
+        // Make the revocation permanent inside the token: next-auth re-encodes the cookie with a fresh exp on every
+        // session read, so a copy could outlive the (expiring) revocation record. sv -1 never matches a stored version.
+        token.sv = -1;
       }
       return token;
     },
@@ -145,6 +163,7 @@ export const authOptions: NextAuthOptions = {
       // version yields a session without a user, which every caller treats as signed out (401).
       const current = await getSessionVersion(token.sub);
       if (current === null || current !== (token.sv ?? 0)) return { expires: session.expires } as Session;
+      if (typeof token.sid === "string" && (await isSessionRevoked(token.sid))) return { expires: session.expires } as Session;
       session.user = { ...session.user, id: token.sub };
       session.authTime = token.authTime;
       return session;

@@ -46,6 +46,18 @@ describe("durable photo cleanup", () => {
     expect(r).toMatchObject({ removed: 0, failed: 0, gaveUp: 1 });
   });
 
+  it("logs a given-up photo once, on the run where it reaches the cap, and never again", async () => {
+    mkdirSync(path.join(process.env.UPLOAD_DIR!, NAME), { recursive: true });
+    await prisma.pendingPhotoDeletion.create({ data: { photoUrl: URL_, attempts: MAX_CLEANUP_ATTEMPTS - 1 } });
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect(await retryPendingDeletions()).toMatchObject({ failed: 1, gaveUp: 1 });
+    const gaveUpLogs = () => log.mock.calls.filter((c) => String(c[0]).startsWith("photo cleanup:")).length;
+    expect(gaveUpLogs()).toBe(1);
+    expect(await retryPendingDeletions()).toMatchObject({ failed: 0, gaveUp: 1 });
+    expect(await retryPendingDeletions()).toMatchObject({ failed: 0, gaveUp: 1 });
+    expect(gaveUpLogs()).toBe(1);
+  });
+
   it("ignores non-photo URLs", async () => {
     expect(await deletePhotoFile("https://example.com/x.jpg")).toBe(true);
     expect(await deletePhotoFile(null)).toBe(true);

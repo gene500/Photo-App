@@ -34,6 +34,26 @@ const isCredentialsCallback = (pathname: string) => {
 };
 
 /**
+ * GET requests NextAuth cannot answer well here: the credentials callback is POST-only (NextAuth answers a GET with a plain-text
+ * 500), and its built-in sign-out and verify-request pages are HTML that the API's locked-down CSP would show unstyled (the app
+ * signs out with a POST and uses its own pages). Returns the response to send instead, or null to let NextAuth handle it.
+ */
+export function authGetRefusal(req: Request): Response | null {
+  const url = new URL(req.url);
+  const segs = decodedSegments(url.pathname);
+  const at = segs.findIndex((seg, i) => seg === "api" && segs[i + 1] === "auth");
+  if (at < 0) return null;
+  const first = segs[at + 2];
+  if (first === "callback" && segs[at + 3] === "credentials") {
+    return Response.json({ error: "Use POST to sign in" }, { status: 405, headers: { Allow: "POST", "Cache-Control": "private, no-store" } });
+  }
+  if (first === "signout" || first === "verify-request") {
+    return new Response(null, { status: 303, headers: { Location: new URL("/login", url).toString(), "Cache-Control": "private, no-store" } });
+  }
+  return null;
+}
+
+/**
  * Runs before NextAuth handles a POST: cross-site check, body size cap, then the per-IP (all attempts) and per-email-and-address
  * (failed attempts) login throttles. Returns the response to send when the request must not proceed.
  * The 429 body mimics NextAuth's JSON so `signIn(..., { redirect: false })` reports `error: "RateLimited"`.

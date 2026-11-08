@@ -59,4 +59,33 @@ describe("GET /api/locate", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ area: { lat: 38.7, lng: -109.6 }, landmark: { name: "Arches National Park", lat: 38.7, lng: -109.6 } });
   });
+
+  it("answers 502 within the deadline when both lookups hang", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(locateArea).mockReturnValue(new Promise(() => {}));
+      vi.mocked(locateLandmark).mockReturnValue(new Promise(() => {}));
+      const p = get("LA");
+      await vi.advanceTimersByTimeAsync(12_000);
+      const res = await p;
+      expect(res.status).toBe(502);
+      expect(await res.json()).toEqual({ error: "Couldn't reach the place search service" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the area when only the landmark lookup hangs", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(locateLandmark).mockReturnValue(new Promise(() => {}));
+      const p = get("LA");
+      await vi.advanceTimersByTimeAsync(12_000);
+      const res = await p;
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ area: { lat: 34.05, lng: -118.24 }, landmark: null });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

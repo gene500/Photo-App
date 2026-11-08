@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { sessionSchema } from "@/lib/validation";
 import { ExternalServiceError, searchPlaces } from "@/server/external/mapbox";
-import { handle, HttpError, requireUserId } from "@/server/http";
+import { DEADLINE_FAST_MS, handle, HttpError, requireUserId, withDeadline } from "@/server/http";
 import { enforcePaidLimit } from "@/server/shared-limit";
 
 const querySchema = z.string().trim().min(2, "Type at least 2 characters").max(200, "Search text must be at most 200 characters");
@@ -24,7 +24,10 @@ export const GET = handle(async (req: Request) => {
   // Malformed requests are refused before they count against the paid limit.
   await enforcePaidLimit("geocode", userId);
   try {
-    return Response.json({ suggestions: await searchPlaces(q, { proximity, sessionToken }) });
+    const suggestions = await withDeadline(searchPlaces(q, { proximity, sessionToken }), DEADLINE_FAST_MS, () => {
+      throw new ExternalServiceError("Couldn't reach the place search service");
+    });
+    return Response.json({ suggestions });
   } catch (e) {
     if (e instanceof ExternalServiceError) throw new HttpError(502, e.message);
     throw e;

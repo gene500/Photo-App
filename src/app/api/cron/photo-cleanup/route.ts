@@ -4,9 +4,18 @@ import { sweepSharedLimits } from "@/server/shared-limit";
 import { SUGGESTION_CACHE_TTL_MS, SUGGESTION_STALE_GRACE_MS } from "@/server/suggestions/service";
 import { sweepSuggestionCache } from "@/server/suggestions/shared-cache";
 
+let warnedNoSecret = false;
+
 function authorized(req: Request): boolean {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
+  if (!secret) {
+    // Otherwise the route just answers 404 and nobody learns the daily cleanup is not running. Warn once per server process.
+    if (process.env.NODE_ENV === "production" && !warnedNoSecret) {
+      warnedNoSecret = true;
+      console.warn("photo-cleanup cron: CRON_SECRET is not set, so the daily cleanup is refused (404). Set it to enable cleanup.");
+    }
+    return false;
+  }
   const given = Buffer.from(req.headers.get("authorization") ?? "");
   const wanted = Buffer.from(`Bearer ${secret}`);
   return given.length === wanted.length && timingSafeEqual(given, wanted);

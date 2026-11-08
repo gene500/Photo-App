@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loginEmailKey } from "./auth";
-import { guardAuthPost, sanitizeAuthRequest } from "./login-guard";
+import { authGetRefusal, guardAuthPost, sanitizeAuthRequest } from "./login-guard";
 import { clearAllLimits, hit } from "./rate-limit";
 
 const login = (email: string, headers: Record<string, string> = {}, path = "/api/auth/callback/credentials") =>
@@ -134,5 +134,27 @@ describe("sanitizeAuthRequest", () => {
     const form = await out.formData();
     expect(form.has("callbackUrl")).toBe(false);
     expect(form.get("email")).toBe("a@b.c");
+  });
+});
+
+describe("authGetRefusal", () => {
+  const get = (path: string) => authGetRefusal(new Request(`http://localhost:3000${path}`));
+  it("answers 405 JSON for a GET on the credentials callback, in any spelling", async () => {
+    for (const path of ["/api/auth/callback/credentials", "/api/auth/CALLBACK/Credentials", "/api/auth/callback/credentials?x=1", "/api/auth/%63allback/credentials"]) {
+      const res = get(path)!;
+      expect(res.status, path).toBe(405);
+      expect(res.headers.get("Allow")).toBe("POST");
+      expect(res.headers.get("content-type")).toContain("application/json");
+    }
+  });
+  it("redirects the HTML sign-out and verify-request pages to /login", () => {
+    for (const path of ["/api/auth/signout", "/api/auth/verify-request"]) {
+      const res = get(path)!;
+      expect(res.status).toBe(303);
+      expect(res.headers.get("Location")).toBe("http://localhost:3000/login");
+    }
+  });
+  it("leaves the JSON endpoints and other providers to NextAuth", () => {
+    for (const path of ["/api/auth/session", "/api/auth/csrf", "/api/auth/providers", "/api/auth/callback/google", "/api/auth/signin"]) expect(get(path), path).toBeNull();
   });
 });

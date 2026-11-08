@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useSettings } from "@/components/settings/SettingsProvider";
+import { softDisabled } from "@/lib/focus";
 import { btnAccent, btnSecondary } from "@/components/ui/styles";
 import { formatPhotoCount, formatRadiusKm } from "@/lib/format";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
@@ -58,7 +59,7 @@ export function AlternativesPanel({ status, alternatives, error, onFind, onSwap,
     <section aria-label="Alternatives" className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-medium">Alternatives nearby</h3>
-        <button type="button" onClick={onFind} disabled={status === "loading"} className={btnSecondary}>
+        <button type="button" {...softDisabled(status === "loading")} onClick={status === "loading" ? undefined : onFind} className={`${btnSecondary} aria-disabled:opacity-50`}>
           {status === "loading" ? "Searching…" : "Find alternatives"}
         </button>
       </div>
@@ -76,7 +77,7 @@ export function AlternativesPanel({ status, alternatives, error, onFind, onSwap,
                 {formatPhotoCount(s.popularity) && <span data-testid="alternative-popularity"> · {formatPhotoCount(s.popularity)}</span>}
               </p>
             </div>
-            <button type="button" disabled={swapping !== null || !!swapBlockedReason} title={swapBlockedReason} onClick={() => void swap(s)} aria-label={`Swap in ${s.name}`} className={btnAccent}>
+            <button type="button" {...softDisabled(swapping !== null || !!swapBlockedReason)} title={swapBlockedReason} onClick={swapping !== null || swapBlockedReason ? undefined : () => void swap(s)} aria-label={`Swap in ${s.name}`} className={`${btnAccent} aria-disabled:opacity-50`}>
               Swap in
             </button>
           </li>

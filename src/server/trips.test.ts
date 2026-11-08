@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { shiftDepartAtLocal } from "@/lib/dates";
 import { prisma } from "./db";
 import { createTrip, deleteTrip, DepartAtMismatchError, getTrip, listTrips, updateTrip } from "./trips";
@@ -128,5 +128,32 @@ describe("trips data access", () => {
     expect(await deleteTrip(intruder.id, trip.id)).toBeNull();
     expect(await deleteTrip(user.id, trip.id)).toEqual({ photoUrls: ["/api/uploads/x.png"] });
     expect(await prisma.trip.count()).toBe(0);
+  });
+});
+
+describe("updateTrip against a concurrent change", () => {
+  beforeEach(resetDb);
+
+  it("re-reads and shifts from the new stored date when another request moved the date between the read and the write", async () => {
+    const user = await createTestUser();
+    const trip = await createTrip(user.id, { name: "t", plannedDate: "2026-07-01", departAt: "2026-07-01T12:00:00.000Z" });
+    const realFind = prisma.trip.findFirst.bind(prisma.trip);
+    let first = true;
+    const spy = vi.spyOn(prisma.trip, "findFirst").mockImplementation(((args: Parameters<typeof realFind>[0]) => {
+      const result = realFind(args);
+      if (first && args?.select && "plannedDate" in args.select) {
+        first = false;
+        // The other request lands right after our read.
+        return result.then(async (r) => {
+          await prisma.trip.update({ where: { id: trip.id }, data: { plannedDate: new Date("2026-07-10T00:00:00.000Z"), departAt: new Date("2026-07-10T15:00:00.000Z") } });
+          return r;
+        });
+      }
+      return result;
+    }) as typeof prisma.trip.findFirst);
+    const saved = await updateTrip(user.id, trip.id, { plannedDate: "2026-07-20" });
+    spy.mockRestore();
+    expect(saved?.plannedDate).toBe("2026-07-20");
+    expect(saved?.departAt).toBe("2026-07-20T15:00:00.000Z"); // shifted from the new stored value, not the stale one
   });
 });

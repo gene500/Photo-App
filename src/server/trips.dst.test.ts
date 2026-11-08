@@ -3,17 +3,17 @@ import { createTrip, DepartAtMismatchError, updateTrip } from "./trips";
 import { prisma } from "./db";
 import { createTestUser, resetDb } from "../../tests/helpers/db";
 
-// Clock times are read in the server's zone; pin one with DST so the suite gives the same answer on any machine.
-process.env.TZ = "America/Los_Angeles";
+// The shift is plain UTC date arithmetic, so the answers below must not depend on the machine's zone.
+// Run this file under both to check: TZ=America/Los_Angeles and TZ=UTC.
 
 describe("changing plannedDate through the API alone", () => {
   beforeEach(resetDb);
 
-  it("keeps the clock time across a daylight-saving change, like the editor does", async () => {
+  it("moves by whole UTC days across a daylight-saving change, whatever the server's time zone", async () => {
     const user = await createTestUser();
-    const trip = await createTrip(user.id, { name: "t", plannedDate: "2026-10-30", departAt: "2026-10-30T14:00:00.000Z" }); // 07:00 PDT
-    const moved = await updateTrip(user.id, trip.id, { plannedDate: "2026-11-06" });
-    expect(moved?.departAt).toBe("2026-11-06T15:00:00.000Z"); // 07:00 PST
+    const trip = await createTrip(user.id, { name: "t", plannedDate: "2026-10-30", departAt: "2026-10-30T14:00:00.000Z" });
+    const moved = await updateTrip(user.id, trip.id, { plannedDate: "2026-11-06" }); // US clocks change on 2026-11-01
+    expect(moved?.departAt).toBe("2026-11-06T14:00:00.000Z");
   });
 
   it("moves by whole days when there is no daylight-saving change", async () => {

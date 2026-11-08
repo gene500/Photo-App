@@ -39,3 +39,13 @@ export type Padding = { top?: number; right?: number; bottom?: number; left?: nu
 export function selectionPadding<P extends Padding>(base: P, drawerWidth: number): P {
   return drawerWidth > 0 ? { ...base, right: Math.max(base.right ?? 0, Math.round(drawerWidth) + 16) } : base;
 }
+
+/**
+ * Bottom padding on phones: clears the sheet wherever it is snapped. `sheetTop` is the sheet's top edge in px from the
+ * top of the page (null when it cannot be measured: then the usual snap height is assumed). Plus a marker radius, and
+ * never so much that less than `minFree` px of the map is left for the points.
+ */
+export function sheetBottomPadding({ height, sheetTop, readOnly, top, minFree = 80 }: { height: number; sheetTop: number | null; readOnly: boolean; top: number; minFree?: number }): number {
+  const covered = sheetTop !== null && sheetTop >= 0 && sheetTop <= height ? height - sheetTop : Math.round(height * (readOnly ? 0.57 : 0.45));
+  return Math.max(0, Math.min(covered + 18, height - top - minFree));
+}

@@ -18,7 +18,7 @@ describe("AlternativesPanel", () => {
     await userEvent.click(screen.getByRole("button", { name: "Find alternatives" }));
     expect(onFind).toHaveBeenCalled();
     rerender(<AlternativesPanel {...base} status="loading" />);
-    expect((screen.getByRole("button", { name: "Searching…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "Searching…" }).getAttribute("aria-disabled")).toBe("true");
   });
 
   it("lists name, kind, popularity and a thumbnail, and swaps one in", async () => {

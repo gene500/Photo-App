@@ -2,6 +2,8 @@ import type { LightPref, LngLat, Place, PlacePhoto, RouteResult, SearchSuggestio
 import { shapes } from "./api-shapes";
 import { isHike, type Hike } from "./hike";
 import type { NewStopInput, StopPatch, TripCreateInput, TripPatch } from "./validation";
+import { SESSION_EXPIRED } from "./session-expired";
+export { SESSION_EXPIRED };
 
 export class ApiError extends Error {
   readonly status: number;
@@ -36,11 +38,10 @@ export const DEFAULT_TIMEOUT_MS = 20_000;
 export const LONG_TIMEOUT_MS = 60_000;
 
 const TIMEOUT_MESSAGE = "The server is taking too long to answer. Try again.";
-const SESSION_EXPIRED = "Your session has expired. Log in again to keep working.";
-
 /** A readable message when the server's answer carries none (an HTML or empty error page, for example). */
 function fallbackMessage(status: number): string {
   if (status === 401) return SESSION_EXPIRED;
+  if (status === 413) return "That file or request is too large.";
   if (status === 429) return "Too many requests. Wait a moment and try again.";
   if (status >= 500) return "The server had a problem. Try again in a moment.";
   return `Request failed (${status})`;

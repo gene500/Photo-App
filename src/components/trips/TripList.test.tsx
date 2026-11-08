@@ -26,6 +26,13 @@ describe("TripList", () => {
     installMemoryStorage().setItem("rtpp.offline.owner", "u1");
   });
 
+  it("says '1 stop' for a single stop, and keeps Delete 44px tall on touch", () => {
+    render(<TripList trips={[{ ...trip, stopCount: 1 }, { ...trip, id: "t2", stopCount: 0 }]} />);
+    expect(screen.getByText("1 stop")).toBeTruthy();
+    expect(screen.getByText("0 stops")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /^Delete / })[0]!.className).toContain("touch:min-h-11");
+  });
+
   it("lets a long trip name wrap to two lines (not one-line truncation) and keeps the full name in a title", () => {
     const long = "W".repeat(60);
     render(<TripList trips={[{ ...trip, name: long }]} />);

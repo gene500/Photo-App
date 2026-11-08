@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decideFit, routeKey, selectionPadding } from "./map-fit";
+import { decideFit, routeKey, selectionPadding, sheetBottomPadding } from "./map-fit";
 
 const base = { prevCount: 0, count: 2, route: null as string | null, fittedRoute: null as string | null, fitted: false };
 
@@ -46,5 +46,17 @@ describe("selectionPadding", () => {
   });
   it("never shrinks an already larger right padding", () => {
     expect(selectionPadding({ ...base, right: 500 }, 40)).toEqual({ ...base, right: 500 });
+  });
+});
+
+describe("sheetBottomPadding", () => {
+  const args = { height: 844, readOnly: false, top: 96 };
+  it("follows the measured sheet top, so the full snap leaves room for the points", () => {
+    expect(sheetBottomPadding({ ...args, sheetTop: 844 - 380 })).toBe(398);
+    expect(sheetBottomPadding({ ...args, sheetTop: 844 - 717 })).toBe(844 - 96 - 80);
+  });
+  it("falls back to the usual snap height when the sheet cannot be measured", () => {
+    expect(sheetBottomPadding({ ...args, sheetTop: null })).toBe(Math.round(844 * 0.45) + 18);
+    expect(sheetBottomPadding({ ...args, sheetTop: null, readOnly: true })).toBe(Math.round(844 * 0.57) + 18);
   });
 });

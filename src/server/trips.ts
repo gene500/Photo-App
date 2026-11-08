@@ -1,5 +1,5 @@
 import { solarDateAt } from "@/lib/best-time";
-import { dateOnlyToUtc, shiftDepartAtLocal, utcToDateOnly } from "@/lib/dates";
+import { dateOnlyToUtc, utcToDateOnly } from "@/lib/dates";
 import type { Trip, TripSummary, TripWithStops } from "@/lib/types";
 import { inYearRange, type TripCreateInput, type TripPatch } from "@/lib/validation";
 import { prisma } from "./db";
@@ -27,10 +27,16 @@ function assertOnPlannedDay(departAt: Date, plannedDate: string, firstLng: numbe
   if (!ok) throw new DepartAtMismatchError(plannedDate);
 }
 
-/** The same clock time on the new date (read in the server's zone, as the editor reads it in the viewer's): a start time moves with the trip's day. */
+/**
+ * The start time for a date change when the request sends only `plannedDate`: the same UTC time of day on the new date (whole
+ * UTC days). UTC arithmetic keeps the result independent of the server's time zone, and it is always on the new planned day
+ * (a whole-day shift of a start on the old day). The editor, which knows the viewer's zone, sends its own start time with the
+ * date: the same local clock time (DST-safe), or this same shift when the clock time would land off the new day. A sent
+ * `departAt` equal to this shift is never rechecked; any other must be on the new planned day.
+ */
 function shiftedDeparture(departAt: Date | null, from: Date, to: Date): Date | null {
   if (!departAt) return null;
-  const shifted = new Date(shiftDepartAtLocal(departAt.toISOString(), utcToDateOnly(from), utcToDateOnly(to)));
+  const shifted = new Date(departAt.getTime() + (to.getTime() - from.getTime()));
   // A start time pushed outside the years the API accepts is dropped (the editor then starts at "now").
   return inYearRange(shifted.getTime()) ? shifted : null;
 }
@@ -101,11 +107,18 @@ export async function getTrip(userId: string, tripId: string): Promise<TripWithS
   return { ...toTripDto(row), stops: row.stops.map(toStopDto) };
 }
 
-export async function updateTrip(
-  userId: string,
-  tripId: string,
-  patch: TripPatch,
-): Promise<Trip | null> {
+export async function updateTrip(userId: string, tripId: string, patch: TripPatch): Promise<Trip | null> {
+  // The start time is derived from the stored date and start time, so the write only lands if those are still what was
+  // read (compare-and-swap; no transaction needed). If another request changed them in between, read again and retry.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const r = await tryUpdateTrip(userId, tripId, patch);
+    if (r !== "stale") return r;
+  }
+  throw new HttpError(409, "This trip was changed by another request. Please try again.");
+}
+
+async function tryUpdateTrip(userId: string, tripId: string, patch: TripPatch): Promise<Trip | null | "stale"> {
+  let guard: { plannedDate: Date; departAt: Date | null } | undefined;
   // Only a different day moves the start time: saving the same date again (a rename) must keep it.
   // An existing start time that no longer matches its day is never checked here: only a different one sent now is.
   let shiftedDepartAt: Date | null | undefined;
@@ -115,6 +128,7 @@ export async function updateTrip(
       select: { plannedDate: true, departAt: true, stops: { orderBy: { order: "asc" }, take: 1, select: { lng: true } } },
     });
     if (!current) return null;
+    guard = { plannedDate: current.plannedDate, departAt: current.departAt };
     // The start time is validated only when it is different from the stored one AND on a day different from both the
     // stored one's day and the planned day. So Undo or a rename that resends a legacy off-day value (or another time on
     // that same day) still saves, while a start time moved to some new wrong day is refused. On a date change the server
@@ -140,10 +154,14 @@ export async function updateTrip(
     }
   }
   const { count } = await prisma.trip.updateMany({
-    where: { id: tripId, userId },
+    where: { id: tripId, userId, ...guard },
     data: patchData(patch, shiftedDepartAt),
   });
-  if (count === 0) return null;
+  if (count === 0) {
+    // Nothing matched: the trip is gone (or not theirs), or its date / start time moved since the read.
+    if (guard && (await prisma.trip.findFirst({ where: { id: tripId, userId }, select: { id: true } }))) return "stale";
+    return null;
+  }
   return toTripDto(await prisma.trip.findUniqueOrThrow({ where: { id: tripId } }));
 }
 

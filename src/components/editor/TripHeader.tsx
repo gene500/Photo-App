@@ -36,10 +36,11 @@ export function TripHeader({ trip, onSave, onShareChange, exportData, stopCount 
     setEditing(true);
   }
 
-  // The server does not know the viewer's time zone, so the moved start time (same clock time, across any daylight-saving change) is computed here.
+  // The server does not know the viewer's time zone, so the moved start time is computed here: the same local clock time on the new day
+  // (across any daylight-saving change), or the whole-UTC-day shift the server itself would apply when that clock time lands off the planned solar day.
   function movedDepartAt(): { departAt?: string } {
     if (!trip.departAt || !isDateOnly(plannedDate) || Number.isNaN(Date.parse(trip.departAt))) return {};
-    const departAt = shiftDepartAtLocal(trip.departAt, trip.plannedDate, plannedDate);
+    const departAt = shiftDepartAtLocal(trip.departAt, trip.plannedDate, plannedDate, exportData?.stops[0]?.lng ?? null);
     return inYearRange(Date.parse(departAt)) ? { departAt } : {}; // out of range: the server drops the start time
   }
 
@@ -68,10 +69,10 @@ export function TripHeader({ trip, onSave, onShareChange, exportData, stopCount 
     return (
       // The Export/Share popovers anchor to this header (not their own button), so they stay inside the panel.
       <header className="relative">
-        {/* One row: a long name wraps onto more lines (never cut with an ellipsis), the buttons keep their size (tighter padding so a short name stays readable in a narrow sidebar). When they drop to a second line they sit at the left under the name (the name grows, so on one row they still end at the right). The buttons only drop to a second line when a long name would get narrower than 12 characters (so it never shrinks to a sliver) (narrow phone or large text); a shorter name only needs its own length, so it stays on the row. The minimum is in ch so it scales with the text size. */}
+        {/* One row: a long name wraps onto more lines (cut with an ellipsis only after 3 lines in short landscape), the buttons keep their size (tighter padding so a short name stays readable in a narrow sidebar). When they drop to a second line they sit at the left under the name (the name grows, so on one row they still end at the right). The buttons only drop to a second line when a long name would get narrower than 12 characters (so it never shrinks to a sliver) (narrow phone or large text); a shorter name only needs its own length, so it stays on the row. The minimum is in ch so it scales with the text size. */}
         <div className="flex flex-wrap items-start justify-between gap-x-1">
-          <h1 title={trip.name} style={{ minWidth: nameMin, flexBasis: nameMin }} className="grow break-words text-2xl font-semibold leading-9">{trip.name}</h1>
-          <div className="flex max-w-full shrink-0 flex-wrap [&>button]:whitespace-nowrap [&>button]:px-1.5 [&>div>button]:whitespace-nowrap [&>div>button]:px-1.5 max-[359px]:[&>button]:min-h-11 max-[359px]:[&>button]:w-8 max-[359px]:[&>button]:justify-center max-[359px]:[&>button]:px-0 max-[359px]:[&>div>button]:min-h-11 max-[359px]:[&>div>button]:w-8 max-[359px]:[&>div>button]:justify-center max-[359px]:[&>div>button]:px-0">
+          <h1 title={trip.name} style={{ minWidth: nameMin, flexBasis: nameMin }} className="grow break-words text-2xl font-semibold leading-9 max-lg:line-clamp-3 short-landscape:line-clamp-3">{trip.name}</h1>
+          <div className="flex max-w-full shrink-0 flex-wrap [&>button]:whitespace-nowrap [&>button]:px-1.5 [&>div>button]:whitespace-nowrap [&>div>button]:px-1.5 touch:[&>button]:min-w-11 touch:[&>div>button]:min-w-11 touch:[&>button]:justify-center touch:[&>div>button]:justify-center max-[359px]:[&>button]:min-h-11 max-[359px]:[&>button]:w-11 max-[359px]:[&>button]:justify-center max-[359px]:[&>button]:px-0 max-[359px]:[&>div>button]:min-h-11 max-[359px]:[&>div>button]:w-11 max-[359px]:[&>div>button]:justify-center max-[359px]:[&>div>button]:px-0">
             <button type="button" ref={editRef} onClick={beginEdit} aria-label="Edit trip" title="Edit trip" className={btnGhost}><HeaderButtonLabel icon="edit">Edit</HeaderButtonLabel></button>
             {exportData && <ExportControl tripName={trip.name} plannedDate={trip.plannedDate} stops={exportData.stops} route={exportData.route} pdf={exportData.pdf} />}
             {onShareChange && <ShareControl tripId={trip.id} shareToken={trip.shareToken} onChange={onShareChange} />}

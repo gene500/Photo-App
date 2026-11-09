@@ -41,7 +41,7 @@ and `docs/archive/PROGRESS.md` over memory. Where things are: this file = START 
 
 ## Current work (2026-11-08)
 
-**State:** HEAD `0f2ae90` = origin/main (F16-F19 pushed as `5e9c96f`, Vercel photo-app-pi2o + CI success). The working tree holds A72 (unused `export` removals), F20 (H8 fixes) and F21 (T17 fixes) UNCOMMITTED: about 100 modified files plus 5 NEW files that must be committed (`src/lib/limits.ts`, `src/lib/storage-util.ts`, `src/components/ui/ShotListReadOnly.tsx`, `src/components/editor/use-popover.test.ts`, `e2e/popover-placement.spec.ts`). Use `git add -A` after checking `git status` shows no scratch files or secrets. Nothing is stashed.
+**State:** PUSHED 2026-11-08 as `3b5c98d` (A72+F20+F21+T17; Vercel photo-app-pi2o success, CI success). Nothing uncommitted. Before the push the working tree held A72 (unused `export` removals), F20 (H8 fixes) and F21 (T17 fixes) UNCOMMITTED: about 100 modified files plus 5 NEW files that must be committed (`src/lib/limits.ts`, `src/lib/storage-util.ts`, `src/components/ui/ShotListReadOnly.tsx`, `src/components/editor/use-popover.test.ts`, `e2e/popover-placement.spec.ts`). Use `git add -A` after checking `git status` shows no scratch files or secrets. Nothing is stashed.
 
 **Just finished:** A72, H8 (5 Opus sweeps, log in `docs/STRESS-LOG.md` "# H8"), F20 (zod-free `limits.ts` takes about 118 KB of JS off every page; stop reorder/delete skip unchanged rows; addStop one aggregate; hike memo; dedup; docs/CI/e2e cleanups; 3 bug fixes: StopDrawer dirty snapshot, offline-store keeps the newest copy after a clock jump, updateTrip 404 on mid-request delete). The MapPanel hover-rebuild change was tried and reverted (wrong width classes). T17 (16 Sonnet testers in the real app, no High; log in `docs/STRESS-LOG.md` "# T17") and F21 (Export/Share popover now below the search bar on phones/tablets with a width cap; a Visited tick waits for an in-flight automatic Optimize order save; focus returns into the drawer after cancelling Discard edits; README/BACKLOG corrections). SEC re-run (Opus): no findings. FINAL Opus check: READY, no blockers (non-blocking notes: the drawer focus pull also applies to other page confirms opened from outside the drawer; the zoom 200/400% width cap is only unit-tested). Verified by the lead on the final tree: tsc, eslint --max-warnings 0, vitest 216 files / 2284 tests, e2e 63 pass, `E2E_PROD=1 e2e/csp.spec.ts`, `next build`, no zod in client chunks. FINAL is waiting only for the owner's "push".
 
@@ -64,7 +64,6 @@ Last updated 2026-11-08
 
 | # | Task | Status | Est | Use | Notes |
 |---|---|---|---|---|---|
-| FINAL | Opus full check, merge, push, Vercel + CI | (push) | 30 min | Heavy | Runs automatically after SEC; stops at (push) until the owner says push. |
 | A71 | Check A67-A70 in a real browser (owner) | pending | 15 min | Light | Owner asked 2026-11-06: save for the very end (after FINAL, deliberate exception to "FINAL last"). Not eyeballed: zoom-fit top room (A68), header wrap (A69), stop card spacing (A67). Also check on a phone: Export/Share menu fully visible with a long trip name (F15-3), lowest stop clear of the sheet (F15-1). Also try the real Bryce/Arches trip with the new Optimize (A70) and Start from my location (geolocation header). |
 
 ## Standing rules for this project (confirmed by the human partner)

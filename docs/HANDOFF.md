@@ -45,7 +45,7 @@ and `docs/archive/PROGRESS.md` over memory. Where things are: this file = START 
 
 **Just finished:** A72, H8 (5 Opus sweeps, log in `docs/STRESS-LOG.md` "# H8"), F20 (zod-free `limits.ts` takes about 118 KB of JS off every page; stop reorder/delete skip unchanged rows; addStop one aggregate; hike memo; dedup; docs/CI/e2e cleanups; 3 bug fixes: StopDrawer dirty snapshot, offline-store keeps the newest copy after a clock jump, updateTrip 404 on mid-request delete). The MapPanel hover-rebuild change was tried and reverted (wrong width classes). T17 (16 Sonnet testers in the real app, no High; log in `docs/STRESS-LOG.md` "# T17") and F21 (Export/Share popover now below the search bar on phones/tablets with a width cap; a Visited tick waits for an in-flight automatic Optimize order save; focus returns into the drawer after cancelling Discard edits; README/BACKLOG corrections). SEC re-run (Opus): no findings. FINAL Opus check: READY, no blockers (non-blocking notes: the drawer focus pull also applies to other page confirms opened from outside the drawer; the zoom 200/400% width cap is only unit-tested). Verified by the lead on the final tree: tsc, eslint --max-warnings 0, vitest 216 files / 2284 tests, e2e 63 pass, `E2E_PROD=1 e2e/csp.spec.ts`, `next build`, no zod in client chunks. FINAL is waiting only for the owner's "push".
 
-**Next:** on the owner's "push": re-run tests and typecheck, `git add -A`, commit, push to `main`, check Vercel (`photo-app-pi2o`) and CI (`check`, `e2e`). Then A71 (owner real-browser check, last by request).
+**Next:** on the owner's "push": re-run tests and typecheck, `git add -A`, commit, push to `main`, check Vercel (`photo-app-pi2o`) and CI (`check`, `e2e`). A71 is done (see archive).
 
 **H8 items left for the owner (they change behavior):** see `docs/STRESS-LOG.md` "# H8" (Blob/DB timeouts, account-delete photo cleanup, photo caching, search trim, notes maxLength, wording, weather DST check).
 
@@ -64,7 +64,6 @@ Last updated 2026-11-08
 
 | # | Task | Status | Est | Use | Notes |
 |---|---|---|---|---|---|
-| A71 | Check A67-A70 in a real browser (owner) | pending | 15 min | Light | Owner asked 2026-11-06: save for the very end (after FINAL, deliberate exception to "FINAL last"). Not eyeballed: zoom-fit top room (A68), header wrap (A69), stop card spacing (A67). Also check on a phone: Export/Share menu fully visible with a long trip name (F15-3), lowest stop clear of the sheet (F15-1). Also try the real Bryce/Arches trip with the new Optimize (A70) and Start from my location (geolocation header). |
 
 ## Standing rules for this project (confirmed by the human partner)
 

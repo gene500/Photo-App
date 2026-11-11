@@ -132,15 +132,23 @@ class Graph {
     return deg;
   }
 
-  /** Nearest alive edge to the point, skipping edges that touch `skipNode`. */
+  /** Nearest alive edge (C1: flat loop, squared-distance prune, hypot only for survivors). */
   nearestEdge(x: number, y: number, skipNode = -1): { index: number; x: number; y: number; d: number } | null {
-    let best: { index: number; x: number; y: number; d: number } | null = null;
-    this.edges.forEach((e, index) => {
-      if (!e.alive || e.a === skipNode || e.b === skipNode) return;
-      const p = project(x, y, this.xs[e.a], this.ys[e.a], this.xs[e.b], this.ys[e.b]);
-      if (!best || p.d < best.d) best = { index, x: p.x, y: p.y, d: p.d };
-    });
-    return best;
+    const edges = this.edges, xs = this.xs, ys = this.ys;
+    let bi = -1, bx = 0, by = 0, bd = Infinity, bd2 = Infinity;
+    for (let index = 0; index < edges.length; index++) {
+      const e = edges[index];
+      if (!e.alive || e.a === skipNode || e.b === skipNode) continue;
+      const ax = xs[e.a], ay = ys[e.a], dx = xs[e.b] - ax, dy = ys[e.b] - ay;
+      const len2 = dx * dx + dy * dy;
+      const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2));
+      const px = ax + t * dx, py = ay + t * dy;
+      const ex = x - px, ey = y - py;
+      if (bi >= 0 && ex * ex + ey * ey > bd2 * (1 + 1e-9)) continue;
+      const d = Math.hypot(ex, ey);
+      if (bi < 0 || d < bd) { bi = index; bx = px; by = py; bd = d; bd2 = d * d; }
+    }
+    return bi < 0 ? null : { index: bi, x: bx, y: by, d: bd };
   }
 
   /** Puts the point onto the nearest trail (splitting it) if within `maxM`; returns the node there. */

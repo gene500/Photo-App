@@ -133,12 +133,32 @@ const KIND_TAGS: Record<string, Record<string, string>> = {
 
 /** Rows shaped like Overpass elements, so the one parser (ranking, de-duplication, cap) serves both sources. */
 export function toElements(rows: PlaceRow[]): unknown[] {
-  return rows.flatMap((r) => {
-    const [type, id] = r.id.split("/");
-    const tags = KIND_TAGS[r.kind];
-    if (!tags || !type || !Number.isFinite(Number(id))) return [];
-    return [{ type, id: Number(id), lat: r.lat, lon: r.lng, tags: r.name ? { ...tags, name: r.name } : { ...tags } }];
-  });
+  const out: unknown[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const kind = r.kind;
+    let tags: Record<string, string> | undefined;
+    if (kind === "viewpoint") tags = r.name ? { tourism: "viewpoint", name: r.name } : { tourism: "viewpoint" };
+    else if (kind === "peak") tags = r.name ? { natural: "peak", name: r.name } : { natural: "peak" };
+    else if (kind === "attraction") tags = r.name ? { tourism: "attraction", name: r.name } : { tourism: "attraction" };
+    else {
+      const known = KIND_TAGS[kind];
+      if (!known) continue;
+      tags = r.name ? { ...known, name: r.name } : { ...known };
+    }
+    // "type/id[/...]": the first two parts, found with indexOf (split allocates an array per row)
+    const id = r.id;
+    const slash = id.indexOf("/");
+    const type = slash < 0 ? id : id.slice(0, slash);
+    let idPart: string | undefined;
+    if (slash >= 0) {
+      const next = id.indexOf("/", slash + 1);
+      idPart = next < 0 ? id.slice(slash + 1) : id.slice(slash + 1, next);
+    }
+    if (!type || !Number.isFinite(Number(idPart))) continue;
+    out.push({ type, id: Number(idPart), lat: r.lat, lon: r.lng, tags });
+  }
+  return out;
 }
 
 /** Places within `radiusKm` of a point; null when the point is outside the area the local copy covers. */

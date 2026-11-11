@@ -39,19 +39,28 @@ type OverpassElement = {
 
 type Candidate = Suggestion & { named: boolean; dist: number };
 
+// stripNameChars only changes a string that holds one of these; testing first skips two replace passes for ordinary names.
+const NAME_NEEDS_CLEANING = /[\u0000-\u001F\u007F-\u009F\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069]/;
+const toRad = (deg: number) => (deg * Math.PI) / 180;
+const collator = new Intl.Collator();
+
 function toCandidate(el: OverpassElement): Candidate | null {
   if (!el || typeof el !== "object") return null;
-  const rawTags = el.tags && typeof el.tags === "object" ? el.tags : {};
-  const tags: Record<string, string> = {};
-  for (const [k, v] of Object.entries(rawTags)) if (typeof v === "string") tags[k] = v;
-  const kind = classifyKind(tags);
+  // Only string tag values count; reading the three tags used here directly avoids copying every tag of every element.
+  const tags = (el.tags && typeof el.tags === "object" ? el.tags : {}) as Record<string, unknown>;
+  const kind: SuggestionKind | null = tags.tourism === "viewpoint" ? "viewpoint" : tags.natural === "peak" ? "peak" : tags.tourism === "attraction" ? "attraction" : null;
   const lat = el.lat ?? el.center?.lat;
   const lng = el.lon ?? el.center?.lon;
   if (!kind || typeof el.type !== "string" || typeof el.id !== "number" || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat as number) > 90 || Math.abs(lng as number) > 180) {
     return null;
   }
-  const name = tags.name === undefined ? undefined : clampText(stripNameChars(tags.name).trim(), MAX_STOP_NAME).trim();
-  if (name && isDedicationName(name)) return null;
+  const rawName = tags.name;
+  let name: string | undefined;
+  if (typeof rawName === "string") {
+    const cleaned = NAME_NEEDS_CLEANING.test(rawName) ? stripNameChars(rawName) : rawName;
+    name = clampText(cleaned.trim(), MAX_STOP_NAME).trim();
+    if (name && isDedicationName(name)) return null;
+  }
   return {
     osmId: `${el.type}/${el.id}`,
     name: name || DEFAULT_NAME[kind],
@@ -68,8 +77,15 @@ function compare(a: Candidate, b: Candidate): number {
     KIND_RANK[a.kind] - KIND_RANK[b.kind] ||
     Number(b.named) - Number(a.named) ||
     a.dist - b.dist ||
-    a.osmId.localeCompare(b.osmId)
+    collator.compare(a.osmId, b.osmId) // same order as localeCompare, without its per-call locale lookup
   );
+}
+
+/** Whether two places are closer than the duplicate radius; great-circle distance is at least R * |dLat|, so a gap of 0.002 degrees (222 m) is never a duplicate. */
+function isDuplicate(k: Candidate, c: Candidate): boolean {
+  const d = k.lat - c.lat;
+  if (d > 0.002 || d < -0.002) return false;
+  return haversineMeters(k, c) < DUPLICATE_RADIUS_M;
 }
 
 /**
@@ -81,18 +97,54 @@ export function parseOverpassResponse(json: unknown, cap: number = SUGGESTION_CA
   if (!Array.isArray(elements)) return [];
 
   const byId = new Map<string, Candidate>();
+  const cosOrigin = origin ? Math.cos(toRad(origin.lat)) : 0;
   for (const el of elements) {
     const c = toCandidate(el as OverpassElement);
     if (c && !byId.has(c.osmId)) {
-      if (origin) c.dist = haversineMeters(origin, c);
+      if (origin) {
+        // haversineMeters(origin, c) with the origin's cosine computed once (same operations, same result)
+        const h = Math.sin(toRad(c.lat - origin.lat) / 2) ** 2 + cosOrigin * Math.cos(toRad(c.lat)) * Math.sin(toRad(c.lng - origin.lng) / 2) ** 2;
+        c.dist = 2 * 6_371_000 * Math.asin(Math.sqrt(h));
+      }
       byId.set(c.osmId, c);
     }
   }
 
+  // The cap is usually reached long before the end of a large list, so the candidates are taken best-first from a heap
+  // instead of sorting them all. Ties fall back to input order, which is what a stable sort gives.
+  const items = [...byId.values()];
+  const n = items.length;
   const kept: Candidate[] = [];
-  for (const c of [...byId.values()].sort(compare)) {
-    if (kept.length >= cap) break;
-    if (kept.some((k) => haversineMeters(k, c) < DUPLICATE_RADIUS_M)) continue;
+  if (n === 0) return [];
+  const heap = new Int32Array(n);
+  for (let i = 0; i < n; i++) heap[i] = i;
+  const before = (x: number, y: number): boolean => {
+    const r = compare(items[x], items[y]);
+    return r < 0 || (!(r > 0) && x < y);
+  };
+  const siftDown = (from: number, size: number) => {
+    let i = from;
+    for (;;) {
+      let best = i;
+      const left = 2 * i + 1;
+      const right = left + 1;
+      if (left < size && before(heap[left], heap[best])) best = left;
+      if (right < size && before(heap[right], heap[best])) best = right;
+      if (best === i) return;
+      const t = heap[i];
+      heap[i] = heap[best];
+      heap[best] = t;
+      i = best;
+    }
+  };
+  for (let i = (n >> 1) - 1; i >= 0; i--) siftDown(i, n);
+  let size = n;
+  while (size > 0 && !(kept.length >= cap)) {
+    const top = heap[0];
+    heap[0] = heap[--size];
+    siftDown(0, size);
+    const c = items[top];
+    if (kept.some((k) => isDuplicate(k, c))) continue;
     kept.push(c);
   }
   return kept.map((c) => ({ osmId: c.osmId, name: c.name, lat: c.lat, lng: c.lng, kind: c.kind }));

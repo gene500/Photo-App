@@ -39,9 +39,14 @@ export function cellsForCircle(lat: number, lng: number, radiusKm: number): numb
 
 /** Sorted, de-duplicated cells merged into inclusive [first, last] runs of consecutive numbers (a run is part of one grid row, or runs on into the next row's start only if the numbers are consecutive, which is still exact). */
 export function cellRuns(cells: readonly number[]): [number, number][] {
-  const sorted = [...new Set(cells)].sort((a, b) => a - b);
+  // A typed-array sort is numeric and several times faster than a comparator sort of a de-duplicated Set (same order, same runs).
+  const sorted = Float64Array.from(cells).sort();
   const runs: [number, number][] = [];
-  for (const cell of sorted) {
+  let prev = NaN;
+  for (let i = 0; i < sorted.length; i++) {
+    const cell = sorted[i];
+    if (cell === prev) continue;
+    prev = cell;
     const last = runs[runs.length - 1];
     if (last && cell === last[1] + 1) last[1] = cell;
     else runs.push([cell, cell]);
@@ -56,26 +61,36 @@ export function cellRuns(cells: readonly number[]): [number, number][] {
 export function cellsForRing(ring: readonly LngLat[], holes: readonly (readonly LngLat[])[] = []): number[] {
   const cells = new Set<number>();
   const step = CELL_DEG / 5;
-  for (const r of [ring, ...holes]) {
-    for (let i = 0; i < r.length; i++) {
-      const [lng1, lat1] = r[i];
-      const [lng2, lat2] = r[(i + 1) % r.length];
+  const all = [ring, ...holes];
+  for (const r of all) {
+    const len = r.length;
+    for (let i = 0; i < len; i++) {
+      const p = r[i];
+      const q = r[(i + 1) % len];
+      const lng1 = p[0], lat1 = p[1], lng2 = q[0], lat2 = q[1];
       const n = Math.max(1, Math.ceil(Math.max(Math.abs(lng2 - lng1), Math.abs(lat2 - lat1)) / step));
       for (let k = 0; k <= n; k++) cells.add(Math.floor((lat1 + ((lat2 - lat1) * k) / n + 90) / CELL_DEG) * LNG_STRIDE + wrapCol(Math.floor((lng1 + ((lng2 - lng1) * k) / n + 180) / CELL_DEG)));
     }
   }
   if (ring.length >= 3) {
-    const lats = ring.map((p) => p[1]);
-    const row0 = Math.floor((Math.min(...lats) + 90) / CELL_DEG);
-    const row1 = Math.floor((Math.max(...lats) + 90) / CELL_DEG);
+    let minLat = Infinity, maxLat = -Infinity;
+    for (let i = 0; i < ring.length; i++) {
+      const y = ring[i][1];
+      if (y !== y) { minLat = NaN; maxLat = NaN; break; } // Math.min / Math.max of a NaN is NaN
+      if (y < minLat) minLat = y;
+      if (y > maxLat) maxLat = y;
+    }
+    const row0 = Math.floor((minLat + 90) / CELL_DEG);
+    const row1 = Math.floor((maxLat + 90) / CELL_DEG);
+    const xs: number[] = [];
     for (let r = row0; r <= row1; r++) {
       const y = (r + 0.5) * CELL_DEG - 90; // the middle of the cell row
-      const xs: number[] = [];
+      xs.length = 0;
       // Even-odd across the outer ring and the holes together: the spans between a hole's edges are left unfilled.
-      for (const r of [ring, ...holes]) {
-        for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
-          const [xi, yi] = r[i];
-          const [xj, yj] = r[j];
+      for (const rr of all) {
+        for (let i = 0, j = rr.length - 1; i < rr.length; j = i++) {
+          const pi = rr[i], pj = rr[j];
+          const xi = pi[0], yi = pi[1], xj = pj[0], yj = pj[1];
           if (yi > y !== yj > y) xs.push(xi + ((y - yi) * (xj - xi)) / (yj - yi));
         }
       }
@@ -83,7 +98,8 @@ export function cellsForRing(ring: readonly LngLat[], holes: readonly (readonly 
       for (let k = 0; k + 1 < xs.length; k += 2) {
         const c0 = Math.floor((xs[k] + 180) / CELL_DEG);
         const c1 = Math.min(Math.floor((xs[k + 1] + 180) / CELL_DEG), c0 + COLS - 1);
-        for (let c = c0; c <= c1; c++) cells.add(r * LNG_STRIDE + wrapCol(c));
+        const rowBase = r * LNG_STRIDE;
+        for (let c = c0; c <= c1; c++) cells.add(rowBase + wrapCol(c));
       }
     }
   }
@@ -101,7 +117,66 @@ export function createRingTester(ring: readonly LngLat[], holes: readonly (reado
   return (lng, lat) => outer(lng, lat) && !inHole.some((h) => h(lng, lat));
 }
 
+/** Below this many vertices the typed-array build costs more than it saves; the plain version is used. */
+const TYPED_TESTER_MIN_POINTS = 32;
+
 function createSingleRingTester(ring: readonly LngLat[]): (lng: number, lat: number) => boolean {
+  return ring.length >= TYPED_TESTER_MIN_POINTS ? createTypedRingTester(ring) : createSmallRingTester(ring);
+}
+
+/** Same edges per latitude strip, in the same order, held in typed arrays (flat, no tuple destructuring per edge test). */
+function createTypedRingTester(ring: readonly LngLat[]): (lng: number, lat: number) => boolean {
+  const n = ring.length;
+  const X = new Float64Array(n);
+  const Y = new Float64Array(n);
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const x = ring[i][0], y = ring[i][1];
+    X[i] = x;
+    Y[i] = y;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  const strips = Math.max(1, Math.min(256, n));
+  const span = maxY - minY || 1;
+  const stripOf = (y: number) => Math.min(strips - 1, Math.max(0, Math.floor(((y - minY) / span) * strips)));
+  // Compressed rows: the edges of strip s are EI/EJ[start[s] .. start[s + 1]).
+  const start = new Int32Array(strips + 1);
+  const bounds = new Int32Array(2 * n);
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const lo = stripOf(Math.min(Y[i], Y[j]));
+    const hi = stripOf(Math.max(Y[i], Y[j]));
+    bounds[2 * i] = lo;
+    bounds[2 * i + 1] = hi;
+    for (let s = lo; s <= hi; s++) start[s + 1]++;
+  }
+  for (let s = 0; s < strips; s++) start[s + 1] += start[s];
+  const fill = start.slice(0, strips);
+  const EI = new Int32Array(start[strips]);
+  const EJ = new Int32Array(start[strips]);
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    for (let s = bounds[2 * i]; s <= bounds[2 * i + 1]; s++) {
+      const slot = fill[s]++;
+      EI[slot] = i;
+      EJ[slot] = j;
+    }
+  }
+  return (lng, lat) => {
+    if (!(lng >= minX && lng <= maxX && lat >= minY && lat <= maxY)) return false;
+    const s = stripOf(lat);
+    let inside = false;
+    for (let k = start[s], end = start[s + 1]; k < end; k++) {
+      const i = EI[k], j = EJ[k];
+      const xi = X[i], yi = Y[i], xj = X[j], yj = Y[j];
+      if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+}
+
+function createSmallRingTester(ring: readonly LngLat[]): (lng: number, lat: number) => boolean {
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   for (const [x, y] of ring) {
     if (x < minX) minX = x;

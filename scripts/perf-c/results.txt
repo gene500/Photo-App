@@ -1,0 +1,10 @@
+hike corpus 6000 cases (1919 non-null results); mismatches {"c1":0,"c2":0,"c3":0,"real":0}
+hike small (40 cases/rep): baseline median 5.36ms; c1 4.37ms ratio 0.814; c2 4.63ms ratio 0.863; c3 4.68ms ratio 0.872; real 3.85ms ratio 0.717
+hike medium (40 cases/rep): baseline median 49.40ms; c1 28.14ms ratio 0.570; c2 34.27ms ratio 0.694; c3 43.16ms ratio 0.874; real 28.37ms ratio 0.574
+hike large (40 cases/rep): baseline median 2454.27ms; c1 849.11ms ratio 0.346; c2 919.93ms ratio 0.375; c3 1889.87ms ratio 0.770; real 770.43ms ratio 0.314
+estimateLegDurations size 200: identical on 6000 cases, mismatches {"real":0,"E1":0,"E2":0,"E3":0}; baseline 0.483ms; real 0.375ms ratio 0.777; E1 0.374ms ratio 0.775; E2 0.420ms ratio 0.871; E3 0.373ms ratio 0.772
+estimateLegDurations size 3: identical on 6000 cases, mismatches {"real":0,"E1":0,"E2":0,"E3":0}; baseline 3.049ms; real 1.657ms ratio 0.543; E1 2.149ms ratio 0.705; E2 2.023ms ratio 0.663; E3 1.894ms ratio 0.621
+diffIds size 2000: identical on 6000 cases, mismatches {"D1":0,"D2":0,"D3":0}; baseline 5.830ms; D1 4.052ms ratio 0.695; D2 4.276ms ratio 0.734; D3 3.986ms ratio 0.684
+diffIds size 3: identical on 6000 cases, mismatches {"D1":0,"D2":0,"D3":0}; baseline 4.366ms; D1 3.745ms ratio 0.858; D2 4.144ms ratio 0.949; D3 3.533ms ratio 0.809
+routeSignature size 200: identical on 6000 cases, mismatches {"R1":0,"R2":0}; baseline 1.947ms; R1 1.906ms ratio 0.979; R2 1.815ms ratio 0.932
+routeSignature size 3: identical on 6000 cases, mismatches {"R1":0,"R2":0}; baseline 18.989ms; R1 17.206ms ratio 0.906; R2 17.622ms ratio 0.928

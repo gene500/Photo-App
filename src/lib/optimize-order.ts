@@ -23,35 +23,46 @@ const pathCost = (d: number[][], order: number[]) => {
   return sum;
 };
 
-/** Held-Karp over the n-1 free stops. */
+/**
+ * Held-Karp over the n-1 free stops, in flat typed tables. Each (visited set, last stop) state takes the cheapest of its predecessors,
+ * scanned in ascending order with a strict `<`, so ties resolve to the lowest predecessor exactly as a forward sweep would.
+ */
 function exact(d: number[][]): number[] {
   const m = d.length - 1; // stop k (0-based) is index k+1
   const full = (1 << m) - 1;
-  const best = Array.from({ length: full + 1 }, () => new Array<number>(m).fill(Infinity));
-  const prev = Array.from({ length: full + 1 }, () => new Array<number>(m).fill(-1));
-  for (let k = 0; k < m; k++) best[1 << k][k] = d[0][k + 1];
-  for (let mask = 1; mask <= full; mask++) {
-    for (let last = 0; last < m; last++) {
-      const cur = best[mask][last];
-      if (!(mask & (1 << last)) || cur === Infinity) continue;
-      for (let next = 0; next < m; next++) {
-        if (mask & (1 << next)) continue;
-        const nm = mask | (1 << next);
-        const c = cur + d[last + 1][next + 1];
-        if (c < best[nm][next]) {
-          best[nm][next] = c;
-          prev[nm][next] = last;
+  const best = new Float64Array((full + 1) * m).fill(Infinity);
+  const prev = new Int8Array((full + 1) * m).fill(-1);
+  const w = new Float64Array(m * m);
+  for (let a = 0; a < m; a++) for (let b = 0; b < m; b++) w[a * m + b] = d[a + 1]![b + 1]!;
+  for (let k = 0; k < m; k++) best[(1 << k) * m + k] = d[0]![k + 1]!;
+  for (let set = 1; set <= full; set++) {
+    for (let bits = set; bits; bits &= bits - 1) {
+      const next = 31 - Math.clz32(bits & -bits);
+      const mask = set & ~(1 << next);
+      if (!mask) continue;
+      let bestCost = Infinity;
+      let bestLast = -1;
+      for (let lastBits = mask; lastBits; lastBits &= lastBits - 1) {
+        const last = 31 - Math.clz32(lastBits & -lastBits);
+        const cur = best[mask * m + last]!;
+        if (cur === Infinity) continue;
+        const c = cur + w[last * m + next]!;
+        if (c < bestCost) {
+          bestCost = c;
+          bestLast = last;
         }
       }
+      best[set * m + next] = bestCost;
+      prev[set * m + next] = bestLast;
     }
   }
   let last = 0;
-  for (let k = 1; k < m; k++) if (best[full][k] < best[full][last]) last = k;
+  for (let k = 1; k < m; k++) if (best[full * m + k]! < best[full * m + last]!) last = k;
   const order: number[] = [];
   let mask = full;
   while (last !== -1) {
     order.push(last + 1);
-    const p = prev[mask][last];
+    const p = prev[mask * m + last]!;
     mask &= ~(1 << last);
     last = p;
   }
@@ -65,13 +76,13 @@ const restartsFor = (n: number) => Math.max(8, Math.round(160 / n));
 function heuristic(d: number[][]): number[] {
   const n = d.length;
   const order = [0];
-  const left = new Set(Array.from({ length: n - 1 }, (_, i) => i + 1));
-  while (left.size) {
+  const left = Array.from({ length: n - 1 }, (_, i) => i + 1); // ascending, like the Set it replaces
+  while (left.length) {
     const last = order[order.length - 1];
-    let next = -1;
-    for (const c of left) if (next === -1 || d[last][c] < d[last][next]) next = c;
-    order.push(next);
-    left.delete(next);
+    let at = 0;
+    for (let q = 1; q < left.length; q++) if (d[last][left[q]] < d[last][left[at]]) at = q;
+    order.push(left[at]);
+    left.splice(at, 1);
   }
 
   let best = descend(d, order);
@@ -100,40 +111,67 @@ function heuristic(d: number[][]): number[] {
   return best;
 }
 
-/** 2-opt and or-opt passes on a copy of `start` until nothing improves. */
+/**
+ * 2-opt and or-opt passes on a copy of `start` until nothing improves. Every candidate is scored by the same left-to-right sum a full
+ * recompute makes, but the unchanged leading legs come from `pre` (their partial sums are bit-identical) and nothing is allocated.
+ */
 function descend(d: number[][], start: number[]): number[] {
   const n = d.length;
-  const order = start.slice();
-  let cost = pathCost(d, order);
+  let w = flatCache.get(d);
+  if (!w) {
+    w = new Float64Array(n * n);
+    for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) w[a * n + b] = d[a][b];
+    flatCache.set(d, w);
+  }
+  const order = Int32Array.from(start);
+  const cand = new Int32Array(n);
+  const pre = new Float64Array(n); // pre[k] = cost of the first k legs of `order`
+  const rebuild = () => {
+    for (let k = 1; k < n; k++) pre[k] = pre[k - 1] + w![order[k - 1] * n + order[k]];
+  };
+  const sumFrom = (from: number) => {
+    let s = pre[from - 1];
+    for (let k = from; k < n; k++) s += w![cand[k - 1] * n + cand[k]];
+    return s;
+  };
+  rebuild();
+  let cost = pre[n - 1];
   let improved = true;
   while (improved) {
     improved = false;
     // 2-opt: reverse order[i..j]; j may be the last element (open end). Full recompute keeps asymmetry correct.
     for (let i = 1; i < n - 1; i++) {
       for (let j = i + 1; j < n; j++) {
-        const cand = [...order.slice(0, i), ...order.slice(i, j + 1).reverse(), ...order.slice(j + 1)];
-        const c = pathCost(d, cand);
+        for (let k = 0; k < i; k++) cand[k] = order[k];
+        for (let k = i; k <= j; k++) cand[k] = order[i + j - k];
+        for (let k = j + 1; k < n; k++) cand[k] = order[k];
+        const c = sumFrom(i);
         if (c < cost - 1e-9) {
-          order.splice(0, n, ...cand);
+          order.set(cand);
           cost = c;
           improved = true;
+          rebuild();
         }
       }
     }
     // or-opt: move a segment of 1-3 stops elsewhere, in either direction.
     for (let len = 1; len <= 3; len++) {
       for (let i = 1; i + len <= n; i++) {
-        const seg = order.slice(i, i + len);
-        const rest = [...order.slice(0, i), ...order.slice(i + len)];
-        for (let pos = 1; pos <= rest.length; pos++) {
+        for (let pos = 1; pos <= n - len; pos++) {
           if (pos === i) continue;
-          for (const s of [seg, [...seg].reverse()]) {
-            const cand = [...rest.slice(0, pos), ...s, ...rest.slice(pos)];
-            const c = pathCost(d, cand);
+          // A single stop reversed is the same order, so it cannot score differently from the forward try.
+          for (let reversed = 0; reversed < (len > 1 ? 2 : 1); reversed++) {
+            for (let k = 0; k < n; k++) {
+              if (k < pos) cand[k] = k < i ? order[k] : order[k + len];
+              else if (k < pos + len) cand[k] = order[reversed ? i + len - 1 - (k - pos) : i + (k - pos)];
+              else cand[k] = k - len < i ? order[k - len] : order[k];
+            }
+            const c = sumFrom(Math.min(i, pos));
             if (c < cost - 1e-9) {
-              order.splice(0, n, ...cand);
+              order.set(cand);
               cost = c;
               improved = true;
+              rebuild();
               break;
             }
           }
@@ -144,5 +182,7 @@ function descend(d: number[][], start: number[]): number[] {
       if (improved) break;
     }
   }
-  return order;
+  return Array.from(order);
 }
+
+const flatCache = new WeakMap<number[][], Float64Array>();

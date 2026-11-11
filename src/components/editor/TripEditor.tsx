@@ -566,11 +566,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     });
   }
 
-  async function addStop(input: { name: string; lat: number; lng: number; source: StopSource; lightPref?: LightPref }, quiet = false) {
-    return tracked(() => addStopInner(input, quiet));
+  async function addStop(input: { name: string; lat: number; lng: number; source: StopSource; lightPref?: LightPref }) {
+    return tracked(() => addStopInner(input));
   }
 
-  async function addStopInner(input: { name: string; lat: number; lng: number; source: StopSource; lightPref?: LightPref }, quiet: boolean) {
+  async function addStopInner(input: { name: string; lat: number; lng: number; source: StopSource; lightPref?: LightPref }) {
     try {
       // Only a changed default is sent; otherwise the server's own default (30) applies, exactly as before.
       const dwell = settings.defaultDwellMinutes === DEFAULT_SETTINGS.defaultDwellMinutes ? {} : { dwellMinutes: settings.defaultDwellMinutes };
@@ -583,11 +583,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       setAnnouncement(`Added ${stop.name}. ${count} ${count === 1 ? "stop" : "stops"} in your trip.`);
       if (stops.length === 0 && trip.departAt === null && !firstStartSavedRef.current) {
         firstStartSavedRef.current = true;
-        void saveFirstStart(stop.lng, quiet);
+        void saveFirstStart(stop.lng);
       }
       return stop;
     } catch (e) {
-      if (!quiet) setStopsError(errorMessage(e, "Couldn't add the stop"));
+      setStopsError(errorMessage(e, "Couldn't add the stop"));
       return null;
     }
   }
@@ -596,7 +596,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
    * A new trip is created without a start time (it has no stops, so no solar day yet). With its first stop the start is
    * saved as now on the planned day at that stop, so shared and offline views show the same start as this editor.
    */
-  async function saveFirstStart(lng: number, quiet = false) {
+  async function saveFirstStart(lng: number) {
     const now = new Date();
     const clock = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
     const iso = fromTimeValue(trip.plannedDate, clock, lng);
@@ -605,7 +605,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       await saveTrip({ departAt: iso });
     } catch (e) {
       firstStartSavedRef.current = false;
-      if (!quiet) setStopsError(errorMessage(e, "Couldn't save the start time"));
+      setStopsError(errorMessage(e, "Couldn't save the start time"));
     }
   }
 

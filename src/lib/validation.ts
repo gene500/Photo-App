@@ -20,7 +20,7 @@ import {
   WEATHER_BATCH_MAX,
 } from "./limits";
 
-export { inYearRange, MAX_DWELL_MINUTES, MAX_ROUTE_WAYPOINTS, MAX_SHOT_ITEMS, MAX_SHOT_NOTES, MAX_SHOT_TEXT, MAX_STOP_NAME, MAX_STOP_NOTES, MAX_TRIP_NAME, WEATHER_BATCH_MAX };
+export { inYearRange, MAX_ROUTE_WAYPOINTS, MAX_SHOT_ITEMS, MAX_STOP_NAME };
 
 const lat = z.number().min(-90).max(90);
 const lng = z.number().min(-180).max(180);

@@ -63,7 +63,8 @@ export function isExactOptimization(stopCount: number, usesLight: boolean): bool
 }
 
 type Interval = [number, number];
-type SunAround = { light: Interval[]; daylight: Interval[]; hasLight: boolean; hasDaylight: boolean };
+/** `lightF` / `dayF` hold the same intervals as `light` / `daylight`, flattened to [start, end, start, end, ...] for the hot loop. */
+type SunAround = { light: Interval[]; daylight: Interval[]; hasLight: boolean; hasDaylight: boolean; lightF: Float64Array; dayF: Float64Array };
 
 /**
  * Pick the visiting order (stop 0 stays first) and the departure time that minimise
@@ -150,6 +151,15 @@ function plannedSearch(input: ScheduleInput):
   };
 }
 
+const flatten = (xs: Interval[]) => {
+  const f = new Float64Array(xs.length * 2);
+  xs.forEach(([a, b], k) => {
+    f[2 * k] = a;
+    f[2 * k + 1] = b;
+  });
+  return f;
+};
+
 const sanitised = (durations: number[][]) => durations.map((row) => row.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : PENALTY)));
 
 /** The objective optimizeSchedule minimises, for a given order and departure (for comparing searches). */
@@ -179,6 +189,12 @@ class Evaluator {
   /** Weight of a minute in the dark per stop: its priority weight, none under the time focus (darkness is then only reported). */
   private readonly darkWeight: number[];
   private readonly arrivalOffsets: Float64Array;
+  /** Dwell of each stop in ms. */
+  readonly dwellMs: number[];
+  /** Seconds of driving one missed minute of a Normal stop is worth. */
+  readonly missWeight: number;
+  /** True when no term of the cost can be negative, so a partial sum that already reaches a threshold can stop early. */
+  readonly monotone: boolean;
   private readonly t: OptimizeTuning;
   /** Drive seconds beyond which the route pays extra (Infinity: no budget). */
   private readonly driveBudget: number;
@@ -213,6 +229,15 @@ class Evaluator {
     this.missCap = stops.map((s) => (focus !== "time" && (s.priority === "must" || s.priority === "high") ? Infinity : this.t.missCap));
     this.darkWeight = focus === "time" ? stops.map(() => 0) : this.weight;
     this.arrivalOffsets = new Float64Array(stops.length);
+    this.missWeight = this.t.missWeight;
+    this.dwellMs = stops.map((s) => s.dwellMinutes * 60_000);
+    const nonNegative = (v: number) => Number.isFinite(v) && v >= 0;
+    this.monotone =
+      d.every((row) => row.every((v) => v >= 0)) &&
+      this.weight.every(nonNegative) &&
+      this.darkWeight.every(nonNegative) &&
+      [this.t.missWeight, this.t.darkFactor, this.t.tailSlope, this.t.overSlope].every(nonNegative) &&
+      this.missCap.every((v) => v >= 0);
   }
 
   drive(order: number[]): number {
@@ -264,7 +289,8 @@ class Evaluator {
       const daylight: Interval[] = [];
       for (const x of [before, own, after]) if (x.daylight) daylight.push(x.daylight);
       // Of the neighbouring days only the window nearest the arrival's day can be the nearest one.
-      w = { light: [...before.light.slice(-1), ...own.light, ...after.light.slice(0, 1)], daylight, hasLight: own.light.length > 0, hasDaylight: own.daylight !== null };
+      const light = [...before.light.slice(-1), ...own.light, ...after.light.slice(0, 1)];
+      w = { light, daylight, hasLight: own.light.length > 0, hasDaylight: own.daylight !== null, lightF: flatten(light), dayF: flatten(daylight) };
       this.aroundCache[i]!.set(day, w);
     }
     this.lastDay[i] = day;
@@ -313,10 +339,56 @@ class Evaluator {
   /** Total missed minutes for `order` when leaving at `departMs`, each stop counted by its priority weight. */
   missTotal(order: number[], departMs: number, off = this.offsets(order)): number {
     let total = 0;
-    for (let k = 0; k < order.length; k++) {
-      const i = order[k]!;
-      if (this.constrained[i]) total += this.weight[i]! * this.countedMiss(i, this.missAt(i, departMs + off[k]!));
-      if (this.darkWeight[i]) total += this.t.darkFactor * this.darkWeight[i]! * this.darkAt(i, departMs + off[k]!);
+    for (let k = 0; k < order.length; k++) total = this.terms(order[k]!, departMs + off[k]!, total);
+    return total;
+  }
+
+  /**
+   * One visit's share of `missTotal`, added to the running `total`: the light miss (for a stop with a preference) and then the darkness,
+   * from one sun lookup. The additions happen in the order missTotal always made them, so partial totals can be reused bit for bit.
+   */
+  terms(i: number, arrivalMs: number, total: number): number {
+    const sun = this.sunDay(i, arrivalMs);
+    const end = arrivalMs + this.dwellMs[i]!;
+    if (this.constrained[i]) {
+      let minutes = 0;
+      if (sun.hasLight) {
+        const f = sun.lightF;
+        let best = Infinity;
+        let hit = false;
+        for (let k = 0; k < f.length; k += 2) {
+          const ws = f[k]!, we = f[k + 1]!;
+          if (end >= ws && arrivalMs <= we) {
+            hit = true;
+            break;
+          }
+          const v = end < ws ? ws - end : arrivalMs - we;
+          if (v < best) best = v;
+        }
+        minutes = hit ? 0 : best / 60_000;
+      }
+      total += this.weight[i]! * this.countedMiss(i, minutes);
+    }
+    if (this.darkWeight[i]) {
+      let minutes = 0;
+      if (sun.hasDaylight) {
+        let best = Infinity;
+        let hit = false;
+        for (const f of [sun.dayF, sun.lightF]) {
+          for (let k = 0; k < f.length; k += 2) {
+            const a = f[k]!, b = f[k + 1]!;
+            if (end >= a && arrivalMs <= b) {
+              hit = true;
+              break;
+            }
+            const v = end < a ? a - end : arrivalMs - b;
+            if (v < best) best = v;
+          }
+          if (hit) break;
+        }
+        minutes = hit ? 0 : best / 60_000;
+      }
+      total += this.t.darkFactor * this.darkWeight[i]! * minutes;
     }
     return total;
   }
@@ -333,7 +405,10 @@ class Evaluator {
 
   /** Drive seconds, plus a surcharge for the part beyond the drive budget (a detour the light does not justify). */
   private driveCost(order: number[]): number {
-    const drive = this.drive(order);
+    return this.driveCostOf(this.drive(order));
+  }
+
+  driveCostOf(drive: number): number {
     return drive > this.driveBudget ? drive + this.t.overSlope * (drive - this.driveBudget) : drive;
   }
 
@@ -344,13 +419,27 @@ class Evaluator {
     let departMs = this.candidates[0]!;
     let best = Infinity;
     for (const t of this.candidates) {
-      const c = drive + this.t.missWeight * this.missTotal(order, t, off);
+      const c = this.boundedCost(order, off, drive, t, best - EPS);
       if (c < best - EPS) {
         best = c;
         departMs = t;
       }
     }
     return { departMs, cost: best };
+  }
+
+  /**
+   * drive + missWeight x missTotal. When no term can be negative it stops adding visits once the sum already reaches `thr` and returns
+   * that partial (still >= thr), which is all a caller comparing against `thr` needs to know.
+   */
+  boundedCost(order: number[], off: Float64Array, drive: number, departMs: number, thr: number): number {
+    const mw = this.t.missWeight;
+    let total = 0;
+    for (let k = 0; k < order.length; k++) {
+      total = this.terms(order[k]!, departMs + off[k]!, total);
+      if (this.monotone && drive + mw * total >= thr) break;
+    }
+    return drive + mw * total;
   }
 
   misses(order: number[], departMs: number): ScheduleMiss[] {
@@ -378,20 +467,59 @@ class Evaluator {
 
 type Solution = { order: number[]; departMs: number; cost: number };
 
-/** Every order of stops 1..n-1 against every candidate departure. Yields after each choice of the second stop. */
+/**
+ * Every order of stops 1..n-1 against every candidate departure. Yields after each choice of the second stop.
+ * The missed-light total of each prefix is carried down the tree per departure (the same left-to-right additions the full sum makes),
+ * and a branch is dropped once even its prefix cannot beat the best order found by more than EPS.
+ */
 function* exactSteps(ctx: Evaluator, n: number, over: () => boolean): Generator<void, Solution> {
-  let best: Solution = { order: [], departMs: ctx.candidates[0]!, cost: Infinity };
+  const departs = ctx.candidates;
+  const T = departs.length;
+  const mw = ctx.missWeight;
+  const prune = ctx.monotone;
+  let best: Solution = { order: [], departMs: departs[0]!, cost: Infinity };
   const order = [0];
   const used = new Array<boolean>(n).fill(false);
   used[0] = true;
+  const missP = new Float64Array(n * T); // missP[k * T + t]: total after the first k + 1 stops when leaving at departs[t]
+  const off = new Float64Array(n);
+  const driveP = new Float64Array(n);
+  for (let t = 0; t < T; t++) missP[t] = ctx.terms(0, departs[t]! + 0, 0);
+  /** Add stop `s` at position k; returns the lowest cost any completion of this prefix could still reach. */
+  const place = (k: number, prev: number, s: number): number => {
+    const leg = ctx.d[prev]![s]!;
+    driveP[k] = driveP[k - 1]! + leg;
+    off[k] = off[k - 1]! + (leg * 1000 + ctx.dwellMs[prev]!);
+    const dc = ctx.driveCostOf(driveP[k]!);
+    let lowest = Infinity;
+    for (let t = 0; t < T; t++) {
+      const m = ctx.terms(s, departs[t]! + off[k]!, missP[(k - 1) * T + t]!);
+      missP[k * T + t] = m;
+      const v = dc + mw * m;
+      if (v < lowest) lowest = v;
+    }
+    return lowest;
+  };
   const visit = () => {
-    if (order.length === n) {
-      const { departMs, cost } = ctx.bestDeparture(order);
+    const k = order.length;
+    if (k === n) {
+      // The best departure for this order: the default wins ties, then the earliest.
+      const dc = ctx.driveCostOf(driveP[n - 1]!);
+      let departMs = departs[0]!;
+      let cost = Infinity;
+      for (let t = 0; t < T; t++) {
+        const c = dc + mw * missP[(n - 1) * T + t]!;
+        if (c < cost - EPS) {
+          cost = c;
+          departMs = departs[t]!;
+        }
+      }
       if (cost < best.cost - EPS) best = { order: [...order], departMs, cost };
       return;
     }
     for (let i = 1; i < n; i++) {
       if (used[i]) continue;
+      if (place(k, order[k - 1]!, i) >= best.cost - EPS && prune) continue;
       used[i] = true;
       order.push(i);
       visit();
@@ -401,11 +529,13 @@ function* exactSteps(ctx: Evaluator, n: number, over: () => boolean): Generator<
   };
   // The first level is unrolled so the generator can pause between its branches.
   for (let first = 1; first < n; first++) {
-    used[first] = true;
-    order.push(first);
-    visit();
-    order.pop();
-    used[first] = false;
+    if (!(place(1, 0, first) >= best.cost - EPS && prune)) {
+      used[first] = true;
+      order.push(first);
+      visit();
+      order.pop();
+      used[first] = false;
+    }
     if (first < n - 1) {
       yield;
       if (over()) break;
@@ -488,24 +618,90 @@ function* localSteps(ctx: Evaluator, n: number, over: () => boolean): Generator<
 /**
  * Alternate: move stops around at the current departure (swap / 2-opt / or-opt, first
  * improvement), then re-pick the best departure for the new order, until nothing improves.
+ * A neighbour is scored from the first position that differs from the current order, reusing the current order's partial drive,
+ * offset and missed-light sums (the same left-to-right additions a full recompute makes), and abandoned once it cannot improve.
  */
 function* improve(ctx: Evaluator, start: number[], from?: number): Generator<void, Solution> {
+  const n = start.length;
+  const d = ctx.d;
+  const mw = ctx.missWeight;
   let order = start;
   let { departMs, cost } = from === undefined ? ctx.bestDeparture(order) : { departMs: from, cost: ctx.cost(start, from) };
-  for (let round = 0; round < MAX_ROUNDS; round++) {
-    let moved = false;
-    let again = true;
-    while (again) {
-      again = false;
-      for (const cand of neighbours(order)) {
-        const c = ctx.cost(cand, departMs);
-        if (c < cost - EPS) {
-          order = cand;
-          cost = c;
-          moved = again = true;
-          break;
+  const offB = new Float64Array(n);
+  const driveB = new Float64Array(n);
+  const missB = new Float64Array(n + 1); // missB[k]: missed-light total of the first k stops
+  const setBase = () => {
+    let t = 0, dr = 0, m = 0;
+    for (let k = 0; k < n; k++) {
+      if (k > 0) {
+        const leg = d[order[k - 1]!]![order[k]!]!;
+        dr += leg;
+        t += leg * 1000 + ctx.dwellMs[order[k - 1]!]!;
+      }
+      offB[k] = t;
+      driveB[k] = dr;
+      m = ctx.terms(order[k]!, departMs + t, m);
+      missB[k + 1] = m;
+    }
+  };
+  const cand = new Array<number>(n).fill(0);
+  /** Cost of `cand`, which equals `order` before position `m` (m >= 1); a partial >= thr when it cannot beat thr. */
+  const score = (m: number, thr: number): number => {
+    let dr = driveB[m - 1]!;
+    for (let k = m; k < n; k++) dr += d[cand[k - 1]!]![cand[k]!]!;
+    const dc = ctx.driveCostOf(dr);
+    let t = offB[m - 1]!;
+    let total = missB[m]!;
+    for (let k = m; k < n; k++) {
+      t += d[cand[k - 1]!]![cand[k]!]! * 1000 + ctx.dwellMs[cand[k - 1]!]!;
+      total = ctx.terms(cand[k]!, departMs + t, total);
+      if (ctx.monotone && dc + mw * total >= thr) break;
+    }
+    return dc + mw * total;
+  };
+  /** The first neighbour that beats the current cost (swaps and 2-opt reversals, then or-opt moves of 1-3 stops in either direction); left in `cand`. */
+  const findBetter = (): boolean => {
+    const thr = cost - EPS;
+    for (let k = 0; k < n; k++) cand[k] = order[k]!;
+    for (let i = 1; i < n - 1; i++) {
+      for (let j = i + 1; j < n; j++) {
+        cand[i] = order[j]!;
+        cand[j] = order[i]!;
+        const swapped = score(i, thr);
+        if (swapped < thr) return (cost = swapped), true;
+        cand[i] = order[i]!;
+        cand[j] = order[j]!;
+        for (let k = i; k <= j; k++) cand[k] = order[i + j - k]!;
+        const reversed = score(i, thr);
+        if (reversed < thr) return (cost = reversed), true;
+        for (let k = i; k <= j; k++) cand[k] = order[k]!;
+      }
+    }
+    for (let len = 1; len <= 3; len++) {
+      for (let i = 1; i + len <= n; i++) {
+        for (let pos = 1; pos <= n - len; pos++) {
+          if (pos === i) continue;
+          for (let flip = 0; flip < (len > 1 ? 2 : 1); flip++) {
+            for (let k = 0; k < n; k++) {
+              if (k < pos) cand[k] = k < i ? order[k]! : order[k + len]!;
+              else if (k < pos + len) cand[k] = order[flip ? i + len - 1 - (k - pos) : i + (k - pos)]!;
+              else cand[k] = k - len < i ? order[k - len]! : order[k]!;
+            }
+            const c = score(Math.min(i, pos), thr);
+            if (c < thr) return (cost = c), true;
+          }
         }
       }
+    }
+    return false;
+  };
+  setBase();
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    let moved = false;
+    while (findBetter()) {
+      order = cand.slice();
+      moved = true;
+      setBase();
     }
     yield; // a descent at 25 stops can take ~0.2 s: let other work run between rounds
     const re = ctx.bestDeparture(order);
@@ -513,35 +709,11 @@ function* improve(ctx: Evaluator, start: number[], from?: number): Generator<voi
     if (shifted) {
       departMs = re.departMs;
       cost = re.cost;
+      setBase();
     }
     if (!moved && !shifted) break;
   }
   return { order, departMs, cost };
-}
-
-/** Swaps, 2-opt reversals and or-opt moves (segments of 1-3, either direction), lazily. */
-function* neighbours(order: number[]): Generator<number[]> {
-  const n = order.length;
-  for (let i = 1; i < n - 1; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const swap = order.slice();
-      swap[i] = order[j]!;
-      swap[j] = order[i]!;
-      yield swap;
-      yield [...order.slice(0, i), ...order.slice(i, j + 1).reverse(), ...order.slice(j + 1)];
-    }
-  }
-  for (let len = 1; len <= 3; len++) {
-    for (let i = 1; i + len <= n; i++) {
-      const seg = order.slice(i, i + len);
-      const rest = [...order.slice(0, i), ...order.slice(i + len)];
-      for (let pos = 1; pos <= rest.length; pos++) {
-        if (pos === i) continue;
-        yield [...rest.slice(0, pos), ...seg, ...rest.slice(pos)];
-        if (len > 1) yield [...rest.slice(0, pos), ...[...seg].reverse(), ...rest.slice(pos)];
-      }
-    }
-  }
 }
 
 function nearestNeighbour(d: number[][], n: number): number[] {

@@ -34,7 +34,7 @@ Notes:
 
 - Next.js 16: `AGENTS.md` says to read `node_modules/next/dist/docs/` before writing Next.js code.
 - Never print or commit the Mapbox `pk.` token or any `TURSO_*` secrets.
-- Tests: run the full vitest suite alone (`fileParallelism` is off); Playwright e2e runs on port 3100 (`E2E_PORT` overrides) against a fresh `e2e.db` with fake externals. Agents that run e2e in their own repo copy must copy `node_modules` (`cp -cR`), not symlink it, because a symlink breaks Turbopack.
+- Tests: run the full vitest suite alone (two projects in `vitest.config.mts`: the DB-backed `db-and-server` files run one at a time, `src/components` and `src/lib` run in parallel); Playwright e2e runs on port 3100 (`E2E_PORT` overrides) against a fresh `e2e.db` with fake externals. Agents that run e2e in their own repo copy must copy `node_modules` (`cp -cR`), not symlink it, because a symlink breaks Turbopack.
 - `.vscode/settings.json` keeps VS Code from watching `.next`, `.next-e2e` and `node_modules`.
 
 ## Privacy Policy and Terms: keep them current (daily)

@@ -165,7 +165,7 @@ describe("time format labels", () => {
   it("does not claim to follow the device locale (auto is the 12-hour clock)", async () => {
     await setup();
     expect(screen.queryByText("Device default")).toBeNull();
-    expect(screen.getByText("Default (12-hour)")).toBeTruthy();
+    expect(screen.getByText("System (12-hour)")).toBeTruthy();
   });
 
   it("has a skip link to the main content", async () => {

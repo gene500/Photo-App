@@ -223,6 +223,24 @@ body {
 :root .mapboxgl-map .mapboxgl-ctrl-attrib a { color: var(--accent-strong); }
 :root .mapboxgl-map .mapboxgl-ctrl-attrib.mapboxgl-compact { background: var(--surface); }
 :root .mapboxgl-map .mapboxgl-ctrl-attrib-button { background-color: transparent; }
+/* Alignment: Mapbox's compact (i) is 24px wide with 10px margins on every side, so it sat 4px right of the centre line of the 32px zoom/compass group
+   and the Zoom-to-fit circle, with a 20px gap below it. Make it a 32px circle like the others (same right edge, same centre) and give it the same
+   10px top-only margin as every other control in the corner. The icon keeps its 24px size; expanded text keeps room for the bigger button. */
+:root .mapboxgl-map .mapboxgl-ctrl.mapboxgl-ctrl-attrib.mapboxgl-compact {
+  margin: 10px 10px 0 0;
+  min-height: 32px;
+  padding: 0 32px 0 0;
+  border-radius: 16px;
+}
+:root .mapboxgl-map .mapboxgl-ctrl.mapboxgl-ctrl-attrib.mapboxgl-compact.mapboxgl-compact-show { padding: 6px 36px 6px 8px; }
+:root .mapboxgl-map .mapboxgl-ctrl-attrib-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-size: 24px 24px;
+  background-position: center;
+  background-repeat: no-repeat;
+}
 /* Mapbox's hover rule (.mapboxgl-ctrl button:not(:disabled):hover, specificity 0,3,1) beats the rule above (0,3,0), so match it. */
 :root .mapboxgl-map .mapboxgl-ctrl button.mapboxgl-ctrl-attrib-button:not(:disabled):hover { background-color: transparent; }
 @media (prefers-color-scheme: dark) {

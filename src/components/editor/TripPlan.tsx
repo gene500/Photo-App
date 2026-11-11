@@ -70,10 +70,10 @@ export function TripPlan({ startTime, optimize, routeStatus, swapNote, list }: P
   const reason = optimize.disabled ? optimize.reason : undefined;
   return (
     <>
-      {/* Start time, the buttons and the route totals are one group, so they sit close together. */}
-      <div className="space-y-1.5">
+      {/* Start time, the buttons and the route totals are one softly tinted card, so they read as one group apart from the title block above and the itinerary below. */}
+      <div className="mb-4 mt-1 space-y-3 rounded-2xl bg-hover p-3 ring-1 ring-border/60">
       {startTime}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
         <button
           type="button"
           ref={optimizeRef}
@@ -119,11 +119,11 @@ export function TripPlan({ startTime, optimize, routeStatus, swapNote, list }: P
         <div
           role="status"
           data-testid="optimize-status"
-          className={optimize.status ? "order-last basis-full rounded-lg bg-accent-soft px-3 py-2 text-sm min-w-0 max-w-full [overflow-wrap:anywhere] text-accent-foreground dark:text-foreground ring-1 ring-border" : "sr-only"}
+          className={optimize.status ? "order-last my-0.5 basis-full rounded-xl bg-accent-soft/50 px-3.5 py-2.5 text-sm leading-snug min-w-0 max-w-full [overflow-wrap:anywhere] text-accent-foreground dark:text-foreground ring-1 ring-border/60" : "sr-only"}
         >
           <StatusText status={optimize.status} parts={optimize.statusParts} />
         </div>
-        <p data-testid="route-status" className="text-sm font-medium text-foreground">{routeStatus}</p>
+        <p data-testid="route-status" className="basis-full text-sm font-medium text-foreground">{routeStatus}</p>
       </div>
       </div>
       {swapNote}

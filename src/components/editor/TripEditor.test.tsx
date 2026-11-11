@@ -144,38 +144,26 @@ describe("TripEditor", () => {
       expect(api.locate).not.toHaveBeenCalled();
     });
 
-    describe("a trip named after a place gets it as its first stop", () => {
-      const arches = { lat: 38.73, lng: -109.59 };
-      const landmark = { name: "Arches National Park", ...arches };
+    describe("a trip named after a place only frames the map, it never adds a stop", () => {
+      const arches = { lat: 38.73, lng: -109.59, bbox: [-109.8, 38.5, -109.4, 38.9] as [number, number, number, number] };
+      const landmark = { name: "Arches National Park", lat: 38.73, lng: -109.59 };
       const named = { ...trip, name: "Arches National Park", stops: [] };
       beforeEach(() => {
         vi.mocked(api.locate).mockResolvedValue({ area: arches, landmark });
-        vi.mocked(api.addStop).mockImplementation(async (_id, input) => ({ stop: newStop({ id: "auto", name: input.name, lat: input.lat, lng: input.lng, source: input.source }) }));
-        vi.mocked(api.updateTrip).mockResolvedValue({ trip: { ...trip, name: "Arches National Park" } });
       });
 
-      it("adds the place once through addStop", async () => {
+      it("flies to the area for a landmark but adds no stop and shows no alert", async () => {
         render(<TripEditor initialTrip={named} />);
         await settle(1000);
-        await waitFor(() => expect(api.addStop).toHaveBeenCalledTimes(1), { timeout: 3000 });
-        expect(api.addStop).toHaveBeenCalledWith("t1", expect.objectContaining({ name: "Arches National Park", lat: 38.73, lng: -109.59, source: "manual" }));
-        await waitFor(() => expect(screen.getByTestId("first-stop").textContent).toBe("38.73,-109.59"), { timeout: 3000 });
+        await waitFor(() => expect(screen.getByTestId("fly-to").textContent).toBe("38.73,-109.59,area"), { timeout: 3000 });
+        await settle(1000);
         expect(api.locate).toHaveBeenCalledTimes(1);
+        expect(api.addStop).not.toHaveBeenCalled();
+        expect(screen.queryByTestId("first-stop")).toBeNull();
+        expect(screen.queryByRole("alert")).toBeNull();
       });
 
-      it("does not re-add after the stop is deleted or on a later open", async () => {
-        const { unmount } = render(<TripEditor initialTrip={named} />);
-        await settle(1000);
-        await waitFor(() => expect(api.addStop).toHaveBeenCalledTimes(1), { timeout: 3000 });
-        unmount();
-        render(<TripEditor initialTrip={named} />);
-        await settle(1000);
-        await waitFor(() => expect(api.locate).toHaveBeenCalledTimes(2), { timeout: 3000 });
-        await settle(50);
-        expect(api.addStop).toHaveBeenCalledTimes(1);
-      });
-
-      it("does nothing when the lookup finds nothing or fails, and shows no error", async () => {
+      it("does nothing when the lookup fails, and shows no error", async () => {
         vi.mocked(api.locate).mockRejectedValue(new Error("boom"));
         render(<TripEditor initialTrip={named} />);
         await settle(1000);
@@ -185,56 +173,13 @@ describe("TripEditor", () => {
         expect(screen.queryByRole("alert")).toBeNull();
       });
 
-      it("stays quiet when the automatic add itself fails, and may try again later", async () => {
-        vi.mocked(api.addStop).mockRejectedValue(new Error("nope"));
-        render(<TripEditor initialTrip={named} />);
-        await settle(1000);
-        await waitFor(() => expect(api.addStop).toHaveBeenCalledTimes(1), { timeout: 3000 });
-        await settle(50);
-        expect(screen.queryByRole("alert")).toBeNull();
-        expect(window.localStorage.getItem("autoFirstStop:t1")).toBeNull();
-      });
-
-      it("adds nothing for a generic name such as a city or state, which only frames the map", async () => {
+      it("only frames the map for a generic name such as a city or state", async () => {
         vi.mocked(api.locate).mockResolvedValue({ area: arches, landmark: null });
         render(<TripEditor initialTrip={{ ...named, name: "Utah" }} />);
         await settle(1000);
         await waitFor(() => expect(api.locate).toHaveBeenCalled(), { timeout: 3000 });
-        await settle(50);
+        await waitFor(() => expect(screen.getByTestId("fly-to").textContent).toBe("38.73,-109.59,area"), { timeout: 3000 });
         expect(api.addStop).not.toHaveBeenCalled();
-      });
-
-      it("does not add a second stop while a manual add is still in flight", async () => {
-        let finishManual: (v: { stop: Stop }) => void = () => {};
-        vi.mocked(api.addStop).mockImplementation(() => new Promise((resolve) => { finishManual = resolve; }));
-        let answer: (v: Awaited<ReturnType<typeof api.locate>>) => void = () => {};
-        vi.mocked(api.locate).mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
-        render(<TripEditor initialTrip={named} />);
-        await settle(1000);
-        await waitFor(() => expect(api.locate).toHaveBeenCalledTimes(1), { timeout: 3000 });
-        await userEvent.click(screen.getByRole("button", { name: "drop pin" }));
-        await screen.findByRole("button", { name: "Add stop" });
-        await userEvent.click(screen.getByRole("button", { name: "Add stop" }));
-        expect(api.addStop).toHaveBeenCalledTimes(1);
-        await act(async () => { answer({ area: arches, landmark }); });
-        expect(api.addStop).toHaveBeenCalledTimes(1);
-        await act(async () => { finishManual({ stop: newStop({ id: "m", name: "Fresno" }) }); });
-        await waitFor(() => expect(api.updateTrip).toHaveBeenCalledTimes(1));
-      });
-
-      it("does not bring the landmark back after a quick manual add and delete", async () => {
-        render(<TripEditor initialTrip={named} />);
-        await userEvent.click(screen.getByRole("button", { name: "drop pin" }));
-        await userEvent.click(await screen.findByRole("button", { name: "Add stop" }));
-        await waitFor(() => expect(screen.getByTestId("first-stop")).toBeTruthy());
-        vi.mocked(api.deleteStop).mockResolvedValue(undefined as never);
-        await openStops();
-        await userEvent.click(await screen.findByRole("button", { name: /^Delete / }));
-        await confirmDeleteStop();
-        await waitFor(() => expect(screen.queryByTestId("first-stop")).toBeNull());
-        await settle(1200);
-        expect(api.addStop).toHaveBeenCalledTimes(1);
-        expect(window.localStorage.getItem("autoFirstStop:t1")).toBe("1");
       });
 
       it("tries the lookup again when the connection comes back after a failure", async () => {
@@ -246,8 +191,8 @@ describe("TripEditor", () => {
         act(() => { window.dispatchEvent(new Event("online")); });
         await settle(1000);
         await waitFor(() => expect(api.locate).toHaveBeenCalledTimes(2), { timeout: 3000 });
-        await settle(1000);
-        await waitFor(() => expect(api.addStop).toHaveBeenCalledTimes(1), { timeout: 3000 });
+        await waitFor(() => expect(screen.getByTestId("fly-to").textContent).toBe("38.73,-109.59,area"), { timeout: 3000 });
+        expect(api.addStop).not.toHaveBeenCalled();
       });
 
       it("leaves a trip that already has stops alone", async () => {

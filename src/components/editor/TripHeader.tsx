@@ -69,7 +69,7 @@ export function TripHeader({ trip, onSave, onShareChange, exportData, stopCount 
     const nameMin = `${(Math.min(trip.name.trim().length, 12) * 0.78).toFixed(2)}ch`;
     return (
       // The Export/Share popovers anchor to this header (not their own button), so they stay inside the panel.
-      <header className="relative">
+      <header className="relative pb-1">
         {/* One row: a long name wraps onto more lines (cut with an ellipsis only after 3 lines in short landscape), the buttons keep their size (tighter padding so a short name stays readable in a narrow sidebar). When they drop to a second line they sit at the left under the name (the name grows, so on one row they still end at the right). The buttons only drop to a second line when a long name would get narrower than 12 characters (so it never shrinks to a sliver) (narrow phone or large text); a shorter name only needs its own length, so it stays on the row. The minimum is in ch so it scales with the text size. */}
         <div className="flex flex-wrap items-start justify-between gap-x-1">
           <h1 title={trip.name} style={{ minWidth: nameMin, flexBasis: nameMin }} className="grow break-words text-2xl font-semibold leading-9 max-lg:line-clamp-3 short-landscape:line-clamp-3">{trip.name}</h1>
@@ -79,7 +79,7 @@ export function TripHeader({ trip, onSave, onShareChange, exportData, stopCount 
             {onShareChange && <ShareControl tripId={trip.id} shareToken={trip.shareToken} onChange={onShareChange} />}
           </div>
         </div>
-        <p className="text-sm text-muted">
+        <p className="mt-0.5 text-sm text-muted">
           {stopCount === undefined ? `Planned for ${trip.plannedDate}` : (
             // Each half stays whole when the line has to break, so it never splits inside "4 stops".
             <><span className="whitespace-nowrap">Planned for {trip.plannedDate}</span> <span className="whitespace-nowrap">· {stopCount} {stopCount === 1 ? "stop" : "stops"}</span></>

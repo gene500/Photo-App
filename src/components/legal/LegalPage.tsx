@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-const LEGAL_UPDATED = "October 9, 2026";
+const LEGAL_UPDATED = "November 10, 2026";
 export const CONTACT_URL = "https://github.com/gene500/Photo-App/issues";
 
 export function LegalPage({ title, children }: { title: string; children: ReactNode }) {

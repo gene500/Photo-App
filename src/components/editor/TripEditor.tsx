@@ -280,11 +280,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   // name and frame that place. The map itself ignores this once the viewer has moved it, and any stop takes over.
   const nameLocatedRef = useRef<string | null>(null);
   const noStops = stops.length === 0;
-  // A trip named after a park or landmark also gets it as its first stop, once per trip: the marker is kept (localStorage) so a
-  // deleted auto stop, a rename or a reload never adds it again.
-  const autoStopKey = `autoFirstStop:${trip.id}`;
   const stopCountRef = useRef(stops.length);
-  const addStopRef = useRef<typeof addStop | null>(null);
   const optimizeRef = useRef<((opts?: { departAt: string | null }, quiet?: boolean) => Promise<void>) | null>(null);
   // Re-optimize after a stop is ticked: one debounced, quiet run at a time (see scheduleAutoOptimize).
   const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -300,17 +296,14 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   /** Set from the Optimize click until the run ends, so a second click (while waiting for the start-time save) is ignored. */
   const optimizeClickRef = useRef(false);
   const [optimizeWaiting, setOptimizeWaiting] = useState(false);
-  // Adds in progress (a manual one may be mid-flight when the name lookup answers) and whether the first start was saved.
-  const addsInFlightRef = useRef(0);
+  // Whether the first start was saved.
   const firstStartSavedRef = useRef(false);
   useEffect(() => () => { if (autoTimerRef.current) clearTimeout(autoTimerRef.current); }, []);
-  // Any stop (typed in by hand inside the 700 ms wait, say) settles the question for good: deleting it later must not
-  // bring the landmark back as an auto stop, so write the marker as soon as the trip has a stop.
+  // Any stop settles the question for good: deleting it later must not re-frame the map.
   useEffect(() => {
     if (noStops) return;
     nameLocatedRef.current = trip.name.trim();
-    try { if (window.localStorage.getItem(autoStopKey) === null) window.localStorage.setItem(autoStopKey, "1"); } catch { /* storage unavailable */ }
-  }, [noStops, autoStopKey, trip.name]);
+  }, [noStops, trip.name]);
   // A lookup that failed (offline, say) is tried again when the browser reports the connection is back.
   const [locateRetry, setLocateRetry] = useState(0);
   useEffect(() => {
@@ -342,25 +335,16 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     const timer = setTimeout(() => {
       nameLocatedRef.current = name;
       api.locate(name).then(
-        ({ area, landmark }) => {
+        ({ area }) => {
           if (!live || !area) return;
+          // The name only frames the map; it never adds a stop.
           setFlyTo({ lat: area.lat, lng: area.lng, nonce: Date.now(), area: { bbox: area.bbox } });
-          let done = false;
-          try { done = window.localStorage.getItem(autoStopKey) !== null; } catch { /* storage unavailable: the in-memory guards still apply */ }
-          // Only a park or landmark becomes a stop; a town, state or any other name just frames the map.
-          if (done || !landmark || stopCountRef.current !== 0 || addsInFlightRef.current !== 0 || !addStopRef.current) return;
-          try { window.localStorage.setItem(autoStopKey, "1"); } catch { /* ignore */ }
-          // Same path as a manual add; the lone-stop suggestions search then starts by itself. Failures stay silent.
-          void addStopRef.current({ name: landmark.name, lat: landmark.lat, lng: landmark.lng, source: "manual" }, true).then((added) => {
-            if (added) return;
-            try { window.localStorage.removeItem(autoStopKey); } catch { /* ignore */ }
-          });
         },
         () => { nameLocatedRef.current = null; }, // a failed lookup may be retried; it never shows an error
       );
     }, 700);
     return () => { live = false; clearTimeout(timer); };
-  }, [trip.name, noStops, autoStopKey, locateRetry]);
+  }, [trip.name, noStops, locateRetry]);
 
   // Route through the stops in order. A string key so edits that don't move anything
   // (visited, notes) don't refetch. Fewer than 2 stops means no route at all.
@@ -587,7 +571,6 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }
 
   async function addStopInner(input: { name: string; lat: number; lng: number; source: StopSource; lightPref?: LightPref }, quiet: boolean) {
-    addsInFlightRef.current += 1;
     try {
       // Only a changed default is sent; otherwise the server's own default (30) applies, exactly as before.
       const dwell = settings.defaultDwellMinutes === DEFAULT_SETTINGS.defaultDwellMinutes ? {} : { dwellMinutes: settings.defaultDwellMinutes };
@@ -606,8 +589,6 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     } catch (e) {
       if (!quiet) setStopsError(errorMessage(e, "Couldn't add the stop"));
       return null;
-    } finally {
-      addsInFlightRef.current -= 1;
     }
   }
 
@@ -977,7 +958,6 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   // Latest-callback refs for timers and async continuations; assigned after the functions they point at are declared.
   useEffect(() => {
     stopCountRef.current = stops.length;
-    addStopRef.current = addStop;
     optimizeRef.current = optimizeRoute;
     autoRunRef.current = runAutoOptimize;
   });

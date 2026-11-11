@@ -12,10 +12,33 @@ describe("legal pages", () => {
     expect(html).toContain('href="/terms"');
   });
 
+  it("discloses location use, Google sign-in, hike data sources, session storage and the suggestion cache", () => {
+    const html = renderToStaticMarkup(<PrivacyPage />);
+    for (const text of [
+      "Start from my location",
+      "only when it is within 500 km",
+      "do not save it to your account, cache it, or write it to our logs",
+      "Sign in with Google",
+      "National Park Service",
+      "session storage",
+      "Photo-spot suggestions",
+      "is kept in our database until the cookie would have expired",
+      "removal is retried daily",
+      "no stop is added",
+      "stored on your device only; a couple of values, the route focus for Optimize and the default time at a stop, are sent with the request that uses them",
+    ]) expect(html).toContain(text);
+  });
+
+  it("legal pages are dated November 10, 2026", () => {
+    expect(renderToStaticMarkup(<PrivacyPage />)).toContain("Last updated November 10, 2026");
+    expect(renderToStaticMarkup(<TermsPage />)).toContain("Last updated November 10, 2026");
+  });
+
   it("renders the terms and links back to the privacy policy", () => {
     const html = renderToStaticMarkup(<TermsPage />);
     expect(html).toContain("Terms of Service");
     expect(html).toContain('href="/privacy"');
+    for (const text of ["Google&#x27;s own terms", "National Park Service", "Open-Meteo", "Using your location for Optimize is optional"]) expect(html).toContain(text);
   });
 
   it("both pages start with a skip link to the main content", () => {

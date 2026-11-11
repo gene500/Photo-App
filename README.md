@@ -111,7 +111,7 @@ The server walks each JPEG, PNG or WebP file (`src/server/photo-sanitize.ts`, no
 The search bar finds landmarks, viewpoints and other points of interest by name ("Horseshoe Bend", "Griffith Observatory"), plus towns and addresses. It uses the Mapbox Search Box API.
 
 - `GET /api/geocode?q&session[&proximity]` calls `suggest` (5 results, `types=poi,address,place,locality,neighborhood`) and answers `{ suggestions: [{ name, subtitle?, mapboxId?, lat?, lng? }] }`, points of interest first (stable: Mapbox's order is kept within a group).
-- A trip named after a park or landmark ("Arches National Park", "Horseshoe Bend") also gets it as its first stop, once, when the trip has no stops and `GET /api/locate` reports it as a `landmark` (a Search Box point of interest whose name matches and whose category is a park, viewpoint, monument and the like). A town, state or other name ("LA", "Utah", "Paris weekend") only moves the map. It is a normal manual stop, so suggestions around it load automatically; once it has been added in this browser (a marker in localStorage), deleting it or reopening the trip does not add it again; another browser or device, or cleared site data, can add it once more for a trip that is still empty. A failed lookup does nothing.
+- A trip with no stops uses its name to frame the map: `GET /api/locate` looks the name up ("Arches National Park", "LA", "Utah") and the map moves and zooms to that area. The name only moves the map; it never adds a stop (a park's centre would drag the optimized route across the park). A failed lookup does nothing.
 - Suggestions carry no coordinates, so picking one calls `GET /api/geocode/retrieve?id&session`, which answers `{ place }` named like "Horseshoe Bend, Page, Arizona".
 - The client makes one uuid `session` per search (shared by every suggest and the retrieve, which Mapbox bills as one) and renews it after a pick or when the search is cleared.
 - If `suggest` fails, the old v6 forward geocoder answers instead. Its rows already carry `lat`/`lng`, so no retrieve is needed.
@@ -250,7 +250,7 @@ Open a stop's details and press "Find alternatives" to list up to 8 photo spots 
 - **Text size:** Default / Large (112.5%) / Extra large (125% of the root font size).
 - **Reduce motion:** the device's own preference is always honoured too.
 - **Distance:** km / mi.
-- **Time format:** device default (the en-US 12-hour clock as before), 12h, 24h.
+- **Time format:** System (the en-US 12-hour clock as before), 12h, 24h.
 - **Map style:** beige recolour or the stock Mapbox style (read when the map loads).
 - **New stops:** minutes for a new stop (0-480) and whether suggested stops get an automatic best light or "any".
 - **Account:** clear saved offline copies, the signed-in email, sign out, reset to defaults.

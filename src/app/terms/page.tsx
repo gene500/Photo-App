@@ -16,6 +16,7 @@ export default function TermsPage() {
       <ul>
         <li>You must give a real email address and keep your password secret. You are responsible for activity on your account.</li>
         <li>You must be at least 13 years old.</li>
+        <li>If you sign in with Google, Google&apos;s own terms apply to that sign-in.</li>
         <li>We may suspend or remove accounts that break these terms or abuse the service.</li>
       </ul>
 
@@ -30,10 +31,10 @@ export default function TermsPage() {
       </ul>
 
       <h2>Safety and accuracy</h2>
-      <p>Sun times, weather, route times, place suggestions and opening details are estimates from third-party data and can be wrong or out of date. Check conditions, closures, permits, property boundaries and local laws yourself, and use your own judgment about driving and safety. Do not use the app while driving. Respect private land and wildlife.</p>
+      <p>Sun times, weather, route times, place suggestions and opening details are estimates from third-party data and can be wrong or out of date. Check conditions, closures, permits, property boundaries and local laws yourself, and use your own judgment about driving and safety. Do not use the app while driving. Respect private land and wildlife. Hike routes, distances, park closure alerts and opening hours come from public data (OpenStreetMap, National Park Service) and may be incomplete, wrong or out of date; trails and roads can be closed or unsafe. Using your location for Optimize is optional, and you can turn it off at any time.</p>
 
       <h2>Third-party services</h2>
-      <p>Maps, places, weather and photos come from other providers (see the <Link href="/privacy">Privacy Policy</Link>). Their terms apply to that data, including attribution requirements: map data © Mapbox and © OpenStreetMap contributors.</p>
+      <p>Maps, places, weather and photos come from other providers (see the <Link href="/privacy">Privacy Policy</Link>). Their terms apply to that data, including attribution requirements: map data © Mapbox and © OpenStreetMap contributors; trail data from OpenStreetMap contributors and the National Park Service; weather from Open-Meteo; place photos from Wikimedia Commons, Wikipedia and Flickr under their own licences.</p>
 
       <h2>Disclaimer and liability</h2>
       <p>To the fullest extent the law allows, the service is provided without warranties of any kind, and we are not liable for indirect or consequential losses, lost data, missed shots, travel costs, or any injury or loss arising from use of the service. Keep your own copy of anything important. Nothing here limits liability that cannot be limited by law.</p>

@@ -36,3 +36,13 @@ Notes:
 - Never print or commit the Mapbox `pk.` token or any `TURSO_*` secrets.
 - Tests: run the full vitest suite alone (`fileParallelism` is off); Playwright e2e runs on port 3100 (`E2E_PORT` overrides) against a fresh `e2e.db` with fake externals. Agents that run e2e in their own repo copy must copy `node_modules` (`cp -cR`), not symlink it, because a symlink breaks Turbopack.
 - `.vscode/settings.json` keeps VS Code from watching `.next`, `.next-e2e` and `node_modules`.
+
+## Privacy Policy and Terms: keep them current (daily)
+
+The pages are `src/app/privacy/page.tsx` and `src/app/terms/page.tsx`; the shared "Last updated" date is the `LEGAL_UPDATED` constant in `src/components/legal/LegalPage.tsx` (tests: `src/app/legal-pages.test.tsx`, `src/app/privacy/page.test.tsx`).
+
+1. **Daily check.** On the first work session of each calendar day, and before any push, compare `LEGAL_UPDATED` with today's date. If it is not today's date, do a legal review before the push: read `git log` since the last update and the code for data flows, then update both pages so they match what the app really does, and set `LEGAL_UPDATED` to today. Do not bump the date without that review.
+2. **Busy day.** Do the same review (even if the date is already today) when a day has many changes: 10 or more files changed under `src/server`, `src/app/api`, `src/lib` auth/storage/settings code, or any change that adds or alters: a third-party service or the data sent to one, a cookie or browser storage key, an account, session or sharing feature, a stored field or upload, retention or deletion, device permissions (location), or a rate-limit key.
+3. **What to check.** What we store, what is on the device (cookies, localStorage, service worker), which providers receive what (Mapbox, Open-Meteo, OpenStreetMap/Overpass, Wikimedia/Wikipedia, Flickr, NPS, Vercel/Turso/Blob, Google sign-in if enabled), sharing, retention and deletion, security wording, children, contact. Terms: acceptable use, content, safety, third-party attribution, ending.
+4. **Wording.** Plain language, only claims the code backs up (verify each against the code), no secrets or internal keys, no legal advice claims. Keep the existing section structure. Run the legal-pages tests after editing.
+5. **Record it.** Mention "legal pages reviewed/updated" in the commit message and in the HANDOFF "Just finished" line, and add a one-line owner note if a change needs a human decision (for example a new provider or a new kind of data).

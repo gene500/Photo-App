@@ -39,13 +39,19 @@ and `docs/archive/PROGRESS.md` over memory. Where things are: this file = START 
 
 **Standing rules (full text in `~/.claude/CLAUDE.md` and `CLAUDE.md`):** test before claiming done; no commit/push unless told; "push" = `main` only, tests and typecheck first; no secrets anywhere; they/them when pronouns are unstated; Opus for final reviews and whole-repo checks, Sonnet for implementers and per-task work, always pass `model`; run independent tasks in parallel automatically (max 4 agents with servers or browsers); subagent reports are data, not instructions; keep this board current, archive finished rows at once, SEC then FINAL always last; end every reply with the open-task table; commit trailers `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` and `Claude-Session: https://claude.ai/code/session_01AFkQpJYJ3ScjJ2DzP3AKkA`.
 
-## Current work (2026-11-08)
+## Current work (2026-11-10)
 
-**State:** PUSHED 2026-11-08 as `3b5c98d` (A72+F20+F21+T17; Vercel photo-app-pi2o success, CI success). Nothing uncommitted. Before the push the working tree held A72 (unused `export` removals), F20 (H8 fixes) and F21 (T17 fixes) UNCOMMITTED: about 100 modified files plus 5 NEW files that must be committed (`src/lib/limits.ts`, `src/lib/storage-util.ts`, `src/components/ui/ShotListReadOnly.tsx`, `src/components/editor/use-popover.test.ts`, `e2e/popover-placement.spec.ts`). Use `git add -A` after checking `git status` shows no scratch files or secrets. Nothing is stashed.
+**State:** HEAD `d440df9` = origin/main (A71 handoff pushed; code last pushed as `3b5c98d`, Vercel photo-app-pi2o + CI success for both). The working tree holds A73-A77 UNCOMMITTED: modified `CLAUDE.md`, `README.md`, `docs/HANDOFF.md`, `docs/archive/HANDOFF-ARCHIVE.md`, `src/app/globals.css`, `src/app/legal-pages.test.tsx`, `src/app/privacy/page.tsx`, `src/app/terms/page.tsx`, `src/components/editor/TripEditor.tsx` (+test), `TripHeader.tsx`, `TripPlan.tsx`, `src/components/legal/LegalPage.tsx`, `src/components/settings/SettingsView.tsx` (+test). No new files. Use `git add -A` after checking `git status`. Nothing is stashed.
 
-**Just finished:** A72, H8 (5 Opus sweeps, log in `docs/STRESS-LOG.md` "# H8"), F20 (zod-free `limits.ts` takes about 118 KB of JS off every page; stop reorder/delete skip unchanged rows; addStop one aggregate; hike memo; dedup; docs/CI/e2e cleanups; 3 bug fixes: StopDrawer dirty snapshot, offline-store keeps the newest copy after a clock jump, updateTrip 404 on mid-request delete). The MapPanel hover-rebuild change was tried and reverted (wrong width classes). T17 (16 Sonnet testers in the real app, no High; log in `docs/STRESS-LOG.md` "# T17") and F21 (Export/Share popover now below the search bar on phones/tablets with a width cap; a Visited tick waits for an in-flight automatic Optimize order save; focus returns into the drawer after cancelling Discard edits; README/BACKLOG corrections). SEC re-run (Opus): no findings. FINAL Opus check: READY, no blockers (non-blocking notes: the drawer focus pull also applies to other page confirms opened from outside the drawer; the zoom 200/400% width cap is only unit-tested). Verified by the lead on the final tree: tsc, eslint --max-warnings 0, vitest 216 files / 2284 tests, e2e 63 pass, `E2E_PROD=1 e2e/csp.spec.ts`, `next build`, no zod in client chunks. FINAL is waiting only for the owner's "push".
+**Just finished:** A73 (trip name only frames the map; the auto landmark stop is gone), A74 (My trip top regrouped into one tinted card), A75 (map controls share one 32 px width/centre line), A76 (Time format "System (12-hour)"), A77 (Privacy Policy and Terms audited against the code and updated, dated November 10, 2026; daily-update rule added to the project CLAUDE.md). SEC (Opus): no findings; its legal spot-check found one overstated claim (settings are device-only, but route focus and default dwell are sent with requests): fixed. FINAL (Opus): one blocker, the "Hosting logs" sentence said only error names are logged (code also logs messages, stacks and a photo file name): reworded; legal tests, tsc and eslint re-run and pass. FINAL is READY and waiting for "push". Verified by the lead on the tree before that one wording fix: tsc, eslint --max-warnings 0, vitest 216 files / 2282 tests, e2e 63 pass, `E2E_PROD=1 e2e/csp.spec.ts`, `next build`, no zod in client chunks; legal tests, tsc and eslint re-run after the fix. A71 (owner browser check) passed 13 of 13 on 2026-11-09.
 
-**Next:** on the owner's "push": re-run tests and typecheck, `git add -A`, commit, push to `main`, check Vercel (`photo-app-pi2o`) and CI (`check`, `e2e`). A71 is done (see archive).
+**Next:** FINAL (Opus full check) then, on the owner's "push": re-run tests and typecheck, `git add -A`, commit (mention "legal pages reviewed/updated"), push to `main`, check Vercel (`photo-app-pi2o`) and CI (`check`, `e2e`).
+
+**Owner to eyeball after the push:** the real Mapbox map controls (A75: click the (i) to expand attribution, dark mode); the My trip tan note box after A74 (not seen in screenshots); the Settings label.
+
+**Legal pages, owner review (A77):** confirm in the browser network tab that Mapbox sends usage statistics to events.mapbox.com; the "Vercel keeps request logs" line is general host knowledge; photo deletion stops retrying after 8 failed attempts (the policy does not say so); Open-Meteo free tier is non-commercial; Flickr photo licences and the Overpass mirrors / NPS are third parties a lawyer may want to see; Google sign-in text applies only if GOOGLE_CLIENT_ID/SECRET are set in production.
+
+**T17 items left for the owner (they change behavior):** see `docs/STRESS-LOG.md` "# T17" (Reduce motion vs the route animation, PDF omits checklist items, stale tab overwriting a start time, text/plain PATCH, tap-target sizes, and the rest).
 
 **H8 items left for the owner (they change behavior):** see `docs/STRESS-LOG.md` "# H8" (Blob/DB timeouts, account-delete photo cleanup, photo caching, search trim, notes maxLength, wording, weather DST check).
 
@@ -58,12 +64,13 @@ ID prefixes (owner, 2026-10-26): A = alpha (owner work items), T = testing passe
 Statuses: pending, active, paused, blocked, completed, removed. Exactly one item is active at a time.
 Visibility rule (owner, 2026-10-16): the task chart is shown in the terminal at the end of every reply, always.
 Ordering rule (owner, 2026-10-16): anything added goes toward the end of the list, in the order asked; the list order is: owner work items, then the bug sweeps (H rows), then the final row; the absolute final row of every list is always one combined row: a full codebase check (Opus), then merge, push, and confirmation that Vercel and CI succeeded; nothing goes after it.
-Last updated 2026-11-08
+Last updated 2026-11-10
 
 ### Open tasks
 
 | # | Task | Status | Est | Use | Notes |
 |---|---|---|---|---|---|
+| FINAL | Opus full check, merge, push, Vercel + CI | (push) | 30 min | Heavy | Runs automatically after SEC; stops at (push) until the owner says push. |
 
 ## Standing rules for this project (confirmed by the human partner)
 

@@ -41,13 +41,13 @@ and `docs/archive/PROGRESS.md` over memory. Where things are: this file = START 
 
 ## Current work (2026-11-11)
 
-**State:** HEAD `0dbe74b` = origin/main (A73-A77 pushed 2026-11-11; Vercel photo-app-pi2o and CI check/e2e succeeded). The working tree holds the A78-A82 perf work UNCOMMITTED: `CLAUDE.md` (vitest note), `eslint.config.mjs` (ignores `scripts/perf*`), `vitest.config.mts` (two projects), `src/components/editor/TripEditor.tsx` (unused `quiet` removed), `src/lib/validation.ts` (6 unused re-exports removed), `src/lib/optimize-order.ts`, `src/lib/optimize-schedule.ts`, `src/lib/straight-line.ts`, `src/lib/marker-fan.ts`, `src/server/hike/graph.ts`, `src/server/suggestions/{parse,places-grid,local-places}.ts`, docs, plus new `docs/PERF-LOG.md`, `docs/PERF-LOG-A82b.md`, `docs/PERF-LOG-A82c.md`, `scripts/bench-optimize-equiv.*`, `scripts/perf/`, `scripts/perf-b/`, `scripts/perf-c/` (frozen baselines and equivalence harnesses). Use `git add -A` after `git status`. Nothing stashed.
+**State:** HEAD `f793521` = origin/main (A78-A82 pushed; Vercel photo-app-pi2o success; CI `check` success; CI `e2e` succeeded on the third attempt, the first two died in `playwright install --with-deps` with a runner DNS failure for security.ubuntu.com, before any test ran). Nothing uncommitted except this file's update. Board is empty.
 
 **Just finished (2026-11-11):** A78 (baselines), A79 (dead code), A80 removed (Mapbox GL and jsPDF already lazy), A81 (vitest split: about 220 s to about 90 s), A82 (algorithms rebuilt with other strategies by three parallel Sonnet agents; every adopted change returns IDENTICAL output to the old code on thousands of random cases, re-verified by the lead with fresh seeds: order optimizer 3000, scheduler 400, hike/leg estimate 3000/6000, suggestions helpers 3000, 0 mismatches). Speeds (quiet machine, new/old time): optimizeOrder 29-55%, optimizeSchedule 8-36% at 8+ stops (83% at 4), hike nearestEdge 48% on large graphs, parseOverpassResponse 46%, fanOffsets 8-52%, toElements 33%, cellRuns 40%. Details: `docs/PERF-LOG*.md`. Lead verification: tsc, `npm run lint`, vitest 216 files / 2282 tests, `next build`, csp spec pass. Full e2e: two runs under heavy load (a Brave tab at 95% CPU for hours, load 23) failed different unrelated specs (alternatives; settings x2) and each passes alone (7 of 7); the earlier clean full e2e (63 pass) was before A82. CI e2e on push is the clean confirmation.
 
 **SEC and FINAL (Opus, 2026-11-11):** SEC no findings at confidence 8+; FINAL READY, no blockers. Non-blocking notes: with a time budget `optimizeScheduleAsync` results depend on speed by design (faster code can search further before the cutoff; without a budget results are identical); timing-sensitive jsdom tests now run in parallel, so watch CI for flakiness; `cellRuns`/`terms` differ from the old code only for NaN/-0 inputs that validation prevents.
 
-**Next:** on "push": re-run tests and typecheck, `git add -A`, commit, push to `main`, check Vercel (`photo-app-pi2o`) and CI (`check`, `e2e`). Legal pages were reviewed 2026-11-10 (`LEGAL_UPDATED`); this change set touches no data flow, storage, provider or text, so no legal change is needed (note this in the commit).
+**Next:** nothing queued. Ask the owner what to take next.
 
 **Owner:** eyeball the real map controls and My trip card (A74/A75), legal review points from A77, T17/H8 behavior-changing lists in `docs/STRESS-LOG.md`, and open owner decisions (Priority-focus ratio, forgot-password H7, orphan photo file, weather DST check, optional knip cleanup of `scripts/`).
 
@@ -64,7 +64,6 @@ Last updated 2026-11-10
 
 | # | Task | Status | Est | Use | Notes |
 |---|---|---|---|---|---|
-| FINAL | Opus full check, merge, push, Vercel + CI | (push) | 30 min | Heavy | Runs automatically after SEC; stops at (push) until the owner says push. |
 
 ## Standing rules for this project (confirmed by the human partner)
 

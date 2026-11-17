@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { MIN_SEARCH_CHARS } from "@/lib/limits";
 import { ExternalServiceError, locateArea, locateLandmark } from "@/server/external/mapbox";
 import { DEADLINE_FAST_MS, handle, HttpError, requireUserId, withDeadline } from "@/server/http";
 import { enforcePaidLimit } from "@/server/shared-limit";
 
-const querySchema = z.string().trim().min(2, "Type at least 2 characters").max(200, "Search text must be at most 200 characters");
+const querySchema = z.string().trim().min(MIN_SEARCH_CHARS, `Type at least ${MIN_SEARCH_CHARS} characters`).max(200, "Search text must be at most 200 characters");
 
 /** Where a trip name points (a city, park region or state), so the map can open there instead of on the world view, plus the park or landmark it names, if any. */
 export const GET = handle(async (req: Request) => {

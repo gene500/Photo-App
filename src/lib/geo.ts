@@ -12,6 +12,13 @@ export function haversineMeters(
   return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h));
 }
 
+/** Length in km of a line of [lng, lat] points. */
+export function routeLengthKm(coords: readonly (readonly [number, number])[]): number {
+  let m = 0;
+  for (let i = 1; i < coords.length; i++) m += haversineMeters({ lng: coords[i - 1]![0], lat: coords[i - 1]![1] }, { lng: coords[i]![0], lat: coords[i]![1] });
+  return m / 1000;
+}
+
 export function coordsLabel(p: { lat: number; lng: number }): string {
   return `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}`;
 }

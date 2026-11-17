@@ -2,6 +2,9 @@ export const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
 export const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export type PhotoType = (typeof PHOTO_TYPES)[number];
 
+/** Browsers report no type, or application/octet-stream, for a file whose extension they do not know: the server reads the bytes to decide. */
+export const isUnknownPhotoType = (type: string) => type === "" || type === "application/octet-stream";
+
 /** Shared by the upload input (client) and the upload route (server). */
 export function checkPhotoFile(file: { type: string; size: number }): string | null {
   if (!(PHOTO_TYPES as readonly string[]).includes(file.type)) {

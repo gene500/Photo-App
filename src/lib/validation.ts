@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isDateOnly } from "./dates";
-import { haversineMeters } from "./geo";
+import { routeLengthKm } from "./geo";
 import { hasContent, stripNameChars, stripTextChars } from "./text";
 
 // Zod otherwise probes `new Function("")` to JIT its parsers, which a CSP without unsafe-eval reports as a violation
@@ -12,6 +12,7 @@ import {
   MAX_DWELL_MINUTES,
   MAX_ROUTE_WAYPOINTS,
   MAX_SHOT_ITEMS,
+  MAX_SUGGESTIONS_ROUTE_KM,
   MAX_SHOT_NOTES,
   MAX_SHOT_TEXT,
   MAX_STOP_NAME,
@@ -70,6 +71,13 @@ const departAtSchema = z.iso.datetime({ offset: true }).refine((v) => {
   const year = Number(v.slice(0, 4));
   return year >= 1970 && year <= 2200 && Number.isFinite(Date.parse(v));
 }, "Date must be between 1970 and 2200");
+
+// The optimizer only reads the start time (it stores nothing), and the app sends it in UTC: a start on the last planned day (2200-12-31)
+// or the first (1970-01-01) can fall in 2201 or 1969 there. The planned date itself is still limited to 1970-2200.
+const optimizeDepartAtSchema = z.iso.datetime({ offset: true }).refine((v) => {
+  const year = Number(v.slice(0, 4));
+  return year >= 1969 && year <= 2201 && Number.isFinite(Date.parse(v));
+}, "Start time must be between 1970 and 2200");
 
 /** A new trip may carry its start time; the app sends the current time on the trip's day. */
 export const tripCreateSchema = tripInputSchema.extend({ departAt: departAtSchema.optional() });
@@ -176,7 +184,7 @@ export const optimizeRequestSchema = z
     stops: z.array(z.object({ lightPref: lightPrefSchema, priority: stopPrioritySchema.optional(), dwellMinutes: dwellMinutesSchema })).optional(),
     plannedDate: dateOnlySchema.optional(),
     /** The trip's saved start time; it wins ties against equally good departures. */
-    departAt: departAtSchema.optional(),
+    departAt: optimizeDepartAtSchema.optional(),
     /** What to weigh first: priority stops (default) or the shortest route. */
     focus: z.enum(["priority", "time"]).optional(),
     /** Keep `departAt` as the start and only order the stops (a trip already under way). */
@@ -205,15 +213,6 @@ export const optimizeRequestSchema = z
 // real route geometries (routes are capped at MAX_ROUTE_WAYPOINTS = 25
 // waypoints, and Mapbox Directions is called with overview=full).
 const MAX_SUGGESTIONS_COORDINATES = 2_000;
-
-/** Coast to coast with detours is ~6,000 km; anything longer is not a real driving route (and would read most of the map data). */
-const MAX_SUGGESTIONS_ROUTE_KM = 6_000;
-
-function routeLengthKm(coords: readonly (readonly [number, number])[]): number {
-  let m = 0;
-  for (let i = 1; i < coords.length; i++) m += haversineMeters({ lng: coords[i - 1][0], lat: coords[i - 1][1] }, { lng: coords[i][0], lat: coords[i][1] });
-  return m / 1000;
-}
 
 const MAX_AROUND_RADIUS_KM = 30;
 

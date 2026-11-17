@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getSunWindows, type SunWindows } from "./best-time";
-import { defaultLightPref, describeLightHint, forecastInstant, lightWindows, windowMissMinutes } from "./light-windows";
+import { defaultLightPref, describeLightHint, forecastInstant, isLightMiss, lightLabel, lightWindows, windowMissMinutes } from "./light-windows";
 
 const at = (hhmm: string) => new Date(`2026-07-01T${hhmm}:00Z`);
 const SUN: SunWindows = {
@@ -90,6 +90,16 @@ describe("describeLightHint", () => {
     expect(hint.met).toBe(false);
     expect(hint.text).toBe(`Misses sunset by ${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ""}`);
   });
+  it("a miss under 30 s counts as met and shows the nearest window, not the day's first (golden hour, evening)", () => {
+    const golden = { ...yosemite, lightPref: "golden" as const, dwellMinutes: 0 };
+    const [morning, evening] = lightWindows("golden", sun);
+    const arrival = new Date(evening[1].getTime() + 20_000);
+    const hint = describeLightHint(golden, arrival, "UTC")!;
+    expect(hint.met).toBe(true);
+    const fmt = (d: Date) => new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "UTC" }).format(d);
+    expect(hint.text).toContain(fmt(evening[0]).replace(/ [AP]M$/, ""));
+    expect(hint.text).not.toContain(fmt(morning[0]).replace(/ [AP]M$/, "") + "–");
+  });
   it("is null for any, without an arrival, or without a window", () => {
     expect(describeLightHint({ ...yosemite, lightPref: "any" }, from)).toBeNull();
     expect(describeLightHint(yosemite, null)).toBeNull();
@@ -147,5 +157,17 @@ describe("settings: time format and suggestion light", () => {
   it("'any' suggestion light overrides the kind default", () => {
     expect(defaultLightPref("viewpoint", "any")).toBe("any");
     expect(defaultLightPref("peak", "auto")).toBe("golden");
+  });
+});
+
+describe("light miss tolerance and labels", () => {
+  it("a miss under half a minute is met, as the optimizer reports it", () => {
+    expect(isLightMiss(0)).toBe(false);
+    expect(isLightMiss(0.49)).toBe(false);
+    expect(isLightMiss(0.5)).toBe(true);
+  });
+  it("lightLabel tolerates a value outside the enum", () => {
+    expect(lightLabel("twilight" as never)).toBe("Any");
+    expect(lightLabel("golden")).toBe("Golden hour");
   });
 });

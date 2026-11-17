@@ -107,3 +107,56 @@ describe("StartTimeControl layout", () => {
     expect(screen.queryByTestId("reset-placeholder")).toBeNull();
   });
 });
+
+describe("StartTimeControl with the 24-hour setting", () => {
+  it("shows hour and minute selects (never AM/PM) and saves a chosen time at once", async () => {
+    const onChange = vi.fn();
+    const departAt = fromTimeValue("2026-07-01", "06:56");
+    render(<StartTimeControl plannedDate="2026-07-01" departAt={departAt} hour24 onChange={onChange} />);
+    const hour = screen.getByLabelText("Start time hour") as HTMLSelectElement;
+    const minute = screen.getByLabelText("Start time minute") as HTMLSelectElement;
+    expect([hour.value, minute.value]).toEqual(["06", "56"]);
+    expect(hour.options).toHaveLength(24);
+    expect(document.body.textContent).not.toMatch(/AM|PM/);
+    await userEvent.selectOptions(hour, "18");
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(toTimeValue(onChange.mock.calls[0][0])).toBe("18:56");
+  });
+  it("labels the group once as \"Start time\" with hour and minute selects inside", () => {
+    render(<StartTimeControl plannedDate="2026-07-01" departAt={fromTimeValue("2026-07-01", "06:56")} hour24 onChange={() => {}} />);
+    const group = screen.getByLabelText("Start time");
+    expect(group.getAttribute("role")).toBe("group");
+    expect(group.contains(screen.getByLabelText("Start time hour"))).toBe(true);
+    expect(group.contains(screen.getByLabelText("Start time minute"))).toBe(true);
+  });
+  it("saves the final hour and minute when the minute is picked while the hour save is still pending", async () => {
+    let release!: () => void;
+    const calls: (string | null)[] = [];
+    const onChange = vi.fn((iso: string | null) => (calls.push(iso) === 1 ? new Promise<void>((r) => (release = r)) : Promise.resolve()));
+    const departAt = fromTimeValue("2026-07-01", "06:56");
+    render(<StartTimeControl plannedDate="2026-07-01" departAt={departAt} hour24 onChange={onChange} />);
+    const hour = screen.getByLabelText("Start time hour") as HTMLSelectElement;
+    const minute = screen.getByLabelText("Start time minute") as HTMLSelectElement;
+    await userEvent.selectOptions(hour, "18");
+    expect(onChange).toHaveBeenCalledTimes(1);
+    await userEvent.selectOptions(minute, "20");
+    await userEvent.selectOptions(minute, "30"); // rapid picks coalesce: only the last is saved
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect([hour.value, minute.value]).toEqual(["18", "30"]);
+    await act(async () => release());
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(toTimeValue(onChange.mock.calls[0][0])).toBe("18:56");
+    expect(toTimeValue(onChange.mock.calls[1][0])).toBe("18:30");
+  });
+  it("saves a pick that returns to the original time while the first save is pending", async () => {
+    let release!: () => void;
+    const calls: (string | null)[] = [];
+    const onChange = vi.fn((iso: string | null) => (calls.push(iso) === 1 ? new Promise<void>((r) => (release = r)) : Promise.resolve()));
+    render(<StartTimeControl plannedDate="2026-07-01" departAt={fromTimeValue("2026-07-01", "06:56")} hour24 onChange={onChange} />);
+    await userEvent.selectOptions(screen.getByLabelText("Start time hour"), "18");
+    await userEvent.selectOptions(screen.getByLabelText("Start time hour"), "06");
+    await act(async () => release());
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(toTimeValue(onChange.mock.calls[1][0])).toBe("06:56");
+  });
+});

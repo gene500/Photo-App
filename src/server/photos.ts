@@ -2,7 +2,7 @@ import { del, get, put } from "@vercel/blob";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { checkPhotoFile, type PhotoType } from "@/lib/photo-rules";
+import { checkPhotoFile, isUnknownPhotoType, type PhotoType } from "@/lib/photo-rules";
 import { prisma } from "./db";
 import { sanitizePhoto } from "./photo-sanitize";
 
@@ -34,9 +34,9 @@ export function sniffImageType(bytes: Uint8Array): PhotoType | null {
 export type PhotoCheck = { ok: true; type: PhotoType; bytes: Uint8Array } | { ok: false; error: string };
 
 export function validatePhoto(file: { type: string; size: number }, bytes: Uint8Array): PhotoCheck {
-  // Some browsers report no type for a file with an unknown extension: the contents decide then.
+  // Some browsers report no type (or application/octet-stream) for a file with an unknown extension: the contents decide then. A declared image type is never trusted alone: it must match the bytes.
   const sniffed = sniffImageType(bytes);
-  const declared = file.type === "" && sniffed ? sniffed : file.type;
+  const declared = isUnknownPhotoType(file.type) && sniffed ? sniffed : file.type;
   const error = checkPhotoFile({ type: declared, size: bytes.length });
   if (error) return { ok: false, error };
   if (!sniffed || sniffed !== declared) {

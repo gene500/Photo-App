@@ -4,11 +4,11 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { api } from "@/lib/api-client";
 import { card } from "@/components/ui/styles";
 import { focusFirst, softDisabled } from "@/lib/focus";
+import { longEnoughToSearch } from "@/lib/limits";
 import type { Place, SearchSuggestion } from "@/lib/types";
 import { newSessionId } from "@/lib/session-id";
 import { useDebouncedValue } from "@/lib/use-debounced-value";
 
-const MIN_CHARS = 2;
 const DEBOUNCE_MS = 250;
 
 type Props = {
@@ -47,7 +47,7 @@ export function SearchBar({ getProximity, onSelect, inputRef }: Props) {
   }, [getProximity]);
 
   useEffect(() => {
-    if (debounced.length < MIN_CHARS) return;
+    if (!longEnoughToSearch(debounced)) return;
     let cancelled = false;
     api.geocode(debounced, sessionRef.current ?? newSessionId(), getProximityRef.current() ?? undefined).then(
       (res) => {
@@ -64,7 +64,7 @@ export function SearchBar({ getProximity, onSelect, inputRef }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `keyed` carries the nonce; `debounced` derives from it
   }, [keyed]);
 
-  const shown = query.length >= MIN_CHARS && outcome?.query === query ? outcome : null;
+  const shown = longEnoughToSearch(query) && outcome?.query === query ? outcome : null;
   // The option the arrow keys are on (-1: none); the input keeps real focus and points at it with aria-activedescendant.
   const [active, setActive] = useState(-1);
   const options = shown?.suggestions ?? [];

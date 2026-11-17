@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { downsampleRoute } from "./downsample";
+import { downsampleRoute, routeTooLongForSuggestions } from "./downsample";
 
 const line = (n: number): [number, number][] => Array.from({ length: n }, (_, i) => [i * 0.001, i * 0.002]);
 
@@ -24,5 +24,10 @@ describe("downsampleRoute", () => {
   it("handles tiny and custom targets", () => {
     expect(downsampleRoute([])).toEqual([]);
     expect(downsampleRoute(line(100), 2)).toEqual([line(100)[0], line(100)[99]]);
+  });
+
+  it("flags a route the suggestions endpoint refuses (longer than the shared cap) and not a normal one", () => {
+    expect(routeTooLongForSuggestions([[-120, 36], [-119, 37]])).toBe(false);
+    expect(routeTooLongForSuggestions([[-120, 36], [-60, 36], [-120, 36], [-60, 36]])).toBe(true); // 3 x ~5,400 km
   });
 });

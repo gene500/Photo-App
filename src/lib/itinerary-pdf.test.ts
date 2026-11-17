@@ -348,6 +348,9 @@ describe("Unicode font", () => {
     expect(s).toContain("/BaseFont /NotoSansCJK");
     const codes = mapped(s);
     for (const ch of "東京タワー") expect(codes.has(ch.codePointAt(0)!), ch).toBe(true);
+    const jp = { ...fonts, cjk: { script: "jp" as const, regular: font("NotoSansJP-Regular.ttf") } };
+    const j = mapped(await renderWith(input(1, { name: "とても綺麗" }), jp));
+    for (const ch of "とても綺麗") expect(j.has(ch.codePointAt(0)!), ch).toBe(true);
     const kr = { ...fonts, cjk: { script: "kr" as const, regular: font("NotoSansKR-Regular.ttf") } };
     const k = mapped(await renderWith({ ...input(1), tripName: "서울 여행" }, kr));
     for (const ch of "서울여행") expect(k.has(ch.codePointAt(0)!), ch).toBe(true);

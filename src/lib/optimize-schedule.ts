@@ -168,6 +168,12 @@ export function scheduleCost(input: ScheduleInput, order: number[], departAt: Da
   return ctx.cost(order, departAt.getTime());
 }
 
+/** The light misses of `order` when leaving at `departAt` (for checking a rounded departure against the searched one). */
+export function scheduleMisses(input: ScheduleInput, order: number[], departAt: Date): ScheduleMiss[] {
+  const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus, input.fixedDeparture, input.tuning);
+  return ctx.misses(order, departAt.getTime());
+}
+
 /** Reference search over every order: slow beyond 8 stops (n! x departures), meant for checking the heuristic in tests. */
 export function optimizeScheduleExact(input: ScheduleInput): Schedule {
   const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus, input.fixedDeparture, input.tuning);

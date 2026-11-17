@@ -1,5 +1,8 @@
-import { readFileSync } from "node:fs";
-import { expect, type Page } from "@playwright/test";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { expect, test, type Page } from "@playwright/test";
 
 /** Creates a fresh account (email `<prefix>-<timestamp>@example.com`), waits for the trips list and returns the email. */
 export async function signUp(page: Page, prefix: string) {
@@ -36,10 +39,30 @@ export async function tripWith(page: Page, prefix: string, names: string[]) {
 
 /** Exports the itinerary PDF through the dialog and returns its bytes as a latin1 string. */
 export async function downloadPdf(page: Page) {
+  return (await downloadPdfBytes(page)).toString("latin1");
+}
+
+/** Same export, returning the raw bytes (for pdftotext). */
+export async function downloadPdfBytes(page: Page) {
   await page.getByRole("button", { name: "Export", exact: true }).click();
   await page.getByRole("button", { name: "Download PDF" }).click();
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("alertdialog", { name: "Itinerary PDF" }).getByRole("button", { name: "Download", exact: true }).click()]);
   const bytes = readFileSync((await download.path())!);
   expect(bytes.subarray(0, 4).toString("latin1")).toBe("%PDF");
-  return bytes.toString("latin1");
+  return bytes;
+}
+
+/**
+ * The text of a PDF as poppler's `pdftotext` reads it (UTF-8). Needs poppler-utils (CI installs it; locally `brew install poppler`
+ * or `apt install poppler-utils`): when the binary is missing the calling test is skipped with that message instead of failing.
+ */
+export function pdfToText(bytes: Buffer): string {
+  if (spawnSync("pdftotext", ["-v"]).error) test.skip(true, "pdftotext (poppler-utils) is not installed: brew install poppler / apt install poppler-utils");
+  const dir = mkdtempSync(join(tmpdir(), "pdf-text-"));
+  try {
+    writeFileSync(join(dir, "out.pdf"), bytes);
+    return execFileSync("pdftotext", ["-enc", "UTF-8", join(dir, "out.pdf"), "-"], { encoding: "utf8" });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }

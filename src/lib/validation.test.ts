@@ -284,3 +284,13 @@ describe("formatZodError names array items", () => {
     if (!r.success) expect(formatZodError(r.error)).toBe("Coordinates (item 2) must be at most 90");
   });
 });
+
+describe("optimize start time", () => {
+  const base = { coordinates: [[0, 0], [1, 1]] };
+  it("accepts a start on the last planned day that falls in 2201 in UTC, still refuses nonsense", () => {
+    expect(optimizeRequestSchema.safeParse({ ...base, plannedDate: "2200-12-31", departAt: "2201-01-01T03:00:00.000Z" }).success).toBe(true);
+    const bad = optimizeRequestSchema.safeParse({ ...base, departAt: "2300-01-01T00:00:00.000Z" });
+    expect(bad.success).toBe(false);
+    expect(optimizeRequestSchema.safeParse({ ...base, plannedDate: "2201-01-01" }).success).toBe(false);
+  });
+});

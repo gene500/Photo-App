@@ -2005,7 +2005,7 @@ describe("TripEditor with saved settings", () => {
     async function setup() {
       const { api: freshApi } = await import("@/lib/api-client");
       vi.mocked(freshApi.directions).mockResolvedValue({ route });
-      vi.mocked(freshApi.updateTrip).mockImplementation(async (_id, patch) => ({ trip: { ...trip, ...patch } as never }));
+      vi.mocked(freshApi.updateTrip).mockImplementation(async (_id, patch) => ({ trip: { ...trip, plannedDate: localDateOnly(new Date()), ...patch } as never }));
       vi.mocked(freshApi.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], departAt: null, misses: [] });
       return freshApi;
     }

@@ -6,7 +6,7 @@ import { btnGhost, btnPrimary, inputClass, btnIcon } from "@/components/ui/style
 import { api } from "@/lib/api-client";
 import { focusLost, softDisabled } from "@/lib/focus";
 import { useWeatherLine } from "@/lib/use-weather";
-import { checkPhotoFile, PHOTO_TYPES } from "@/lib/photo-rules";
+import { checkPhotoFile, isUnknownPhotoType, PHOTO_TYPES } from "@/lib/photo-rules";
 import { hasContent } from "@/lib/text";
 import type { LightPref, ShotItem, Stop, Suggestion } from "@/lib/types";
 import { AlternativesPanel } from "./AlternativesPanel";
@@ -227,7 +227,8 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
   }
 
   async function upload(file: File) {
-    const problem = checkPhotoFile(file);
+    // An unknown type (octet-stream, or none) is let through: the server reads the bytes and refuses anything that is not JPEG, PNG or WebP.
+    const problem = checkPhotoFile(isUnknownPhotoType(file.type) ? { type: PHOTO_TYPES[0], size: file.size } : file);
     if (problem) {
       setError(problem);
       return;
@@ -278,7 +279,7 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
       )}
       <label className="block">
         <span className="text-sm text-muted">Name</span>
-        <input ref={nameRef} value={name} maxLength={MAX_STOP_NAME} aria-invalid={nameError ? true : undefined} onChange={(e) => { setName(e.target.value); setNameError(null); }} className={inputClass} />
+        <input ref={nameRef} value={name} maxLength={MAX_STOP_NAME} aria-invalid={nameError ? true : undefined} onChange={(e) => { setName(e.target.value); setNameError(null); }} onBlur={() => { if (!hasContent(name)) { setName(initial.name); setNameError("Stop name is required"); } }} className={inputClass} />
       </label>
       {nameError && <p role="alert" className="-mt-3 text-sm text-danger">{nameError}</p>}
       <label className="block">

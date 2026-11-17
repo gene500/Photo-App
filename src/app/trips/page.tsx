@@ -18,7 +18,7 @@ export default async function TripsPage() {
   const trips = await listTrips(userId);
   const renderedAt = renderStamp();
   return (
-    <div className="relative isolate min-h-[calc(100vh-3rem)] overflow-hidden">
+    <div className="relative isolate flex-1 overflow-hidden">
       <RefreshWhenStale renderedAt={renderedAt} />
       <TripMapBackdrop />
       <main id="main-content" tabIndex={-1} className="outline-none mx-auto max-w-2xl space-y-8 px-4 py-10">

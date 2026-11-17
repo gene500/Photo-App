@@ -1,3 +1,5 @@
+import { routeLengthKm } from "./geo";
+import { MAX_SUGGESTIONS_ROUTE_KM } from "./limits";
 import type { LngLat } from "./types";
 
 /** Server cap is 2000 points; stay well under it. */
@@ -12,3 +14,6 @@ export function downsampleRoute(points: LngLat[], target = SUGGESTIONS_TARGET_PO
   for (let i = 0; i < n; i++) out.push(points[Math.round((i * last) / (n - 1))]!);
   return out;
 }
+
+/** True when the suggestions endpoint would refuse this route as too long (it answers 400); measured on the points that would be sent. */
+export const routeTooLongForSuggestions = (points: LngLat[]) => routeLengthKm(downsampleRoute(points)) > MAX_SUGGESTIONS_ROUTE_KM;

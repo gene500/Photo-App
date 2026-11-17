@@ -4,10 +4,11 @@
 
 // CJK fallback (only when the trip text has Han, kana or Hangul): one extra file holding Noto Sans Latin/Cyrillic/Greek plus
 // the script, regular weight only (jsPDF cannot switch fonts inside a line, so the whole document uses that one family).
-// Chinese+Japanese (GB2312 level 1 hanzi plus JIS X 0208 level 1 kanji and kana, Simplified Chinese glyph forms) and Korean (KS X 1001 syllables) are included. Arabic,
+// Chinese (GB2312 level 1 hanzi plus JIS X 0208 level 1 kanji and kana, Simplified Chinese glyph forms), Japanese (JIS X 0208
+// level 1+2 kanji and kana, Japanese glyph forms) and Korean (KS X 1001 syllables) are included. Arabic,
 // Hebrew, Thai and the Indic scripts are NOT: jsPDF has no text shaping or right-to-left support, so they would render
 // wrongly, and "?" is better than wrong text.
-export type CjkScript = "sc" | "kr";
+export type CjkScript = "sc" | "jp" | "kr";
 export type PdfFonts = {
   regular: ArrayBuffer;
   bold: ArrayBuffer;
@@ -16,26 +17,58 @@ export type PdfFonts = {
 };
 
 const FONT_URLS = { regular: "/fonts/NotoSans-Regular.ttf", bold: "/fonts/NotoSans-Bold.ttf" };
-const CJK_FONT_URLS: Record<CjkScript, string> = { sc: "/fonts/NotoSansSC-Regular.ttf", kr: "/fonts/NotoSansKR-Regular.ttf" };
-const CJK_PROBE: Record<CjkScript, number> = { sc: 0x4eac, kr: 0xd55c }; // 京, 한: a file without it is the wrong file
+const CJK_FONT_URLS: Record<CjkScript, string> = { sc: "/fonts/NotoSansSC-Regular.ttf", jp: "/fonts/NotoSansJP-Regular.ttf", kr: "/fonts/NotoSansKR-Regular.ttf" };
+const CJK_PROBE: Record<CjkScript, number> = { sc: 0x4eac, jp: 0x7dba, kr: 0xd55c }; // 京, 綺 (JIS level 2, so a file without it is not the JP subset), 한: a file without it is the wrong file
 const CJK_MAX_BYTES = 6_000_000;
 
 const isHangul = (c: number) => (c >= 0xac00 && c <= 0xd7af) || (c >= 0x1100 && c <= 0x11ff) || (c >= 0x3130 && c <= 0x318f);
+const isKana = (c: number) => (c >= 0x3040 && c <= 0x30ff) || (c >= 0x31f0 && c <= 0x31ff);
 const isHanKana = (c: number) =>
   (c >= 0x3400 && c <= 0x4dbf) || (c >= 0x4e00 && c <= 0x9fff) || (c >= 0xf900 && c <= 0xfaff) || (c >= 0x3040 && c <= 0x30ff) || (c >= 0x31f0 && c <= 0x31ff);
 
-/** The CJK font the text needs: the script with more characters in the text, or null when it has neither Han/kana nor Hangul. */
+/**
+ * The CJK font to try first, or null when the text has neither Han/kana nor Hangul. More Hangul than Han/kana gives Korean;
+ * otherwise any kana (which Chinese text does not use) gives Japanese; otherwise Han alone gives Simplified Chinese (Han-only
+ * Japanese such as 東京 cannot be told from Chinese). This is only a guess about glyph forms: loadPdfFonts then checks the file's
+ * cmap against the actual text and, for kana text, switches to the Chinese file when that draws more of it (see pickCjk).
+ */
 export function cjkScriptFor(text: string): CjkScript | null {
   let sc = 0;
   let kr = 0;
+  let kana = 0;
   for (const ch of text) {
     const c = ch.codePointAt(0)!;
     if (c < 0x1100) continue;
     if (isHangul(c)) kr++;
-    else if (isHanKana(c)) sc++;
+    else if (isHanKana(c)) {
+      sc++;
+      if (isKana(c)) kana++;
+    }
   }
   if (sc === 0 && kr === 0) return null;
-  return kr > sc ? "kr" : "sc";
+  if (kr > sc) return "kr";
+  return kana > 0 ? "jp" : "sc";
+}
+
+/** How many code points of `text` (NFC; ASCII, controls, joiners and variation selectors ignored) the font's cmap has no glyph for. */
+export function missingCount(text: string, cmap: ReadonlySet<number>): number {
+  let n = 0;
+  for (const ch of text.normalize("NFC")) {
+    const c = ch.codePointAt(0)!;
+    if (c < 0xa0 || c === 0x200d || (c >= 0xfe00 && c <= 0xfe0f)) continue;
+    if (!cmap.has(c)) n++;
+  }
+  return n;
+}
+
+/**
+ * Chooses between the Japanese and Chinese file for kana text by coverage, not by script: the Japanese subset (JIS X 0208) lacks
+ * many simplified hanzi the Chinese file draws, while the Chinese file lacks JIS level 2 kanji. Japanese wins when it misses
+ * nothing and on ties (Japanese glyph forms); otherwise the file missing fewer of the text's characters wins.
+ */
+export function pickCjk(text: string, jp: ReadonlySet<number>, sc: ReadonlySet<number>): "jp" | "sc" {
+  const jpMissing = missingCount(text, jp);
+  return jpMissing === 0 || jpMissing <= missingCount(text, sc) ? "jp" : "sc";
 }
 
 /**
@@ -70,12 +103,31 @@ export async function loadPdfFonts(opts: { timeoutMs?: number; cjkTimeoutMs?: nu
     }
   };
   const base = (buf: ArrayBuffer) => buf.byteLength >= 10000 && parseCmap(buf).size > 0;
-  const script = opts.text ? cjkScriptFor(opts.text) : null;
-  const cjkPromise: Promise<PdfFonts["cjk"]> = script
-    ? get(CJK_FONT_URLS[script], opts.cjkTimeoutMs ?? 30000, (b) => b.byteLength >= 10000 && b.byteLength <= CJK_MAX_BYTES && parseCmap(b).has(CJK_PROBE[script]))
-        .then((regular) => ({ script, regular }))
-        .catch(() => undefined)
-    : Promise.resolve(undefined);
+  const guess = opts.text ? cjkScriptFor(opts.text) : null;
+  type Loaded = { script: CjkScript; regular: ArrayBuffer; cmap: Set<number> };
+  const loadCjk = async (script: CjkScript): Promise<Loaded | undefined> => {
+    let cmap = new Set<number>();
+    try {
+      const regular = await get(CJK_FONT_URLS[script], opts.cjkTimeoutMs ?? 30000, (b) => {
+        cmap = parseCmap(b);
+        return b.byteLength >= 10000 && b.byteLength <= CJK_MAX_BYTES && cmap.has(CJK_PROBE[script]);
+      });
+      return { script, regular, cmap };
+    } catch {
+      return undefined;
+    }
+  };
+  // Kana text: load the Japanese file; only when it lacks some of the text's characters (or failed) is the Chinese file also
+  // loaded, and the one drawing more of the text is kept. Latin-only text loads nothing, other scripts load just their file.
+  const chooseCjk = async (text: string, first: CjkScript): Promise<PdfFonts["cjk"]> => {
+    let best = await loadCjk(first);
+    if (first === "jp" && (!best || missingCount(text, best.cmap) > 0)) {
+      const sc = await loadCjk("sc");
+      if (sc && (!best || pickCjk(text, best.cmap, sc.cmap) === "sc")) best = sc;
+    }
+    return best && { script: best.script, regular: best.regular };
+  };
+  const cjkPromise: Promise<PdfFonts["cjk"]> = guess && opts.text ? chooseCjk(opts.text, guess) : Promise.resolve(undefined);
   try {
     const [regular, bold, cjk] = await Promise.all([get(FONT_URLS.regular, opts.timeoutMs ?? 15000, base), get(FONT_URLS.bold, opts.timeoutMs ?? 15000, base), cjkPromise]);
     return cjk ? { regular, bold, cjk } : { regular, bold };

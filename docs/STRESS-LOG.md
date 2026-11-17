@@ -286,7 +286,7 @@ No High. Five Medium, nineteen Low. Fake map used, so real Mapbox behaviour is n
 - Low: visited stop's drag handle is dimmed with no tooltip.
 - Low: empty-state wording: Suggestions tab with 0 stops says "Suggestions need a route first." with an enabled "Find photo spots"; My trip with 0 stops shows both "Optimize route needs 2 stops" and "Add 2 stops to plan the route".
 - Low: re-optimizing a dragged route with Priority focus lengthened it (139 mi / 2h30 to 179 mi / 3h12) with no explanation; start time also moved with only a notice (the accepted Priority-focus behaviour, owner decision open).
-- Low: Revoke link has no confirmation; Export needs two clicks (menu "Download PDF", then dialog "Download") and the dialog shows "Cancel" on a ready PDF; the 404 page "Back to trips" for a logged-out stranger leads to login.
+- Low: Revoke link has no confirmation; Export needs two clicks (menu "Download PDF", then dialog "Download") and the dialog shows "Cancel" on a ready PDF. (Fixed in F2: the 404 page no longer says "Back to trips" to a logged-out stranger.)
 - Low: phone panel ▾ ▴ buttons are two overlapping circles with no visible labels.
 - Low: stop list rows are not visibly numbered (numbers are screen-reader only; map markers show them).
 - Low (suspected): closing the tab right after Save lost the edit (may be the request being aborted).

@@ -173,4 +173,12 @@ describe("time format labels", () => {
     expect(screen.getByRole("link", { name: "Skip to content" }).getAttribute("href")).toBe("#main-content");
     expect(screen.getByRole("main").id).toBe("main-content");
   });
+
+
+  it("lets the title row wrap, so the Back link cannot push the page wider than a small screen at large text sizes", async () => {
+    await setup();
+    const row = screen.getByRole("heading", { name: "Settings" }).parentElement!;
+    expect(row.className).toContain("flex-wrap");
+  });
 });
+

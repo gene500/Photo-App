@@ -1,13 +1,16 @@
 import { enforcePaidLimit } from "@/server/shared-limit";
 import { clampToSolarDay, daylightInterval, departureTime } from "@/lib/best-time";
 import { orderWithoutOrigin, stopIndexWithoutOrigin, withOrigin } from "@/lib/optimize-origin";
-import { optimizeScheduleAsync } from "@/lib/optimize-schedule";
+import { optimizeScheduleAsync, scheduleMisses } from "@/lib/optimize-schedule";
 import { optimizeRequestSchema } from "@/lib/validation";
 import { collectPlaceNotices } from "@/server/external/place-notices";
 import type { LngLat } from "@/lib/types";
 import { ExternalServiceError, getDurationMatrix } from "@/server/external/mapbox";
 import { optimizeBudgetMs, withOptimizeSlot } from "@/server/optimize-slots";
 import { handle, HttpError, readJson, requireUserId } from "@/server/http";
+
+/** Missed minutes below this are rounding noise when comparing two start times. */
+const ADDED_EPS = 1e-6;
 
 /**
  * Best visiting order for the submitted coordinates; the first one stays the start.
@@ -51,8 +54,7 @@ export const POST = handle(async (req: Request) => {
       });
       // Yields to other requests while it works, and stops at a time budget.
       const preferredMs = departAt ? new Date(departAt).getTime() - (origin ? nearestLegMs(durations) : 0) : undefined;
-      const result = await optimizeScheduleAsync(
-        {
+      const scheduleInput = {
           durations,
           stops,
           plannedDate: date,
@@ -63,9 +65,8 @@ export const POST = handle(async (req: Request) => {
           preferredDeparture: preferredMs !== undefined ? new Date(preferredMs) : undefined,
           focus,
           fixedDeparture: fixDeparture,
-        },
-        { budgetMs: optimizeBudgetMs() },
-      );
+        };
+      const result = await optimizeScheduleAsync(scheduleInput, { budgetMs: optimizeBudgetMs() });
       // A kept start time stays as saved; a new one is floored to the minute, as the Start time field shows it (sunrise has seconds).
       // With an origin the search kept the preferred departure (saved start minus the nearest drive), which is not the saved start itself,
       // and the first leg it chose may differ from the nearest one: compare against the preferred departure and keep the saved start as is.
@@ -78,6 +79,24 @@ export const POST = handle(async (req: Request) => {
       if (origin && firstLeg !== undefined && !Number.isFinite(firstLeg)) return null;
       if (origin && result.timed && firstLeg !== undefined && !keptSaved) {
         departMs = Math.floor((result.departAt.getTime() + firstLeg * 1000) / 60_000) * 60_000;
+      }
+      // Flooring to the minute can turn a met light window into a (sub-minute) miss. Compare the exact, unrounded misses: the whole-minute
+      // start (floor, else the next minute) that adds no missed time to any stop; if both add some, the one that adds less.
+      // What the client then shows as met or missed uses the same half-minute tolerance (isLightMiss), so the two agree.
+      if (result.timed && !keptSaved) {
+        const lead = origin && firstLeg !== undefined ? firstLeg * 1000 : 0;
+        const baseMiss = new Map(result.misses.map((m) => [m.stopIndex, m.minutes]));
+        // Missed minutes this start adds beyond what the searched (unrounded) start already missed, stop by stop.
+        const added = (ms: number) =>
+          scheduleMisses(scheduleInput, result.order, new Date(ms - lead)).reduce((sum, m) => sum + Math.max(0, m.minutes - (baseMiss.get(m.stopIndex) ?? 0)), 0);
+        if (departMs % 60_000 === 0 && departMs !== result.departAt.getTime() + lead) {
+          const floorAdds = added(departMs);
+          if (floorAdds > ADDED_EPS) {
+            const later = departMs + 60_000;
+            const laterAdds = added(later);
+            if (laterAdds <= ADDED_EPS || laterAdds < floorAdds) departMs = later;
+          }
+        }
       }
       const reindex = <T extends { stopIndex: number }>(rows: T[]) =>
         rows.flatMap((m) => {

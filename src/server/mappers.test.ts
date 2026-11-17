@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Stop as StopRow } from "@/generated/prisma/client";
-import { parseShotChecklist, toStopDto } from "./mappers";
+import { parseShotChecklist, toPublicTripDto, toStopDto } from "./mappers";
 
 const row: StopRow = {
   id: "s1", tripId: "t1", order: 0, name: "A", lat: 1, lng: 2, notes: null, source: "manual", photoUrl: null,
@@ -38,5 +38,14 @@ describe("stored text written before the bidi rule", () => {
   it("is cleaned on the way out (notes, shot notes and checklist items), keeping newlines", () => {
     const dto = toStopDto({ ...row, notes: "a\u202Eb\u2028c\nd", shotNotes: "x\u2066y\u2029z", shotChecklist: JSON.stringify([{ text: "t\u202Eu", done: false }]) });
     expect(dto).toMatchObject({ notes: "abc\nd", shotNotes: "xyz", shotChecklist: [{ text: "tu", done: false }] });
+  });
+});
+
+describe("enum-like stored fields", () => {
+  it("fall back to the defaults when the stored value is outside the enum (private and public mappers)", () => {
+    const bad = { ...row, lightPref: "twilight", priority: "urgent", source: "import" };
+    expect(toStopDto(bad)).toMatchObject({ lightPref: "any", priority: "normal", source: "manual" });
+    const trip = { id: "t", userId: "u", name: "T", plannedDate: new Date("2026-07-01T00:00:00Z"), departAt: null, shareToken: "x", routeOptimizedFor: null, createdAt: new Date(), updatedAt: new Date(), stops: [bad] };
+    expect(toPublicTripDto(trip as never).stops[0]).toMatchObject({ lightPref: "any", priority: "normal", source: "manual" });
   });
 });

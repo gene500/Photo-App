@@ -81,7 +81,7 @@ export function defaultLightPref(kind: SuggestionKind, setting: SuggestionLightP
 }
 
 const LIGHT_LABEL: Record<LightPref, string> = { any: "Any", sunrise: "Sunrise", golden: "Golden hour", sunset: "Sunset" };
-export const lightLabel = (pref: LightPref) => LIGHT_LABEL[pref];
+export const lightLabel = (pref: LightPref) => LIGHT_LABEL[pref] ?? LIGHT_LABEL.any;
 
 /** "6:12–7:05 PM": the AM/PM suffix is shown once when both ends share it. */
 function clockRange(a: Date, b: Date, timeZone?: string, timeFormat: TimeFormat = "auto"): string {
@@ -91,6 +91,13 @@ function clockRange(a: Date, b: Date, timeZone?: string, timeFormat: TimeFormat 
   const suffix = (s: string) => s.slice(-2);
   return suffix(from) === suffix(to) ? `${from.slice(0, -3)}–${to}` : `${from}–${to}`;
 }
+
+/**
+ * What counts as a missed light window, on both sides: the optimizer reports a miss in whole minutes (Math.round) and drops
+ * the ones that round to 0, and the row hint must agree, or a stop the optimizer called met would read "Misses ... by 1 min".
+ * So a miss under half a minute (30 s) is met.
+ */
+export const isLightMiss = (minutes: number) => Math.round(minutes) > 0;
 
 export type LightHint = { text: string; met: boolean };
 
@@ -116,10 +123,12 @@ export function describeLightHint(
   ];
   const label = lightLabel(stop.lightPref);
   const miss = windowMissMinutes(arrival, stop.dwellMinutes, windows);
-  if (miss > 0) return { text: `Misses ${label.toLowerCase()} by ${formatMinutes(Math.round(miss))}`, met: false };
-  const hit =
-    windows.find(([s, e]) => arrival.getTime() + stop.dwellMinutes * MS_MIN >= s.getTime() && arrival.getTime() <= e.getTime()) ??
-    own[0]!;
+  if (isLightMiss(miss)) return { text: `Misses ${label.toLowerCase()} by ${formatMinutes(Math.round(miss))}`, met: false };
+  // The window the stay overlaps, or (a miss under the 30 s tolerance counts as met) the nearest one, never just the day's first.
+  const from = arrival.getTime();
+  const to = from + stop.dwellMinutes * MS_MIN;
+  const gap = ([s, e]: LightWindow) => Math.max(s.getTime() - to, from - e.getTime(), 0);
+  const hit = windows.reduce((best, w) => (gap(w) < gap(best) ? w : best), windows[0]!);
   return {
     text: `${label} ${clockRange(hit[0], hit[1], timeZone, timeFormat)} · arrive ${formatClock(arrival, timeZone, timeFormat)}`,
     met: true,

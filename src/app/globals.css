@@ -319,3 +319,16 @@ body {
   }
   body { background: #fff !important; color: #000 !important; }
 }
+
+/* Windows high contrast (forced colors): rings and shadows are removed, so give bordered surfaces a real border and the
+   selected tab the system highlight colours. */
+@media (forced-colors: active) {
+  .ring-1 { border: 1px solid CanvasText; }
+  [role="tab"][aria-selected="true"] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+}
+
+/* Browsers without :has() (Firefox 101-120, Safari before 15.4) cannot apply layout.tsx's has-[main[data-fill]]:h-dvh, so give the editor's
+   main the old definite height (viewport minus the 3.25rem header minimum). Only there, a header that wraps taller can make the page scroll. */
+@supports not selector(:has(*)) {
+  main[data-fill] { height: calc(100dvh - 3.25rem); }
+}

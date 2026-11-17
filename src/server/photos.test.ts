@@ -34,6 +34,13 @@ describe("photos", () => {
     expect(validatePhoto({ type: "", size: 12 }, new TextEncoder().encode("hello world!"))).toMatchObject({ ok: false, error: "Photo must be a JPEG, PNG, or WebP image" });
   });
 
+  it("reads the bytes when the browser reports application/octet-stream: an image passes, anything else is still refused", () => {
+    expect(validatePhoto({ type: "application/octet-stream", size: PNG_BYTES.length }, PNG_BYTES)).toEqual({ ok: true, type: "image/png", bytes: PNG_BYTES });
+    expect(validatePhoto({ type: "application/octet-stream", size: 12 }, new TextEncoder().encode("hello world!"))).toMatchObject({ ok: false, error: "Photo must be a JPEG, PNG, or WebP image" });
+    // A declared image type is still not trusted on its own.
+    expect(validatePhoto({ type: "image/jpeg", size: PNG_BYTES.length }, PNG_BYTES)).toMatchObject({ ok: false });
+  });
+
   it("saves, reads back, and deletes a photo", async () => {
     const url = await savePhoto(PNG_BYTES, "image/png");
     expect(url.startsWith(PHOTO_URL_PREFIX)).toBe(true);

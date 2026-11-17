@@ -24,3 +24,10 @@ export const MAX_SHOT_NOTES = 2000;
 
 /** Most places whose weather one batch request may ask for. */
 export const WEATHER_BATCH_MAX = 10;
+
+/** Coast to coast with detours is ~6,000 km; a longer route is not a real driving route (and would read most of the map data), so the suggestions search refuses it. */
+export const MAX_SUGGESTIONS_ROUTE_KM = 6_000;
+
+/** Fewest characters a place search (geocode, locate) accepts; the server counts code points (an emoji is one), so the browser must too. */
+export const MIN_SEARCH_CHARS = 2;
+export const longEnoughToSearch = (text: string) => [...text.trim()].length >= MIN_SEARCH_CHARS;

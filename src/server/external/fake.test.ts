@@ -97,4 +97,14 @@ describe("fakeHike", () => {
     expect(fakeHike(36.2, -120.5)).toBeNull();
     expect(fakeHike(37, -118.2)).toBeNull();
   });
+
+
+  it("keeps suggestion coordinates in range for a stop at the pole or the antimeridian", () => {
+    for (const [lng, lat] of [[180, 90], [-180, -90], [180, -90], [-180, 90]] as [number, number][]) {
+      for (const x of fakeSuggestions([[lng, lat], [lng, lat]])) {
+        expect(Math.abs(x.lat)).toBeLessThanOrEqual(90);
+        expect(Math.abs(x.lng)).toBeLessThanOrEqual(180);
+      }
+    }
+  });
 });

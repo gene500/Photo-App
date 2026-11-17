@@ -257,6 +257,17 @@ describe("TripEditor announcements and notes", () => {
     await waitFor(() => expect(screen.getByTestId("announcer").textContent).toBe("Deleted B. 2 stops left in your trip."));
   });
 
+  it("counts the stops left from the server when the stop was already deleted elsewhere (404)", async () => {
+    vi.mocked(api.deleteStop).mockRejectedValue(Object.assign(new Error("Stop not found"), { status: 404 }));
+    // Another tab also deleted C: the server has only A left, though this tab still shows three.
+    vi.mocked(api.getTrip).mockResolvedValue({ trip: withStops(mk(["a"])) });
+    render(<TripEditor initialTrip={withStops(mk(["a", "b", "c"]))} />);
+    await openStops();
+    await userEvent.click(screen.getByRole("button", { name: "Delete B" }));
+    await userEvent.click(within(screen.getByRole("alertdialog", { name: "Delete stop?" })).getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(screen.getByTestId("announcer").textContent).toBe("Deleted B. 1 stop left in your trip."));
+  });
+
   it("clears 'Route optimized. Undo is available.' once Undo is retired", async () => {
     const three = mk(["a", "b", "c"]);
     vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 2, 1] });

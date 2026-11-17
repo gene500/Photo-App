@@ -14,7 +14,7 @@ import { useSettings } from "./SettingsProvider";
 
 function Section({ title, children, id }: { title: string; children: ReactNode; id?: string }) {
   return (
-    <section id={id} className={`scroll-mt-4 space-y-5 p-5 ${card}`}>
+    <section id={id} className={`scroll-mt-4 space-y-5 p-3 min-[360px]:p-5 ${card}`}>
       <h2 className="text-base font-semibold">{title}</h2>
       {children}
     </section>
@@ -39,7 +39,7 @@ function Segmented<K extends keyof Settings>({ legend, hint, name, value, option
         {options.map((o) => (
           <label key={o.value} className="relative min-w-0 flex-1">
             <input type="radio" name={name} value={o.value} checked={value === o.value} onChange={() => onChange(o.value)} className="peer absolute inset-0 m-0 h-full w-full cursor-pointer opacity-0" />
-            <span className="flex min-h-9 touch:min-h-11 cursor-pointer items-center justify-center rounded-lg px-3 py-1.5 text-center text-sm text-muted transition hover:text-foreground peer-checked:bg-surface peer-checked:font-medium peer-checked:text-foreground peer-checked:shadow-sm peer-focus-visible:outline-2 peer-focus-visible:outline-accent-strong">
+            <span className="flex min-h-9 touch:min-h-11 cursor-pointer items-center justify-center rounded-lg px-3 [overflow-wrap:anywhere] py-1.5 text-center text-sm text-muted transition hover:text-foreground peer-checked:bg-surface peer-checked:font-medium peer-checked:text-foreground peer-checked:shadow-sm peer-focus-visible:outline-2 peer-focus-visible:outline-accent-strong">
               {o.label}
             </span>
           </label>
@@ -81,7 +81,7 @@ export function SettingsView({ email, hasPassword = true }: { email: string | nu
     <>
     <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:ring-2 focus:ring-accent-strong">Skip to content</a>
     <main id="main-content" tabIndex={-1} className="mx-auto max-w-2xl space-y-5 px-4 py-8 outline-none">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <h1 className="text-2xl font-semibold">Settings</h1>
         <Link href="/trips" onClick={goBack} className="inline-flex min-h-9 touch:min-h-11 items-center rounded-lg px-2 text-sm text-muted hover:bg-hover hover:text-foreground">‹ Back</Link>
       </div>

@@ -33,6 +33,20 @@ describe("SearchBar", () => {
     expect((input() as HTMLInputElement).value).toBe("");
   });
 
+  it("sends no request for a single character, however many UTF-16 units it takes (the server counts code points and would answer 400)", async () => {
+    vi.mocked(api.geocode).mockResolvedValue({ suggestions: [fresno] });
+    render(<SearchBar getProximity={() => null} onSelect={vi.fn()} />);
+    for (const one of ["\u6771", "\u00e9", "\u{1F600}"]) {
+      await userEvent.clear(input());
+      await userEvent.type(input(), one);
+      await new Promise((r) => setTimeout(r, 400)); // past the debounce
+    }
+    expect(api.geocode).not.toHaveBeenCalled();
+    await userEvent.clear(input());
+    await userEvent.type(input(), "\u6771\u4eac");
+    await vi.waitFor(() => expect(api.geocode).toHaveBeenCalledTimes(1));
+  });
+
   it("shows the subtitle and retrieves coordinates with the search session when a landmark is picked", async () => {
     vi.mocked(api.geocode).mockResolvedValue({ suggestions: [bend] });
     vi.mocked(api.retrievePlace).mockResolvedValue({ place: { name: "Horseshoe Bend, Page, Arizona", lat: 36.88, lng: -111.51 } });

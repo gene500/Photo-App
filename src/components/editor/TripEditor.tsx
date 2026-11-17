@@ -10,7 +10,7 @@ import { useSettings } from "@/components/settings/SettingsProvider";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { btnGhost } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
-import { downsampleRoute } from "@/lib/downsample";
+import { downsampleRoute, routeTooLongForSuggestions } from "@/lib/downsample";
 import { adoptPrewarm, PREWARM_DELAY_MS, startPrewarm, type Prewarm } from "@/lib/suggestion-prewarm";
 import { loadSuggestions, removeSuggestions, saveSuggestions } from "@/lib/suggestions-store";
 import { prefetchPlacePhotos } from "@/lib/place-photo-cache";
@@ -32,7 +32,7 @@ import { formatDistance, formatDuration } from "@/lib/format";
 import { coordsLabel, haversineMeters } from "@/lib/geo";
 import { getSkyInfo } from "@/lib/sky";
 import type { LightPref, LngLat, Place, RouteResult, Stop, StopSource, Suggestion, Trip, TripWithStops } from "@/lib/types";
-import { MAX_ROUTE_WAYPOINTS, MAX_STOP_NAME } from "@/lib/limits";
+import { MAX_ROUTE_WAYPOINTS, MAX_STOP_NAME, MAX_SUGGESTIONS_ROUTE_KM, longEnoughToSearch } from "@/lib/limits";
 import type { StopPatch, TripPatch } from "@/lib/validation";
 import { MapView } from "./MapView";
 import { focusLost } from "@/lib/focus";
@@ -62,6 +62,7 @@ type LatLng = { lat: number; lng: number };
 type Pending = LatLng & { name: string; source: StopSource; osmId?: string; lightPref?: LightPref; resolving: boolean };
 
 const NO_SUGGESTIONS: Suggestion[] = [];
+const TRIP_GONE_MESSAGE = "Trip not found";
 const errorMessage = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 /** How long the browser may take over the location prompt before Optimize says it is waiting. */
@@ -159,8 +160,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     try {
       const { trip: server } = await api.getTrip(trip.id);
       if (!adopt(server, epoch)) markStale(); // a write overlapped: ask again when it is done
-    } catch {
-      /* offline, or the trip is gone: the earlier error message stands */
+    } catch (e) {
+      // Offline: the earlier error message stands. The trip was deleted in another tab: say so instead of leaving a stale view.
+      if ((e as { status?: unknown }).status === 404) setStopsError(TRIP_GONE_MESSAGE);
     }
   }
   useEffect(() => {
@@ -234,7 +236,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     previousOptimizedFor: string | null;
   } | null>(null);
   // The start-time move is kept as an instant and written out at render, so it follows the time-format setting.
-  const [optimizeNote, setOptimizeNote] = useState<{ moveAt: string | null; notes: (string | null)[]; idsKey: string } | null>(null);
+  const [optimizeNote, setOptimizeNote] = useState<{ moveAt: string | null; notes: (string | null)[]; idsKey: string; planKey: string } | null>(null);
   // Alternatives found for one stop, tagged with the stop and the waypoints they were found for (stale ones are not shown).
   const [alternativesState, setAlternativesState] = useState<{ stopId: string; key: string; items: Suggestion[]; status: SuggestionsStatus; error: string | null } | null>(null);
   const alternativesSeq = useRef(0);
@@ -256,6 +258,14 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   // A closed or finished place/stop card takes its focused button with it; the search box (always there) gets keyboard focus instead.
   const searchRef = useRef<HTMLInputElement>(null);
   const focusSearch = () => searchRef.current?.focus();
+  // The marker that opened the stop card: Escape or Close hands focus back to it (the search box if it is gone).
+  const markerOpenerRef = useRef<HTMLElement | null>(null);
+  const focusMarkerOrSearch = useCallback(() => {
+    const el = markerOpenerRef.current;
+    markerOpenerRef.current = null;
+    if (el && el.isConnected && el !== document.body) el.focus();
+    else searchRef.current?.focus();
+  }, []);
   const lookupSeq = useRef(0);
   const refocusAfterAddRef = useRef(false);
   const pendingRef = useRef<Pending | null>(null);
@@ -293,6 +303,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const autoRunRef = useRef<(() => Promise<void>) | null>(null);
   /** The start-time save in flight, if any: Optimize waits for it so it plans from the time just typed. It resolves to the saved departAt (undefined if the save failed). */
   const startSaveRef = useRef<Promise<string | null | undefined> | null>(null);
+  // The start-time control's whole save chain (first save plus any newer pick saved after it) and the outcome of the newest save.
+  const startChainRef = useRef<Promise<void> | null>(null);
+  const startSavedRef = useRef<string | null | undefined>(undefined);
   /** Set from the Optimize click until the run ends, so a second click (while waiting for the start-time save) is ignored. */
   const optimizeClickRef = useRef(false);
   const [optimizeWaiting, setOptimizeWaiting] = useState(false);
@@ -330,7 +343,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }, []);
   useEffect(() => {
     const name = trip.name.trim();
-    if (!noStops || name.length < 2 || nameLocatedRef.current === name) return;
+    if (!noStops || !longEnoughToSearch(name) || nameLocatedRef.current === name) return;
     let live = true;
     const timer = setTimeout(() => {
       nameLocatedRef.current = name;
@@ -360,6 +373,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }, [idsKey]);
   // What the optimizer reads besides positions (including the trip date and which stops are visited): a change to it mid-flight makes the result stale.
   const prefsKey = JSON.stringify([trip.plannedDate, stops.map((s) => [s.lightPref, s.priority, s.dwellMinutes, s.visited])]);
+  // What an optimize note was written for: the date and each stop's light, priority and dwell, whatever the order. Editing any of them
+  // makes the note stale (it would describe a plan that no longer applies), the same fields that un-optimize the route.
+  const planKey = JSON.stringify([trip.plannedDate, stops.map((s) => [s.id, s.lightPref, s.priority, s.dwellMinutes]).sort((a, b) => (a[0] < b[0] ? -1 : 1))]);
   const prefsKeyRef = useRef(prefsKey);
   useEffect(() => {
     prefsKeyRef.current = prefsKey;
@@ -518,6 +534,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const askedKeyRef = useRef<string | null>(null); // the route "Find" last searched, so a pending prewarm does not repeat it
   useEffect(() => {
     if (!activeRoute) return;
+    // The server refuses a route this long (400): no quiet search for it, and Find says so.
+    if (routeTooLongForSuggestions(activeRoute.geometry)) return;
     // A list restored after a reload is already on screen: no quiet place search behind it (Find searches afresh if asked).
     const shown = suggestionsStateRef.current;
     if (shown?.restored && shown.key === waypointKey) return;
@@ -737,6 +755,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     const startKey = idsKey;
     const startWaypoints = waypointKey;
     const startPrefs = prefsKey;
+    const startPlan = planKey;
     const before = stops;
     const previousDepartAt = opts ? opts.departAt : trip.departAt;
     const previousOptimizedFor = trip.routeOptimizedFor ?? null;
@@ -755,7 +774,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const planFrom = anchorArrival ? anchorArrival.toISOString() : (previousDepartAt ?? departAt);
       if (done >= before.length) {
         if (quiet) return;
-        setOptimizeNote({ moveAt: null, notes: ["Every stop is already visited, so there is nothing left to reorder"], idsKey: startKey });
+        setOptimizeNote({ moveAt: null, notes: ["Every stop is already visited, so there is nothing left to reorder"], idsKey: startKey, planKey: startPlan });
         return;
       }
       // Two stops have nothing to reorder, so without a light preference to plan the start time around Optimize only records the state.
@@ -839,7 +858,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         const usesLight = tail.some((s) => s.lightPref !== "any") || result.departAt != null;
         // Two stops have no other order to compare, so there is no verdict to give, only the light notes.
         const verdict = tail.length < 3 ? null : isExactOptimization(tail.length + (origin ? 1 : 0), usesLight) && result.complete !== false ? "Already the fastest order" : "No faster order found";
-        if (!quiet && (verdict || notes.some(Boolean))) setOptimizeNote({ moveAt: null, notes: [verdict, ...notes], idsKey: startKey });
+        if (!quiet && (verdict || notes.some(Boolean))) setOptimizeNote({ moveAt: null, notes: [verdict, ...notes], idsKey: startKey, planKey: startPlan });
         return;
       }
       const previousIds = before.map((s) => s.id);
@@ -867,7 +886,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       // A note is read out by the notice's own live region; announcing here as well would say it twice.
       setAnnouncement(!quiet && (moveAt || notes.some(Boolean)) ? "" : OPTIMIZED_ANNOUNCEMENT);
       // A quiet (automatic) run shows no note: the order just updates.
-      if (!quiet && (moveAt || notes.some(Boolean))) setOptimizeNote({ moveAt, notes, idsKey: ids.join(",") });
+      if (!quiet && (moveAt || notes.some(Boolean))) setOptimizeNote({ moveAt, notes, idsKey: ids.join(","), planKey: startPlan });
     } catch (e) {
       if (!quiet) setStopsError(errorMessage(e, "Couldn't optimize the route"));
     } finally {
@@ -989,9 +1008,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         const { trip: updated } = await api.updateTrip(trip.id, { departAt });
         setTrip(updated);
         setStopsError(null); // an earlier failed attempt's message is stale now
+        startSavedRef.current = updated.departAt;
         return updated.departAt;
       } catch (e) {
         const text = errorMessage(e, "Couldn't save the start time");
+        startSavedRef.current = undefined;
         setStopsError(/planned day/.test(text) ? `${text}. That clock time falls on a neighbouring day at the first stop (this can happen on a daylight-saving change day); pick a time a little later or earlier.` : text);
         return undefined;
       }
@@ -1014,8 +1035,12 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     autoQueuedRef.current = false;
     try {
       if (autoPromiseRef.current) await autoPromiseRef.current;
-      const pending = startSaveRef.current;
-      const saved = pending ? await pending : undefined;
+      // Wait for the whole chain: a minute picked while the hour's save was in flight is saved after it, and Optimize must plan from that newest time.
+      let saved: string | null | undefined;
+      while (startChainRef.current || startSaveRef.current) {
+        await (startChainRef.current ?? startSaveRef.current);
+        saved = startSavedRef.current;
+      }
       await optimizeRef.current?.(saved === undefined ? undefined : { departAt: saved });
     } finally {
       optimizeClickRef.current = false;
@@ -1139,13 +1164,29 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     deletingStopsRef.current.add(id);
     await tracked(async () => {
       try {
+        // The count announced afterwards: this tab's list minus the stop, unless the stop was already gone. Read when this delete
+        // lands and written back at once (the effect that syncs the ref runs only after a render), so overlapping deletes count down.
+        let left = 0;
         try {
           await api.deleteStop(id);
+          left = Math.max(stopCountRef.current - 1, 0);
+          stopCountRef.current = left;
         } catch (e) {
           // Already deleted elsewhere (another tab, or a repeated request): the stop is gone, which is what was asked for.
           if ((e as { status?: unknown }).status !== 404) throw e;
+          // This tab's list is behind, so count what the server really has (and refresh this tab once the write is done).
+          markStale();
+          left = Math.max(stopCountRef.current - 1, 0);
+          try {
+            left = (await api.getTrip(trip.id)).trip.stops.filter((s) => s.id !== id).length;
+          } catch (e2) {
+            // The whole trip was deleted in another tab: say so rather than announcing an empty trip. Offline: the local count stands.
+            if ((e2 as { status?: unknown }).status === 404) {
+              setStopsError(TRIP_GONE_MESSAGE);
+              return;
+            }
+          }
         }
-        const left = Math.max(stopCountRef.current - 1, 0);
         setStops((prev) => prev.filter((s) => s.id !== id).map((s, order) => ({ ...s, order })));
         setStopsError(null);
         setAnnouncement(`Deleted ${name}. ${left} ${left === 1 ? "stop" : "stops"} left in your trip.`);
@@ -1176,6 +1217,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }
 
   function clickMarker(id: string) {
+    const active = document.activeElement;
+    markerOpenerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
     lookupSeq.current++;
     setPending(null);
     setCardId(id);
@@ -1205,6 +1248,10 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     }
     if (!activeRoute) return;
     const key = waypointKey;
+    if (routeTooLongForSuggestions(activeRoute.geometry)) {
+      setSuggestionsState({ key, items: [], status: "error", error: `This route is too long to search for photo spots (over ${MAX_SUGGESTIONS_ROUTE_KM.toLocaleString("en-US")} km).` });
+      return;
+    }
     const kept = keptForRetry(key);
     setSuggestionsState({ key, items: [], status: "loading", error: null });
     askedKeyRef.current = key;
@@ -1331,7 +1378,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const moveText = optimizeNote?.moveAt && sameInstant(trip.departAt, optimizeNote.moveAt)
     ? `Start time moved to ${formatClock(new Date(optimizeNote.moveAt), undefined, settings.timeFormat)} so stops land in good light`
     : null;
-  const noteParts = optimizeNote?.idsKey === idsKey ? [moveText, ...optimizeNote.notes].filter((t): t is string => !!t) : [];
+  const noteParts = optimizeNote?.idsKey === idsKey && optimizeNote.planKey === planKey ? [moveText, ...optimizeNote.notes].filter((t): t is string => !!t) : [];
   const optimizeParts = waitingForLocation ? ["Waiting for your location"] : noteParts;
   const optimizeStatus = joinNotes(optimizeParts);
 
@@ -1355,13 +1402,17 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       if (t?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [aria-modal="true"], [role="combobox"], section[aria-label="Selected place"], section[aria-label="Selected stop"]')) return;
       if (document.querySelector('[role="dialog"], [aria-modal="true"], button[aria-expanded="true"]')) return;
       lookupSeq.current++;
-      if (pending) setPending(null);
-      else setCardId(null);
-      focusSearch();
+      if (pending) {
+        setPending(null);
+        focusSearch();
+      } else {
+        setCardId(null);
+        focusMarkerOrSearch();
+      }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [cardOpen, drawerOpen, pending]);
+  }, [cardOpen, drawerOpen, pending, focusMarkerOrSearch]);
   // Memoised: the real map redraws its sky lines whenever this object's identity changes.
   // The open drawer's stop wins over the map card's, so a stop opened from the list gets its lines too.
   const skyStop = drawerStop ?? cardStop;
@@ -1393,7 +1444,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const mapHikes = useMemo(() => Array.from(hikeByStop, ([id, h]) => ({ id, geometry: h.geometry })), [hikeByStop]);
 
   return (
-    <main id="main-content" tabIndex={-1} className="relative h-[calc(100dvh-3rem)] overflow-hidden outline-none">
+    <main id="main-content" data-fill tabIndex={-1} className="relative min-h-0 flex-1 overflow-hidden outline-none">
       {dialog}
       <p role="status" data-testid="announcer" className="sr-only">{announcement}</p>
       <MapView
@@ -1446,7 +1497,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
               arrival={arrivals[cardIndex] ?? null}
               onToggleVisited={(visited) => void toggleVisited(cardStop.id, visited)}
               onOpenDetails={() => void openDrawer(cardStop.id)}
-              onClose={() => { setCardId(null); focusSearch(); }}
+              onClose={() => { setCardId(null); focusMarkerOrSearch(); }}
             />
           </div>
         )}
@@ -1497,7 +1548,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         }
         trip={
           <TripPlan
-            startTime={<StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} defaultDepartAt={defaultDepartAt} lng={stops[0]?.lng} disabled={optimizing} draft={startDraft} onDraftChange={setStartDraft} onChange={(iso) => saveStartTime(iso)} onReset={() => void resetDeparture()} />}
+            startTime={<StartTimeControl plannedDate={trip.plannedDate} departAt={trip.departAt} defaultDepartAt={defaultDepartAt} lng={stops[0]?.lng} disabled={optimizing} hour24={settings.timeFormat === "24h"} draft={startDraft} onDraftChange={setStartDraft} commitRef={startChainRef} onChange={(iso) => saveStartTime(iso)} onReset={() => void resetDeparture()} />}
             optimize={{
               onOptimize: () => void optimizeAfterStartSave(),
               onUndo: canUndo && undo ? () => void undoOptimize() : null,

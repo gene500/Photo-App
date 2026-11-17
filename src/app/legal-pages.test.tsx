@@ -29,9 +29,9 @@ describe("legal pages", () => {
     ]) expect(html).toContain(text);
   });
 
-  it("legal pages are dated November 10, 2026", () => {
-    expect(renderToStaticMarkup(<PrivacyPage />)).toContain("Last updated November 10, 2026");
-    expect(renderToStaticMarkup(<TermsPage />)).toContain("Last updated November 10, 2026");
+  it("legal pages are dated November 17, 2026", () => {
+    expect(renderToStaticMarkup(<PrivacyPage />)).toContain("Last updated November 17, 2026");
+    expect(renderToStaticMarkup(<TermsPage />)).toContain("Last updated November 17, 2026");
   });
 
   it("renders the terms and links back to the privacy policy", () => {

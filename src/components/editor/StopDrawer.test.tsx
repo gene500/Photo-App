@@ -416,6 +416,16 @@ describe("StopDrawer sky card", () => {
     expect(screen.queryByText("Stop name is required")).toBeNull();
   });
 
+  it("puts the saved name back when the name field is left blank, and keeps the error visible", async () => {
+    render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    const name = screen.getByLabelText("Name") as HTMLInputElement;
+    await userEvent.clear(name);
+    await userEvent.type(name, "   ");
+    await userEvent.tab();
+    expect(name.value).toBe("Tunnel View");
+    expect(screen.getByText("Stop name is required")).toBeTruthy();
+  });
+
   it("reports unsaved edits to the page, and clears the report on close", async () => {
     const onDirtyChange = vi.fn();
     const { unmount } = render(<StopDrawer plannedDate="2026-07-01" stop={stop} onClose={vi.fn()} onSave={vi.fn()} onDirtyChange={onDirtyChange} onPhotoChange={vi.fn()} />);

@@ -35,10 +35,13 @@ export function fakeDurationMatrix(coords: LngLat[]): number[][] {
 export function fakeSuggestions(route: LngLat[]): Suggestion[] {
   const [lng, lat] = route[Math.floor(route.length / 2)];
   const r = (n: number) => Math.round(n * 1e6) / 1e6;
+  // A stop at the pole or the antimeridian must not push a suggestion out of range (the place-photo and weather APIs reject it).
+  const la = (n: number) => r(Math.min(90, Math.max(-90, n)));
+  const ln = (n: number) => r(Math.min(180, Math.max(-180, n)));
   return [
-    { osmId: "node/9000001", name: "Fake Viewpoint", lat: r(lat + 0.01), lng, kind: "viewpoint", popularity: 1234 },
-    { osmId: "node/9000002", name: "Fake Peak", lat, lng: r(lng + 0.01), kind: "peak", popularity: 87 },
-    { osmId: "node/9000003", name: "Fake Attraction", lat: r(lat - 0.01), lng, kind: "attraction", popularity: 2500 },
+    { osmId: "node/9000001", name: "Fake Viewpoint", lat: la(lat + 0.01), lng, kind: "viewpoint", popularity: 1234 },
+    { osmId: "node/9000002", name: "Fake Peak", lat, lng: ln(lng + 0.01), kind: "peak", popularity: 87 },
+    { osmId: "node/9000003", name: "Fake Attraction", lat: la(lat - 0.01), lng, kind: "attraction", popularity: 2500 },
   ];
 }
 

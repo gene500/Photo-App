@@ -9,10 +9,12 @@ export default async function TripsLayout({ children }: LayoutProps<"/trips">) {
   // Signed out: render only the page, which does its own check and redirects to /login with a return-to path (the layout
   // cannot see the URL). Every page under /trips must therefore check the session itself.
   if (!userId) return <>{children}</>;
+  // The editor page (its <main> carries data-fill) gets a definite viewport height so its flex-1 main and the map's percent height resolve and the page never scrolls,
+  // whatever height the header wraps to; other pages (the trips list) keep min-h-dvh and scroll normally.
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-dvh flex-col has-[main[data-fill]]:h-dvh">
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:ring-2 focus:ring-accent-strong">Skip to content</a>
-      <header className="flex min-h-12 items-center justify-between gap-2 bg-surface px-4 py-1 shadow-sm">
+      <header className="flex min-h-[3.25rem] items-center justify-between gap-2 bg-surface px-4 py-1 shadow-sm">
         <Link href="/trips" className="inline-flex min-h-11 min-w-0 items-center break-words text-sm font-semibold tracking-tight">Photo Op Planner</Link>
         <div className="flex shrink-0 items-center">
           <Link href="/settings" aria-label="Settings" title="Settings" className="inline-flex h-9 w-9 touch:h-11 touch:w-11 items-center justify-center rounded-lg text-muted transition hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent-strong">
@@ -26,7 +28,7 @@ export default async function TripsLayout({ children }: LayoutProps<"/trips">) {
       </header>
       <InAppNavMarker />
       <OfflineOwnerSync userId={userId} />
-      <div className="anim-fade flex-1">{children}</div>
+      <div className="anim-fade flex min-h-0 flex-1 flex-col">{children}</div>
     </div>
   );
 }

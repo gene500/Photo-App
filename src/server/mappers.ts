@@ -39,6 +39,10 @@ function toPriority(value: string): StopPriority {
   return value === "high" || value === "must" ? value : "normal";
 }
 
+/** Stored enum-like text is checked on the way out: a value written by an older or broken version degrades to the default instead of crashing a page. */
+const toLightPref = (value: string): LightPref => (value === "sunrise" || value === "golden" || value === "sunset" ? value : "any");
+const toSource = (value: string): StopSource => (value === "suggested" ? value : "manual");
+
 export function toStopDto(row: StopRow): Stop {
   return {
     id: row.id,
@@ -48,10 +52,10 @@ export function toStopDto(row: StopRow): Stop {
     lat: row.lat,
     lng: row.lng,
     notes: row.notes === null ? null : stripTextChars(row.notes),
-    source: row.source as StopSource,
+    source: toSource(row.source),
     photoUrl: row.photoUrl,
     visited: row.visited,
-    lightPref: row.lightPref as LightPref,
+    lightPref: toLightPref(row.lightPref),
     priority: toPriority(row.priority),
     dwellMinutes: row.dwellMinutes,
     shotNotes: row.shotNotes === null ? null : stripTextChars(row.shotNotes),
@@ -71,8 +75,8 @@ export function toPublicTripDto(row: TripRow & { stops: StopRow[] }): PublicTrip
       name: s.name,
       lat: s.lat,
       lng: s.lng,
-      source: s.source as StopSource,
-      lightPref: s.lightPref as LightPref,
+      source: toSource(s.source),
+      lightPref: toLightPref(s.lightPref),
       priority: toPriority(s.priority),
       dwellMinutes: s.dwellMinutes,
       visited: s.visited,

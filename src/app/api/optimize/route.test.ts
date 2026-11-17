@@ -92,3 +92,34 @@ describe("POST /api/optimize: Start from my location keeps the daylight check", 
     expect(body.departAt).toBe(departAt);
   });
 });
+
+describe("POST /api/optimize: rounded start keeps the light windows met", () => {
+  beforeEach(() => vi.mocked(getCurrentUserId).mockResolvedValue("u1"));
+  afterEach(() => vi.mocked(getDurationMatrix).mockReset());
+
+  it("re-posting the returned start with a fixed departure gives no new miss", async () => {
+    const coordinates = [[-120.5, 36.5], [-120.1, 36.9], [-119.6, 37.2], [-120.1, 36.91]];
+    const km = (a: number[], b: number[]) => Math.hypot((a[0]! - b[0]!) * 89, (a[1]! - b[1]!) * 111);
+    const post = (extra: object) =>
+      POST(
+        new Request("http://localhost/api/optimize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Origin: "http://localhost" },
+          body: JSON.stringify({
+            coordinates,
+            plannedDate: "2026-12-01",
+            stops: coordinates.map((_, i) => ({ lightPref: i === 3 ? "golden" : "any", priority: "normal", dwellMinutes: 30 })),
+            ...extra,
+          }),
+        }),
+      );
+    const total = (r: { misses: { minutes: number }[] }) => r.misses.reduce((s, m) => s + m.minutes, 0);
+    // Several speeds, so the searched start lands on all kinds of seconds.
+    for (let kmh = 37; kmh <= 113; kmh += 4) {
+      vi.mocked(getDurationMatrix).mockResolvedValue(coordinates.map((a) => coordinates.map((b) => Math.round((km(a, b) / kmh) * 3600) + 7)));
+      const first = await (await post({})).json();
+      const again = await (await post({ departAt: first.departAt, fixDeparture: true })).json();
+      expect(total(again), `${kmh} km/h`).toBeLessThanOrEqual(total(first));
+    }
+  });
+});

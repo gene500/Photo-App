@@ -16,7 +16,7 @@ export const HIKE_CACHE_MAX = 500;
 type Deps = { fetchImpl?: typeof fetch; now?: () => number };
 
 /** A lot this close to the place is not a drive-then-walk: the walk is kept but the car goes to the place itself. */
-export const ACCESS_MIN_M = 150;
+const ACCESS_MIN_M = 150;
 /** A parking lot or trailhead marker more than this far away by trail is not "the" start: trailhead markers are tried after lots, and with neither in range the walk starts at a trail dead end with no drive target. */
 export const LOT_MAX_WALK_M = 5000;
 

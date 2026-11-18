@@ -5,6 +5,7 @@ import { inYearRange, type TripCreateInput, type TripPatch } from "@/lib/validat
 import { prisma } from "./db";
 import { HttpError } from "./http-error";
 import { toStopDto, toTripDto } from "./mappers";
+import { hasPrismaCode, photoUrlsOf } from "./prisma-helpers";
 
 const HOUR_MS = 3_600_000;
 
@@ -79,7 +80,7 @@ export async function createTrip(userId: string, input: TripCreateInput): Promis
     });
   } catch (e) {
     // The account was deleted after the session check passed (foreign key violation): signed out, not a server error.
-    if ((e as { code?: unknown } | null)?.code === "P2003") throw new HttpError(401, "Not signed in");
+    if (hasPrismaCode(e, "P2003")) throw new HttpError(401, "Not signed in");
     throw e;
   }
   return toTripDto(row);
@@ -181,6 +182,6 @@ export async function deleteTrip(
   });
   if (!row) return null;
   return {
-    photoUrls: row.stops.map((s) => s.photoUrl).filter((u): u is string => u !== null),
+    photoUrls: photoUrlsOf(row.stops),
   };
 }

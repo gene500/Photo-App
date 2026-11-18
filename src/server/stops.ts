@@ -4,6 +4,7 @@ import type { NewStopInput, StopPatch } from "@/lib/validation";
 import { MAX_ROUTE_WAYPOINTS, MAX_SHOT_ITEMS } from "@/lib/validation";
 import { prisma } from "./db";
 import { parseShotChecklist, toStopDto } from "./mappers";
+import { hasPrismaCode } from "./prisma-helpers";
 
 export class InvalidReorderError extends Error {
   constructor() {
@@ -140,7 +141,7 @@ export async function updateStopCascade(
     });
   } catch (e) {
     // Deleted between the ownership check and the update (Prisma "record not found").
-    if (typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2025") return null;
+    if (hasPrismaCode(e, "P2025")) return null;
     throw e;
   }
 }
@@ -222,7 +223,7 @@ export async function reorderStops(
       return rows.map(toStopDto);
     }, { timeout: 20_000, maxWait: 5_000 }); // the default 5 s is too short for a trip with hundreds of stops on a remote database
   } catch (e) {
-    if (typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2025") throw new StopsChangedError();
+    if (hasPrismaCode(e, "P2025")) throw new StopsChangedError();
     throw e;
   }
 }

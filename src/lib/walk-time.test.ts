@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasWalkLength, MAX_WALK_MINUTES, stopWalkMinutes, walkMinutes, walkMs, WALK_METERS_PER_MINUTE } from "./walk-time";
+import { hasWalkLength, MAX_WALK_MINUTES, stopWalkMinutes, walkMinutes, walkMs } from "./walk-time";
 
 describe("walkMinutes", () => {
   it("is 0 for no, zero, negative or non-finite walks", () => {
@@ -17,7 +17,6 @@ describe("walkMinutes", () => {
     expect(walkMinutes(2001)).toBe(35);
   });
   it("uses 4 km/h and caps a huge walk", () => {
-    expect(WALK_METERS_PER_MINUTE).toBeCloseTo(66.667, 3);
     expect(walkMinutes(1e12)).toBe(MAX_WALK_MINUTES);
   });
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { describeBestTime, type BestTime } from "@/lib/best-time";
 import { describeLightHint } from "@/lib/light-windows";
 import { describeSunPosition } from "@/lib/sky";
@@ -28,13 +29,23 @@ type Props = {
   onSelect: (stopId: string) => void;
 };
 
+/** The device's current time zone. Rows are memoized and format clock text in this zone, so it is passed down as a prop: a zone change (travel, DST) then re-renders them. */
+function deviceZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export function TripPlanList({ stops, optimized, bestTimes, arrivals, onToggleVisited, onPriorityChange, onSelect }: Props) {
+  const zone = deviceZone();
   if (stops.length === 0) return <p className="text-sm text-muted">No stops yet.</p>;
   return (
     <ol aria-label="Trip plan">
       {stops.map((s, i) => (
         <TripRow key={s.id} stop={s} index={i} first={i === 0} last={i === stops.length - 1} optimized={optimized}
-          bestTime={bestTimes[i] ?? null} arrival={arrivals?.[i] ?? null}
+          bestTime={bestTimes[i] ?? null} arrival={arrivals?.[i] ?? null} zone={zone}
           role={stops.length > 1 ? (i === 0 ? "Start" : i === stops.length - 1 ? "End" : null) : null}
           onToggleVisited={onToggleVisited} onPriorityChange={onPriorityChange} onSelect={onSelect}
         />
@@ -114,7 +125,7 @@ function HikeLines({ stop }: { stop: Stop }) {
   );
 }
 
-function TripRow({ stop, index, first, last, optimized, bestTime, arrival, role, onToggleVisited, onPriorityChange, onSelect }: Pick<Props, "optimized" | "onToggleVisited" | "onPriorityChange" | "onSelect"> & { stop: Stop; index: number; first: boolean; last: boolean; bestTime: BestTime; arrival: Date | null; role: "Start" | "End" | null }) {
+const TripRow = memo(function TripRow({ stop, index, first, last, optimized, bestTime, arrival, role, onToggleVisited, onPriorityChange, onSelect }: Pick<Props, "optimized" | "onToggleVisited" | "onPriorityChange" | "onSelect"> & { stop: Stop; index: number; first: boolean; last: boolean; bestTime: BestTime; arrival: Date | null; role: "Start" | "End" | null; /** Not read: it only makes a zone change re-render the row. */ zone: string }) {
   // The timeline line runs through the dot centre (22px down) and stops at the first/last dot.
   const line = first && last ? "hidden" : first ? "top-[22px] bottom-0" : last ? "top-0 h-[22px]" : "inset-y-0";
   return (
@@ -162,4 +173,4 @@ function TripRow({ stop, index, first, last, optimized, bestTime, arrival, role,
       )}
     </li>
   );
-}
+});

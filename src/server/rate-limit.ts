@@ -105,8 +105,10 @@ function slot(name: PolicyName, key: string, now: number): Bucket {
 
 export type LimitResult = { ok: true } | { ok: false; retryAfter: number };
 
+const retryAfterSeconds = (b: Bucket, now: number): number => Math.max(1, Math.ceil((b.resetAt - now) / 1000));
+
 function result(name: PolicyName, b: Bucket, now: number): LimitResult {
-  return b.count <= POLICIES[name].limit ? { ok: true } : { ok: false, retryAfter: Math.max(1, Math.ceil((b.resetAt - now) / 1000)) };
+  return b.count <= POLICIES[name].limit ? { ok: true } : { ok: false, retryAfter: retryAfterSeconds(b, now) };
 }
 
 /** Counts one hit and reports whether it is still within the limit. */
@@ -124,7 +126,7 @@ export function isBlocked(name: PolicyName, key: string, now = Date.now()): Limi
   // Read-only: looking up a key must not create a bucket (an attacker submitting endless emails would fill the map).
   const b = mapFor(name).get(key);
   if (!b || b.resetAt <= now) return untrackable(name, key, now) ? fullMapResult(name) : { ok: true };
-  return b.count >= POLICIES[name].limit ? { ok: false, retryAfter: Math.max(1, Math.ceil((b.resetAt - now) / 1000)) } : { ok: true };
+  return b.count >= POLICIES[name].limit ? { ok: false, retryAfter: retryAfterSeconds(b, now) } : { ok: true };
 }
 
 /** Hits counted in the current window, without counting one. */

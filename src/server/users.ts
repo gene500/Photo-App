@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
+import { hasPrismaCode, photoUrlsOf } from "./prisma-helpers";
 import { TtlCache } from "./suggestions/cache";
 
 const BCRYPT_COST = 10;
@@ -16,10 +17,6 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-function isUniqueViolation(e: unknown): boolean {
-  return typeof e === "object" && e !== null && (e as { code?: unknown }).code === "P2002";
-}
-
 export async function createUser(
   email: string,
   password: string,
@@ -29,7 +26,7 @@ export async function createUser(
     const user = await prisma.user.create({ data: { email: normalizeEmail(email), passwordHash } });
     return { id: user.id, email: user.email };
   } catch (e) {
-    if (isUniqueViolation(e)) throw new DuplicateEmailError();
+    if (hasPrismaCode(e, "P2002")) throw new DuplicateEmailError();
     throw e;
   }
 }
@@ -76,7 +73,7 @@ export async function findOrCreateGoogleUser(sub: string, email: string): Promis
     const user = await prisma.user.create({ data: { email: normalized, passwordHash, passwordSet: false, googleSub: sub } });
     return { id: user.id, email: user.email };
   } catch (e) {
-    if (isUniqueViolation(e)) return EMAIL_IN_USE; // lost a race with a concurrent signup of the same email
+    if (hasPrismaCode(e, "P2002")) return EMAIL_IN_USE; // lost a race with a concurrent signup of the same email
     throw e;
   }
 }
@@ -89,7 +86,7 @@ export async function hasPassword(userId: string): Promise<boolean> {
 
 // Every signed-in request checks the session version, which is a database round trip. Remember the answer briefly per
 // server instance; revoking clears it on the instance that handled the revoke, and other instances see it within the TTL.
-export const SESSION_VERSION_TTL_MS = 15_000;
+const SESSION_VERSION_TTL_MS = 15_000;
 // Next bundles route handlers and pages as separate module instances, so the cache lives on globalThis: a revoke made
 // in a route handler must clear the entry the page-side check reads, or the old session stays valid for the whole TTL.
 const globalForVersions = globalThis as unknown as { __sessionVersions?: TtlCache<number | null> };
@@ -166,9 +163,9 @@ export async function deleteAccount(
     });
   } catch (e) {
     // A concurrent delete removed the user between the read and ours (Prisma P2025: record not found).
-    if ((e as { code?: string }).code === "P2025") return ACCOUNT_GONE;
+    if (hasPrismaCode(e, "P2025")) return ACCOUNT_GONE;
     throw e;
   }
   versions.delete(userId);
-  return { photoUrls: stops.map((s) => s.photoUrl).filter((u): u is string => u !== null) };
+  return { photoUrls: photoUrlsOf(stops) };
 }

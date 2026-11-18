@@ -125,12 +125,6 @@ const readCells: CellReader = defaultReader;
 /** Forgets the remembered cells (tests, and after a data re-import in a long-lived process). */
 export const clearCellCache = (): void => defaultReader.clear();
 
-const KIND_TAGS: Record<string, Record<string, string>> = {
-  viewpoint: { tourism: "viewpoint" },
-  peak: { natural: "peak" },
-  attraction: { tourism: "attraction" },
-};
-
 /** Rows shaped like Overpass elements, so the one parser (ranking, de-duplication, cap) serves both sources. */
 export function toElements(rows: PlaceRow[]): unknown[] {
   const out: unknown[] = [];
@@ -141,11 +135,7 @@ export function toElements(rows: PlaceRow[]): unknown[] {
     if (kind === "viewpoint") tags = r.name ? { tourism: "viewpoint", name: r.name } : { tourism: "viewpoint" };
     else if (kind === "peak") tags = r.name ? { natural: "peak", name: r.name } : { natural: "peak" };
     else if (kind === "attraction") tags = r.name ? { tourism: "attraction", name: r.name } : { tourism: "attraction" };
-    else {
-      const known = KIND_TAGS[kind];
-      if (!known) continue;
-      tags = r.name ? { ...known, name: r.name } : { ...known };
-    }
+    else continue;
     // "type/id[/...]": the first two parts, found with indexOf (split allocates an array per row)
     const id = r.id;
     const slash = id.indexOf("/");

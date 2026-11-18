@@ -103,6 +103,9 @@ function skyData(sky: MapViewProps["sky"], zoom: number): { lines: FeatureCollec
   return { lines: { type: "FeatureCollection", features }, labels: { type: "FeatureCollection", features: labels } };
 }
 
+/** The last background written to each stop marker element, so an unchanged colour is not rewritten. */
+const markerColors = new WeakMap<HTMLElement, string>();
+
 function markerElement(className: string, label: string, text = ""): HTMLButtonElement {
   const el = document.createElement("button");
   el.type = "button";
@@ -153,7 +156,6 @@ export default function MapPanel({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const userMovedRef = useRef(false);
-  /** Zoom floor for the next stop re-centre: set by a fly-to so the list's zoom-in survives it. */
   /** A fly-to asks the selection re-centre (same commit) to keep its zoom-in; the request lapses after a second so a later marker click keeps the current zoom. */
   const minZoomRef = useRef({ zoom: 0, until: 0 });
   const stopMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
@@ -483,18 +485,24 @@ export default function MapPanel({
         if (ll.lng !== s.lng || ll.lat !== s.lat) marker.setLngLat([s.lng, s.lat]);
         if (el.textContent !== String(i + 1)) el.textContent = String(i + 1);
         // Toggle only our ring classes: mapbox owns the rest of the element's classes.
-        el.classList.toggle("ring-2", selected);
-        el.classList.toggle("ring-route", selected);
-        el.classList.toggle("text-black/75", s.visited);
-        el.classList.toggle("text-white", !s.visited);
-        el.style.background = stopColor(s);
-        el.setAttribute("aria-label", label);
-        el.setAttribute("aria-pressed", String(selected));
-        el.setAttribute("role", "button"); // Mapbox sets role=img on markers, which would drop the button semantics
-        el.title = label;
+        // Each write is skipped when the element already holds the value (this runs on every stops change, e.g. typing in the editor).
+        const setClass = (name: string, on: boolean) => { if (el.classList.contains(name) !== on) el.classList.toggle(name, on); };
+        setClass("ring-2", selected);
+        setClass("ring-route", selected);
+        setClass("text-black/75", s.visited);
+        setClass("text-white", !s.visited);
+        const color = stopColor(s);
+        if (markerColors.get(el) !== color) { el.style.background = color; markerColors.set(el, color); } // the browser rewrites the style string, so the last value written is remembered instead
+        const setAttr = (name: string, value: string) => { if (el.getAttribute(name) !== value) el.setAttribute(name, value); };
+        setAttr("aria-label", label);
+        setAttr("aria-pressed", String(selected));
+        setAttr("role", "button"); // Mapbox sets role=img on markers, which would drop the button semantics
+        if (el.title !== label) el.title = label;
       } else if (addSet.has(s.id)) {
         const el = markerElement(`${STOP_MARKER_CLASS} ${TOUCH_HIT_STOP} ${textClass(s.visited)} ${selected ? "ring-2 ring-route" : ""}`, label, String(i + 1));
-        el.style.background = stopColor(s);
+        const color = stopColor(s);
+        el.style.background = color;
+        markerColors.set(el, color);
         el.setAttribute("aria-pressed", String(selected));
         const id = s.id;
         el.addEventListener("click", () => handlersRef.current.onStopClick(id));

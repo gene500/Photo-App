@@ -77,6 +77,7 @@ model Stop {
   updatedAt        DateTime  @updatedAt
 
   @@index([tripId, order])
+  @@index([photoUrl])
 }
 
 // A local copy of OpenStreetMap viewpoints, named peaks and attractions (loaded by scripts/import-places.mjs),

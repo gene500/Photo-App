@@ -1,6 +1,11 @@
+import { isNum } from "./guards";
+
 /** Largest instance solved exactly (Held-Karp is O(n² · 2ⁿ), about 0.3M steps at 12); above this we use a heuristic. */
 export const EXACT_MAX = 12;
 export const PENALTY = 1e9; // stands in for unreachable / missing durations
+
+/** A copy of the duration matrix with every non-finite (or non-number) cell replaced by PENALTY. */
+export const sanitiseDurations = (durations: number[][]): number[][] => durations.map((row) => row.map((v) => (isNum(v) ? v : PENALTY)));
 
 /**
  * Cheapest visiting order for an open path that starts at index 0 and ends anywhere.
@@ -11,7 +16,7 @@ export function optimizeOrder(durations: number[][]): number[] {
   const n = durations.length;
   const identity = Array.from({ length: n }, (_, i) => i);
   if (n <= 2) return identity;
-  const d = durations.map((row) => row.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : PENALTY)));
+  const d = sanitiseDurations(durations);
   const best = n <= EXACT_MAX ? exact(d) : heuristic(d);
   // A different order that gains nothing (e.g. stops at the same spot) is only churn: keep the order the owner has.
   return pathCost(d, identity) <= pathCost(d, best) + 1e-9 ? identity : best;

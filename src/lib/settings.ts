@@ -1,5 +1,6 @@
 // Per-device display settings, kept in localStorage (never sent to the server). Pure helpers only: the React
 // provider lives in components/settings. The same key and shape are read by SETTINGS_INIT_SCRIPT before first paint.
+import { isNum } from "./guards";
 import { MAX_DWELL_MINUTES } from "./limits";
 
 export const SETTINGS_KEY = "rtpp.settings.v1";
@@ -72,7 +73,7 @@ function pick<T extends string>(allowed: readonly T[], value: unknown, fallback:
 export function parseSettings(raw: unknown): Settings {
   const o = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const d = DEFAULT_SETTINGS;
-  const dwell = typeof o.defaultDwellMinutes === "number" && Number.isFinite(o.defaultDwellMinutes)
+  const dwell = isNum(o.defaultDwellMinutes)
     ? Math.min(MAX_DWELL_MINUTES, Math.max(0, Math.round(o.defaultDwellMinutes)))
     : d.defaultDwellMinutes;
   return {

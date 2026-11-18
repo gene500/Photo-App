@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import {
   closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type CollisionDetection, type DragEndEvent,
 } from "@dnd-kit/core";
@@ -53,16 +53,23 @@ export const listCollision: CollisionDetection = (args) => {
 // leaves almost no room between a row and the edge: a short drag ran the scroll away. A thin zone and gentler speed keep it bounded.
 const AUTO_SCROLL = { threshold: { x: 0.2, y: 0.06 }, acceleration: 4 };
 
+// Module-level so the sensors (and with them dnd-kit's context value) keep their identity across renders: new option objects each render
+// would re-render every sortable row whenever the list's parent re-renders.
+const POINTER_OPTIONS = { activationConstraint: { distance: 5 } };
+const KEYBOARD_OPTIONS = { coordinateGetter: centreAlignedKeyboardCoordinates };
+
 export function StopList({ stops, onReorder, ...handlers }: Props) {
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: centreAlignedKeyboardCoordinates }),
+    useSensor(PointerSensor, POINTER_OPTIONS),
+    useSensor(KeyboardSensor, KEYBOARD_OPTIONS),
   );
 
   const rootRef = useRef<HTMLDivElement>(null);
   const prevIds = useRef<string[]>([]);
-  const ids = stops.map((s) => s.id);
-  const idsKey = ids.join(",");
+  const idsKey = useMemo(() => stops.map((s) => s.id).join(","), [stops]);
+  // Keyed on the joined ids (database ids never contain a comma, as the effect below already relies on), so an edit that leaves the order
+  // alone keeps the same array and the sortable rows are not re-rendered through dnd-kit's items context.
+  const ids = useMemo(() => (idsKey ? idsKey.split(",") : []), [idsKey]);
   const pinned = leadingVisited(stops);
   useEffect(() => {
     const before = prevIds.current;
@@ -77,16 +84,18 @@ export function StopList({ stops, onReorder, ...handlers }: Props) {
     (next ?? rootRef.current)?.focus();
   }, [idsKey]);
 
-  if (stops.length === 0) return <div ref={rootRef} tabIndex={-1} className="outline-none"><p className="text-sm text-muted">No stops yet.</p></div>;
-
   // dnd-kit's default announcements read out database ids; the app announces the result itself ("Moved X to position N of M"), so only the pick-up is spoken here, by name.
-  const nameOf = (id: string | number) => stops.find((s) => s.id === String(id))?.name ?? "stop";
-  const announcements = {
-    onDragStart: ({ active }: { active: { id: string | number } }) => `Picked up ${nameOf(active.id)}.`,
-    onDragOver: () => undefined,
-    onDragEnd: ({ active, over }: { active: { id: string | number }; over: unknown }) => (over ? undefined : `Reordering ${nameOf(active.id)} cancelled.`),
-    onDragCancel: ({ active }: { active: { id: string | number } }) => `Reordering ${nameOf(active.id)} cancelled.`,
-  };
+  const announcements = useMemo(() => {
+    const nameOf = (id: string | number) => stops.find((s) => s.id === String(id))?.name ?? "stop";
+    return {
+      onDragStart: ({ active }: { active: { id: string | number } }) => `Picked up ${nameOf(active.id)}.`,
+      onDragOver: () => undefined,
+      onDragEnd: ({ active, over }: { active: { id: string | number }; over: unknown }) => (over ? undefined : `Reordering ${nameOf(active.id)} cancelled.`),
+      onDragCancel: ({ active }: { active: { id: string | number } }) => `Reordering ${nameOf(active.id)} cancelled.`,
+    };
+  }, [stops]);
+
+  if (stops.length === 0) return <div ref={rootRef} tabIndex={-1} className="outline-none"><p className="text-sm text-muted">No stops yet.</p></div>;
 
   function handleDragEnd({ active, over }: DragEndEvent) {
     if (!over) return;
@@ -113,7 +122,7 @@ export function StopList({ stops, onReorder, ...handlers }: Props) {
 // Hover-capable pointers reveal the secondary controls on row hover/focus; touch always shows them.
 const REVEAL = "[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 focus-visible:!opacity-100";
 
-function StopRow({ stop, index, locked, onDelete, onSelect }: Handlers & { stop: Stop; index: number; locked: boolean }) {
+const StopRow = memo(function StopRow({ stop, index, locked, onDelete, onSelect }: Handlers & { stop: Stop; index: number; locked: boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: stop.id, disabled: locked });
   return (
     <li
@@ -147,4 +156,4 @@ function StopRow({ stop, index, locked, onDelete, onSelect }: Handlers & { stop:
       <StopPhoto stop={stop} />
     </li>
   );
-}
+});

@@ -53,11 +53,12 @@ export async function authorizeCredentials(
   const key = credentials.email.trim().toLowerCase();
   // No real address is longer; refuse before the limiter so an unbounded string never becomes a key or reaches bcrypt.
   if (key.length > 254) return null;
-  const pair = loginEmailKey(key, headerIp(headers));
+  const ip = headerIp(headers);
+  const pair = loginEmailKey(key, ip);
   // Per-email-and-address throttle. The attempt is counted before the slow password check, so parallel guesses see
   // each other and cannot all slip past the limit; a successful login clears the count. (The per-IP limit is applied
   // in the route before NextAuth runs.) Keying by address means an attacker's failures cannot lock out the real owner.
-  if (!(await loginRefused(key, headerIp(headers))).ok) throw new Error(RATE_LIMITED);
+  if (!(await loginRefused(key, ip)).ok) throw new Error(RATE_LIMITED);
   if (!(await hitShared("login-email-failures", pair)).ok) throw new Error(RATE_LIMITED);
   const user = await verifyCredentials(credentials.email, credentials.password);
   if (user) await resetShared("login-email-failures", pair);

@@ -4,12 +4,12 @@ The one file that tracks the work and lets another Claude session or machine pic
 `TODO.md`. **Update the Task board below the moment any status changes** (and commit it), then trust it, `git log`
 and `docs/archive/PROGRESS.md` over memory. Where things are: this file = START HERE, board, standing rules, Claude Code setup. `docs/BACKLOG.md` = owner follow-ups and known gaps. `docs/LOCAL-PLACES.md` = local map data. `docs/design/` = specs and design notes. `docs/archive/` = history (old board rows, progress log, plans, test reports).
 
-## START HERE (a fresh Claude session reads this first; updated 2026-11-16)
+## START HERE (a fresh Claude session reads this first; updated 2026-11-18)
 
 **Goal:** Photo Op Planner, a road-trip photo planner (Next.js 16, Prisma/libsql, next-auth, Mapbox). Live at https://photo-app-pi2o.vercel.app (Vercel project `photo-app-pi2o` only; `photo-app` is an empty duplicate).
 
 **Starting point (verify with `git status` and `git log`; trust them over this text):**
-- Repo `~/Photo-App` (older machine: `/Users/genestone/road-trip-photo-planner`), branch `main`, remote `gene500/Photo-App`. Last pushed code commit before F16-F19: `45b5b71`. The F16-F19 push is the commit on top of it (see `git log`).
+- Repo `~/Photo-App` (older machine: `/Users/genestone/road-trip-photo-planner`), branch `main`, remote `gene500/Photo-App`. Last pushed commit: `5181cd2` (parking-lot routing, live on Vercel `photo-app-pi2o`). On top of it the working tree holds the UNCOMMITTED A89 cleanup/optimization plus fixes F11/F12 (see "Current work (2026-11-18)"); `git status` shows 28 modified and 6 new paths (3 new source files, 3 new test files, new migration dir `prisma/migrations/20261118120000_stop_photo_url_index/`). The next step is the owner's "push" (commit everything including the untracked files, legal-review note in the message, then check Vercel and CI).
 - **Pushed in `2ee3008` (nothing else uncommitted except this file):** A61 (optimizer: lost-cause light misses capped, so equal-priority routes stop zigzagging), A62 (Start from my location), A63 (NPS alerts + OSM opening-hours notices; `docs/design/A63-DESIGN.md` is tracked now), A64 (Visited checkbox + quiet auto re-optimize), A65 (themed PDF), F12 (fixes from the Opus FINAL review), plus test-stability edits (`tests/setup.ts` asyncUtilTimeout 5 s, optimize stall threshold 500 ms, fake timers in TripEditor tests).
 - Last verification before F16-F19 (2026-10-29, my runs): tsc clean, lint clean, vitest 2101/2102 (the one failure was the wall-clock check "9 stops" taking 8 s under load; 1.1 s alone), e2e 58/59 (swap-undo failed under load; passed alone 2/2).
 
@@ -41,7 +41,17 @@ and `docs/archive/PROGRESS.md` over memory. Where things are: this file = START 
 
 ## Current work (2026-11-18)
 
-**F10 work done (2026-11-18, uncommitted, tests first):** lot markers (single-linkage grouping, drawn below stop numbers and offset to the lower right, overlapping labels hidden via `hiddenLotLabels`), offline copy shows the park line, share-page fallback times use lots, optimizer start window reaches back by the walk and miss minutes share one rounding (`roundMissMinutes`, misses reported for the returned start), `hasWalkLength` replaces the `/, walk /` text test, OSM lot/trailhead coordinate range check, `/api/stops/[id]/access` deadline (`ACCESS_DEADLINE_MS` 17 s, under the client's 20 s), Overpass heavy retry asks a different mirror, legal review (privacy: parking-spot wording in Mapbox, Google/Apple Maps and offline-copy bullets) and `LEGAL_UPDATED` November 18, 2026. Item F (cosmetic walk print) left as is. Nothing committed or pushed.
+**Status at the end of the A89 batch (2026-11-18):** A89b cleanup (passes 1 and 2), sweeps T7-T11, fix F11, repeat sweeps T12-T16, fix F12, SEC (Opus, no Critical/High/Medium) and the FINAL Opus full check are all done and archived in `docs/archive/HANDOFF-ARCHIVE.md`. Verified on the final tree: typecheck 0, lint 0, vitest 230 files / 2536 tests, `npm run build` ok, e2e 79/79. NOTHING IS COMMITTED. FINAL is waiting for the owner's "push".
+
+**F11 (stale zone):** `src/lib/intl-cache.ts` now caches a formatter only when an explicit `timeZone` is passed; with no zone it builds a fresh one per call (the default zone can change while a page is open). In production only `formatDateOnly` (UTC) is cached, so the clock-formatter speed-up no longer applies (owner may simplify the cache later). **F12:** `TripPlanList` passes the device time zone to the memoized `TripRow` as a prop so rows re-render on a zone change (test added); the list handler ref in `TripEditor.tsx` is refreshed in `useLayoutEffect` (FINAL note L1). **Owner decisions left:** keep or drop the formatter cache; add `IF NOT EXISTS` to the index migration (it fails the Vercel build only if someone created `Stop_photoUrl_idx` by hand); the old `scripts/perf*` / `bench-*` copies (about 5,700 lines).
+
+**Push checklist:** `git add -A` (the untracked new files are imported by tracked code); commit message says "legal pages reviewed (no change needed)" (busy-day rule: 11 files under `src/server`; `LEGAL_UPDATED` is "November 18, 2026"; if the push happens on a later day do the daily legal review first and bump the date); run typecheck and tests; push to `main`; check Vercel `photo-app-pi2o` and CI (`check`, `e2e`); watch the Turso migration step closely (the `e8c6584` deploy failed once for an unseen reason).
+
+**Cleanup pass 2 (components, 2026-11-18, uncommitted, behavior unchanged):** `TripEditor.tsx`: `waypointKey`, `ownPlacesKey`, `idsKey`, `prefsKey`, `planKey` and the header `exportData` are `useMemo`; the list handlers go to the rows through stable `useCallback` wrappers that call the newest logic via a ref refreshed every render. `StopList.tsx`/`TripPlanList.tsx`: rows are `React.memo`; `ids` (keyed on the joined ids), `idsKey`, `announcements` memoized; dnd-kit sensor options hoisted to module constants (new option objects every render were re-rendering every sortable row). `MapPanel.tsx`: stop-marker effect skips DOM writes whose value is unchanged (background remembered in a WeakMap). Skipped: fan-offset effect signature (a drag-end that leaves the coordinates unchanged resets the offset and relied on the re-run to re-fan, so not provably equivalent). New test `TripEditor.rows.test.tsx` (render-count probe).
+
+**Cleanup pass 1 (server + lib, 2026-11-18, uncommitted, behavior unchanged):** removed `WALK_METERS_PER_MINUTE` (not bit-identical to the 60/4000 arithmetic) and the dead `KIND_TAGS` branch; shared helpers `src/server/prisma-helpers.ts` (`hasPrismaCode`, `photoUrlsOf`), `sanitiseDurations` (optimize-order), `memoLookup` (popularity), `isNum` swaps in src/lib; cached `Intl.DateTimeFormat` (`src/lib/intl-cache.ts`, used by `formatClock` and `dates.ts`) and a 500-entry `getSunWindows` memo (callers get fresh Date copies); new index `Stop_photoUrl_idx` (migration `20261118120000_stop_photo_url_index`). Skipped: uploads route `Buffer` body (tsc rejects it), `loadSharedTrip` select (mapper types), item 3 type imports (still used). Tests: `src/lib/clock-format-equiv.test.ts`, `src/server/prisma-helpers.test.ts`.
+
+**F10 work done (2026-11-18, uncommitted, tests first):** lot markers (single-linkage grouping, drawn below stop numbers and offset to the lower right, overlapping labels hidden via `hiddenLotLabels`), offline copy shows the park line, share-page fallback times use lots, optimizer start window reaches back by the walk and miss minutes share one rounding (`roundMissMinutes`, misses reported for the returned start), `hasWalkLength` replaces the `/, walk /` text test, OSM lot/trailhead coordinate range check, `/api/stops/[id]/access` deadline (`ACCESS_DEADLINE_MS` 17 s, under the client's 20 s), Overpass heavy retry asks a different mirror, legal review (privacy: parking-spot wording in Mapbox, Google/Apple Maps and offline-copy bullets) and `LEGAL_UPDATED` November 18, 2026. Item F (cosmetic walk print) left as is. F10 itself was pushed in `5181cd2`.
 
 ## Current work (2026-11-17)
 
@@ -80,14 +90,13 @@ ID prefixes (owner, 2026-10-26): A = alpha (owner work items), T = testing passe
 Statuses: pending, active, paused, blocked, completed, removed. Exactly one item is active at a time.
 Visibility rule (owner, 2026-10-16): the task chart is shown in the terminal at the end of every reply, always.
 Ordering rule (owner, 2026-10-16): anything added goes toward the end of the list, in the order asked; the list order is: owner work items, then the bug sweeps (H rows), then the final row; the absolute final row of every list is always one combined row: a full codebase check (Opus), then merge, push, and confirmation that Vercel and CI succeeded; nothing goes after it.
-Last updated 2026-11-16
+Last updated 2026-11-18
 
 ### Open tasks
 
-| # | Task | Status | Est | Use | Notes |
+| ID | Task | Status | Est | Use | Notes |
 |---|---|---|---|---|---|
-| SEC | Security review of pending changes (re-run after F10) | active | 15 min | Medium | |
-| FINAL | Opus full check, merge, push, Vercel+CI | (push) | 30 min | Heavy | stops before push (push) |
+| FINAL | Opus full check, merge, push, Vercel+CI | (push) | 30 min | Heavy | Opus check done (no Critical/High/Medium); waits for "push" |
 
 ## Standing rules for this project (confirmed by the human partner)
 

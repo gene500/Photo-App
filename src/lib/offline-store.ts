@@ -3,7 +3,7 @@
 // copies are wiped on sign-out and when a different user signs in, and everything is best-effort
 // (storage can be missing, full or blocked; nothing here ever throws).
 import { isDateOnly } from "@/lib/dates";
-import { isObj } from "@/lib/guards";
+import { isNum, isObj } from "@/lib/guards";
 import { removeKeysWithPrefix } from "@/lib/storage-util";
 import { cleanLine } from "@/lib/text";
 import { clearAllSuggestions, removeSuggestions } from "@/lib/suggestions-store";
@@ -241,25 +241,24 @@ export function listTripCopies(): TripCopySummary[] {
 }
 
 const LIGHT_PREFS = ["any", "sunrise", "golden", "sunset"] as const;
-const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
 /** A stored access point: a point in range with a string or null name; anything else (or a copy from before it existed) is none. A missing or bad walk length is unknown. */
 function normalizeAccess(a: unknown): AccessPoint | null {
-  if (!isObj(a) || !finite(a.lat) || !finite(a.lng) || Math.abs(a.lat) > 90 || Math.abs(a.lng) > 180) return null;
+  if (!isObj(a) || !isNum(a.lat) || !isNum(a.lng) || Math.abs(a.lat) > 90 || Math.abs(a.lng) > 180) return null;
   if (a.name !== null && typeof a.name !== "string") return null;
-  return { lat: a.lat, lng: a.lng, name: a.name === null ? null : cleanLine(a.name, 120), walkMeters: finite(a.walkMeters) && a.walkMeters > 0 ? a.walkMeters : null };
+  return { lat: a.lat, lng: a.lng, name: a.name === null ? null : cleanLine(a.name, 120), walkMeters: isNum(a.walkMeters) && a.walkMeters > 0 ? a.walkMeters : null };
 }
 
 /** Shallow validation of one stored stop; fills defaults for fields older copies lack. Null when it cannot be shown safely. */
 function normalizeStop(raw: unknown, tripId: string, order: number): Stop | null {
-  if (!isObj(raw) || typeof raw.id !== "string" || typeof raw.name !== "string" || !finite(raw.lat) || !finite(raw.lng)) return null;
+  if (!isObj(raw) || typeof raw.id !== "string" || typeof raw.name !== "string" || !isNum(raw.lat) || !isNum(raw.lng)) return null;
   const checklist = Array.isArray(raw.shotChecklist)
     ? raw.shotChecklist.filter((i): i is ShotItem => isObj(i) && typeof i.text === "string" && typeof i.done === "boolean").map((i) => ({ text: i.text, done: i.done }))
     : [];
   return {
     id: raw.id,
     tripId: typeof raw.tripId === "string" ? raw.tripId : tripId,
-    order: finite(raw.order) ? raw.order : order,
+    order: isNum(raw.order) ? raw.order : order,
     name: raw.name,
     lat: raw.lat,
     lng: raw.lng,
@@ -269,7 +268,7 @@ function normalizeStop(raw: unknown, tripId: string, order: number): Stop | null
     visited: raw.visited === true,
     lightPref: (LIGHT_PREFS as readonly unknown[]).includes(raw.lightPref) ? (raw.lightPref as Stop["lightPref"]) : "any",
     priority: raw.priority === "high" || raw.priority === "must" ? raw.priority : "normal",
-    dwellMinutes: finite(raw.dwellMinutes) ? raw.dwellMinutes : 0,
+    dwellMinutes: isNum(raw.dwellMinutes) ? raw.dwellMinutes : 0,
     shotNotes: typeof raw.shotNotes === "string" ? raw.shotNotes : null,
     shotChecklist: checklist,
     // Copies saved before the access point existed have none; a missing or malformed one means "go to the stop".

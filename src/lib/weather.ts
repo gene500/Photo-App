@@ -1,3 +1,4 @@
+import { isNum } from "./guards";
 import type { LightPref, WeatherForecast, WeatherHour } from "./types";
 
 /**
@@ -55,7 +56,7 @@ export function hourInstant(localTime: string, utcOffsetSeconds: number): number
   return Date.UTC(y, mo - 1, d, h, mi) - utcOffsetSeconds * 1000;
 }
 
-export const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+export const num = (v: unknown): number | null => (isNum(v) ? v : null);
 
 /** Parse an Open-Meteo `/v1/forecast` response (hourly + utc_offset_seconds); anything malformed is unavailable. */
 export function parseOpenMeteo(json: unknown): WeatherForecast {

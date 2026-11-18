@@ -1,3 +1,4 @@
+import { enUsFormatter } from "./intl-cache";
 import { solarDateAt } from "./best-time";
 
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -48,12 +49,12 @@ export function shiftDepartAtLocal(departAt: string, from: string, to: string, f
 /** "2026-11-20" -> "Nov 20, 2026": the one way a calendar date is written for reading (not for date inputs). "" when invalid. */
 export function formatDateOnly(value: string): string {
   if (!isDateOnly(value)) return "";
-  return new Intl.DateTimeFormat("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
+  return enUsFormatter("dateOnly", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`));
 }
 
 /** An ISO timestamp -> the same style in the viewer's own time zone; "" when unparseable. */
 export function formatInstantDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return new Intl.DateTimeFormat("en-US", { year: "numeric", month: "short", day: "numeric" }).format(d);
+  return enUsFormatter("instantDate", { year: "numeric", month: "short", day: "numeric" }).format(d);
 }

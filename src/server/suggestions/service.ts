@@ -17,9 +17,9 @@ export const SUGGESTION_CACHE_TTL_MS = 30 * 60_000;
 /** Fewer places than this from the local copy is treated as "probably not loaded or not covered", so Overpass is asked too. */
 const MIN_LOCAL_PLACES = 5;
 
-/** Enriched (ranked by popularity) results, and the raw Overpass results they are built from. */
 /** A finished (enriched) result is served for up to this long past its TTL while a fresh one is built in the background. */
 export const SUGGESTION_STALE_GRACE_MS = 6 * 3600_000;
+/** Enriched (ranked by popularity) results, and the raw Overpass results they are built from. */
 const cache = new TtlCache<Suggestion[]>(SUGGESTION_CACHE_TTL_MS, 100, () => Date.now(), SUGGESTION_STALE_GRACE_MS);
 /** Background refreshes underway for stale entries. */
 const refreshing = new Set<string>();
@@ -65,7 +65,8 @@ type Deps = {
   local?: () => Promise<unknown[] | null>;
   /** Places the local copy has for an area it only partly covers (a border park): shown as a fallback while Overpass is asked. */
   localPartial?: () => Promise<unknown[] | null>;
-  fetchOverpass?: (query: string) => Promise<unknown>;   fetchImpl?: typeof fetch;
+  fetchOverpass?: (query: string) => Promise<unknown>;
+  fetchImpl?: typeof fetch;
   /** false: skip popularity (the caller ranks it later). */
   enrich?: boolean;
   /** Test hook: overrides THIN_LOCAL_GRACE_MS. */

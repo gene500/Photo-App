@@ -271,4 +271,24 @@ describe("TripPlanList", () => {
     expect(screen.getByTestId("trip-row").className).toContain("flex-wrap");
     expect(screen.getByRole("radiogroup").className).toContain("max-w-full");
   });
+
+  it("re-renders its memoized rows when the device time zone changes, so the clock text follows it", async () => {
+    const real = process.env.TZ;
+    const stops = [stop("a", "Sunset", { lightPref: "sunset", lat: 37.7, lng: -119.6 })];
+    const bestTimes = [null];
+    const [[from]] = lightWindows("sunset", getSunWindows(37.7, -119.6, "2026-07-01"));
+    const arrivals = [new Date(from.getTime() + 600_000)]; // inside the window, so the line carries clock times
+    const ui = <TripPlanList stops={stops} bestTimes={bestTimes} arrivals={arrivals} optimized {...handlers} />;
+    try {
+      process.env.TZ = "Asia/Tokyo";
+      const { rerender } = render(ui);
+      const before = (await screen.findByTestId("best-time")).textContent;
+      process.env.TZ = "America/New_York";
+      rerender(<TripPlanList stops={stops} bestTimes={bestTimes} arrivals={arrivals} optimized {...handlers} />); // same props objects, as when the editor re-renders for another reason
+      const after = screen.getByTestId("best-time").textContent;
+      expect(after).not.toBe(before);
+    } finally {
+      if (real === undefined) delete process.env.TZ; else process.env.TZ = real;
+    }
+  });
 });

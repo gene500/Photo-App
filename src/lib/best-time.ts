@@ -1,3 +1,4 @@
+import { enUsFormatter } from "./intl-cache";
 import { getTimes } from "suncalc";
 import type { TimeFormat } from "./settings";
 import type { Stop } from "./types";
@@ -48,16 +49,39 @@ export function clampToSolarDay(at: Date, plannedDate: string, lng: number): Dat
   return t >= first && t <= last && solarDateAt(at, lng) === plannedDate ? at : new Date(Math.min(Math.max(t, first), last));
 }
 
+const SUN_MEMO_MAX = 500;
+const sunMemo = new Map<string, SunWindows>();
+const copyDate = (d: Date | null): Date | null => (d ? new Date(d.getTime()) : d);
+
+/**
+ * Sun times for a spot and solar day. Pure in (lat, lng, plannedDate), and the same spot and day are asked for over and over (every render,
+ * every stop, three solar days each), so the answer is remembered (the 500 most recently added keys; the oldest is dropped first). Callers get their own Date objects each time.
+ */
 export function getSunWindows(lat: number, lng: number, plannedDate: string): SunWindows {
-  const t = getTimes(solarDayAnchor(plannedDate, lng), lat, lng);
+  const key = `${lat},${lng},${plannedDate}`;
+  let w = sunMemo.get(key);
+  if (!w) {
+    const t = getTimes(solarDayAnchor(plannedDate, lng), lat, lng);
+    w = {
+      sunrise: t.sunrise,
+      goldenHourEnd: t.goldenHourEnd,
+      solarNoon: t.solarNoon,
+      goldenHour: t.goldenHour,
+      sunset: t.sunset,
+      alwaysUp: t.alwaysUp === true,
+      alwaysDown: t.alwaysDown === true,
+    };
+    if (sunMemo.size >= SUN_MEMO_MAX) sunMemo.delete(sunMemo.keys().next().value!);
+    sunMemo.set(key, w);
+  }
   return {
-    sunrise: t.sunrise,
-    goldenHourEnd: t.goldenHourEnd,
-    solarNoon: t.solarNoon,
-    goldenHour: t.goldenHour,
-    sunset: t.sunset,
-    alwaysUp: t.alwaysUp === true,
-    alwaysDown: t.alwaysDown === true,
+    sunrise: copyDate(w.sunrise),
+    goldenHourEnd: copyDate(w.goldenHourEnd),
+    solarNoon: new Date(w.solarNoon.getTime()),
+    goldenHour: copyDate(w.goldenHour),
+    sunset: copyDate(w.sunset),
+    alwaysUp: w.alwaysUp,
+    alwaysDown: w.alwaysDown,
   };
 }
 
@@ -166,7 +190,9 @@ export function computeBestTimes(trip: TripForTimes, legDurations: number[] | nu
 /** "7:45 PM" in the viewer's time zone (or the one given, for tests); "19:45" for 24h, "auto" is the 12-hour default. */
 export function formatClock(date: Date, timeZone?: string, timeFormat: TimeFormat = "auto"): string {
   const hourCycle = timeFormat === "24h" ? "h23" : timeFormat === "12h" ? "h12" : undefined;
-  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone, hourCycle });
+  // An invalid Date: toLocaleTimeString answers "Invalid Date" where DateTimeFormat.format would throw.
+  if (Number.isNaN(date.getTime())) return "Invalid Date";
+  return enUsFormatter(`clock|${timeZone}|${hourCycle}`, { hour: "numeric", minute: "2-digit", timeZone, hourCycle }).format(date);
 }
 
 export function describeBestTime(best: BestTime, timeZone?: string, timeFormat: TimeFormat = "auto"): string {

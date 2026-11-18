@@ -1,7 +1,7 @@
 import { daylightInterval, getSunWindows } from "./best-time";
 import { walkMs } from "./walk-time";
 import { lightWindows } from "./light-windows";
-import { EXACT_MAX, optimizeOrder, PENALTY } from "./optimize-order";
+import { EXACT_MAX, optimizeOrder, sanitiseDurations } from "./optimize-order";
 import type { LightPref, StopPriority } from "./types";
 
 export type ScheduleStop = { lat: number; lng: number; lightPref: LightPref; dwellMinutes: number; priority?: StopPriority;
@@ -124,7 +124,7 @@ function plannedSearch(input: ScheduleInput):
   | { steps: (over: () => boolean) => Generator<void, Solution>; finish: (sol: Solution) => Schedule } {
   const { durations, stops, defaultDeparture, preferredDeparture } = input;
   const n = stops.length;
-  const d = sanitised(durations);
+  const d = sanitiseDurations(durations);
   const ctx = new Evaluator(d, stops, defaultDeparture.getTime(), preferredDeparture?.getTime(), input.focus, input.fixedDeparture, input.tuning);
   if (n < 2) return { done: { order: optimizeOrder(durations), departAt: defaultDeparture, misses: [], dark: [], timed: false } };
   if (stops.every((s) => s.lightPref === "any")) {
@@ -164,23 +164,21 @@ const flatten = (xs: Interval[]) => {
   return f;
 };
 
-const sanitised = (durations: number[][]) => durations.map((row) => row.map((v) => (typeof v === "number" && Number.isFinite(v) ? v : PENALTY)));
-
 /** The objective optimizeSchedule minimises, for a given order and departure (for comparing searches). */
 export function scheduleCost(input: ScheduleInput, order: number[], departAt: Date): number {
-  const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus, input.fixedDeparture, input.tuning);
+  const ctx = new Evaluator(sanitiseDurations(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus, input.fixedDeparture, input.tuning);
   return ctx.cost(order, departAt.getTime());
 }
 
 /** The light misses of `order` when leaving at `departAt` (for checking a rounded departure against the searched one). */
 export function scheduleMisses(input: ScheduleInput, order: number[], departAt: Date): ScheduleMiss[] {
-  const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus, input.fixedDeparture, input.tuning);
+  const ctx = new Evaluator(sanitiseDurations(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus, input.fixedDeparture, input.tuning);
   return ctx.misses(order, departAt.getTime());
 }
 
 /** Reference search over every order: slow beyond 8 stops (n! x departures), meant for checking the heuristic in tests. */
 export function optimizeScheduleExact(input: ScheduleInput): Schedule {
-  const ctx = new Evaluator(sanitised(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus, input.fixedDeparture, input.tuning);
+  const ctx = new Evaluator(sanitiseDurations(input.durations), input.stops, input.defaultDeparture.getTime(), input.preferredDeparture?.getTime(), input.focus, input.fixedDeparture, input.tuning);
   const { order, departMs } = exactSearch(ctx, input.stops.length);
   return { order, departAt: new Date(departMs), misses: ctx.misses(order, departMs), dark: ctx.darkVisits(order, departMs), timed: true };
 }
@@ -254,7 +252,7 @@ class Evaluator {
     this.missWeight = this.t.missWeight;
     this.dwellMs = stops.map((s) => s.dwellMinutes * 60_000);
     this.walkMs = stops.map((s) => walkMs(s.walkMinutes));
-    this.holdMs = stops.map((s, i) => this.dwellMs[i]! + 2 * this.walkMs[i]!);
+    this.holdMs = stops.map((_, i) => this.dwellMs[i]! + 2 * this.walkMs[i]!);
     const nonNegative = (v: number) => Number.isFinite(v) && v >= 0;
     this.monotone =
       d.every((row) => row.every((v) => v >= 0)) &&

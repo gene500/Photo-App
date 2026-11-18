@@ -28,27 +28,40 @@ const COUNT_CACHE_TTL_MS = 24 * 3600_000;
 export const COUNT_CACHE_MAX = 5000;
 
 /**
- * Wraps a counter with a per-instance cache (24 h - photo counts barely move, keyed on the ~10 m grid cell) and in-flight de-duplication, so a place
- * that shows up in a second search - or in two at once - is counted once. Failures (undefined) are not remembered.
+ * Wraps an async lookup with a per-instance cache (24 h) and in-flight de-duplication by `keyOf`: a repeat - or two at once - runs the lookup once.
+ * Only answers `cacheable` says yes to are remembered (failures come back undefined and are not).
  */
-export function cachedCounter(count: Counter, now: () => number = Date.now): Counter {
-  const cache = new TtlCache<number>(COUNT_CACHE_TTL_MS, COUNT_CACHE_MAX, now);
-  const inFlight = new Map<string, Promise<number | undefined>>();
+function memoLookup<V>(
+  lookup: (s: Suggestion, fetchImpl: typeof fetch) => Promise<V | undefined>,
+  keyOf: (s: Suggestion) => string,
+  cacheable: (v: V | undefined) => v is V,
+  now: () => number,
+): (s: Suggestion, fetchImpl: typeof fetch) => Promise<V | undefined> {
+  const cache = new TtlCache<V>(COUNT_CACHE_TTL_MS, COUNT_CACHE_MAX, now);
+  const inFlight = new Map<string, Promise<V | undefined>>();
   return (s, fetchImpl) => {
-    const key = `${s.lat.toFixed(4)},${s.lng.toFixed(4)}`;
+    const key = keyOf(s);
     const hit = cache.get(key);
     if (hit !== undefined) return Promise.resolve(hit);
     const pending = inFlight.get(key);
     if (pending) return pending;
-    const p = count(s, fetchImpl)
-      .then((n) => {
-        if (typeof n === "number" && Number.isFinite(n) && n >= 0) cache.set(key, n);
-        return n;
+    const p = lookup(s, fetchImpl)
+      .then((v) => {
+        if (cacheable(v)) cache.set(key, v);
+        return v;
       })
       .finally(() => inFlight.delete(key));
     inFlight.set(key, p);
     return p;
   };
+}
+
+/**
+ * Wraps a counter with a per-instance cache (24 h - photo counts barely move, keyed on the ~10 m grid cell) and in-flight de-duplication, so a place
+ * that shows up in a second search - or in two at once - is counted once. Failures (undefined) are not remembered.
+ */
+export function cachedCounter(count: Counter, now: () => number = Date.now): Counter {
+  return memoLookup<number>(count, (s) => `${s.lat.toFixed(4)},${s.lng.toFixed(4)}`, (n): n is number => typeof n === "number" && Number.isFinite(n) && n >= 0, now);
 }
 
 /** The counter used by the routes: the default source behind the shared cache. */
@@ -58,23 +71,7 @@ export const sharedCounter = (): Counter => (shared ??= cachedCounter(defaultCou
 let sharedNotableCheck: NotableCheck | undefined;
 export const sharedNotable = (): NotableCheck => (sharedNotableCheck ??= cachedNotable((s, f) => getWikipediaNotable(s, f, POPULARITY_TIMEOUT_MS)));
 export function cachedNotable(check: NotableCheck, now: () => number = Date.now): NotableCheck {
-  const cache = new TtlCache<boolean>(COUNT_CACHE_TTL_MS, COUNT_CACHE_MAX, now);
-  const inFlight = new Map<string, Promise<boolean | undefined>>();
-  return (s, fetchImpl) => {
-    const key = `${s.lat.toFixed(4)},${s.lng.toFixed(4)}|${s.name.toLowerCase()}`;
-    const hit = cache.get(key);
-    if (hit !== undefined) return Promise.resolve(hit);
-    const pending = inFlight.get(key);
-    if (pending) return pending;
-    const p = check(s, fetchImpl)
-      .then((v) => {
-        if (typeof v === "boolean") cache.set(key, v);
-        return v;
-      })
-      .finally(() => inFlight.delete(key));
-    inFlight.set(key, p);
-    return p;
-  };
+  return memoLookup<boolean>(check, (s) => `${s.lat.toFixed(4)},${s.lng.toFixed(4)}|${s.name.toLowerCase()}`, (v): v is boolean => typeof v === "boolean", now);
 }
 export const resetSharedCounter = (): void => {
   shared = undefined;

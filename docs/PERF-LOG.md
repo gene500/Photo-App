@@ -58,3 +58,13 @@ STAGE=schedule CASES=1700 SEED=0 REPS=20 perl -e 'alarm 7200; exec @ARGV' npx vi
 ```
 
 Results are written to `RESULT` (default `/tmp/bench-optimize-equiv-<stage>.txt`). The schedule stage at 5,000 cases takes about an hour; run three seeds in parallel to shorten it.
+
+## Cleanup pass 1 (2026-11-18)
+
+`formatClock` and the `dates.ts` formatters reuse one cached `Intl.DateTimeFormat` per option set (about 40 us to 4 us per call, node micro-benchmark, identical output checked over zones, 12h/24h and instants); `getSunWindows` is memoised on (lat, lng, date), 500 entries (about 10 us to 0.5 us per repeat call including the Date copies); `Stop.photoUrl` is indexed for the photo-read lookup.
+
+## Cleanup pass 2 (components, 2026-11-18)
+
+Typing, hover or opening a stop card no longer re-renders the list rows: the Stops and My trip rows are `React.memo` with stable handlers, `TripEditor`'s route/place/prefs keys and the export payload are memoized, and `StopList` hoists dnd-kit's sensor options (fresh option objects each render re-rendered every sortable row) and keys `ids` on the joined ids. Render-count probe (`TripEditor.rows.test.tsx`, 3 stops, one unrelated editor render from opening the stop card): before, every row rendered once more (StopPhoto 2 to 3, useHike 1 to 2 per stop); after, 0 extra renders, and a row still re-renders when its own stop changes. The marker effect in `MapPanel` skips DOM writes whose value is unchanged. Not timed in a browser.
+
+F11 (2026-11-18): the formatter cache only caches when an explicit time zone is given. With no zone the default zone can change while a page is open (sweep T9 showed stale clock times after a device zone change), so a fresh formatter is built per call, the same cost as before the cleanup. In the app today the only explicit zone is UTC in `formatDateOnly`; `formatClock` and `formatInstantDate` build a fresh formatter per call, so the earlier 40.6 -> 4.3 us claim for the clock formatter no longer applies in production. The sun-window memo (10.0 -> 0.48 us) and the row memoization (fewer re-renders) stand.

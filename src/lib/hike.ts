@@ -1,4 +1,5 @@
 import { METERS_PER_MILE } from "./format";
+import { isNum } from "./guards";
 import type { DistanceUnit } from "./settings";
 import type { LngLat } from "./types";
 
@@ -36,8 +37,8 @@ function isAccess(a: unknown): boolean {
   if (a === undefined || a === null) return true;
   const x = a as { lat?: unknown; lng?: unknown; name?: unknown };
   return (
-    typeof x.lat === "number" && Number.isFinite(x.lat) && Math.abs(x.lat) <= 90 &&
-    typeof x.lng === "number" && Number.isFinite(x.lng) && Math.abs(x.lng) <= 180 &&
+    isNum(x.lat) && Math.abs(x.lat) <= 90 &&
+    isNum(x.lng) && Math.abs(x.lng) <= 180 &&
     (x.name === null || (typeof x.name === "string" && x.name.length <= ACCESS_NAME_MAX))
   );
 }
@@ -47,7 +48,7 @@ export function isHike(v: unknown): v is Hike {
   const h = v as Hike | null;
   return (
     !!h &&
-    typeof h.distanceMeters === "number" && Number.isFinite(h.distanceMeters) && h.distanceMeters > 0 &&
+    isNum(h.distanceMeters) && h.distanceMeters > 0 &&
     (h.source === "nps" || h.source === "osm") &&
     Array.isArray(h.geometry) && h.geometry.length >= 2 && h.geometry.length <= HIKE_MAX_POINTS &&
     h.geometry.every((p) => Array.isArray(p) && p.length === 2 && Number.isFinite(p[0]) && Number.isFinite(p[1])) &&

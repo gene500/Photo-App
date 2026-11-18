@@ -3,7 +3,7 @@
 import { noticeNotes } from "@/lib/notice-notes";
 import { StartTimeControl } from "./StartTimeControl";
 import { retickTarget } from "./swap-undo";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { WRITE_LANDED_EVENT } from "@/components/RefreshWhenStale";
 import { useSettings } from "@/components/settings/SettingsProvider";
@@ -32,7 +32,7 @@ import { defaultLightPref } from "@/lib/light-windows";
 import { formatDistance, formatDuration } from "@/lib/format";
 import { coordsLabel, haversineMeters } from "@/lib/geo";
 import { getSkyInfo } from "@/lib/sky";
-import type { LightPref, LngLat, Place, RouteResult, Stop, StopSource, Suggestion, Trip, TripWithStops } from "@/lib/types";
+import type { LightPref, LngLat, Place, RouteResult, Stop, StopPriority, StopSource, Suggestion, Trip, TripWithStops } from "@/lib/types";
 import { MAX_ROUTE_WAYPOINTS, MAX_STOP_NAME, MAX_SUGGESTIONS_ROUTE_KM, longEnoughToSearch } from "@/lib/limits";
 import type { StopPatch, TripPatch } from "@/lib/validation";
 import { MapView } from "./MapView";
@@ -371,24 +371,24 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
 
   // Route through the stops in order. A string key so edits that don't move anything
   // (visited, notes) don't refetch. Fewer than 2 stops means no route at all.
-  const waypointKey = JSON.stringify(routePoints(stops));
+  const waypointKey = useMemo(() => JSON.stringify(routePoints(stops)), [stops]);
   // The Optimize stale-result guard uses the stops' own places (not the lot-aware key above), so a parking lot
   // arriving mid-run does not discard the result; adding, removing, reordering or moving a stop still does.
-  const ownPlacesKey = JSON.stringify(stops.map((s) => [s.id, s.lat, s.lng]));
+  const ownPlacesKey = useMemo(() => JSON.stringify(stops.map((s) => [s.id, s.lat, s.lng])), [stops]);
   const ownPlacesKeyRef = useRef(ownPlacesKey);
   useEffect(() => {
     ownPlacesKeyRef.current = ownPlacesKey;
   }, [ownPlacesKey]);
-  const idsKey = stops.map((s) => s.id).join(",");
+  const idsKey = useMemo(() => stops.map((s) => s.id).join(","), [stops]);
   const idsKeyRef = useRef(idsKey);
   useEffect(() => {
     idsKeyRef.current = idsKey;
   }, [idsKey]);
   // What the optimizer reads besides positions (including the trip date and which stops are visited): a change to it mid-flight makes the result stale.
-  const prefsKey = JSON.stringify([trip.plannedDate, stops.map((s) => [s.lightPref, s.priority, s.dwellMinutes, s.visited])]);
+  const prefsKey = useMemo(() => JSON.stringify([trip.plannedDate, stops.map((s) => [s.lightPref, s.priority, s.dwellMinutes, s.visited])]), [trip.plannedDate, stops]);
   // What an optimize note was written for: the date and each stop's light, priority and dwell, whatever the order. Editing any of them
   // makes the note stale (it would describe a plan that no longer applies), the same fields that un-optimize the route.
-  const planKey = JSON.stringify([trip.plannedDate, stops.map((s) => [s.id, s.lightPref, s.priority, s.dwellMinutes]).sort((a, b) => (a[0] < b[0] ? -1 : 1))]);
+  const planKey = useMemo(() => JSON.stringify([trip.plannedDate, stops.map((s) => [s.id, s.lightPref, s.priority, s.dwellMinutes]).sort((a, b) => (a[0] < b[0] ? -1 : 1))]), [trip.plannedDate, stops]);
   const prefsKeyRef = useRef(prefsKey);
   useEffect(() => {
     prefsKeyRef.current = prefsKey;
@@ -625,6 +625,18 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     // eslint-disable-next-line react-hooks/exhaustive-deps -- legDurations is derived from activeRoute
     [trip.plannedDate, departAt, stops, activeRoute],
   );
+
+  // The header's export payload: rebuilt only when what it reads changes (the header re-renders for unrelated state such as typing the trip name).
+  const exportData = useMemo(() => ({
+      stops,
+      route: activeRoute?.geometry ?? null,
+      pdf: {
+        departAt: departAt ? new Date(departAt) : null,
+        totalDistanceM: activeRoute?.distance ?? null,
+        totalDurationS: activeRoute?.duration ?? null,
+        stops: stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: s.notes, shotNotes: s.shotNotes, lightPref: s.lightPref, arrival: arrivals[i] ?? null, lotArrival: lotArrivals[i] ?? null, source: s.source, visited: s.visited, priority: s.priority, access: s.access, walkMeters: s.access?.walkMeters ?? null })),
+      },
+  }), [stops, activeRoute, departAt, arrivals, lotArrivals]);
 
   async function saveTrip(patch: TripPatch) {
     await tracked(async () => {
@@ -1309,6 +1321,18 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     void openDrawer(id);
   }
 
+  // Stable handler identities for the memoized list rows (typing the trip name or hovering must not re-render every row). Each wrapper
+  // calls the newest logic through a ref refreshed after every render, so it never runs a stale closure.
+  const listLatest = useRef({ toggleVisited, removeStop, openFromList, patchStop, reorder });
+  useLayoutEffect(() => { // before paint, so a click can never reach the previous render's logic
+    listLatest.current = { toggleVisited, removeStop, openFromList, patchStop, reorder };
+  });
+  const listToggleVisited = useCallback((id: string, visited: boolean) => void listLatest.current.toggleVisited(id, visited), []);
+  const listPriorityChange = useCallback((id: string, priority: StopPriority) => listLatest.current.patchStop(id, { priority }), []);
+  const listDelete = useCallback((id: string) => void listLatest.current.removeStop(id), []);
+  const listSelect = useCallback((id: string) => listLatest.current.openFromList(id), []);
+  const listReorder = useCallback((ids: string[], movedId?: string) => void listLatest.current.reorder(ids, true, movedId), []);
+
   function clickMarker(id: string) {
     const active = document.activeElement;
     markerOpenerRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
@@ -1603,16 +1627,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       )}
 
       <StopsPanel
-        header={<TripHeader trip={trip} stopCount={stops.length} onSave={saveTrip} onShareChange={(shareToken) => void tracked(async () => setTrip((t) => ({ ...t, shareToken })))} exportData={{
-          stops,
-          route: activeRoute?.geometry ?? null,
-          pdf: {
-            departAt: departAt ? new Date(departAt) : null,
-            totalDistanceM: activeRoute?.distance ?? null,
-            totalDurationS: activeRoute?.duration ?? null,
-            stops: stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: s.notes, shotNotes: s.shotNotes, lightPref: s.lightPref, arrival: arrivals[i] ?? null, lotArrival: lotArrivals[i] ?? null, source: s.source, visited: s.visited, priority: s.priority, access: s.access, walkMeters: s.access?.walkMeters ?? null })),
-          },
-        }} />}
+        header={<TripHeader trip={trip} stopCount={stops.length} onSave={saveTrip} onShareChange={(shareToken) => void tracked(async () => setTrip((t) => ({ ...t, shareToken })))} exportData={exportData} />}
         collapsedSummary={
           optimized && activeRoute
             ? `${stops.length} ${stops.length === 1 ? "stop" : "stops"} · ${formatDuration(activeRoute.duration)}`
@@ -1633,9 +1648,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
             {swapNoteEl}
             <StopList
               stops={stops}
-              onReorder={(ids, movedId) => void reorder(ids, true, movedId)}
-              onDelete={(id) => void removeStop(id)}
-              onSelect={openFromList}
+              onReorder={listReorder}
+              onDelete={listDelete}
+              onSelect={listSelect}
             />
           </>
         }
@@ -1673,9 +1688,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
                 optimized={optimized}
                 bestTimes={bestTimes}
                 arrivals={arrivals}
-                onToggleVisited={(id, visited) => void toggleVisited(id, visited)}
-                onPriorityChange={(id, priority) => patchStop(id, { priority })}
-                onSelect={openFromList}
+                onToggleVisited={listToggleVisited}
+                onPriorityChange={listPriorityChange}
+                onSelect={listSelect}
               />
             }
           />

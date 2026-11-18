@@ -7,6 +7,7 @@ vi.mock("@/server/external/mapbox", async (orig) => ({ ...(await orig<typeof imp
 import { getCurrentUserId } from "@/server/session";
 import { enforcePaidLimit } from "@/server/shared-limit";
 import { getDurationMatrix } from "@/server/external/mapbox";
+import { getSunWindows } from "@/lib/best-time";
 import { POST } from "./route";
 
 const post = () =>
@@ -121,5 +122,57 @@ describe("POST /api/optimize: rounded start keeps the light windows met", () => 
       const again = await (await post({ departAt: first.departAt, fixDeparture: true })).json();
       expect(total(again), `${kmh} km/h`).toBeLessThanOrEqual(total(first));
     }
+  });
+});
+
+describe("POST /api/optimize: walkMinutes (walk from the parking lot)", () => {
+  beforeEach(() => vi.mocked(getCurrentUserId).mockResolvedValue("u1"));
+  afterEach(() => vi.mocked(getDurationMatrix).mockReset());
+
+  const coordinates = [[-119.8, 36.7], [-119.7, 36.8]];
+  const goldenEnd = getSunWindows(36.7, -119.8, "2026-07-01").goldenHourEnd!;
+  // The car reaches the first stop's lot 5 min before morning golden hour ends, and the start is kept as saved.
+  const req = (walkMinutes?: unknown) =>
+    new Request("http://localhost/api/optimize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "http://localhost" },
+      body: JSON.stringify({
+        coordinates,
+        plannedDate: "2026-07-01",
+        departAt: new Date(goldenEnd.getTime() - 5 * 60_000).toISOString(),
+        fixDeparture: true,
+        stops: [
+          { lightPref: "sunrise", priority: "normal", dwellMinutes: 30, ...(walkMinutes === undefined ? {} : { walkMinutes }) },
+          { lightPref: "any", priority: "normal", dwellMinutes: 30 },
+        ],
+      }),
+    });
+
+  it("an old payload without the field behaves as before (no miss)", async () => {
+    vi.mocked(getDurationMatrix).mockResolvedValueOnce([[0, 600], [600, 0]]);
+    const res = await POST(req());
+    expect(res.status).toBe(200);
+    expect((await res.json()).misses).toEqual([]);
+  });
+
+  it("a walk of 30 min makes the sunrise stop miss by the walk, judged at the subject", async () => {
+    vi.mocked(getDurationMatrix).mockResolvedValueOnce([[0, 600], [600, 0]]);
+    const res = await POST(req(30));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.misses).toEqual([{ stopIndex: 0, minutes: 25, priority: "normal" }]);
+  });
+
+  it("walkMinutes 0 equals no field", async () => {
+    vi.mocked(getDurationMatrix).mockResolvedValueOnce([[0, 600], [600, 0]]);
+    expect((await (await POST(req(0))).json()).misses).toEqual([]);
+  });
+
+  it("rejects values that are negative, fractional, too big or not numbers", async () => {
+    for (const bad of [-1, 2.5, 301, "30", null, Infinity]) {
+      const res = await POST(req(bad));
+      expect(res.status, String(bad)).toBe(400);
+    }
+    expect(getDurationMatrix).not.toHaveBeenCalled();
   });
 });

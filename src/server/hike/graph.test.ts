@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { LngLat } from "@/lib/types";
 import nps from "./fixtures/nps-delicate-arch.json";
 import osm from "./fixtures/osm-delicate-arch.json";
-import { findHikePath, lineLengthMeters, simplifyLine } from "./graph";
+import { Graph, findHikePath, lineLengthMeters, simplifyLine } from "./graph";
 import { parseNpsTrails } from "./nps";
 import { parseOsm } from "./osm";
 
@@ -53,6 +53,44 @@ describe("findHikePath", () => {
     const spur = line([800, 0], [800, 300]); // a dead end 300 m from the junction
     const path = findHikePath([trail, spur], at(800, 300), { trailheadTiers: [[p(0, 0)]] });
     expect(path?.distanceMeters).toBeCloseTo(1100, -1);
+  });
+
+  it("starts at a parking lot (tier 0) even when a trailhead is closer by walking, and reports which one", () => {
+    const trail = line([0, 0], [800, 0], [1600, 0]);
+    const lots = [p(5000, 0), p(0, 0)]; // the first does not snap to the trail
+    const heads = [p(1200, 0)];
+    const path = findHikePath([trail], at(1600, 0), { trailheadTiers: [lots, heads] });
+    expect(path?.start).toEqual({ kind: "tier", tier: 0, index: 1 });
+    expect(path?.distanceMeters).toBeCloseTo(1600, -1);
+  });
+
+  it("skips a tier whose nearest point is farther than tierMaxM and tries the next tier", () => {
+    const trail = line([0, 0], [3000, 0], [6000, 0]);
+    const opts = { trailheadTiers: [[p(0, 0)], [p(3000, 0)]], tierMaxM: [5000, undefined] };
+    const path = findHikePath([trail], at(6000, 0), opts);
+    expect(path?.start).toEqual({ kind: "tier", tier: 1, index: 0 });
+    expect(path?.distanceMeters).toBeCloseTo(3000, -1);
+    // 4 km away is within the cap: the lot still wins.
+    const near = findHikePath([line([0, 0], [4000, 0])], at(4000, 0), opts);
+    expect(near?.start).toEqual({ kind: "tier", tier: 0, index: 0 });
+    // Nothing capped when tierMaxM is not given.
+    expect(findHikePath([trail], at(6000, 0), { trailheadTiers: opts.trailheadTiers })?.start).toEqual({ kind: "tier", tier: 0, index: 0 });
+  });
+
+  it("uses the dead end when every tier is capped out", () => {
+    const path = findHikePath([line([0, 0], [6000, 0])], at(6000, 0), { trailheadTiers: [[p(0, 0)]], tierMaxM: [5000] });
+    expect(path?.start).toEqual({ kind: "dead-end" });
+  });
+
+  it("uses the second tier when no lot snaps to a trail", () => {
+    const path = findHikePath([line([0, 0], [1600, 0])], at(1600, 0), { trailheadTiers: [[p(0, 5000)], [p(400, 0)]] });
+    expect(path?.start).toEqual({ kind: "tier", tier: 1, index: 0 });
+  });
+
+  it("reports a dead-end start when no tier point snaps", () => {
+    const path = findHikePath([line([0, 0], [1000, 0])], at(1000, 0), { trailheadTiers: [[p(0, 5000)], []] });
+    expect(path?.start).toEqual({ kind: "dead-end" });
+    expect(findHikePath([line([0, 0], [1000, 0])], at(1000, 0))?.start).toEqual({ kind: "dead-end" });
   });
 
   it("ignores a trailhead that is not on any connected trail", () => {
@@ -122,12 +160,43 @@ describe("real Delicate Arch fixtures (Arches National Park)", () => {
   it("OSM ways with the trailhead node give about the same walk", () => {
     const o = parseOsm(osm)!;
     expect(o.trailheads).toHaveLength(2);
-    const path = findHikePath(o.segments, arch, { trailheadTiers: [o.trailheads, o.parking].filter((t) => t.length) });
+    const path = findHikePath(o.segments, arch, { trailheadTiers: [o.parking, o.trailheads].map((t) => t.map((l) => l.point)) });
     expect(path).not.toBeNull();
     expect(path!.distanceMeters).toBeGreaterThan(2500);
     expect(path!.distanceMeters).toBeLessThan(6500);
     // ends at the Delicate Arch trailhead
     const [lng, lat] = path!.coords[0];
     expect(Math.hypot(lng - -109.52044, lat - 38.73569)).toBeLessThan(0.002);
+  });
+});
+
+describe("Graph.nearestEdge (grid search)", () => {
+  it("gives the same edge, point and distance as scanning every edge in order, with dead edges, a skipped node, long edges and a distance cap", () => {
+    let seed = 42;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const g = new Graph(6);
+    const nodes: number[] = [];
+    for (let i = 0; i < 400; i++) nodes.push(g.node(rnd() * 3000 - 1500, rnd() * 3000 - 1500));
+    for (let i = 0; i < 600; i++) g.edge(nodes[Math.floor(rnd() * nodes.length)], nodes[Math.floor(rnd() * nodes.length)]); // some are very long
+    for (let i = 0; i < 40; i++) g.split(Math.floor(rnd() * g.edges.length), g.node(rnd() * 3000 - 1500, rnd() * 3000 - 1500));
+    const brute = (x: number, y: number, skip: number, maxD: number) => {
+      let best: { index: number; x: number; y: number; d: number } | null = null;
+      g.edges.forEach((e, index) => {
+        if (!e.alive || e.a === skip || e.b === skip) return;
+        const ax = g.xs[e.a], ay = g.ys[e.a], dx = g.xs[e.b] - ax, dy = g.ys[e.b] - ay;
+        const len2 = dx * dx + dy * dy;
+        const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2));
+        const px = ax + t * dx, py = ay + t * dy;
+        const d = Math.hypot(x - px, y - py);
+        if (!best || d < best.d) best = { index, x: px, y: py, d };
+      });
+      return best && (best as { d: number }).d <= maxD ? best : null;
+    };
+    for (let q = 0; q < 300; q++) {
+      const x = rnd() * 4000 - 2000, y = rnd() * 4000 - 2000;
+      const skip = q % 3 === 0 ? nodes[q % nodes.length] : -1;
+      const maxD = q % 2 === 0 ? Infinity : 150;
+      expect(g.nearestEdge(x, y, skip, maxD)).toEqual(brute(x, y, skip, maxD));
+    }
   });
 });

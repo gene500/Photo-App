@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchOverpass, OVERPASS_ENDPOINTS, OverpassError } from "./overpass";
+import { fetchOverpass, OVERPASS_ENDPOINTS, OverpassError, OverpassTooHeavyError } from "./overpass";
 
 const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 const noSleep = vi.fn(async () => {});
@@ -20,7 +20,7 @@ describe("fetchOverpass", () => {
       .mockResolvedValueOnce(new Response("busy", { status: 504 }))
       .mockResolvedValueOnce(ok({ elements: [1] }));
     await expect(fetchOverpass("q", { fetchImpl, sleep: noSleep, hedgeMs: Infinity })).resolves.toEqual({ elements: [1] });
-    expect(fetchImpl.mock.calls.map((c) => c[0])).toEqual(OVERPASS_ENDPOINTS);
+    expect((fetchImpl.mock.calls as unknown[][]).map((c) => c[0])).toEqual(OVERPASS_ENDPOINTS);
     expect(noSleep).not.toHaveBeenCalled();
   });
 
@@ -50,6 +50,50 @@ describe("fetchOverpass", () => {
   it("throws OverpassError when every mirror answers with a runtime-error remark", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(ok({ elements: [], remark: "runtime error: Query ran out of memory" }));
     await expect(fetchOverpass("q", { fetchImpl, sleep: noSleep, hedgeMs: Infinity })).rejects.toBeInstanceOf(OverpassError);
+  });
+
+  it.each([
+    'runtime error: Query ran out of memory in "recurse" at line 3 using about 2048 MB of RAM.',
+    "runtime error: Query run out of memory using about 2048 MB of RAM.",
+    "runtime error: Query exceeded the maximum size of 6000000 bytes",
+  ])("with stopOnHeavy, a too-heavy remark (%s) from two mirrors in a row ends the lookup: two queries, then TooHeavy", async (remark) => {
+    noSleep.mockClear();
+    const fetchImpl = vi.fn(async () => ok({ elements: [], remark }));
+    await expect(fetchOverpass("q", { fetchImpl: fetchImpl as unknown as typeof fetch, sleep: noSleep, hedgeMs: Infinity, stopOnHeavy: true })).rejects.toBeInstanceOf(OverpassTooHeavyError);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect((fetchImpl.mock.calls as unknown[][]).map((c) => c[0])).toEqual([OVERPASS_ENDPOINTS[0], OVERPASS_ENDPOINTS[1]]);
+    expect(noSleep).not.toHaveBeenCalled();
+  });
+
+  const heavyRemark = "runtime error: Query ran out of memory in \"query\" at line 5 using about 2048 MB of RAM.";
+  it("with stopOnHeavy, a heavy first mirror and a normal second mirror: the second answer is used", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(ok({ elements: [], remark: heavyRemark }))
+      .mockResolvedValueOnce(ok({ elements: [7] }));
+    await expect(fetchOverpass("q", { fetchImpl, sleep: noSleep, hedgeMs: Infinity, stopOnHeavy: true })).resolves.toEqual({ elements: [7] });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("with stopOnHeavy, a heavy first mirror and a failing second mirror is a failure, not a too-heavy verdict", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(ok({ elements: [], remark: heavyRemark }))
+      .mockRejectedValue(new Error("network"));
+    const err = await fetchOverpass("q", { fetchImpl, sleep: noSleep, hedgeMs: Infinity, stopOnHeavy: true }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(OverpassError);
+    expect(err).not.toBeInstanceOf(OverpassTooHeavyError);
+  });
+
+  it("with stopOnHeavy, a timed-out remark is still a failed mirror", async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(ok({ elements: [], remark: "runtime error: Query timed out in \"query\" at line 3 after 26 seconds." }))
+      .mockResolvedValueOnce(ok({ elements: [1] }));
+    await expect(fetchOverpass("q", { fetchImpl, sleep: noSleep, hedgeMs: Infinity, stopOnHeavy: true })).resolves.toEqual({ elements: [1] });
+  });
+
+  it("without stopOnHeavy an out-of-memory remark behaves as before (every mirror tried)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(ok({ elements: [], remark: "runtime error: Query ran out of memory" }));
+    await expect(fetchOverpass("q", { fetchImpl, sleep: noSleep, hedgeMs: Infinity })).rejects.toBeInstanceOf(OverpassError);
+    expect(fetchImpl).toHaveBeenCalledTimes(OVERPASS_ENDPOINTS.length + 1);
   });
 
   it("starts the next mirror when the first has not answered within the hedge delay, and the fastest good answer wins", async () => {

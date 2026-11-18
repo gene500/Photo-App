@@ -122,7 +122,7 @@ export const api = {
   removePhoto: (stopId: string) => request<{ stop: Stop }>(`/api/stops/${stopId}/photo`, send("DELETE"), DEFAULT_TIMEOUT_MS, shapes.stop),
   directions: (coordinates: LngLat[]) =>
     request<{ route: RouteResult }>("/api/directions", send("POST", { coordinates }), DEFAULT_TIMEOUT_MS, shapes.route),
-  optimizeOrder: (coordinates: LngLat[], light?: { stops: { lightPref: LightPref; priority?: StopPriority; dwellMinutes: number }[]; plannedDate: string; departAt?: string; focus?: "priority" | "time"; fixDeparture?: boolean; origin?: { lat: number; lng: number } }) =>
+  optimizeOrder: (coordinates: LngLat[], light?: { stops: { lightPref: LightPref; priority?: StopPriority; dwellMinutes: number; walkMinutes?: number }[]; plannedDate: string; departAt?: string; focus?: "priority" | "time"; fixDeparture?: boolean; origin?: { lat: number; lng: number } }) =>
     request<{ order: number[]; complete?: boolean; departAt?: string | null; misses?: { stopIndex: number; minutes: number; priority?: StopPriority }[]; dark?: { stopIndex: number; minutes: number; priority?: StopPriority }[]; polar?: number[]; notices?: PlaceNotice[] }>(
       "/api/optimize",
       send("POST", { coordinates, ...light }),
@@ -163,6 +163,8 @@ export const api = {
       const h = (b as { hike?: unknown } | null)?.hike;
       return h === null || isHike(h);
     }),
+  /** Finds and saves the parking lot a stop's hike starts from; returns the updated stop. */
+  resolveAccess: (stopId: string) => request<{ stop: Stop }>(`/api/stops/${stopId}/access`, send("POST"), DEFAULT_TIMEOUT_MS, shapes.stop),
   weather: (p: { lat: number; lng: number; date: string }) =>
     request<{ forecast: WeatherForecast }>(`/api/weather?lat=${p.lat.toFixed(6)}&lng=${p.lng.toFixed(6)}&date=${p.date}`),
 };

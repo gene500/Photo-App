@@ -3,6 +3,7 @@ import type { RouteResult } from "@/lib/types";
 import { createShareToken } from "@/server/share";
 import { addStop, reorderStops } from "@/server/stops";
 import { createTrip, updateTrip } from "@/server/trips";
+import { prisma } from "@/server/db";
 import { createTestUser, resetDb, sampleTripInput } from "../../../../tests/helpers/db";
 
 const getDirections = vi.fn();
@@ -48,5 +49,16 @@ describe("share page follows the owner's saved stop order", () => {
     expect(after.route).toEqual(route);
     // The mark itself is the owner's private state.
     expect(JSON.stringify(after.trip)).not.toContain("routeOptimizedFor");
+  });
+
+  it("fetches the route to a stop's saved parking lot instead of the stop", async () => {
+    const user = await createTestUser();
+    const trip = await createTrip(user.id, sampleTripInput);
+    const a = (await addStop(user.id, trip.id, spot("A", 36, -120)))!;
+    await addStop(user.id, trip.id, spot("B", 37, -119));
+    await prisma.stop.update({ where: { id: a.id }, data: { accessLat: 36.01, accessLng: -120.02, accessName: "Lot", accessResolvedAt: new Date() } });
+    const token = (await createShareToken(user.id, trip.id))!;
+    await render(token);
+    expect(getDirections).toHaveBeenLastCalledWith([[-120.02, 36.01], [-119, 37]]);
   });
 });

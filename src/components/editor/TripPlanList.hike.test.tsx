@@ -13,9 +13,9 @@ vi.mock("@/lib/use-hike", () => ({ useHike: (...a: unknown[]) => useHike(...a) }
 vi.mock("@/lib/use-weather", () => ({ useWeatherLine: () => null }));
 
 const stop = (id: string, name: string): Stop => ({
-  id, tripId: "t1", order: 0, name, lat: id === "a" ? 37 : 40, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [],
+  id, tripId: "t1", order: 0, name, lat: id === "a" ? 37 : 40, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], access: null, accessResolvedAt: null,
 });
-const HIKE: Hike = { distanceMeters: 1931, geometry: [[-119.52, 36.99], [-119.5, 37]], source: "osm", attribution: "x" };
+const HIKE: Hike = { distanceMeters: 1931, geometry: [[-119.52, 36.99], [-119.5, 37]], source: "osm", attribution: "x", access: null };
 const handlers = { onToggleVisited: vi.fn(), onPriorityChange: vi.fn(), onSelect: vi.fn() };
 const list = (props: Partial<React.ComponentProps<typeof TripPlanList>> = {}) =>
   render(<SettingsProvider><TripPlanList stops={[stop("a", "Arch"), stop("b", "Plain")]} optimized={false} bestTimes={[null, null]} {...handlers} {...props} /></SettingsProvider>);

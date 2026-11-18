@@ -6,7 +6,7 @@ import type { Stop, TripWithStops } from "./types";
 
 const stop = (i: number): Stop => ({
   id: `s${i}`, tripId: "t", order: i, name: `Stop ${i}`, lat: 37, lng: -119, notes: "n", source: "manual",
-  photoUrl: "/uploads/private.jpg", visited: false, lightPref: "golden", priority: "normal", dwellMinutes: 30, shotNotes: "wide", shotChecklist: [{ text: "a", done: true }],
+  photoUrl: "/uploads/private.jpg", visited: false, lightPref: "golden", priority: "normal", dwellMinutes: 30, shotNotes: "wide", shotChecklist: [{ text: "a", done: true }], access: null, accessResolvedAt: null,
 });
 const trip = (id: string, over: Partial<TripWithStops> = {}): TripWithStops => ({
   id, name: `Trip ${id}`, plannedDate: "2026-07-01", departAt: null, shareToken: "SECRET-TOKEN", stops: [stop(0), stop(1)], ...over,
@@ -251,6 +251,54 @@ describe("offline-store", () => {
     expect(s0.shotNotes).toBeNull();
     expect(s0.lightPref).toBe("any");
     expect(s0.dwellMinutes).toBe(0);
+  });
+
+  describe("stop access point in a stored copy", () => {
+    const withAccess = (access: unknown, extra: Record<string, unknown> = {}) => {
+      saveTripCopy(trip("a"), at(1));
+      const raw = JSON.parse(mem.getItem("rtpp.offline.trip.a")!);
+      raw.trip.stops[0].access = access;
+      Object.assign(raw.trip.stops[0], extra);
+      mem.setItem("rtpp.offline.trip.a", JSON.stringify(raw));
+      return loadTripCopy("a")!.trip.stops[0];
+    };
+
+    it("treats a stored lot name of only invisible characters as no name", () => {
+      expect(withAccess({ lat: 1, lng: 2, name: "\u200B\u200D", walkMeters: null }).access?.name).toBeNull();
+    });
+
+    it("caps a stored lot name at 120 characters without splitting an emoji", () => {
+      expect(withAccess({ lat: 1, lng: 2, name: "x".repeat(300), walkMeters: null }).access?.name).toBe("x".repeat(120));
+      expect(withAccess({ lat: 1, lng: 2, name: "x".repeat(119) + "\u{1F600}", walkMeters: null }).access?.name).toBe("x".repeat(119));
+    });
+
+    it("an old copy without access or accessResolvedAt shows access null", () => {
+      saveTripCopy(trip("a"), at(1));
+      const raw = JSON.parse(mem.getItem("rtpp.offline.trip.a")!);
+      for (const st of raw.trip.stops) { delete st.access; delete st.accessResolvedAt; }
+      mem.setItem("rtpp.offline.trip.a", JSON.stringify(raw));
+      expect(loadTripCopy("a")!.trip.stops[0]).toMatchObject({ access: null, accessResolvedAt: null });
+    });
+
+    it("keeps a valid access point, the walk length and the resolved time (a copy from before the walk length gets null)", () => {
+      const s = withAccess({ lat: 37.01, lng: -119.5, name: "North lot", walkMeters: 1930 }, { accessResolvedAt: "2026-11-17T10:00:00.000Z" });
+      expect(s.access).toEqual({ lat: 37.01, lng: -119.5, name: "North lot", walkMeters: 1930 });
+      expect(s.accessResolvedAt).toBe("2026-11-17T10:00:00.000Z");
+      expect(withAccess({ lat: 37.01, lng: -119.5, name: null }).access).toEqual({ lat: 37.01, lng: -119.5, name: null, walkMeters: null });
+    });
+
+    it("treats a malformed access point as none, keeping the stop", () => {
+      for (const bad of [{ lat: 91, lng: 0, name: "x" }, { lat: 0, lng: 181, name: "x" }, { lat: -91, lng: 0, name: null }, { lat: NaN, lng: 0, name: null }, { lat: "1", lng: 2, name: null }, { lat: 1, lng: 2, name: 5 }, { lat: 1, lng: 2, name: {} }, "lot", [], 7]) {
+        const s = withAccess(bad);
+        expect(s.access).toBeNull();
+        expect(s.name).toBe("Stop 0");
+      }
+    });
+
+    it("treats a bad walk length as unknown and a non-string resolved time as none", () => {
+      for (const w of [-5, 0, "far", NaN, null]) expect(withAccess({ lat: 1, lng: 2, name: "x", walkMeters: w }).access?.walkMeters).toBeNull();
+      expect(withAccess(null, { accessResolvedAt: 12 }).accessResolvedAt).toBeNull();
+    });
   });
 
   it("drops a copy whose stops are malformed, and its index entry", () => {

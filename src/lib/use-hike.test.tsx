@@ -7,7 +7,7 @@ const subscribe = vi.fn();
 vi.mock("./hike-cache", () => ({ subscribeHike: (...a: unknown[]) => subscribe(...a) }));
 import { useHike, useHikes } from "./use-hike";
 
-const HIKE: Hike = { distanceMeters: 1930, geometry: [[-119.52, 36.99], [-119.5, 37]], source: "osm", attribution: "x" };
+const HIKE: Hike = { distanceMeters: 1930, geometry: [[-119.52, 36.99], [-119.5, 37]], source: "osm", attribution: "x", access: null };
 const release = vi.fn();
 beforeEach(() => {
   subscribe.mockReset();

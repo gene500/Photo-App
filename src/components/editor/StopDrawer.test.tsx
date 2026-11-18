@@ -13,7 +13,7 @@ import { StopDrawer } from "./StopDrawer";
 
 const stop: Stop = {
   id: "s1", tripId: "t1", order: 0, name: "Tunnel View", lat: 37.7156, lng: -119.6773,
-  notes: null, source: "suggested", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [],
+  notes: null, source: "suggested", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], access: null, accessResolvedAt: null,
 };
 
 describe("StopDrawer", () => {

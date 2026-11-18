@@ -6,7 +6,7 @@ const hikeApi = vi.fn();
 vi.mock("./api-client", () => ({ api: { hike: (...a: unknown[]) => hikeApi(...a) } }));
 import { HIKE_FAILURE_TTL_MS, HIKE_MAX_IN_FLIGHT, HIKE_NONE_TTL_MS, HIKE_SUCCESS_TTL_MS, hikeCacheSize, resetHikeCache, subscribeHike } from "./hike-cache";
 
-const HIKE: Hike = { distanceMeters: 1930, geometry: [[-119.52, 36.99], [-119.5, 37]], source: "osm", attribution: "x" };
+const HIKE: Hike = { distanceMeters: 1930, geometry: [[-119.52, 36.99], [-119.5, 37]], source: "osm", attribution: "x", access: null };
 
 beforeEach(() => {
   resetHikeCache();

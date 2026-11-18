@@ -25,7 +25,7 @@ vi.mock("@/lib/place-photo-cache", () => ({ loadPlacePhoto: vi.fn(async () => nu
 
 const stop = (i: number, over: Partial<Stop> = {}): Stop => ({
   id: `s${i}`, tripId: "t1", order: i, name: EVIL, lat: 37.7, lng: -119.6, notes: EVIL, source: "manual",
-  photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 0, shotNotes: EVIL, shotChecklist: [{ text: EVIL, done: false }], ...over,
+  photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 0, shotNotes: EVIL, shotChecklist: [{ text: EVIL, done: false }], access: null, accessResolvedAt: null, ...over,
 });
 
 beforeEach(() => {
@@ -52,7 +52,7 @@ describe("hostile place names are rendered as text", () => {
   });
 
   it("share page", () => {
-    const trip: PublicTrip = { name: EVIL, plannedDate: "2026-07-01", departAt: null, stops: [stop(0)].map(({ order, name, lat, lng, notes, source, visited, lightPref, priority, dwellMinutes, shotNotes, shotChecklist }) => ({ order, name, lat, lng, notes, source, visited, lightPref, priority, dwellMinutes, shotNotes, shotChecklist })) };
+    const trip: PublicTrip = { name: EVIL, plannedDate: "2026-07-01", departAt: null, stops: [stop(0)].map(({ order, name, lat, lng, notes, source, visited, lightPref, priority, dwellMinutes, shotNotes, shotChecklist, access }) => ({ order, name, lat, lng, notes, source, visited, lightPref, priority, dwellMinutes, shotNotes, shotChecklist, access })) };
     const { container } = render(<SharedTripView trip={trip} />);
     expect(container.textContent).toContain(EVIL);
     noInjectedNodes(container);

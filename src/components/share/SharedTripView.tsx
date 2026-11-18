@@ -7,9 +7,9 @@ import { DownloadDialog } from "@/components/itinerary/DownloadDialog";
 import { useItineraryDownload } from "@/components/itinerary/use-itinerary-download";
 import { ShotListReadOnly } from "@/components/ui/ShotListReadOnly";
 import { btnGhost, card } from "@/components/ui/styles";
-import { computeArrivals, computeBestTimes, describeBestTime, formatClock } from "@/lib/best-time";
+import { computeArrivals, computeBestTimes, computeLotArrivals, describeBestTime, formatClock } from "@/lib/best-time";
 import { appleMapsUrls, googleMapsUrl } from "@/lib/export";
-import { buildItinerary, itineraryFileName } from "@/lib/itinerary";
+import { buildItinerary, itineraryFileName, parkText } from "@/lib/itinerary";
 import { createItineraryPdf, mapTokenFromEnv } from "@/lib/itinerary-download";
 import { describeLightHint, lightLabel } from "@/lib/light-windows";
 import { estimateLegDurations } from "@/lib/straight-line";
@@ -31,7 +31,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
 
   // The map takes Stop objects (visited stops show as visited); the keys are made from the order, never from database ids.
   const mapStops: Stop[] = useMemo(
-    () => trip.stops.map((s) => ({ ...s, id: `stop-${s.order}`, tripId: "", notes: null, photoUrl: null })),
+    () => trip.stops.map((s) => ({ ...s, id: `stop-${s.order}`, tripId: "", notes: null, photoUrl: null, accessResolvedAt: null })),
     [trip.stops],
   );
   // The page fetches the real driving route on the server; without one (routing down) the line is straight and the times are estimated from distance.
@@ -50,6 +50,11 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
     // eslint-disable-next-line react-hooks/exhaustive-deps -- timesInput is rebuilt from these each render
     [trip.plannedDate, departAt, trip.stops, legs],
   );
+  const lotArrivals = useMemo(
+    () => computeLotArrivals(timesInput, legs),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- timesInput is rebuilt from these each render
+    [trip.plannedDate, departAt, trip.stops, legs],
+  );
   const bestTimes = useMemo(
     () => computeBestTimes(timesInput, legs),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- timesInput is rebuilt from these each render
@@ -58,7 +63,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
 
   // Stop notes are never shared, so the links are built from names and coordinates only.
   const mapLinks = useMemo(() => {
-    const stops = trip.stops.map((s) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: null }));
+    const stops = trip.stops.map((s) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: null, access: s.access }));
     return { apple: appleMapsUrls(stops) ?? [], google: googleMapsUrl(stops) ?? [] };
   }, [trip.stops]);
 
@@ -73,7 +78,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
         departAt: departAt ? new Date(departAt) : null,
         totalDistanceM: route?.distance ?? null,
         totalDurationS: route?.duration ?? null,
-        stops: trip.stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: null, shotNotes: s.shotNotes, lightPref: s.lightPref, source: s.source, visited: s.visited, priority: s.priority, arrival: arrivals[i] ?? null })),
+        stops: trip.stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: null, shotNotes: s.shotNotes, lightPref: s.lightPref, source: s.source, visited: s.visited, priority: s.priority, access: s.access, walkMeters: s.access?.walkMeters ?? null, arrival: arrivals[i] ?? null, lotArrival: lotArrivals[i] ?? null })),
         weather: trip.stops.map(() => null),
         note: route ? null : ESTIMATE_NOTE,
         timeFormat: tf,
@@ -158,6 +163,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
                           {s.priority !== "normal" && <> · {s.priority === "must" ? "Must-have" : "High priority"}</>}
                         </p>
                       )}
+                      {s.access && <p className="break-words text-xs text-muted" data-testid="shared-park">{parkText({ name: s.name, access: s.access, walkMeters: s.access.walkMeters }, settings.distanceUnit, mounted && lotArrivals[i] ? formatClock(lotArrivals[i]!, undefined, tf) : null)}</p>}
                       <ShotListReadOnly notes={s.shotNotes} checklist={s.shotChecklist} />
                     </div>
                   </li>

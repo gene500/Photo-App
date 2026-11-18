@@ -5,6 +5,7 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
 import { diffIds } from "@/lib/diff-ids";
+import { groupLots, LOT_LABEL_MIN_ZOOM, lotSignature } from "@/lib/lot-markers";
 import { bearingEndpoint, wrapLng } from "@/lib/geo";
 import { unwrapForFit } from "@/lib/map-bounds";
 import { isMapFatalError, type MapErrorEvent } from "@/lib/map-errors";
@@ -162,6 +163,7 @@ export default function MapPanel({
   // Suggestion dots already on the map, so only newly revealed ones fade in when the markers are rebuilt.
   const seenSuggestionsRef = useRef(new Set<string>());
   const pendingMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const lotMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const popupRef = useRef<mapboxgl.Popup | null>(null);
   const routeGeometryRef = useRef(routeGeometry);
   const drawnBucketRef = useRef(NaN);
@@ -599,6 +601,48 @@ export default function MapPanel({
       return new mapboxgl.Marker({ element: el }).setLngLat([s.lng, s.lat]).addTo(map);
     });
   }, [suggestions, highlightedSuggestionId]);
+
+  // Every stop's parking lot (the route drives there): a small "P" with the lot name, merged when lots coincide. Plain DOM markers (no map layer).
+  // Rebuilt only when the set of lots changes; a selection change only toggles the emphasis class. The stop's own marker stays at the stop.
+  const lots = groupLots(stops, selectedId);
+  const lotsRef = useRef(lots);
+  const lotSig = lotSignature(lots);
+  const lotSelSig = lots.map((g) => (g.selected ? "1" : "0")).join("");
+  useEffect(() => { lotsRef.current = lots; }); // first, so the effects below read this render's lots
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const made = lotsRef.current.map((g) => {
+      const el = document.createElement("span");
+      el.className = `${MARKER_CLASS} lot-marker${g.selected ? " lot-marker-selected" : ""}`;
+      el.textContent = "P";
+      const label = document.createElement("span");
+      label.className = "lot-label";
+      label.textContent = g.label;
+      el.append(label);
+      el.setAttribute("role", "img"); // decorative: not focusable, named for screen readers
+      el.setAttribute("aria-label", g.ariaLabel);
+      return new mapboxgl.Marker({ element: el }).setLngLat([g.lng, g.lat]).addTo(map);
+    });
+    lotMarkersRef.current = made;
+    return () => {
+      for (const m of made) m.remove();
+      lotMarkersRef.current = [];
+    };
+  }, [lotSig, loaded]);
+  useEffect(() => {
+    lotMarkersRef.current.forEach((m, i) => m.getElement().classList.toggle("lot-marker-selected", lotsRef.current[i]?.selected ?? false));
+  }, [lotSelSig, lotSig, loaded]);
+  // Zoomed far out the labels would overlap: only the P shows (CSS keys off this attribute).
+  useEffect(() => {
+    const map = mapRef.current;
+    const box = containerRef.current;
+    if (!map || !box) return;
+    const update = () => { box.dataset.lotLabels = map.getZoom() >= LOT_LABEL_MIN_ZOOM ? "on" : "off"; };
+    update();
+    map.on("zoom", update);
+    return () => { map.off("zoom", update); };
+  }, [loaded]);
 
   // The temporary pin.
   useEffect(() => {

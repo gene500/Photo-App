@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  classifyBestTime, computeArrivals, computeBestTimes, describeBestTime, estimateArrivals, clampToSolarDay, formatClock, solarDateAt, getSunWindows, solarDayAnchor,
+  classifyBestTime, computeArrivals, computeLotArrivals, computeBestTimes, describeBestTime, estimateArrivals, clampToSolarDay, formatClock, solarDateAt, getSunWindows, solarDayAnchor,
   type SunWindows,
 } from "./best-time";
 
@@ -199,5 +199,50 @@ describe("clampToSolarDay", () => {
   it("works at a longitude whose offset is not a whole number of minutes", () => {
     const c = clampToSolarDay(new Date("2026-07-05T00:00:00Z"), "2026-07-01", 12.3456);
     expect(solarDateAt(c, 12.3456)).toBe("2026-07-01");
+  });
+});
+
+describe("arrivals with a parking lot (walk)", () => {
+  const lot = (walkMeters: number | null) => ({ access: { walkMeters } });
+  const trip = (stops: object[], departAt = "2026-07-01T12:00:00.000Z") =>
+    ({ plannedDate: "2026-07-01", departAt, stops: stops as typeof stops & { lat: number; lng: number; dwellMinutes: number }[] }) as Parameters<typeof computeArrivals>[0];
+  const A = { ...TUNNEL_VIEW }, B = { ...FRESNO }, C = { lat: 36.9, lng: -119.7, dwellMinutes: 20 };
+
+  it("without a lot nothing changes: subject and lot arrival are the same", () => {
+    const t = trip([A, B]);
+    expect(computeArrivals(t, [3600])).toEqual(computeLotArrivals(t, [3600]));
+    expect(computeArrivals(t, [3600])[1]!.toISOString()).toBe("2026-07-01T13:30:00.000Z");
+  });
+
+  it("arrives at the subject one walk after the lot, and leaves the lot dwell plus two walks later", () => {
+    const t = trip([{ ...A, ...lot(1920) }, B]); // 30 min each way
+    const [subject0, subject1] = computeArrivals(t, [3600]);
+    const [lot0, lot1] = computeLotArrivals(t, [3600]);
+    expect(lot0!.toISOString()).toBe("2026-07-01T12:00:00.000Z"); // the start is the arrival at the first lot
+    expect(subject0!.toISOString()).toBe("2026-07-01T12:30:00.000Z");
+    expect(lot1!.toISOString()).toBe("2026-07-01T14:30:00.000Z"); // 30 dwell + 60 walking + 60 drive
+    expect(subject1!.toISOString()).toBe("2026-07-01T14:30:00.000Z"); // B has no lot
+  });
+
+  it("adds both lots' walks for two consecutive stops with a lot", () => {
+    const t = trip([{ ...A, ...lot(1920) }, { ...B, ...lot(1000) }, C]); // 30 and 15 min
+    const none = computeArrivals(trip([A, B, C]), [3600, 1800]);
+    const withLots = computeArrivals(t, [3600, 1800]);
+    expect(withLots[1]!.getTime() - none[1]!.getTime()).toBe((60 + 15) * 60_000); // 2 x 30 before it, its own one-way walk
+    expect(withLots[2]!.getTime() - none[2]!.getTime()).toBe((60 + 30) * 60_000); // 2 x 30 + 2 x 15
+  });
+
+  it("treats an unknown walk as no walk", () => {
+    const t = trip([{ ...A, ...lot(null) }, B]);
+    expect(computeArrivals(t, [3600])).toEqual(computeArrivals(trip([A, B]), [3600]));
+  });
+
+  it("classifies the best time from the subject arrival", () => {
+    // Sunrise at the tunnel is about 12:48Z on 2026-07-01 (5:48 PDT); morning golden hour ends about an hour later.
+    const w = getSunWindows(A.lat, A.lng, "2026-07-01");
+    const lotArrival = new Date(w.goldenHourEnd!.getTime() - 10 * 60_000);
+    const departAt = lotArrival.toISOString();
+    expect(computeBestTimes(trip([A, B], departAt), [3600])[0]!.window).toBe("sunrise");
+    expect(computeBestTimes(trip([{ ...A, ...lot(1920) }, B], departAt), [3600])[0]!.window).toBe("midday"); // 30 min walk crosses it
   });
 });

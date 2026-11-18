@@ -4,7 +4,7 @@ import { routeSignature, type SignedStop } from "./route-signature";
 
 const stop = (over: Partial<Stop> = {}): Stop => ({
   id: "a", tripId: "t", order: 0, name: "A", lat: 36.74, lng: -119.79, notes: null, source: "manual", photoUrl: null,
-  visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], ...over,
+  visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], access: null, accessResolvedAt: null, ...over,
 });
 const base: SignedStop[] = [stop(), stop({ id: "b", order: 1, lat: 37.96, lng: -119.12 })];
 const sig = (stops: readonly SignedStop[] = base, date = "2026-07-01") => routeSignature(date, stops);
@@ -31,6 +31,11 @@ describe("routeSignature", () => {
   it("ignores name, notes, visited and photo", () => {
     const edited = [stop({ name: "Renamed", notes: "n", visited: true, photoUrl: "/p.jpg", order: 5 }), base[1]];
     expect(sig(edited)).toBe(sig());
+  });
+
+  it("ignores a parking lot and its walk, so a lot arriving does not un-optimize the trip", () => {
+    const withLot = { ...stop(), access: { lat: 36.7, lng: -119.7, name: "North lot", walkMeters: 1920 } };
+    expect(routeSignature("2026-07-01", [withLot, base[1]])).toBe(sig());
   });
 
   it("ignores float noise below 1e-6", () => {

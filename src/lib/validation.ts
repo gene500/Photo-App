@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isDateOnly } from "./dates";
 import { routeLengthKm } from "./geo";
 import { hasContent, stripNameChars, stripTextChars } from "./text";
+import { MAX_WALK_MINUTES } from "./walk-time";
 
 // Zod otherwise probes `new Function("")` to JIT its parsers, which a CSP without unsafe-eval reports as a violation
 // in the browser console. In the browser the interpreter path is plenty fast for these small forms.
@@ -181,7 +182,17 @@ export const optimizeRequestSchema = z
     .min(2, "Add at least 2 stops to optimize the route")
     .max(MAX_ROUTE_WAYPOINTS, `Optimizing supports at most ${MAX_ROUTE_WAYPOINTS} stops per trip`),
     /** Per-coordinate light preference and time spent; same length as `coordinates`. */
-    stops: z.array(z.object({ lightPref: lightPrefSchema, priority: stopPrioritySchema.optional(), dwellMinutes: dwellMinutesSchema })).optional(),
+    stops: z
+      .array(
+        z.object({
+          lightPref: lightPrefSchema,
+          priority: stopPrioritySchema.optional(),
+          dwellMinutes: dwellMinutesSchema,
+          /** One-way walk (minutes) from the stop's parking lot to its subject; absent (an older client) or 0 means no walk. */
+          walkMinutes: z.number().int().min(0).max(MAX_WALK_MINUTES).optional(),
+        }),
+      )
+      .optional(),
     plannedDate: dateOnlySchema.optional(),
     /** The trip's saved start time; it wins ties against equally good departures. */
     departAt: optimizeDepartAtSchema.optional(),

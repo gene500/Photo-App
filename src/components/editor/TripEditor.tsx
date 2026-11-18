@@ -18,7 +18,7 @@ import { useSuggestionWeather } from "@/lib/use-weather";
 import { useHikes } from "@/lib/use-hike";
 import { holdWeather } from "@/lib/weather-cache";
 import { loadPopularityInBatches, POPULARITY_BATCH, rankSuggestions } from "@/lib/suggestion-popularity";
-import { clampToSolarDay, computeArrivals, computeBestTimes, formatClock } from "@/lib/best-time";
+import { clampToSolarDay, computeArrivals, computeBestTimes, computeLotArrivals, formatClock } from "@/lib/best-time";
 import { useMounted } from "@/lib/use-mounted";
 import { fromTimeValue, toTimeValue } from "./StartTimeControl";
 import { DEFAULT_SETTINGS } from "@/lib/settings";
@@ -27,6 +27,7 @@ import { isExactOptimization } from "@/lib/optimize-schedule";
 import { leadingVisited, pinVisitedFirst } from "@/lib/visited-run";
 import { localDateOnly } from "@/lib/dates";
 import { routeSignature } from "@/lib/route-signature";
+import { stopWalkMinutes } from "@/lib/walk-time";
 import { defaultLightPref } from "@/lib/light-windows";
 import { formatDistance, formatDuration } from "@/lib/format";
 import { coordsLabel, haversineMeters } from "@/lib/geo";
@@ -41,6 +42,8 @@ import { SearchBar } from "./SearchBar";
 import { StopCard } from "./StopCard";
 import { StopDrawer } from "./StopDrawer";
 import { StopList } from "./StopList";
+import { routePoints } from "@/lib/route-points";
+import { useAccessResolver } from "./use-access-resolver";
 import { geolocationSupported, getPosition, type PositionResult } from "@/lib/geolocation";
 import { originNearStops } from "@/lib/optimize-origin";
 import { TripPlan } from "./TripPlan";
@@ -65,6 +68,13 @@ const NO_SUGGESTIONS: Suggestion[] = [];
 const TRIP_GONE_MESSAGE = "Trip not found";
 const errorMessage = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
+/** While parking lots are still arriving, a route request waits for this much quiet, but never longer than the max since the first change it is holding back (25 stops looked up 3 at a time otherwise made a request per lot). */
+const DIRECTIONS_DEBOUNCE_MS = 1200;
+const DIRECTIONS_MAX_WAIT_MS = 5000;
+/** Optimize waits at most this long for pending parking lots, then plans with what it has. */
+const LOT_WAIT_MAX_MS = 8000;
+/** After the lookups finish, one short pause lets React apply the last lot to the stops before Optimize reads them. */
+const LOT_SETTLE_MS = 30;
 /** How long the browser may take over the location prompt before Optimize says it is waiting. */
 const LOCATION_HINT_MS = 2_000;
 
@@ -361,11 +371,14 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
 
   // Route through the stops in order. A string key so edits that don't move anything
   // (visited, notes) don't refetch. Fewer than 2 stops means no route at all.
-  const waypointKey = JSON.stringify(stops.map((s) => [s.lng, s.lat]));
-  const waypointKeyRef = useRef(waypointKey);
+  const waypointKey = JSON.stringify(routePoints(stops));
+  // The Optimize stale-result guard uses the stops' own places (not the lot-aware key above), so a parking lot
+  // arriving mid-run does not discard the result; adding, removing, reordering or moving a stop still does.
+  const ownPlacesKey = JSON.stringify(stops.map((s) => [s.id, s.lat, s.lng]));
+  const ownPlacesKeyRef = useRef(ownPlacesKey);
   useEffect(() => {
-    waypointKeyRef.current = waypointKey;
-  }, [waypointKey]);
+    ownPlacesKeyRef.current = ownPlacesKey;
+  }, [ownPlacesKey]);
   const idsKey = stops.map((s) => s.id).join(",");
   const idsKeyRef = useRef(idsKey);
   useEffect(() => {
@@ -469,23 +482,52 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     if (suggestions.length === 0) return;
     return prefetchPlacePhotos(suggestions.map((s) => ({ key: s.osmId, name: s.name, lat: s.lat, lng: s.lng })));
   }, [suggestions]);
+  /** A parking lot found by the resolver: copy only the lot onto the latest local stop, and only if the stop is still where it was looked up (a moved stop's old answer is dropped). */
+  const mergeResolvedAccess = useCallback((stop: Stop) => {
+    setStops((prev) =>
+      prev.map((s) => (s.id === stop.id && s.lat === stop.lat && s.lng === stop.lng ? { ...s, access: stop.access, accessResolvedAt: stop.accessResolvedAt } : s)),
+    );
+  }, []);
+  // Stops whose move is being saved: no lot lookup for them until the server has the new position (it would answer for the old one).
+  const movingRef = useRef(new Set<string>());
+  // Per stop with a move in flight: `seq` numbers its moves, `pending` counts unanswered saves, `saved` is the last place the server confirmed (what a failed latest move goes back to).
+  const movesRef = useRef(new Map<string, { seq: number; pending: number; saved: Pick<Stop, "lat" | "lng" | "access" | "accessResolvedAt"> }>());
+  const liveStopsRef = useRef(stops);
+  const resolver = useAccessResolver(stops, mergeResolvedAccess, { isHeld: (id) => movingRef.current.has(id) });
+  const askedRouteRef = useRef(false); // a first route request has gone out
+  const heldSinceRef = useRef<number | null>(null); // when the oldest held-back route change began waiting
+
   useEffect(() => {
     const coordinates = JSON.parse(waypointKey) as LngLat[];
     if (coordinates.length < 2) return;
     let cancelled = false;
-    api.directions(coordinates).then(
-      ({ route: next }) => {
-        if (cancelled) return;
-        setRouteResult({ key: waypointKey, route: next, error: null, dismissed: false });
-      },
-      (e: unknown) => {
-        if (cancelled) return;
-        setRouteResult({ key: waypointKey, route: null, error: errorMessage(e, "Couldn't load the route"), dismissed: false });
-      },
-    );
+    const load = () => {
+      askedRouteRef.current = true;
+      heldSinceRef.current = null;
+      return api.directions(coordinates).then(
+        ({ route: next }) => {
+          if (cancelled) return;
+          setRouteResult({ key: waypointKey, route: next, error: null, dismissed: false });
+        },
+        (e: unknown) => {
+          if (cancelled) return;
+          setRouteResult({ key: waypointKey, route: null, error: errorMessage(e, "Couldn't load the route"), dismissed: false });
+        },
+      );
+    };
+    // Parking lots still arriving each change the key: once a first request has gone out, wait a moment so lots that land
+    // together make one request. The first draw, and any request with no lookup pending, goes out at once.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (askedRouteRef.current && resolver.isBusy()) {
+      const t = Date.now();
+      heldSinceRef.current ??= t;
+      timer = setTimeout(load, Math.max(0, Math.min(DIRECTIONS_DEBOUNCE_MS, heldSinceRef.current + DIRECTIONS_MAX_WAIT_MS - t)));
+    } else void load();
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `resolver` is a stable object; only the route changes refetch
   }, [waypointKey, routeRetry]);
 
   // With a single stop there is no route to follow, so look around that stop automatically
@@ -573,6 +615,13 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   );
   const arrivals = useMemo(
     () => computeArrivals({ plannedDate: trip.plannedDate, departAt, stops }, legDurations),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- legDurations is derived from activeRoute
+    [trip.plannedDate, departAt, stops, activeRoute],
+  );
+
+  // When the car reaches each stop's lot (the same as `arrivals` for a stop without one); `arrivals` is the subject, one walk later.
+  const lotArrivals = useMemo(
+    () => computeLotArrivals({ plannedDate: trip.plannedDate, departAt, stops }, legDurations),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- legDurations is derived from activeRoute
     [trip.plannedDate, departAt, stops, activeRoute],
   );
@@ -753,7 +802,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   async function optimizeRoute(opts?: { departAt: string | null }, quiet = false) {
     if (optimizing || stops.length < 2) return;
     const startKey = idsKey;
-    const startWaypoints = waypointKey;
+    const startPlaces = ownPlacesKey;
     const startPrefs = prefsKey;
     const startPlan = planKey;
     const before = stops;
@@ -769,7 +818,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const head = before.slice(0, anchor);
       const tail = before.slice(anchor);
       // The re-plan starts at the last visited stop: when the current route says the owner got there. The optimizer adds that stop's dwell itself.
-      const anchorArrival = done > 1 ? arrivals[anchor] : null;
+      const anchorArrival = done > 1 ? lotArrivals[anchor] : null;
       // With no saved start the Start time field shows "now": plan from that, not from sunrise, so the answer matches what is on screen.
       const planFrom = anchorArrival ? anchorArrival.toISOString() : (previousDepartAt ?? departAt);
       if (done >= before.length) {
@@ -804,9 +853,9 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         ? "Your location is far from this trip, so it was not used."
         : position && !position.ok ? "Couldn't get your location, optimized without it."
         : !quiet && settings.startFromLocation && !position ? locationSkipReason(done, tail.length) : null;
-      const result = await api.optimizeOrder(tail.map((s): LngLat => [s.lng, s.lat]), {
+      const result = await api.optimizeOrder(routePoints(tail), {
         ...(origin ? { origin } : {}),
-        stops: tail.map((s) => ({ lightPref: s.lightPref, priority: s.priority, dwellMinutes: s.dwellMinutes })),
+        stops: tail.map((s) => ({ lightPref: s.lightPref, priority: s.priority, dwellMinutes: s.dwellMinutes, ...(stopWalkMinutes(s) > 0 ? { walkMinutes: stopWalkMinutes(s) } : {}) })),
         plannedDate: trip.plannedDate,
         ...(planFrom ? { departAt: planFrom } : {}),
         focus: settings.optimizeFocus,
@@ -820,7 +869,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       }
       if (
         idsKeyRef.current !== startKey ||
-        waypointKeyRef.current !== startWaypoints ||
+        ownPlacesKeyRef.current !== startPlaces ||
         prefsKeyRef.current !== startPrefs
       ) {
         if (!quiet) setStopsError("Your stops changed while optimizing, so the result was discarded. Try again.");
@@ -949,6 +998,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     autoRunningRef.current = true;
     const run = (async () => {
       try {
+        await waitForLots();
         await optimizeRef.current?.(undefined, true);
       } catch {
         /* background run: stay silent */
@@ -977,6 +1027,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   // Latest-callback refs for timers and async continuations; assigned after the functions they point at are declared.
   useEffect(() => {
     stopCountRef.current = stops.length;
+    liveStopsRef.current = stops;
     optimizeRef.current = optimizeRoute;
     autoRunRef.current = runAutoOptimize;
   });
@@ -1025,6 +1076,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     }
   }
 
+  /** Optimize and the background re-plan wait here so they order by drive times that include the parking lots (capped, never hangs). */
+  async function waitForLots() {
+    if (await resolver.whenIdle(LOT_WAIT_MAX_MS)) await new Promise<void>((r) => setTimeout(r, LOT_SETTLE_MS));
+  }
+
   /** Optimize after a start time typed a moment ago (its blur save may still be running): wait for the save, then plan from the saved time itself. */
   async function optimizeAfterStartSave() {
     if (optimizeClickRef.current || optimizing) return;
@@ -1035,6 +1091,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     autoQueuedRef.current = false;
     try {
       if (autoPromiseRef.current) await autoPromiseRef.current;
+      await waitForLots();
       // Wait for the whole chain: a minute picked while the hour's save was in flight is saved after it, and Optimize must plan from that newest time.
       let saved: string | null | undefined;
       while (startChainRef.current || startSaveRef.current) {
@@ -1071,9 +1128,16 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     setAnnouncement((a) => (a === OPTIMIZED_ANNOUNCEMENT ? "" : a)); // "Undo is available" must not linger once it is not
   }
 
+  /** Moving a stop makes the server clear its parking lot, so the answer to a move also carries the (now empty) lot, and the resolver looks it up again. */
+  function withAccessOnMove(keys: (keyof Stop)[]): (keyof Stop)[] {
+    return keys.includes("lat") || keys.includes("lng") ? [...keys, "access", "accessResolvedAt"] : keys;
+  }
+
+
   /** Copy only `keys` from the server's stop onto the latest local one, so a response
    *  that raced a reorder can't overwrite `order` (or anything else it didn't change). */
   function mergeStop(stop: Stop, keys: (keyof Stop)[]) {
+    keys = withAccessOnMove(keys);
     setStops((prev) =>
       prev.map((s) => {
         if (s.id !== stop.id) return s;
@@ -1086,6 +1150,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
 
   /** Applies the server's answer to a stop update: the stop itself (only the keys that were sent) and the other stops whose visited flag the server changed with it. */
   function applyStopResult(res: { stop: Stop; stops?: Stop[] }, keys: (keyof Stop)[]) {
+    keys = withAccessOnMove(keys);
     const cascade = new Map((res.stops ?? []).map((o) => [o.id, o.visited]));
     setStops((prev) =>
       prev.map((s) => {
@@ -1137,19 +1202,47 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     });
   }
 
-  /** Marker drag: move optimistically, revert on failure. */
+  /** Marker drag: move optimistically, revert on failure. A stop dragged again before the first save answers has numbered moves: only the answer to the latest one may set the position, release the lookup hold, or roll back. */
   async function moveStop(id: string, p: LatLng) {
     const before = stops.find((s) => s.id === id);
     if (!before) return;
-    const put = (at: LatLng) => setStops((cur) => cur.map((s) => (s.id === id ? { ...s, lat: at.lat, lng: at.lng } : s)));
-    put(p);
+    const put = (patch: Partial<Stop>) => setStops((cur) => cur.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    let move = movesRef.current.get(id);
+    if (!move) {
+      move = { seq: 0, pending: 0, saved: { lat: before.lat, lng: before.lng, access: before.access, accessResolvedAt: before.accessResolvedAt } };
+      movesRef.current.set(id, move);
+    }
+    const mine = ++move.seq;
+    move.pending++;
+    // The server clears the lot on a move, so the route and the "P" marker must not keep pointing at the old one meanwhile.
+    put({ lat: p.lat, lng: p.lng, access: null, accessResolvedAt: null });
+    movingRef.current.add(id);
+    const finish = () => {
+      move.pending--;
+      if (move.pending > 0) return false;
+      movesRef.current.delete(id);
+      movingRef.current.delete(id); // before any state change, so the render that applies it also scans for the new position
+      return true;
+    };
     await tracked(async () => {
       try {
-        mergeStop((await api.updateStop(id, { lat: p.lat, lng: p.lng })).stop, ["lat", "lng"]);
-        setStopsError(null);
+        const { stop } = await api.updateStop(id, { lat: p.lat, lng: p.lng });
+        move.saved = { lat: stop.lat, lng: stop.lng, access: stop.access, accessResolvedAt: stop.accessResolvedAt };
+        if (mine === move.seq) {
+          finish();
+          mergeStop(stop, ["lat", "lng"]);
+          setStopsError(null);
+        } else if (finish()) setStops((cur) => cur.slice()); // an older answer ends the hold: scan again
       } catch (e) {
         markStaleOn(e);
-        put(before); // restores lat/lng only
+        if (mine !== move.seq) {
+          if (finish()) setStops((cur) => cur.slice());
+          return; // a newer move decides the position
+        }
+        finish();
+        // Deleted while the move was saving: the 404 is the expected outcome, not an error.
+        if ((e as { status?: unknown }).status === 404 && !liveStopsRef.current.some((s) => s.id === id)) return;
+        put(move.saved); // restores the last saved place and its lot
         setStopsError(errorMessage(e, "Couldn't move the stop"));
       }
     });
@@ -1517,7 +1610,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
             departAt: departAt ? new Date(departAt) : null,
             totalDistanceM: activeRoute?.distance ?? null,
             totalDurationS: activeRoute?.duration ?? null,
-            stops: stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: s.notes, shotNotes: s.shotNotes, lightPref: s.lightPref, arrival: arrivals[i] ?? null, source: s.source, visited: s.visited, priority: s.priority })),
+            stops: stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: s.notes, shotNotes: s.shotNotes, lightPref: s.lightPref, arrival: arrivals[i] ?? null, lotArrival: lotArrivals[i] ?? null, source: s.source, visited: s.visited, priority: s.priority, access: s.access, walkMeters: s.access?.walkMeters ?? null })),
           },
         }} />}
         collapsedSummary={

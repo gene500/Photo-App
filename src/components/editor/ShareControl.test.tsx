@@ -61,6 +61,12 @@ describe("ShareControl", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Yes, revoke" })).toBeNull());
   });
 
+  it("says the link shows each stop's parking spot", async () => {
+    render(<ShareControl tripId="t1" shareToken={TOKEN} onChange={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "Share" }));
+    expect(screen.getByText(/each stop.s parking spot/)).toBeTruthy();
+  });
+
   it("Keep cancels the revoke, and the note says shot notes are shared", async () => {
     render(<ShareControl tripId="t1" shareToken={TOKEN} onChange={vi.fn()} />);
     await userEvent.click(screen.getByRole("button", { name: "Share" }));

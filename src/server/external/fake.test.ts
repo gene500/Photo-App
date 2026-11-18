@@ -91,6 +91,7 @@ describe("fakeHike", () => {
     expect(h.geometry.at(-1)).toEqual([FAKE_HIKE_POINT.lng - 0.01, FAKE_HIKE_POINT.lat + 0.01]);
     expect(h.distanceMeters / 1609.344).toBeGreaterThan(1.15);
     expect(h.distanceMeters / 1609.344).toBeLessThan(1.25);
+    expect(h.access).toEqual({ lat: h.geometry[0][1], lng: h.geometry[0][0], name: "Fake Trailhead Lot" });
   });
   it("gives none anywhere else", async () => {
     const { fakeHike } = await import("./fake");

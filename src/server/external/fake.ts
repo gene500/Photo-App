@@ -121,7 +121,7 @@ export function fakeHike(lat: number, lng: number): Hike | null {
   const geometry = offsets.map(([dx, dy]): LngLat => [r(lng + dx), r(lat + dy)]);
   let distanceMeters = 0;
   for (let i = 1; i < geometry.length; i++) distanceMeters += haversineMeters({ lat: geometry[i - 1][1], lng: geometry[i - 1][0] }, { lat: geometry[i][1], lng: geometry[i][0] });
-  return { distanceMeters: Math.round(distanceMeters / 10) * 10, geometry, source: "osm", attribution: OSM_ATTRIBUTION };
+  return { distanceMeters: Math.round(distanceMeters / 10) * 10, geometry, source: "osm", attribution: OSM_ATTRIBUTION, access: { lat: geometry[0][1], lng: geometry[0][0], name: "Fake Trailhead Lot" } };
 }
 
 /** Fake heads-ups (no network): a stop near Tioga Pass (Yosemite) gets a closed-road notice, one near Horseshoe Bend a closed-at-arrival one. */

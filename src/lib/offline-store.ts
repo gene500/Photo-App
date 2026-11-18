@@ -5,8 +5,9 @@
 import { isDateOnly } from "@/lib/dates";
 import { isObj } from "@/lib/guards";
 import { removeKeysWithPrefix } from "@/lib/storage-util";
+import { cleanLine } from "@/lib/text";
 import { clearAllSuggestions, removeSuggestions } from "@/lib/suggestions-store";
-import type { ShotItem, Stop, TripWithStops } from "@/lib/types";
+import type { AccessPoint, ShotItem, Stop, TripWithStops } from "@/lib/types";
 
 const PREFIX = "rtpp.offline.";
 const INDEX_KEY = `${PREFIX}index`;
@@ -242,6 +243,13 @@ export function listTripCopies(): TripCopySummary[] {
 const LIGHT_PREFS = ["any", "sunrise", "golden", "sunset"] as const;
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
+/** A stored access point: a point in range with a string or null name; anything else (or a copy from before it existed) is none. A missing or bad walk length is unknown. */
+function normalizeAccess(a: unknown): AccessPoint | null {
+  if (!isObj(a) || !finite(a.lat) || !finite(a.lng) || Math.abs(a.lat) > 90 || Math.abs(a.lng) > 180) return null;
+  if (a.name !== null && typeof a.name !== "string") return null;
+  return { lat: a.lat, lng: a.lng, name: a.name === null ? null : cleanLine(a.name, 120), walkMeters: finite(a.walkMeters) && a.walkMeters > 0 ? a.walkMeters : null };
+}
+
 /** Shallow validation of one stored stop; fills defaults for fields older copies lack. Null when it cannot be shown safely. */
 function normalizeStop(raw: unknown, tripId: string, order: number): Stop | null {
   if (!isObj(raw) || typeof raw.id !== "string" || typeof raw.name !== "string" || !finite(raw.lat) || !finite(raw.lng)) return null;
@@ -264,6 +272,9 @@ function normalizeStop(raw: unknown, tripId: string, order: number): Stop | null
     dwellMinutes: finite(raw.dwellMinutes) ? raw.dwellMinutes : 0,
     shotNotes: typeof raw.shotNotes === "string" ? raw.shotNotes : null,
     shotChecklist: checklist,
+    // Copies saved before the access point existed have none; a missing or malformed one means "go to the stop".
+    access: normalizeAccess(raw.access),
+    accessResolvedAt: typeof raw.accessResolvedAt === "string" ? raw.accessResolvedAt : null,
   };
 }
 

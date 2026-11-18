@@ -9,7 +9,17 @@ export class OverpassError extends Error {
   }
 }
 
+/** The query is too big (out of memory, over `maxsize`) for two different mirrors in a row, so asking more cannot help. Only thrown when the caller sets `stopOnHeavy`. */
+export class OverpassTooHeavyError extends OverpassError {
+  constructor(message: string) {
+    super(message);
+    this.name = "OverpassTooHeavyError";
+  }
+}
+
 type Deps = {
+  /** An out-of-memory / over-size remark is not retried on every mirror: ONE other mirror is asked, and only if it also says too heavy does the call fail with `OverpassTooHeavyError`. If that mirror answers, its answer is used; if it fails, the call fails with a plain `OverpassError` (so the caller treats it as a failure, not a verdict). */
+  stopOnHeavy?: boolean;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   timeoutMs?: number;
@@ -34,6 +44,8 @@ function overpassUrls(): string[] {
 const OVERPASS_HEDGE_MS = 1_500;
 
 class FatalOverpassError extends OverpassError {}
+class FatalHeavyError extends OverpassTooHeavyError {}
+const HEAVY_REMARK = /out of memory|exceeded the maximum size|maxsize/i;
 
 /**
  * Asks the mirrors for the same query, starting the next one when the previous has failed (network error, timeout, 429,
@@ -74,7 +86,10 @@ export async function fetchOverpass(query: string, deps: Deps = {}): Promise<unk
     }
     // Overpass reports a query that timed out or ran out of memory as a 200 with a remark and empty or partial elements.
     const remark = (json as { remark?: unknown } | null)?.remark;
-    if (typeof remark === "string" && /runtime error/i.test(remark)) throw new OverpassError(`Overpass: ${remark}`);
+    if (typeof remark === "string" && /runtime error/i.test(remark)) {
+      if (deps.stopOnHeavy && HEAVY_REMARK.test(remark)) throw new FatalHeavyError(`Overpass: ${remark}`);
+      throw new OverpassError(`Overpass: ${remark}`);
+    }
     // A 200 that is not an element list is a broken answer, not "no places here": do not let it be cached as empty.
     if (!Array.isArray((json as { elements?: unknown } | null)?.elements)) throw new OverpassError("Overpass returned an unexpected response");
     return json;
@@ -104,7 +119,7 @@ export async function fetchOverpass(query: string, deps: Deps = {}): Promise<unk
           (e: unknown) => {
             if (finished) return;
             lastError = e instanceof Error ? e.message : String(e);
-            if (e instanceof FatalOverpassError) return finish(() => reject(e));
+            if (e instanceof FatalOverpassError || e instanceof FatalHeavyError) return finish(() => reject(e));
             if (++failed === list.length) return finish(() => reject(new OverpassError(lastError)));
             launch(); // a failure doesn't wait for the hedge timer
           },
@@ -117,6 +132,16 @@ export async function fetchOverpass(query: string, deps: Deps = {}): Promise<unk
   try {
     return await race(urls);
   } catch (e) {
+    if (e instanceof FatalHeavyError) {
+      // One mirror running out of memory may just be an overloaded mirror: a second one must agree before the query counts as too heavy.
+      const others = urls.length > 1 ? urls.slice(1) : urls;
+      try {
+        return await race(others);
+      } catch (e2) {
+        if (e2 instanceof FatalHeavyError) throw e2;
+        throw new OverpassError(e2 instanceof Error ? e2.message : String(e2));
+      }
+    }
     if (e instanceof FatalOverpassError) throw e;
   }
   await sleep(OVERPASS_RETRY_DELAY_MS);

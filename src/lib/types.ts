@@ -15,6 +15,9 @@ export type StopPriority = "normal" | "high" | "must";
 
 export type ShotItem = { text: string; done: boolean };
 
+/** Where the car stops for a stop's hike (parking lot or trailhead). */
+export type AccessPoint = { lat: number; lng: number; name: string | null; walkMeters: number | null };
+
 export type Stop = {
   id: string;
   tripId: string;
@@ -36,6 +39,10 @@ export type Stop = {
   shotNotes: string | null;
   /** Shots to get at this stop (up to 20). */
   shotChecklist: ShotItem[];
+  /** Saved parking lot the route drives to; null = none (route goes to the stop). */
+  access: AccessPoint | null;
+  /** ISO instant the access lookup last finished; null = never finished (retried on open). */
+  accessResolvedAt: string | null;
 };
 
 export type Trip = {
@@ -54,7 +61,7 @@ export type Trip = {
 /** One stop as shown on the public share page: no ids, no uploaded photo, no private notes (shot notes and the shot list are meant for sharing). */
 export type PublicStop = Pick<
   Stop,
-  "order" | "name" | "lat" | "lng" | "source" | "lightPref" | "priority" | "dwellMinutes" | "visited" | "shotNotes" | "shotChecklist"
+  "order" | "name" | "lat" | "lng" | "source" | "lightPref" | "priority" | "dwellMinutes" | "visited" | "shotNotes" | "shotChecklist" | "access"
 >;
 
 /** The sanitized, read-only view of a shared trip. Nothing here identifies or can modify the owner's data. */

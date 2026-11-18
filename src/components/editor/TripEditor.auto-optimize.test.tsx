@@ -24,7 +24,7 @@ import { TripEditor } from "./TripEditor";
 const trip: TripWithStops = { id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] };
 const route = { geometry: [[-119.79, 36.74], [-119.12, 37.96]] as [number, number][], legs: [{ distance: 100_000, duration: 3_600 }], distance: 100_000, duration: 3_600 };
 const mk = (id: string, order: number, lat: number): Stop => ({
-  id, tripId: "t1", order, name: id.toUpperCase(), lat, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], ...{},
+  id, tripId: "t1", order, name: id.toUpperCase(), lat, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], access: null, accessResolvedAt: null, ...{},
 });
 const four = [mk("a", 0, 36), mk("b", 1, 38), mk("c", 2, 37), mk("d", 3, 39)];
 const WAIT = { timeout: 4000 };

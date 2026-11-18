@@ -19,7 +19,7 @@ Work in a flat metre grid around the stop. Vertices within 6 m are one node; a t
 ## Server
 
 `GET /api/hike?lat&lng` (`src/app/api/hike/route.ts`): `requireUserId`, `enforceLimit("hike")` (60/min per user, in-memory like `weather`), `hikeQuerySchema` (same point rules as weather), answers `{hike: Hike | null}` with `Cache-Control: private, max-age=3600` (hike) or 600 (none). Never 5xx from upstream trouble: failures are `{hike:null}`.
-`src/server/hike/service.ts`: NPS (6 s timeout) then OSM (12 s per mirror, 15 s overall deadline, 6 MB maxsize) as fallback; keyed on a 4-decimal grid (about 11 m); in-memory LRU of 500; TTL 24 h for a hike, 1 h for none, 5 min for a failed lookup; in-flight de-duplication. `EXTERNAL_APIS_FAKE=1`: `fakeHike` (canned 1.2 mi hike within 0.05 deg of (37, -119.5), null elsewhere); no network.
+`src/server/hike/service.ts` (superseded: OSM first, NPS second, see the parking update below; an Overpass maxsize/out-of-memory answer is now a finished, cached "no hike" result): NPS (6 s timeout) then OSM (12 s per mirror, 15 s overall deadline, 6 MB maxsize) as fallback; keyed on a 4-decimal grid (about 11 m); in-memory LRU of 500; TTL 24 h for a hike, 1 h for none, 5 min for a failed lookup; in-flight de-duplication. `EXTERNAL_APIS_FAKE=1`: `fakeHike` (canned 1.2 mi hike within 0.05 deg of (37, -119.5), null elsewhere); no network.
 
 ## Client
 
@@ -42,3 +42,9 @@ Line style: `#3f6b3a` (muted dark green, about 4.9:1 on the beige `#d8d1bd`), `l
 - Trail data gaps: a gap in the mapping gives "no hike" or a shorter walk. Loops are not special-cased (shortest way).
 - Public Overpass is shared and slow; dense cities (Griffith Park scale) can exceed the size/time limits and then show no hike.
 - Straight-line stitching tolerance: 6 m joins, 8 m T-joins; bridges/crossings without shared nodes are not joined.
+
+## Update (2026-11-17): parking first, OSM first, access point
+
+- The lookup now tries **OpenStreetMap first**. Start order: **parking** (nodes, ways, relations; `out center`), then trailhead markers, both within 150 m of a trail and the nearest by walking distance; a lot or trailhead marker is only used if the walk to it is at most 5 km (`LOT_MAX_WALK_M`, same cap for both). NPS trails are second (no lot is known there, so OSM supplies none), and the walk from a trail dead end is last. A dead end is never an access point. The older "trailhead first, then parking" tiers above are superseded: the walk is drawn from the lot even when a trailhead marker is closer.
+- `Hike.access` = `{ lat, lng, name }` of the lot the walk starts from (null when the lot is within 150 m of the stop or none was used). `POST /api/stops/:id/access` copies it to the stop as the **access point** (`Stop.access = { lat, lng, name, walkMeters } | null`, columns `accessLat/Lng/Name/WalkMeters` and `accessResolvedAt`). Moving a stop clears all of them; a failed lookup leaves `accessResolvedAt` null so it is retried.
+- Routing uses `routePoints(stops)` (lot when present). Markers stay at the stop; the selected stop also gets a "Parking for <stop>" marker. Fake externals: `fakeHike` returns a lot ("Fake Trailhead Lot", about 1.9 km away) at the first geometry point.

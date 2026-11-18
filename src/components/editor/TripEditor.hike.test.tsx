@@ -29,10 +29,10 @@ import type { Stop, TripWithStops } from "@/lib/types";
 import { TripEditor } from "./TripEditor";
 
 const stop = (over: Partial<Stop>): Stop => ({
-  id: "s1", tripId: "t1", order: 0, name: "Pin", lat: 37, lng: -119.5, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], ...over,
+  id: "s1", tripId: "t1", order: 0, name: "Pin", lat: 37, lng: -119.5, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], access: null, accessResolvedAt: null, ...over,
 });
 const trip: TripWithStops = { id: "t1", name: "Trip", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [stop({ id: "a", name: "Arch" }), stop({ id: "b", name: "Plain", order: 1, lat: 36.2, lng: -120.5 })] };
-const HIKE = { distanceMeters: 1931, geometry: [[-119.52, 36.99], [-119.51, 36.995], [-119.5, 37]] as [number, number][], source: "osm" as const, attribution: "x" };
+const HIKE = { distanceMeters: 1931, geometry: [[-119.52, 36.99], [-119.51, 36.995], [-119.5, 37]] as [number, number][], source: "osm" as const, attribution: "x", access: null };
 
 describe("TripEditor hike line", () => {
   beforeEach(() => {

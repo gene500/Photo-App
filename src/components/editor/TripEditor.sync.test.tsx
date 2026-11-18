@@ -58,7 +58,7 @@ import { TripEditor } from "./TripEditor";
 const trip: TripWithStops = { id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] };
 const route = { geometry: [[-119.79, 36.74], [-119.12, 37.96]] as [number, number][], legs: [{ distance: 100_000, duration: 3_600 }], distance: 100_000, duration: 3_600 };
 const newStop = (over: Partial<Stop>): Stop => ({
-  id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37.5, lng: -119.5, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], ...over,
+  id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37.5, lng: -119.5, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], access: null, accessResolvedAt: null, ...over,
 });
 const mk = (ids: string[], over: Partial<Stop> = {}) => ids.map((id, order) => newStop({ id, order, name: id.toUpperCase(), lat: 36 + order, lng: -119, ...over }));
 const withStops = (stops: Stop[], over: Partial<TripWithStops> = {}): TripWithStops => ({ ...trip, ...over, stops });

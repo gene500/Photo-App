@@ -6,7 +6,7 @@ import type { Stop } from "@/lib/types";
 import { listCollision, reorderIds, StopList } from "./StopList";
 
 const stop = (id: string, name: string, extra: Partial<Stop> = {}): Stop => ({
-  id, tripId: "t1", order: 0, name, lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], ...extra,
+  id, tripId: "t1", order: 0, name, lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], access: null, accessResolvedAt: null, ...extra,
 });
 const handlers = { onReorder: vi.fn(), onDelete: vi.fn(), onSelect: vi.fn() };
 

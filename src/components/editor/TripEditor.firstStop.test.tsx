@@ -34,7 +34,7 @@ import { TripEditor } from "./TripEditor";
 const LA = { lat: 34.05, lng: -118.24 };
 const trip: TripWithStops = { id: "t1", name: "LA", plannedDate: "2026-10-20", departAt: null, shareToken: null, stops: [] };
 const stop = (over: Partial<Stop>): Stop => ({
-  id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: LA.lat, lng: LA.lng, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], ...over,
+  id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: LA.lat, lng: LA.lng, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], access: null, accessResolvedAt: null, ...over,
 });
 
 describe("TripEditor first stop", () => {

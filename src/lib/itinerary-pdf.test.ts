@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { deflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import type { ItineraryInput, ItineraryStop } from "./itinerary";
-import { pdfSafe, renderItineraryPdf, type PdfMap } from "./itinerary-pdf";
+import { itineraryText, pdfSafe, renderItineraryPdf, type PdfMap } from "./itinerary-pdf";
 
 // A valid 64x64 RGB PNG of pseudo-random noise (does not compress away), built without a canvas.
 function noisePng(): string {
@@ -93,6 +93,14 @@ describe("renderItineraryPdf", () => {
     expect(s).toContain("Coastal Tripname");
     expect(s).toContain("Stopname1");
     expect(s).toContain("Stopname2");
+  });
+
+  it("prints the parking line, passed through the font sanitising", async () => {
+    const s = await render(input(1, { parkLine: "Park at North lot, walk 1.2 mi to Stopname1" }));
+    expect(s).toContain("Park at North lot, walk 1.2 mi to Stopname1");
+    const odd = await render(input(1, { parkLine: "Park at Lot \u4eac, walk 1.2 mi" }));
+    expect(odd).toContain("Park at Lot ?, walk 1.2 mi");
+    expect(itineraryText(input(1, { parkLine: "Park at North lot" }))).toContain("Park at North lot");
   });
 
   it("works with the fallback map and two stops", async () => {

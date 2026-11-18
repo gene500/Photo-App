@@ -552,3 +552,38 @@ describe("Normal stops do not buy long detours for light (A70)", () => {
     expect(drive(r.order)).toBeLessThanOrEqual(1.45 * drive(optimizeOrder(durations)));
   });
 });
+
+describe("walk from the parking lot", () => {
+  const sunrise = getSunWindows(base.lat, base.lng, DATE);
+  const walking = (walkMinutes: number, lightPref: LightPref = "sunrise", dwellMinutes = 30) => ({ ...base, lightPref, dwellMinutes, walkMinutes });
+
+  it("without walkMinutes (or 0) the answer is unchanged", () => {
+    const d = flat(3, 1200);
+    const plain = optimizeSchedule({ durations: d, stops: [stop("sunrise"), stop("sunset"), stop("any")], plannedDate: DATE, defaultDeparture });
+    const zero = optimizeSchedule({ durations: d, stops: [walking(0), walking(0, "sunset"), walking(0, "any")], plannedDate: DATE, defaultDeparture });
+    expect(zero).toEqual(plain);
+  });
+
+  it("judges the light at the subject: a fixed start that is fine without the walk misses sunrise by the walk", () => {
+    const d = flat(2, 600);
+    // Lot arrival 5 min before the end of morning golden hour: met at the lot, but 30 min of walking arrives 25 min after it ends.
+    const lotAt = new Date(sunrise.goldenHourEnd!.getTime() - 5 * 60_000);
+    const run = (walk: number) =>
+      optimizeSchedule({ durations: d, stops: [walking(walk), stop("any")], plannedDate: DATE, defaultDeparture: lotAt, fixedDeparture: true });
+    expect(run(0).misses).toEqual([]);
+    const walked = run(30);
+    expect(walked.misses).toHaveLength(1);
+    expect(walked.misses[0]!.minutes).toBeCloseTo(25, 5);
+  });
+
+  it("the later stop's arrival includes both walks of the earlier one", () => {
+    // Stop 1 wants sunset: leaving the first stop's lot 2 x 30 min later than without a walk moves the evening arrival.
+    const d = flat(2, 600);
+    const sunsetEnd = sunrise.sunset!.getTime() + 20 * 60_000;
+    const dep = new Date(sunsetEnd - (30 + 10) * 60_000 - 1000); // arrives at the second stop 1 s before... only without a walk
+    const second = (walk: number) =>
+      optimizeSchedule({ durations: d, stops: [walking(walk, "any"), stop("sunset", 0)], plannedDate: DATE, defaultDeparture: dep, fixedDeparture: true });
+    expect(second(0).misses).toEqual([]);
+    expect(second(30).misses[0]!.minutes).toBeGreaterThan(50);
+  });
+});

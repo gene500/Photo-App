@@ -8,6 +8,8 @@ import { useSettings } from "@/components/settings/SettingsProvider";
 import { stopColor } from "@/lib/stop-style";
 import { useWeatherLine } from "@/lib/use-weather";
 import { useHike } from "@/lib/use-hike";
+import { parkText } from "@/lib/itinerary";
+import { ParkLine } from "./ParkLine";
 import { formatHikeDistance } from "@/lib/hike";
 import { WeatherText } from "@/components/weather/WeatherIcon";
 import type { Stop, StopPriority } from "@/lib/types";
@@ -88,6 +90,21 @@ function ArrivalLines({ stop, bestTime, arrival }: { stop: Stop; bestTime: BestT
 function HikeLines({ stop }: { stop: Stop }) {
   const { settings } = useSettings();
   const hike = useHike(stop.id, stop.lat, stop.lng);
+  const parkLine = parkText({ name: stop.name, access: stop.access, walkMeters: stop.access?.walkMeters ?? null }, settings.distanceUnit);
+  if (parkLine) {
+    // With a lot the park line replaces the plain hike text; the hike distance stays when the line has no walk length.
+    const walkShown = /, walk /.test(parkLine);
+    return (
+      <>
+        <ParkLine stop={stop} />
+        {hike && !walkShown && (
+          <div data-testid="stop-hike" className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-foreground/80">
+            <span>Hike {formatHikeDistance(hike.distanceMeters, settings.distanceUnit)} one way</span>
+          </div>
+        )}
+      </>
+    );
+  }
   if (!hike) return null;
   return (
     <div data-testid="stop-hike" className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-foreground/80">

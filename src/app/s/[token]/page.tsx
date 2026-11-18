@@ -4,6 +4,7 @@ import { cache } from "react";
 import { SharedTripView } from "@/components/share/SharedTripView";
 import type { RouteResult } from "@/lib/types";
 import { enforceLimit } from "@/server/rate-limit";
+import { routePoints } from "@/lib/route-points";
 import { getDirections } from "@/server/external/mapbox";
 import { loadSharedTrip } from "@/server/share";
 
@@ -27,12 +28,12 @@ export async function generateMetadata({ params }: PageProps<"/s/[token]">): Pro
 }
 
 /** The real driving route, fetched here because the directions API needs a login. Null (straight line) on any failure. */
-async function routeFor(token: string, ownerId: string, stops: { lng: number; lat: number }[]): Promise<RouteResult | null> {
+async function routeFor(token: string, ownerId: string, stops: { lng: number; lat: number; access?: { lat: number; lng: number } | null }[]): Promise<RouteResult | null> {
   if (stops.length < 2) return null;
   try {
     enforceLimit("directions", `share:${token}`);
     enforceLimit("share-directions", ownerId); // one account's many links share one budget
-    return await getDirections(stops.map((s) => [s.lng, s.lat]));
+    return await getDirections(routePoints(stops));
   } catch {
     return null;
   }

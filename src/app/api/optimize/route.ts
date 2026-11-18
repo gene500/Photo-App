@@ -2,6 +2,7 @@ import { enforcePaidLimit } from "@/server/shared-limit";
 import { clampToSolarDay, daylightInterval, departureTime } from "@/lib/best-time";
 import { orderWithoutOrigin, stopIndexWithoutOrigin, withOrigin } from "@/lib/optimize-origin";
 import { optimizeScheduleAsync, scheduleMisses } from "@/lib/optimize-schedule";
+import { walkMs } from "@/lib/walk-time";
 import { optimizeRequestSchema } from "@/lib/validation";
 import { collectPlaceNotices } from "@/server/external/place-notices";
 import type { LngLat } from "@/lib/types";
@@ -41,7 +42,7 @@ export const POST = handle(async (req: Request) => {
       const shift = origin ? 1 : 0;
       const stops = searchCoords.map(([lng, lat], k) => {
         // The origin (search index 0) is only a place to drive from: no light rule, no time spent.
-        if (origin && k === 0) return { lat, lng, lightPref: "any" as const, dwellMinutes: 0, priority: "normal" as const };
+        if (origin && k === 0) return { lat, lng, lightPref: "any" as const, dwellMinutes: 0, walkMinutes: 0, priority: "normal" as const };
         const i = k - shift;
         return {
           lat,
@@ -49,6 +50,7 @@ export const POST = handle(async (req: Request) => {
           // A stop with no sunrise or sunset that day has no light to chase, so it must not make the start time move.
           lightPref: daylightInterval(lat, lng, date) ? (prefs?.[i]?.lightPref ?? ("any" as const)) : ("any" as const),
           dwellMinutes: prefs?.[i]?.dwellMinutes ?? 30,
+          walkMinutes: prefs?.[i]?.walkMinutes ?? 0,
           priority: prefs?.[i]?.priority ?? ("normal" as const),
         };
       });
@@ -138,7 +140,7 @@ async function placeNoticesFor(
   searchOrder: number[],
   coords: LngLat[],
   durations: number[][],
-  stops: { dwellMinutes: number }[],
+  stops: { dwellMinutes: number; walkMinutes?: number }[],
   startMs: number,
   date: string,
   shift: number,
@@ -148,8 +150,9 @@ async function placeNoticesFor(
     let t = startMs;
     searchOrder.forEach((k, n) => {
       if (n > 0) t += (durations[searchOrder[n - 1]!]?.[k] ?? 0) * 1000;
-      arrival.set(k, t);
-      t += (stops[k]?.dwellMinutes ?? 0) * 60_000;
+      // Opening hours matter at the subject: one walk after the lot; the lot is left dwell + 2 walks after arriving at it.
+      arrival.set(k, t + walkMs(stops[k]?.walkMinutes));
+      t += (stops[k]?.dwellMinutes ?? 0) * 60_000 + 2 * walkMs(stops[k]?.walkMinutes);
     });
     const points = coords.slice(shift).map(([lng, lat], i) => ({ lat, lng, arrivalMs: arrival.get(i + shift) }));
     return await collectPlaceNotices(points, date);

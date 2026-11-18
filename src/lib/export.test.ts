@@ -110,6 +110,22 @@ describe("file names without ASCII letters or digits", () => {
   });
 });
 
+describe("Maps links use the parking lot when a stop has one; GPX waypoints stay at the stop", () => {
+  const withLot = [
+    { name: "A", lat: 40, lng: -120, notes: null },
+    { name: "Hike", lat: 41, lng: -121, notes: null, access: { lat: 41.01, lng: -121.02 } },
+  ];
+  it("Google and Apple point at the lot", () => {
+    const u = new URL(googleMapsUrl(withLot)![0].url);
+    expect(u.searchParams.get("origin")).toBe("40,-120");
+    expect(u.searchParams.get("destination")).toBe("41.01,-121.02");
+    expect(appleMapsUrl(withLot)).toContain("daddr=41.01%2C-121.02");
+  });
+  it("GPX keeps the stop's own coordinates", () => {
+    expect(buildGpx({ name: "t", stops: withLot })).toContain('lat="41" lon="-121"');
+  });
+});
+
 describe("googleMapsUrl", () => {
   it("returns null under 2 stops", () => {
     expect(googleMapsUrl(mk(0))).toBeNull();

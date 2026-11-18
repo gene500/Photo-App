@@ -12,7 +12,7 @@ import { StopList } from "./StopList";
 import { TripPlanList } from "./TripPlanList";
 import { StopsPanel } from "./StopsPanel";
 
-const stop: Stop = { id: "a", tripId: "t", order: 0, name: "A", lat: 1, lng: 2, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [] };
+const stop: Stop = { id: "a", tripId: "t", order: 0, name: "A", lat: 1, lng: 2, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], access: null, accessResolvedAt: null };
 
 // The page text colour follows the OS theme (light text in dark mode), so every white
 // floating surface must set its own dark text.

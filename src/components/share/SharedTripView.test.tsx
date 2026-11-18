@@ -17,7 +17,7 @@ vi.mock("@/lib/itinerary-download", () => ({
 
 const stop = (order: number, name: string, extra: Partial<PublicTrip["stops"][number]> = {}): PublicTrip["stops"][number] => ({
   order, name, lat: 36 + order * 0.3, lng: -120, source: "manual", lightPref: "any", dwellMinutes: 30, visited: false,
-  shotNotes: null, shotChecklist: [], priority: "normal", ...extra,
+  shotNotes: null, shotChecklist: [], priority: "normal", access: null, ...extra,
 });
 
 const trip: PublicTrip = {
@@ -43,6 +43,44 @@ describe("SharedTripView", () => {
     expect(rows[1]!.textContent).toContain("Wide shot");
     expect(screen.getByRole("button", { name: "Stop 2: Second view" })).toBeTruthy();
     expect(screen.getByText("Best at sunset")).toBeTruthy();
+  });
+
+  it("tells viewers where to park, without private data", () => {
+    const t = { ...trip, stops: [stop(0, "Overlook", { access: { lat: 36, lng: -120, name: "North lot", walkMeters: null } }), stop(1, "Beach", { access: { lat: 36, lng: -120, name: null, walkMeters: null } }), stop(2, "Plain")] };
+    render(<SharedTripView trip={t} />);
+    const rows = screen.getAllByTestId("shared-stop").map((r) => r.textContent ?? "");
+    expect(rows[0]).toContain("Park at North lot");
+    expect(rows[1]).toContain("Park at the parking lot");
+    expect(rows[2]).not.toContain("Park at");
+  });
+
+  it("says how far to walk, in the viewer's distance unit, on screen and in the PDF input", async () => {
+    vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["x"]));
+    const t = { ...trip, stops: [stop(0, "Overlook", { access: { lat: 36, lng: -120, name: "North lot", walkMeters: 1930 } }), stop(1, "Beach", { access: { lat: 36, lng: -120, name: null, walkMeters: 640 } })] };
+    render(<SharedTripView trip={t} />);
+    const rows = screen.getAllByTestId("shared-park").map((r) => r.textContent);
+    // default unit is miles; the park time is the lot arrival (the subject arrival is a walk later)
+    expect(rows[0]).toMatch(/^Park at North lot( ~\d{1,2}:\d{2} [AP]M)?, walk 1\.2 mi \(~30 min\) to Overlook$/);
+    expect(rows[1]).toMatch(/^Park at the parking lot( ~\d{1,2}:\d{2} [AP]M)?, walk 0\.4 mi \(~10 min\) to Beach$/);
+    await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
+    const stops = vi.mocked(createItineraryPdf).mock.calls.at(-1)![0].input.stops;
+    expect(stops[0]!.parkLine).toMatch(/^Park at North lot( ~\d{1,2}:\d{2} [AP]M)?, walk 1\.2 mi \(~30 min\) to Overlook$/);
+  });
+
+  it("lets a long unbroken lot name wrap instead of widening the page", () => {
+    const t = { ...trip, stops: [stop(0, "Overlook", { access: { lat: 36, lng: -120, name: "W".repeat(120), walkMeters: null } })] };
+    render(<SharedTripView trip={t} />);
+    expect(screen.getByTestId("shared-park").className).toMatch(/break-words/);
+  });
+
+  it("puts the parking line in the PDF input", async () => {
+    vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["x"]));
+    const t = { ...trip, stops: [stop(0, "Overlook", { access: { lat: 36, lng: -120, name: "North lot", walkMeters: null } }), stop(1, "Plain")] };
+    render(<SharedTripView trip={t} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
+    const stops = vi.mocked(createItineraryPdf).mock.calls.at(-1)![0].input.stops;
+    expect(stops[0]!.parkLine).toBe("Park at North lot");
+    expect(stops[1]!.parkLine).toBeNull();
   });
 
   it("labels High and Must-have stops but not Normal ones", () => {
@@ -130,7 +168,7 @@ describe("SharedTripView Download PDF", () => {
     vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["x"]));
     render(<SharedTripView trip={trip} />);
     await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
-    const stops = vi.mocked(createItineraryPdf).mock.calls[0]![0].input.stops;
+    const stops = vi.mocked(createItineraryPdf).mock.calls.at(-1)![0].input.stops;
     expect(JSON.stringify(stops)).not.toContain("Park by the gate");
     expect(JSON.stringify(stops)).toContain("Use a polarizer");
   });
@@ -139,7 +177,7 @@ describe("SharedTripView Download PDF", () => {
     vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["x"]));
     render(<SharedTripView trip={{ ...trip, stops: [stop(0, "Mine"), stop(1, "Idea", { source: "suggested" })] }} />);
     await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
-    const stops = vi.mocked(createItineraryPdf).mock.calls[0]![0].input.stops;
+    const stops = vi.mocked(createItineraryPdf).mock.calls.at(-1)![0].input.stops;
     expect(stops[0]!.color).not.toBe(stops[1]!.color);
   });
 

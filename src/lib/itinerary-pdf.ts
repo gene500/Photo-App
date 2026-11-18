@@ -24,7 +24,7 @@ const CJK_FAMILY = "NotoSansCJK";
 /** Every string the PDF draws, for choosing fonts before the PDF is built. */
 export function itineraryText(input: ItineraryInput): string {
   const parts = [input.tripName, input.dateLine, input.startLine, input.routeLine, input.note];
-  for (const s of input.stops) parts.push(s.name, s.arrival, s.bestLight, s.weather, s.notes);
+  for (const s of input.stops) parts.push(s.name, s.arrival, s.bestLight, s.parkLine ?? null, s.weather, s.notes);
   return parts.filter((t): t is string => typeof t === "string").join("\n");
 }
 
@@ -302,6 +302,7 @@ export async function renderItineraryPdf(
     // Best-light hints use the app's sand colour; weather and notes stay muted.
     const rawDetails: { text: string | null; color: string }[] = [
       { text: s.bestLight, color: PDF_THEME.sand },
+      { text: s.parkLine ?? null, color: PDF_THEME.muted },
       { text: s.weather, color: PDF_THEME.muted },
       { text: s.notes, color: PDF_THEME.muted },
     ];

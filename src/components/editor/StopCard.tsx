@@ -6,6 +6,7 @@ import { btnSecondary, card, btnIcon } from "@/components/ui/styles";
 import { useMounted } from "@/lib/use-mounted";
 import { useWeatherLine } from "@/lib/use-weather";
 import { WeatherText } from "@/components/weather/WeatherIcon";
+import { ParkLine } from "./ParkLine";
 import type { BestTime } from "@/lib/best-time";
 import type { Stop } from "@/lib/types";
 
@@ -36,6 +37,7 @@ export function StopCard({ stop, bestTime, arrival, onToggleVisited, onOpenDetai
           {stop.shotChecklist.filter((s) => s.done).length}/{stop.shotChecklist.length} shots
         </p>
       )}
+      <ParkLine stop={stop} className="text-xs text-muted" />
       {mounted && arrival && <p className="text-xs text-muted">Arrive ~{formatClock(arrival, undefined, settings.timeFormat)}</p>}
       {weather && (
         <p data-testid="card-weather" data-light-quality={weather.quality ?? undefined} title={weather.label} className={`text-xs ${weather.quality === "poor" ? "text-sand" : "text-muted"}`}>

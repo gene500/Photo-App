@@ -17,6 +17,12 @@ export function clampText(s: string, max: number): string {
   return s.slice(0, cut >= 0xd800 && cut <= 0xdbff ? max - 1 : max);
 }
 
+/** A one-line name made storable: forbidden characters removed, trimmed, cut to `max` without splitting a surrogate pair; null when nothing is left or nothing visible is (a name of only zero-width characters). */
+export function cleanLine(s: string | null | undefined, max: number): string | null {
+  const t = clampText(stripNameChars(s ?? "").trim(), max).trim();
+  return t && hasContent(t) ? t : null;
+}
+
 /** Characters that draw nothing: bidi marks and isolates, soft hyphen, Mongolian vowel separator, invisible operators, combining grapheme joiner,
  *  Hangul and Khmer fillers, Braille blank, variation selectors, and tag characters. A name made only of these looks blank. */
 const INVISIBLE = /[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\u2800\u3164\uFE00-\uFE0F\uFEFF\uFFA0\u{1D159}\u{1D173}-\u{1D17A}\u{E0000}-\u{E01EF}]/gu;

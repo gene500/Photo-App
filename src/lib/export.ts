@@ -1,8 +1,12 @@
 // Trip export: a GPX file and "open in Maps" links, all built client-side from stops already loaded.
 
+import { routePoint } from "./route-points";
 import type { LngLat } from "./types";
 
-export type ExportStop = { name: string; lat: number; lng: number; notes: string | null };
+export type ExportStop = { name: string; lat: number; lng: number; notes: string | null;
+  /** The parking lot the car goes to, when the stop is a drive-then-walk hike. Used by the Maps links only; GPX waypoints stay at the stop. */
+  access?: { lat: number; lng: number } | null;
+};
 
 // Anything outside the XML 1.0 Char production (control chars, lone surrogates, U+FFFE/U+FFFF).
 const ILLEGAL_XML = /[^\u0009\u000A\u000D -퟿-�\u{10000}-\u{10FFFF}]/gu;
@@ -84,7 +88,11 @@ export function gpxFileName(tripName: string, date?: string): string {
   return `${exportBaseName(tripName, date)}.gpx`;
 }
 
-const point = (s: ExportStop) => `${num(s.lat) ?? 0},${num(s.lng) ?? 0}`;
+/** Where a Maps link sends the car: the stop's lot when it has one, else the stop. */
+const point = (s: ExportStop) => {
+  const [lng, lat] = routePoint(s);
+  return `${num(lat) ?? 0},${num(lng) ?? 0}`;
+};
 
 // Google's directions link allows an origin, a destination and at most 9 waypoints between.
 const GOOGLE_MAX_WAYPOINTS = 9;

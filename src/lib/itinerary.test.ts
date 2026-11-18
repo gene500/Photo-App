@@ -101,3 +101,41 @@ describe("itineraryFileName", () => {
     expect(itineraryFileName("???", "2026-07-01")).toBe("trip-2026-07-01-itinerary.pdf");
   });
 });
+
+describe("buildItinerary parking line", () => {
+  it("says where to park and how far to walk, in the chosen unit", () => {
+    const s = stop({ name: "Overlook", access: { name: "North lot" }, walkMeters: 1930 });
+    expect(build([s], { distanceUnit: "mi" }).stops[0].parkLine).toBe("Park at North lot, walk 1.2 mi (~30 min) to Overlook");
+    expect(build([s], { distanceUnit: "km" }).stops[0].parkLine).toBe("Park at North lot, walk 1.9 km (~30 min) to Overlook");
+  });
+
+  it("uses a generic name when the lot has none", () => {
+    const s = stop({ name: "Overlook", access: { name: null }, walkMeters: 1930 });
+    expect(build([s], { distanceUnit: "mi" }).stops[0].parkLine).toBe("Park at the parking lot, walk 1.2 mi (~30 min) to Overlook");
+  });
+
+  it("uses the generic name when the lot name is only invisible characters", () => {
+    expect(build([stop({ name: "Overlook", access: { name: "\u200B\u200D" }, walkMeters: 1930 })], { distanceUnit: "mi" }).stops[0].parkLine).toBe("Park at the parking lot, walk 1.2 mi (~30 min) to Overlook");
+  });
+
+  it("leaves out the walk part when the distance is unknown", () => {
+    expect(build([stop({ access: { name: "North lot" } })]).stops[0].parkLine).toBe("Park at North lot");
+    expect(build([stop({ access: { name: null }, walkMeters: null })]).stops[0].parkLine).toBe("Park at the parking lot");
+  });
+
+  it("adds the lot arrival time only when there is a walk, in the chosen clock", () => {
+    const lotArrival = new Date("2026-07-01T17:17:00Z");
+    const s = stop({ name: "Overlook", access: { name: "North lot" }, walkMeters: 1920, arrival: new Date("2026-07-01T17:47:00Z"), lotArrival });
+    const line = (t: "12h" | "24h") => build([s], { timeFormat: t, distanceUnit: "mi" }).stops[0];
+    expect(line("24h").parkLine).toMatch(/^Park at North lot ~\d{2}:17, walk 1\.2 mi \(~30 min\) to Overlook$/);
+    expect(line("12h").parkLine).toMatch(/^Park at North lot ~\d{1,2}:17 [AP]M, walk 1\.2 mi \(~30 min\) to Overlook$/);
+    // the subject arrival is the stop's arrival, 30 min after the lot
+    expect(line("24h").arrival).toMatch(/:47$/);
+    expect(build([{ ...s, walkMeters: null }], { distanceUnit: "mi" }).stops[0].parkLine).toBe("Park at North lot");
+  });
+
+  it("prints nothing without an access point", () => {
+    expect(build([stop()]).stops[0].parkLine).toBeNull();
+    expect(build([stop({ access: null, walkMeters: 500 })]).stops[0].parkLine).toBeNull();
+  });
+});

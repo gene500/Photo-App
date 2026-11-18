@@ -9,6 +9,7 @@ import { useWeatherLine } from "@/lib/use-weather";
 import { checkPhotoFile, isUnknownPhotoType, PHOTO_TYPES } from "@/lib/photo-rules";
 import { hasContent } from "@/lib/text";
 import type { LightPref, ShotItem, Stop, Suggestion } from "@/lib/types";
+import { ParkLine } from "./ParkLine";
 import { AlternativesPanel } from "./AlternativesPanel";
 import { SkyCard } from "./SkyCard";
 import { FOCUSABLE } from "@/components/ui/Dialog";
@@ -274,6 +275,7 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
       <p className="text-xs text-muted">
         {stop.source === "suggested" ? "Suggested from OpenStreetMap" : "Manual pin"} · {stop.lat.toFixed(4)}, {stop.lng.toFixed(4)}
       </p>
+      <ParkLine stop={stop} className="text-sm text-muted" />
       {alternatives && (
         <AlternativesPanel status={alternatives.status} alternatives={alternatives.items} error={alternatives.error} onFind={alternatives.onFind} onSwap={alternatives.onSwap} onDismissError={alternatives.onDismissError} swapBlockedReason={dirty ? "Save or close your edits before swapping this stop." : undefined} />
       )}

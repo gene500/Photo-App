@@ -8,7 +8,7 @@ import { FLOW_TOTAL_MS } from "./route-flow";
 const loadPlacePhoto = vi.fn();
 vi.mock("@/lib/place-photo-cache", () => ({ loadPlacePhoto: (...a: unknown[]) => loadPlacePhoto(...a) }));
 
-const stop: Stop = { id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [] };
+const stop: Stop = { id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37, lng: -119, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], access: null, accessResolvedAt: null };
 const suggestion: Suggestion = { osmId: "node/1", name: "Fake Viewpoint", lat: 37.2, lng: -119.2, kind: "viewpoint" };
 const base = { stops: [] as Stop[], routeGeometry: null, onMapClick: vi.fn(), onStopClick: vi.fn() };
 
@@ -323,5 +323,58 @@ describe("FakeMapPanel zoom to fit", () => {
     expect(screen.queryByTestId("route-line")).toBeNull();
     rerender(<FakeMapPanel {...base} stops={[stop]} hikes={[]} />);
     expect(screen.queryByTestId("hike-line")).toBeNull();
+  });
+});
+
+describe("FakeMapPanel parking markers for every lot", () => {
+  const lotStop = (id: string, name: string, lat: number, lng: number, lotName: string | null, alat: number, alng: number): Stop => ({
+    ...stop, id, name, lat, lng, access: { lat: alat, lng: alng, name: lotName, walkMeters: 400 }, accessResolvedAt: "2026-11-17T10:00:00.000Z",
+  });
+  const a = lotStop("a", "Arch", 37, -119, "North lot", 37.01, -119.02);
+  const b = lotStop("b", "Bridge", 37.5, -119.5, null, 37.51, -119.52);
+  const c = lotStop("c", "Cliff", 36.5, -120, "A very long trailhead parking area name", 36.51, -120.02);
+  const plain = { ...stop, id: "p", name: "Plain" };
+
+  it("shows a P marker with a visible label for every stop that has a lot, none for stops without", () => {
+    render(<FakeMapPanel {...base} stops={[a, b, c, plain]} />);
+    const marks = screen.getAllByRole("img", { name: /^Parking for/ });
+    expect(marks).toHaveLength(3);
+    expect(screen.getByRole("img", { name: "Parking for Arch: North lot" }).textContent).toBe("PNorth lot");
+    expect(screen.getByRole("img", { name: "Parking for Bridge: Parking" }).textContent).toBe("PParking");
+    const long = screen.getByRole("img", { name: "Parking for Cliff: A very long trailhead parking area name" });
+    expect(long.textContent).toMatch(/…$/);
+    expect(long.textContent!.length).toBeLessThanOrEqual(1 + 18);
+    for (const m of marks) expect(m.className).toContain("pointer-events-none");
+  });
+
+  it("merges coinciding lots into one marker with a count", () => {
+    const a2 = lotStop("a2", "Arch 2", 37.2, -119.2, "North lot", 37.01, -119.02);
+    render(<FakeMapPanel {...base} stops={[a, a2]} />);
+    const marks = screen.getAllByRole("img", { name: /^Parking for/ });
+    expect(marks).toHaveLength(1);
+    expect(marks[0].textContent).toBe("PParking ×2");
+    expect(marks[0].getAttribute("aria-label")).toBe("Parking for Arch, Arch 2: North lot");
+  });
+
+  it("emphasises the selected stop's marker without recreating any marker", () => {
+    const { rerender } = render(<FakeMapPanel {...base} stops={[a, b]} />);
+    const before = screen.getAllByRole("img", { name: /^Parking for/ });
+    expect(before.every((m) => !m.className.includes("lot-marker-selected"))).toBe(true);
+    rerender(<FakeMapPanel {...base} stops={[a, b]} selectedId="a" />);
+    const mid = screen.getAllByRole("img", { name: /^Parking for/ });
+    expect(mid[0]).toBe(before[0]);
+    expect(mid[1]).toBe(before[1]);
+    expect(mid[0].className).toContain("lot-marker-selected");
+    expect(mid[1].className).not.toContain("lot-marker-selected");
+    rerender(<FakeMapPanel {...base} stops={[a, b]} selectedId="b" />);
+    const after = screen.getAllByRole("img", { name: /^Parking for/ });
+    expect(after[0]).toBe(before[0]);
+    expect(after[0].className).not.toContain("lot-marker-selected");
+    expect(after[1].className).toContain("lot-marker-selected");
+  });
+
+  it("is not tabbable", () => {
+    render(<FakeMapPanel {...base} stops={[a]} />);
+    expect(screen.getByRole("img", { name: /^Parking for/ }).getAttribute("tabindex")).toBeNull();
   });
 });

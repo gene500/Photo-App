@@ -7,14 +7,19 @@ import type { LngLat } from "@/lib/types";
  * trailhead to it. Everything runs in a flat metre grid around the point, which is exact enough for a few km.
  */
 
-export type HikePath = { coords: LngLat[]; distanceMeters: number };
+/** Where the walk starts: the point `index` of `trailheadTiers[tier]` (as passed in), or the nearest dead end of the trail network. */
+export type HikeStart = { kind: "dead-end" } | { kind: "tier"; tier: number; index: number };
+
+export type HikePath = { coords: LngLat[]; distanceMeters: number; start: HikeStart };
 
 export type FindOptions = {
   /**
-   * Trailhead candidates in priority order (for example OSM trailheads, then parking lots). The nearest reachable one
+   * Trailhead candidates in priority order (for example parking lots, then trailhead markers). The nearest reachable one
    * of the first tier that has any is the start. With none reachable the nearest dead end of the trail network is used.
    */
   trailheadTiers?: LngLat[][];
+  /** The most walking (metres along the trail) each tier may need, same indexing as `trailheadTiers`; a missing or undefined entry means no cap beyond `maxM`. A tier with nothing within its cap is skipped. */
+  tierMaxM?: (number | undefined)[];
   /** Trail ends closer than this are one junction. */
   joinM?: number;
   /** A trail end this close to the side of another trail is joined to it. */
@@ -63,14 +68,26 @@ function project(px: number, py: number, ax: number, ay: number, bx: number, by:
   return { t, x, y, d: Math.hypot(px - x, py - y) };
 }
 
+/** Side of a cell of the edge grid, metres. */
+const EDGE_CELL_M = 40;
+const edgeCellKey = (i: number, j: number): number => (i + 524_288) * 1_048_576 + (j + 524_288);
+
 type Edge = { a: number; b: number; alive: boolean };
 
-class Graph {
+/** Exported for its test only. */
+export class Graph {
   xs: number[] = [];
   ys: number[] = [];
   edges: Edge[] = [];
   private cells = new Map<string, number[]>();
   private edgeKeys = new Set<string>();
+  private edgeCells = new Map<number, number[]>();
+  private longEdges: number[] = [];
+  private cellCount = 0;
+  private minCx = Infinity;
+  private maxCx = -Infinity;
+  private minCy = Infinity;
+  private maxCy = -Infinity;
   constructor(private joinM: number) {}
 
   private cellKey(x: number, y: number): string {
@@ -110,7 +127,26 @@ class Graph {
     const key = a < b ? `${a}-${b}` : `${b}-${a}`;
     if (this.edgeKeys.has(key)) return;
     this.edgeKeys.add(key);
+    const index = this.edges.length;
     this.edges.push({ a, b, alive: true });
+    const C = EDGE_CELL_M;
+    const x0 = Math.floor(Math.min(this.xs[a], this.xs[b]) / C), x1 = Math.floor(Math.max(this.xs[a], this.xs[b]) / C);
+    const y0 = Math.floor(Math.min(this.ys[a], this.ys[b]) / C), y1 = Math.floor(Math.max(this.ys[a], this.ys[b]) / C);
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 64) {
+      this.longEdges.push(index); // a very long edge would sit in too many cells: it is checked on every lookup instead
+      return;
+    }
+    for (let i = x0; i <= x1; i++) {
+      for (let j = y0; j <= y1; j++) {
+        const key = edgeCellKey(i, j);
+        const list = this.edgeCells.get(key);
+        if (list) list.push(index);
+        else this.edgeCells.set(key, [index]);
+        this.cellCount++;
+      }
+    }
+    this.minCx = Math.min(this.minCx, x0); this.maxCx = Math.max(this.maxCx, x1);
+    this.minCy = Math.min(this.minCy, y0); this.maxCy = Math.max(this.maxCy, y1);
   }
 
   /** Cuts edge `i` at node `n` (no-op when `n` is one of its ends). */
@@ -132,29 +168,47 @@ class Graph {
     return deg;
   }
 
-  /** Nearest alive edge (C1: flat loop, squared-distance prune, hypot only for survivors). */
-  nearestEdge(x: number, y: number, skipNode = -1): { index: number; x: number; y: number; d: number } | null {
+  /**
+   * Nearest alive edge, from a grid of edge cells searched ring by ring outwards, so a lookup costs the few edges
+   * nearby, not every edge (the old flat scan was quadratic over a dead-end pass). Same answer as scanning all edges
+   * in order: the smallest distance, the lowest index on an exact tie. `maxD` gives up beyond that distance (null).
+   */
+  nearestEdge(x: number, y: number, skipNode = -1, maxD = Infinity): { index: number; x: number; y: number; d: number } | null {
     const edges = this.edges, xs = this.xs, ys = this.ys;
-    let bi = -1, bx = 0, by = 0, bd = Infinity, bd2 = Infinity;
-    for (let index = 0; index < edges.length; index++) {
+    let bi = -1, bx = 0, by = 0, bd = Infinity;
+    const visit = (index: number) => {
       const e = edges[index];
-      if (!e.alive || e.a === skipNode || e.b === skipNode) continue;
+      if (!e.alive || e.a === skipNode || e.b === skipNode) return;
       const ax = xs[e.a], ay = ys[e.a], dx = xs[e.b] - ax, dy = ys[e.b] - ay;
       const len2 = dx * dx + dy * dy;
       const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2));
       const px = ax + t * dx, py = ay + t * dy;
-      const ex = x - px, ey = y - py;
-      if (bi >= 0 && ex * ex + ey * ey > bd2 * (1 + 1e-9)) continue;
-      const d = Math.hypot(ex, ey);
-      if (bi < 0 || d < bd) { bi = index; bx = px; by = py; bd = d; bd2 = d * d; }
+      const d = Math.hypot(x - px, y - py);
+      if (d < bd || (d === bd && index < bi)) { bi = index; bx = px; by = py; bd = d; }
+    };
+    for (const index of this.longEdges) visit(index);
+    if (this.cellCount > 0) {
+      const C = EDGE_CELL_M;
+      const cx = Math.floor(x / C), cy = Math.floor(y / C);
+      const reach = Math.max(cx - this.minCx, this.maxCx - cx, cy - this.minCy, this.maxCy - cy, 0);
+      for (let r = 0; r <= reach; r++) {
+        if (bi >= 0 && bd < (r - 1) * C) break; // everything in ring r or beyond is at least (r - 1) cells away
+        if (!(Math.max(0, r - 1) * C <= maxD)) break;
+        for (let i = -r; i <= r; i++) {
+          const edge = i === -r || i === r;
+          for (let j = -r; j <= r; j += edge || r === 0 ? 1 : 2 * r) {
+            for (const index of this.edgeCells.get(edgeCellKey(cx + i, cy + j)) ?? []) visit(index);
+          }
+        }
+      }
     }
-    return bi < 0 ? null : { index: bi, x: bx, y: by, d: bd };
+    return bi < 0 || bd > maxD ? null : { index: bi, x: bx, y: by, d: bd };
   }
 
   /** Puts the point onto the nearest trail (splitting it) if within `maxM`; returns the node there. */
   snap(x: number, y: number, maxM: number): number | null {
-    const hit = this.nearestEdge(x, y);
-    if (!hit || hit.d > maxM) return null;
+    const hit = this.nearestEdge(x, y, -1, maxM);
+    if (!hit) return null;
     const n = this.node(hit.x, hit.y);
     this.split(hit.index, n);
     return n;
@@ -271,8 +325,8 @@ export function findHikePath(segments: readonly (readonly LngLat[])[], poi: { la
   const deg0 = g.degrees();
   for (const n of new Set(ends)) {
     if (deg0[n] !== 1) continue;
-    const hit = g.nearestEdge(g.xs[n], g.ys[n], n);
-    if (hit && hit.d <= o.tJoinM) {
+    const hit = g.nearestEdge(g.xs[n], g.ys[n], n, o.tJoinM);
+    if (hit) {
       const j = g.node(hit.x, hit.y);
       g.split(hit.index, j);
       g.edge(n, j);
@@ -283,16 +337,16 @@ export function findHikePath(segments: readonly (readonly LngLat[])[], poi: { la
   const poiNode = g.snap(px, py, o.snapPoiM);
   if (poiNode === null) return null;
 
-  const tiers: number[][] = [];
-  for (const tier of options.trailheadTiers ?? []) {
-    const nodes: number[] = [];
-    for (const [lng, lat] of tier) {
+  const tiers: { tier: number; nodes: { node: number; index: number }[] }[] = [];
+  (options.trailheadTiers ?? []).forEach((points, tier) => {
+    const nodes: { node: number; index: number }[] = [];
+    points.forEach(([lng, lat], index) => {
       const [x, y] = toXY(f, lng, lat);
       const n = g.snap(x, y, o.snapTrailheadM);
-      if (n !== null) nodes.push(n);
-    }
-    if (nodes.length) tiers.push(nodes);
-  }
+      if (n !== null) nodes.push({ node: n, index });
+    });
+    if (nodes.length) tiers.push({ tier, nodes });
+  });
   const deg = g.degrees();
   const deadEnds: number[] = [];
   deg.forEach((d, n) => {
@@ -327,10 +381,14 @@ export function findHikePath(segments: readonly (readonly LngLat[])[], poi: { la
 
   const reachable = (nodes: number[]) => nodes.filter((n) => Number.isFinite(dist[n]) && dist[n] <= o.maxM);
   let start = -1;
-  for (const tier of tiers) {
-    const near = reachable(tier);
+  let startInfo: HikeStart = { kind: "dead-end" };
+  for (const { tier, nodes } of tiers) {
+    const cap = Math.min(o.maxM, options.tierMaxM?.[tier] ?? Infinity);
+    const near = nodes.filter((c) => dist[c.node] <= cap);
     if (near.length === 0) continue;
-    start = near.reduce((a, b) => (dist[b] < dist[a] ? b : a));
+    const best = near.reduce((a, b) => (dist[b.node] < dist[a.node] ? b : a));
+    start = best.node;
+    startInfo = { kind: "tier", tier, index: best.index };
     // A trailhead right at the point: the place is the trailhead, there is no hike to speak of.
     if (dist[start] < o.minM) return null;
     break;
@@ -344,5 +402,5 @@ export function findHikePath(segments: readonly (readonly LngLat[])[], poi: { la
   const nodes: number[] = [];
   for (let n = start; n >= 0; n = prev[n]) nodes.push(n); // start ... poiNode
   const coords = nodes.map((n) => toLngLat(f, g.xs[n], g.ys[n]));
-  return { coords, distanceMeters: lineLengthMeters(coords) };
+  return { coords, distanceMeters: lineLengthMeters(coords), start: startInfo };
 }

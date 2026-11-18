@@ -24,11 +24,13 @@ test("My trip shows the hike distance only where there is a hike, and the map li
   await expect(rows).toHaveCount(2);
 
   // Distance only, no per-card data credit (the map's attribution has it); the far stop shows nothing. No per-stop toggle any more.
-  const hike = rows.nth(0).getByTestId("stop-hike");
-  await expect(hike).toContainText(/^Hike \d+\.\d mi one way/);
-  await expect(hike).not.toContainText(/min|hour|easy|moderate|hard|elevation/i);
+  // Once the lot is saved (A88) the row's park line carries the walk distance in place of "Hike N one way".
+  const hike = rows.nth(0).getByTestId(/^(stop-hike|park-line)$/);
+  await expect(hike).toContainText(/^(Hike \d+\.\d mi one way|Park at .*walk \d+\.\d mi \(~\d+ min\) to )/);
+  // The only time allowed is the flat walk estimate in the park line ("(~30 min)", A87); no hike duration, difficulty or elevation.
+  await expect(hike).not.toContainText(/hour|easy|moderate|hard|elevation|\d min(?!\))/i);
   await expect(rows.nth(0).getByText(/Trail data/)).toHaveCount(0);
-  await expect(rows.nth(1).getByTestId("stop-hike")).toHaveCount(0);
+  await expect(rows.nth(1).getByTestId(/^(stop-hike|park-line)$/)).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Show hike/ })).toHaveCount(0);
 
   // Default is on: the stop's hike is drawn, separate from the route.
@@ -48,7 +50,7 @@ test("My trip shows the hike distance only where there is a hike, and the map li
   await expect(box).not.toBeChecked();
   await page.goBack();
   await page.getByRole("tab", { name: "My trip" }).click();
-  await expect(page.getByTestId("trip-row").nth(0).getByTestId("stop-hike")).toBeVisible();
+  await expect(page.getByTestId("trip-row").nth(0).getByTestId(/^(stop-hike|park-line)$/)).toBeVisible();
   await expect(line).toHaveCount(0);
 
   // A selected stop's hike still shows; selecting the other stop (no hike) clears it.

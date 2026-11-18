@@ -1,6 +1,7 @@
 import { getTimes } from "suncalc";
 import type { TimeFormat } from "./settings";
 import type { Stop } from "./types";
+import { stopWalkMinutes, walkMs } from "./walk-time";
 
 type BestTimeWindow = "sunrise" | "golden hour" | "midday" | "sunset";
 
@@ -95,19 +96,22 @@ export function classifyBestTime(w: SunWindows, arrival: Date | null): BestTime 
  * departure + cumulative leg durations (seconds) + the minutes spent at every earlier
  * stop. Legs run stop1 -> stop2 -> ..., so there must be stopCount - 1 of them.
  * `dwellMinutes[i]` is the time spent at stop i (missing = 0).
+ * `walkMinutes[i]` is the one-way walk from stop i's parking lot to its subject (missing = 0): the dwell is spent at the subject,
+ * so the lot is left dwell + 2 x walk after arriving at it. The dates returned are arrivals at the lot (at the stop itself without one).
  */
 export function estimateArrivals(
   departure: Date,
   legDurations: number[],
   stopCount: number,
   dwellMinutes: number[] = [],
+  walkMinutes: number[] = [],
 ): Date[] | null {
   if (stopCount === 0) return [];
   if (legDurations.length !== stopCount - 1) return null;
   const arrivals: Date[] = [departure];
   let elapsedMs = 0;
   legDurations.forEach((seconds, i) => {
-    elapsedMs += seconds * 1000 + (dwellMinutes[i] ?? 0) * 60_000;
+    elapsedMs += seconds * 1000 + (dwellMinutes[i] ?? 0) * 60_000 + 2 * walkMs(walkMinutes[i]);
     arrivals.push(new Date(departure.getTime() + elapsedMs));
   });
   return arrivals;
@@ -123,7 +127,7 @@ type TripForTimes = {
   plannedDate: string;
   /** ISO instant the trip leaves the first stop; null/absent = sunrise at the first stop. */
   departAt?: string | null;
-  stops: Pick<Stop, "lat" | "lng" | "dwellMinutes">[];
+  stops: (Pick<Stop, "lat" | "lng" | "dwellMinutes"> & { access?: { walkMeters?: number | null } | null })[];
 };
 
 /** When the trip leaves its first stop: the chosen departure, else sunrise there. */
@@ -132,13 +136,21 @@ export function tripDeparture(trip: TripForTimes): Date {
   return departureTime(trip.stops[0]!, trip.plannedDate);
 }
 
-/** Estimated arrival per stop, or nulls when there are fewer than 2 stops or no matching route. */
-export function computeArrivals(trip: TripForTimes, legDurations: number[] | null): (Date | null)[] {
+/** Estimated arrival at each stop's lot (at the stop itself without one), or nulls when there are fewer than 2 stops or no matching route. The first is the start time. */
+export function computeLotArrivals(trip: TripForTimes, legDurations: number[] | null): (Date | null)[] {
   const none = trip.stops.map(() => null);
   if (!legDurations || trip.stops.length < 2) return none;
   return (
-    estimateArrivals(tripDeparture(trip), legDurations, trip.stops.length, trip.stops.map((s) => s.dwellMinutes)) ?? none
+    estimateArrivals(tripDeparture(trip), legDurations, trip.stops.length, trip.stops.map((s) => s.dwellMinutes), trip.stops.map(stopWalkMinutes)) ?? none
   );
+}
+
+/**
+ * Estimated arrival at each stop's subject: the lot arrival plus the one-way walk (the same as the lot arrival for a stop without a lot).
+ * This is the time light, best-time windows and "Arrive" lines use. Nulls when there are fewer than 2 stops or no matching route.
+ */
+export function computeArrivals(trip: TripForTimes, legDurations: number[] | null): (Date | null)[] {
+  return computeLotArrivals(trip, legDurations).map((d, i) => (d ? new Date(d.getTime() + walkMs(stopWalkMinutes(trip.stops[i]!))) : null));
 }
 
 export function computeBestTimes(trip: TripForTimes, legDurations: number[] | null): BestTime[] {

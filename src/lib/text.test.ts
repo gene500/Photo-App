@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasContent, clampText, stripNameChars, stripTextChars } from "./text";
+import { cleanLine, hasContent, clampText, stripNameChars, stripTextChars } from "./text";
 
 describe("text hygiene", () => {
   it("strips control and bidi characters from names but keeps zero-width joiners and emoji", () => {
@@ -29,5 +29,13 @@ describe("text hygiene", () => {
     expect(hasContent("A")).toBe(true);
     expect(hasContent("\u2764\uFE0F")).toBe(true); // an emoji with a variation selector is visible
     expect(hasContent("\u200E\u0627")).toBe(true);
+  });
+});
+
+describe("cleanLine with invisible-only text", () => {
+  it("returns null for a name with nothing visible, keeps a visible one", () => {
+    for (const blank of ["\u200B", "\u200B\u200D", " \uFEFF ", "\u2060", "\u200E"]) expect(cleanLine(blank, 120)).toBeNull();
+    expect(cleanLine("North lot", 120)).toBe("North lot");
+    expect(cleanLine("\u200BNorth\u200B", 120)).toBe("\u200BNorth\u200B".replace(/\u200E/g, ""));
   });
 });

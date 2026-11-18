@@ -5,6 +5,7 @@ import { parseShotChecklist, toPublicTripDto, toStopDto } from "./mappers";
 const row: StopRow = {
   id: "s1", tripId: "t1", order: 0, name: "A", lat: 1, lng: 2, notes: null, source: "manual", photoUrl: null,
   visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: "Tripod", shotChecklist: "[]",
+  accessLat: null, accessLng: null, accessName: null, accessWalkMeters: null, accessResolvedAt: null,
   createdAt: new Date(), updatedAt: new Date(),
 };
 
@@ -47,5 +48,39 @@ describe("enum-like stored fields", () => {
     expect(toStopDto(bad)).toMatchObject({ lightPref: "any", priority: "normal", source: "manual" });
     const trip = { id: "t", userId: "u", name: "T", plannedDate: new Date("2026-07-01T00:00:00Z"), departAt: null, shareToken: "x", routeOptimizedFor: null, createdAt: new Date(), updatedAt: new Date(), stops: [bad] };
     expect(toPublicTripDto(trip as never).stops[0]).toMatchObject({ lightPref: "any", priority: "normal", source: "manual" });
+  });
+});
+
+describe("stop access point", () => {
+  it("caps a stored lot name at 120 characters on read without splitting an emoji", () => {
+    const long = toStopDto({ ...row, accessLat: 1, accessLng: 2, accessName: "x".repeat(300) });
+    expect(long.access?.name).toBe("x".repeat(120));
+    const emoji = toStopDto({ ...row, accessLat: 1, accessLng: 2, accessName: "x".repeat(119) + "\u{1F600}" });
+    expect(emoji.access?.name).toBe("x".repeat(119));
+  });
+  it("maps the saved lot and the resolved time", () => {
+    const at = new Date("2026-11-17T10:00:00Z");
+    const dto = toStopDto({ ...row, accessLat: 1, accessLng: 2, accessName: "North lot", accessWalkMeters: 1930, accessResolvedAt: at });
+    expect(dto.access).toEqual({ lat: 1, lng: 2, name: "North lot", walkMeters: 1930 });
+    expect(dto.accessResolvedAt).toBe(at.toISOString());
+  });
+  it("cleans the lot name like a stop name (control characters and line breaks)", () => {
+    const dto = toStopDto({ ...row, accessLat: 1, accessLng: 2, accessName: "North\u0000 lot\n\u202E" });
+    expect(dto.access?.name).toBe("North lot");
+    expect(dto.access?.name).not.toMatch(/[\u0000\n\u202E]/);
+  });
+  it("reads a lot name made only of invisible characters as no name", () => {
+    expect(toStopDto({ ...row, accessLat: 1, accessLng: 2, accessName: "\u200B\u200D" }).access?.name).toBeNull();
+  });
+  it("is null when lat or lng is missing, even with a name", () => {
+    expect(toStopDto({ ...row, accessLat: null, accessLng: 2, accessName: "x" }).access).toBeNull();
+    expect(toStopDto({ ...row, accessLat: 1, accessLng: null, accessName: "x" }).access).toBeNull();
+    expect(toStopDto(row)).toMatchObject({ access: null, accessResolvedAt: null });
+  });
+  it("public stops carry access but never accessResolvedAt", () => {
+    const trip = { id: "t", name: "T", plannedDate: new Date("2026-11-17T00:00:00Z"), departAt: null, shareToken: null, routeOptimizedFor: null, userId: "u", createdAt: new Date(), updatedAt: new Date(), stops: [{ ...row, accessLat: 1, accessLng: 2, accessName: "L", accessWalkMeters: 640, accessResolvedAt: new Date() }] } as unknown as Parameters<typeof toPublicTripDto>[0];
+    const s = toPublicTripDto(trip).stops[0];
+    expect(s.access).toEqual({ lat: 1, lng: 2, name: "L", walkMeters: 640 });
+    expect("accessResolvedAt" in s).toBe(false);
   });
 });

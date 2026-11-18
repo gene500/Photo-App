@@ -122,8 +122,8 @@ describe("public share data", () => {
       plannedDate: "2026-07-01",
       departAt: null,
       stops: [
-        { order: 0, name: "First view", lat: 36, lng: -120.2, source: "manual", lightPref: "any", priority: "normal", dwellMinutes: 30, visited: false, shotNotes: null, shotChecklist: [] },
-        { order: 1, name: "Second view", lat: 36.5, lng: -120, source: "suggested", lightPref: "any", priority: "normal", dwellMinutes: 30, visited: false, shotNotes: "Use a polarizer", shotChecklist: [{ text: "Wide shot", done: true }] },
+        { order: 0, name: "First view", lat: 36, lng: -120.2, source: "manual", lightPref: "any", priority: "normal", dwellMinutes: 30, visited: false, shotNotes: null, shotChecklist: [], access: null },
+        { order: 1, name: "Second view", lat: 36.5, lng: -120, source: "suggested", lightPref: "any", priority: "normal", dwellMinutes: 30, visited: false, shotNotes: "Use a polarizer", shotChecklist: [{ text: "Wide shot", done: true }], access: null },
       ],
     });
   });
@@ -146,7 +146,7 @@ describe("public share data", () => {
     expect(Object.keys(dto!).sort()).toEqual(["departAt", "name", "plannedDate", "stops"]);
     for (const s of dto!.stops) {
       expect(Object.keys(s).sort()).toEqual(
-        ["dwellMinutes", "lat", "lightPref", "lng", "name", "order", "priority", "shotChecklist", "shotNotes", "source", "visited"],
+        ["access", "dwellMinutes", "lat", "lightPref", "lng", "name", "order", "priority", "shotChecklist", "shotNotes", "source", "visited"],
       );
     }
   });

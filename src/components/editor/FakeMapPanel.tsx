@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { bearingEndpoint } from "@/lib/geo";
+import { groupLots } from "@/lib/lot-markers";
 import { fanOffsets } from "@/lib/marker-fan";
 import { latLngToPercent, pixelToLatLng, type Bounds } from "@/lib/map-bounds";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
@@ -105,6 +106,8 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
   // While the water runs the route itself is drawn in behind it (the real map trims the line the same way).
   const running = flow === "running";
   const revealing = running ? { className: "route-reveal", pathLength: 100 } : {};
+  // Every stop's parking lot (the route drives there), merged when they coincide; every stop's own marker stays at the stop.
+  const lots = groupLots(stops, selectedId);
   const popupId = hoveredId ?? highlightedSuggestionId;
   const popupSuggestion = suggestions.find((s) => s.osmId === popupId);
 
@@ -164,6 +167,17 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
           </button>
         );
       })}
+      {lots.map((g) => (
+        <span
+          key={`${g.lat},${g.lng}`}
+          role="img"
+          aria-label={g.ariaLabel}
+          className={`lot-marker pointer-events-none absolute -translate-x-1/2 -translate-y-1/2${g.selected ? " lot-marker-selected" : ""}`}
+          style={{ left: `${pos(g).left}%`, top: `${pos(g).top}%` }}
+        >
+          P<span className="lot-label">{g.label}</span>
+        </span>
+      ))}
       {suggestions.map((s) => (
         <button
           key={s.osmId}

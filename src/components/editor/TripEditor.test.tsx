@@ -9,7 +9,7 @@ import { resetPlacePhotoCache } from "@/lib/place-photo-cache";
 
 vi.mock("@/lib/api-client", () => ({
   api: {
-    directions: vi.fn(), addStop: vi.fn(), suggestions: vi.fn(), reorderStops: vi.fn(),
+    directions: vi.fn(), addStop: vi.fn(), suggestions: vi.fn(), reorderStops: vi.fn(), resolveAccess: vi.fn(),
     updateStop: vi.fn(), uploadPhoto: vi.fn(), deleteStop: vi.fn(), updateTrip: vi.fn(), reverseGeocode: vi.fn(), suggestionPopularity: vi.fn(), placePhoto: vi.fn(async () => ({ photo: null })), geocode: vi.fn(), optimizeOrder: vi.fn(), locate: vi.fn(async () => ({ area: null })),
   },
 }));
@@ -62,7 +62,7 @@ import { TripEditor } from "./TripEditor";
 const trip: TripWithStops = { id: "t1", name: "Sierra loop", plannedDate: "2026-07-01", departAt: null, shareToken: null, stops: [] };
 const route = { geometry: [[-119.79, 36.74], [-119.12, 37.96]] as [number, number][], legs: [{ distance: 100_000, duration: 3_600 }], distance: 100_000, duration: 3_600 };
 const newStop = (over: Partial<Stop>): Stop => ({
-  id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37.5, lng: -119.5, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], ...over,
+  id: "s1", tripId: "t1", order: 0, name: "Pin 1", lat: 37.5, lng: -119.5, notes: null, source: "manual", photoUrl: null, visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: null, shotChecklist: [], access: null, accessResolvedAt: null, ...over,
 });
 /** What the server does for a stop update: applies the patch, and for a visited change also the cascade (earlier stops checked, later ones unchecked). */
 function serverUpdate(list: Stop[]) {
@@ -275,6 +275,20 @@ describe("TripEditor", () => {
     expect(screen.queryByTestId("route-line")).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Optimize route" }));
     await waitFor(() => expect(screen.getByTestId("route-line")).toBeTruthy());
+  });
+
+  it("puts the saved walk length in the PDF parking line", async () => {
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.mocked(loadWeatherLines).mockResolvedValue([null, null]);
+    vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["pdf"]));
+    const a = { lat: seed[0].lat, lng: seed[0].lng, name: "North lot", walkMeters: 1930 };
+    render(<TripEditor initialTrip={withStops([{ ...seed[0], access: a, accessResolvedAt: "2026-11-17T10:00:00.000Z" }, seed[1]])} />);
+    await waitFor(() => expect(api.directions).toHaveBeenCalled());
+    await userEvent.click(screen.getByRole("button", { name: "Export" }));
+    await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
+    await waitFor(() => expect(createItineraryPdf).toHaveBeenCalled());
+    const stops = vi.mocked(createItineraryPdf).mock.calls.at(-1)![0].input.stops;
+    expect(stops[0]!.parkLine).toMatch(new RegExp(`^Park at North lot( ~\\d{1,2}:\\d{2} [AP]M)?, walk 1\\.2 mi \\(~30 min\\) to ${seed[0].name}$`));
   });
 
   it("still hands the real route to Export before Optimize", async () => {
@@ -1856,6 +1870,43 @@ describe("TripEditor", () => {
       await act(async () => resolveIt({ order: [0, 2, 1] }));
       expect((await screen.findByRole("alert")).textContent).toContain("changed");
       expect(api.reorderStops).toHaveBeenCalledTimes(1); // only the manual one
+    });
+
+    it("applies the result when only a parking lot arrived while optimizing", async () => {
+      const LOT = { lat: 36.01, lng: -119.02, name: "Lot", walkMeters: 400 };
+      const resolved = "2026-11-17T10:00:00.000Z";
+      const list: Stop[] = three.map((s, i) => ({ ...s, accessResolvedAt: i === 2 ? null : resolved }));
+      let resolveIt!: (v: { order: number[] }) => void;
+      vi.mocked(api.optimizeOrder).mockReturnValue(new Promise((res) => (resolveIt = res)));
+      let resolveLot!: (v: { stop: Stop }) => void;
+      vi.mocked(api.resolveAccess).mockReturnValueOnce(new Promise((res) => (resolveLot = res)));
+      vi.mocked(api.reorderStops).mockImplementation(async (_t, ids) => ({ stops: ids.map((id, order) => ({ ...list.find((s) => s.id === id)!, order })) }));
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(list)} />);
+      await openMyTrip();
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      await act(async () => resolveLot({ stop: { ...list[2], access: LOT, accessResolvedAt: resolved } }));
+      await act(async () => resolveIt({ order: [0, 2, 1] }));
+      await waitFor(() => expect(api.reorderStops).toHaveBeenCalledTimes(1));
+      expect(screen.queryByText(/result was discarded/)).toBeNull();
+    });
+
+    it("still discards the result when a stop is deleted while optimizing", async () => {
+      let resolveIt!: (v: { order: number[] }) => void;
+      vi.mocked(api.optimizeOrder).mockReturnValue(new Promise((res) => (resolveIt = res)));
+      vi.mocked(api.deleteStop).mockResolvedValue(undefined as never);
+      const user = userEvent.setup();
+      render(<TripEditor initialTrip={withStops(three)} />);
+      await openMyTrip();
+      await user.click(screen.getByRole("button", { name: "Optimize route" }));
+      await user.click(screen.getByRole("tab", { name: "Stops" }));
+      await user.click(screen.getByRole("button", { name: "Delete B" }));
+      await confirmDeleteStop();
+      await waitFor(() => expect(api.deleteStop).toHaveBeenCalled());
+      await openMyTrip();
+      await act(async () => resolveIt({ order: [0, 2, 1] }));
+      expect(await screen.findByText(/result was discarded/)).toBeTruthy();
+      expect(api.reorderStops).not.toHaveBeenCalled();
     });
 
     it("drops Undo once the user reorders manually", async () => {

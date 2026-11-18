@@ -1,7 +1,7 @@
 import type { Stop as StopRow, Trip as TripRow } from "@/generated/prisma/client";
 import { utcToDateOnly } from "@/lib/dates";
-import { clampText, hasContent, stripNameChars, stripTextChars } from "@/lib/text";
-import type { LightPref, PublicStop, PublicTrip, ShotItem, Stop, StopPriority, StopSource, Trip } from "@/lib/types";
+import { cleanLine, clampText, hasContent, stripNameChars, stripTextChars } from "@/lib/text";
+import type { AccessPoint, LightPref, PublicStop, PublicTrip, ShotItem, Stop, StopPriority, StopSource, Trip } from "@/lib/types";
 
 export function toTripDto(row: TripRow): Trip {
   return {
@@ -43,6 +43,11 @@ function toPriority(value: string): StopPriority {
 const toLightPref = (value: string): LightPref => (value === "sunrise" || value === "golden" || value === "sunset" ? value : "any");
 const toSource = (value: string): StopSource => (value === "suggested" ? value : "manual");
 
+const toAccess = (row: StopRow): AccessPoint | null =>
+  row.accessLat === null || row.accessLng === null
+    ? null
+    : { lat: row.accessLat, lng: row.accessLng, name: row.accessName === null ? null : cleanLine(row.accessName, 120), walkMeters: row.accessWalkMeters };
+
 export function toStopDto(row: StopRow): Stop {
   return {
     id: row.id,
@@ -60,6 +65,8 @@ export function toStopDto(row: StopRow): Stop {
     dwellMinutes: row.dwellMinutes,
     shotNotes: row.shotNotes === null ? null : stripTextChars(row.shotNotes),
     shotChecklist: parseShotChecklist(row.shotChecklist),
+    access: toAccess(row),
+    accessResolvedAt: row.accessResolvedAt ? row.accessResolvedAt.toISOString() : null,
   };
 }
 
@@ -82,6 +89,7 @@ export function toPublicTripDto(row: TripRow & { stops: StopRow[] }): PublicTrip
       visited: s.visited,
       shotNotes: s.shotNotes === null ? null : stripTextChars(s.shotNotes),
       shotChecklist: parseShotChecklist(s.shotChecklist),
+      access: toAccess(s),
     }));
   return {
     name: row.name,

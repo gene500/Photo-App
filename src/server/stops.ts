@@ -116,7 +116,11 @@ export async function updateStopCascade(
     return await prisma.$transaction(async (tx) => {
       const row = await tx.stop.findFirst({ where: { id: stopId, trip: { userId } } });
       if (!row) return null;
-      const data = toStopData(shotBase && patch.shotChecklist ? { ...patch, shotChecklist: mergeShotChecklist(parseShotChecklist(row.shotChecklist), shotBase, patch.shotChecklist) } : patch);
+      const data = {
+        ...toStopData(shotBase && patch.shotChecklist ? { ...patch, shotChecklist: mergeShotChecklist(parseShotChecklist(row.shotChecklist), shotBase, patch.shotChecklist) } : patch),
+        // A moved stop's parking lot is stale: forget it so it is looked up again.
+        ...(patch.lat !== undefined || patch.lng !== undefined ? { accessLat: null, accessLng: null, accessName: null, accessWalkMeters: null, accessResolvedAt: null } : {}),
+      };
       const updated = await tx.stop.update({ where: { id: stopId }, data });
       const cascaded: Stop[] = [];
       if (patch.visited !== undefined) {

@@ -1,9 +1,13 @@
 import { daylightInterval, getSunWindows } from "./best-time";
+import { walkMs } from "./walk-time";
 import { lightWindows } from "./light-windows";
 import { EXACT_MAX, optimizeOrder, PENALTY } from "./optimize-order";
 import type { LightPref, StopPriority } from "./types";
 
-export type ScheduleStop = { lat: number; lng: number; lightPref: LightPref; dwellMinutes: number; priority?: StopPriority };
+export type ScheduleStop = { lat: number; lng: number; lightPref: LightPref; dwellMinutes: number; priority?: StopPriority;
+  /** One-way walk (minutes) from the parking lot the car is routed to, to the subject; omitted or 0 for a stop without a lot. Dwell is spent at the subject, so the lot is left 2 x walk + dwell after arriving at it. */
+  walkMinutes?: number;
+};
 
 type ScheduleMiss = {
   /** Index in the submitted stop list. */
@@ -197,6 +201,10 @@ class Evaluator {
   private readonly arrivalOffsets: Float64Array;
   /** Dwell of each stop in ms. */
   readonly dwellMs: number[];
+  /** One-way walk of each stop in ms (0 without a lot). */
+  readonly walkMs: number[];
+  /** Time from arriving at a stop's lot to leaving it: the walk both ways plus the dwell, in ms. */
+  readonly holdMs: number[];
   /** Seconds of driving one missed minute of a Normal stop is worth. */
   readonly missWeight: number;
   /** True when no term of the cost can be negative, so a partial sum that already reaches a threshold can stop early. */
@@ -237,6 +245,8 @@ class Evaluator {
     this.arrivalOffsets = new Float64Array(stops.length);
     this.missWeight = this.t.missWeight;
     this.dwellMs = stops.map((s) => s.dwellMinutes * 60_000);
+    this.walkMs = stops.map((s) => walkMs(s.walkMinutes));
+    this.holdMs = stops.map((s, i) => this.dwellMs[i]! + 2 * this.walkMs[i]!);
     const nonNegative = (v: number) => Number.isFinite(v) && v >= 0;
     this.monotone =
       d.every((row) => row.every((v) => v >= 0)) &&
@@ -258,7 +268,7 @@ class Evaluator {
     let t = 0;
     off[0] = 0;
     for (let k = 1; k < order.length; k++) {
-      t += this.d[order[k - 1]!]![order[k]!]! * 1000 + this.stops[order[k - 1]!]!.dwellMinutes * 60_000;
+      t += this.d[order[k - 1]!]![order[k]!]! * 1000 + this.holdMs[order[k - 1]!]!;
       off[k] = t;
     }
     return off;
@@ -304,7 +314,8 @@ class Evaluator {
     return w;
   }
 
-  private missAt(i: number, arrivalMs: number): number {
+  private missAt(i: number, lotMs: number): number {
+    const arrivalMs = lotMs + this.walkMs[i]!;
     const { light, hasLight } = this.sunDay(i, arrivalMs);
     if (!hasLight) return 0;
     const end = arrivalMs + this.stops[i]!.dwellMinutes * 60_000;
@@ -320,7 +331,8 @@ class Evaluator {
    * Minutes between a visit and the nearest daylight (sunrise to sunset, or the stop's own preferred light), 0 when the
    * visit touches either. A day without sunrise or sunset has no daylight rule.
    */
-  private darkAt(i: number, arrivalMs: number): number {
+  private darkAt(i: number, lotMs: number): number {
+    const arrivalMs = lotMs + this.walkMs[i]!;
     const { light, daylight, hasDaylight } = this.sunDay(i, arrivalMs);
     if (!hasDaylight) return 0;
     const end = arrivalMs + this.stops[i]!.dwellMinutes * 60_000;
@@ -353,7 +365,8 @@ class Evaluator {
    * One visit's share of `missTotal`, added to the running `total`: the light miss (for a stop with a preference) and then the darkness,
    * from one sun lookup. The additions happen in the order missTotal always made them, so partial totals can be reused bit for bit.
    */
-  terms(i: number, arrivalMs: number, total: number): number {
+  terms(i: number, lotMs: number, total: number): number {
+    const arrivalMs = lotMs + this.walkMs[i]!; // the light is judged at the subject, one walk after reaching the lot
     const sun = this.sunDay(i, arrivalMs);
     const end = arrivalMs + this.dwellMs[i]!;
     if (this.constrained[i]) {
@@ -495,7 +508,7 @@ function* exactSteps(ctx: Evaluator, n: number, over: () => boolean): Generator<
   const place = (k: number, prev: number, s: number): number => {
     const leg = ctx.d[prev]![s]!;
     driveP[k] = driveP[k - 1]! + leg;
-    off[k] = off[k - 1]! + (leg * 1000 + ctx.dwellMs[prev]!);
+    off[k] = off[k - 1]! + (leg * 1000 + ctx.holdMs[prev]!);
     const dc = ctx.driveCostOf(driveP[k]!);
     let lowest = Infinity;
     for (let t = 0; t < T; t++) {
@@ -642,7 +655,7 @@ function* improve(ctx: Evaluator, start: number[], from?: number): Generator<voi
       if (k > 0) {
         const leg = d[order[k - 1]!]![order[k]!]!;
         dr += leg;
-        t += leg * 1000 + ctx.dwellMs[order[k - 1]!]!;
+        t += leg * 1000 + ctx.holdMs[order[k - 1]!]!;
       }
       offB[k] = t;
       driveB[k] = dr;
@@ -659,7 +672,7 @@ function* improve(ctx: Evaluator, start: number[], from?: number): Generator<voi
     let t = offB[m - 1]!;
     let total = missB[m]!;
     for (let k = m; k < n; k++) {
-      t += d[cand[k - 1]!]![cand[k]!]! * 1000 + ctx.dwellMs[cand[k - 1]!]!;
+      t += d[cand[k - 1]!]![cand[k]!]! * 1000 + ctx.holdMs[cand[k - 1]!]!;
       total = ctx.terms(cand[k]!, departMs + t, total);
       if (ctx.monotone && dc + mw * total >= thr) break;
     }

@@ -97,7 +97,8 @@ function clockRange(a: Date, b: Date, timeZone?: string, timeFormat: TimeFormat 
  * the ones that round to 0, and the row hint must agree, or a stop the optimizer called met would read "Misses ... by 1 min".
  * So a miss under half a minute (30 s) is met.
  */
-export const isLightMiss = (minutes: number) => Math.round(minutes) > 0;
+export const roundMissMinutes = (minutes: number) => Math.round(minutes);
+export const isLightMiss = (minutes: number) => roundMissMinutes(minutes) > 0;
 
 export type LightHint = { text: string; met: boolean };
 
@@ -123,7 +124,7 @@ export function describeLightHint(
   ];
   const label = lightLabel(stop.lightPref);
   const miss = windowMissMinutes(arrival, stop.dwellMinutes, windows);
-  if (isLightMiss(miss)) return { text: `Misses ${label.toLowerCase()} by ${formatMinutes(Math.round(miss))}`, met: false };
+  if (isLightMiss(miss)) return { text: `Misses ${label.toLowerCase()} by ${formatMinutes(roundMissMinutes(miss))}`, met: false };
   // The window the stay overlaps, or (a miss under the 30 s tolerance counts as met) the nearest one, never just the day's first.
   const from = arrival.getTime();
   const to = from + stop.dwellMinutes * MS_MIN;

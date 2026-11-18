@@ -373,6 +373,22 @@ describe("FakeMapPanel parking markers for every lot", () => {
     expect(after[1].className).toContain("lot-marker-selected");
   });
 
+  it("hides the label (keeps the P) of a later lot whose label would overlap an earlier one; the selected one wins", () => {
+    const n1 = lotStop("n1", "One", 37.2, -119.2, "Lot one", 37.1, -119.1);
+    const n2 = lotStop("n2", "Two", 37.3, -119.3, "Lot two", 37.1005, -119.1005); // about 70 m away: separate groups, boxes overlap
+    const far = lotStop("f", "Far", 37.4, -119.4, "Far lot", 37.4, -119.4);
+    const { rerender } = render(<FakeMapPanel {...base} stops={[n1, n2, far]} />);
+    const one = screen.getByRole("img", { name: "Parking for One: Lot one" });
+    const two = screen.getByRole("img", { name: "Parking for Two: Lot two" });
+    expect(one.className).not.toContain("lot-label-hidden");
+    expect(two.className).toContain("lot-label-hidden");
+    expect(two.textContent).toContain("P");
+    expect(screen.getByRole("img", { name: "Parking for Far: Far lot" }).className).not.toContain("lot-label-hidden");
+    rerender(<FakeMapPanel {...base} stops={[n1, n2, far]} selectedId="n2" />);
+    expect(screen.getByRole("img", { name: "Parking for One: Lot one" }).className).toContain("lot-label-hidden");
+    expect(screen.getByRole("img", { name: "Parking for Two: Lot two" }).className).not.toContain("lot-label-hidden");
+  });
+
   it("is not tabbable", () => {
     render(<FakeMapPanel {...base} stops={[a]} />);
     expect(screen.getByRole("img", { name: /^Parking for/ }).getAttribute("tabindex")).toBeNull();

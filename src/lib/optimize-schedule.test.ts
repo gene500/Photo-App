@@ -576,6 +576,23 @@ describe("walk from the parking lot", () => {
     expect(walked.misses[0]!.minutes).toBeCloseTo(25, 5);
   });
 
+  it("a long walk to the first stop: the start search reaches back far enough to meet the light", () => {
+    const d = flat(2, 600);
+    const run = (walk: number) => optimizeSchedule({ durations: d, stops: [walking(walk, "sunrise", 30), stop("any")], plannedDate: DATE, defaultDeparture });
+    for (const walk of [60, 120, 200, 300]) {
+      const r = run(walk);
+      expect(r.misses, `walk ${walk}`).toEqual([]);
+    }
+    // The extended search must not change answers that the old window already found (same departure for a short walk).
+    expect(run(20).departAt.getTime()).toBeGreaterThanOrEqual(defaultDeparture.getTime() - 3_600_000 - 20 * 60_000);
+  });
+
+  it("a long walk before a light-constrained stop later in the order is judged at the subject too (a must-have stop)", () => {
+    const d = flat(2, 600);
+    const r = optimizeSchedule({ durations: d, stops: [stop("any", 0), { ...walking(240, "sunrise", 30), priority: "must" as const }], plannedDate: DATE, defaultDeparture });
+    expect(r.misses).toEqual([]);
+  });
+
   it("the later stop's arrival includes both walks of the earlier one", () => {
     // Stop 1 wants sunset: leaving the first stop's lot 2 x 30 min later than without a walk moves the evening arrival.
     const d = flat(2, 600);

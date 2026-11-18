@@ -11,6 +11,7 @@ import { useHike } from "@/lib/use-hike";
 import { parkText } from "@/lib/itinerary";
 import { ParkLine } from "./ParkLine";
 import { formatHikeDistance } from "@/lib/hike";
+import { hasWalkLength } from "@/lib/walk-time";
 import { WeatherText } from "@/components/weather/WeatherIcon";
 import type { Stop, StopPriority } from "@/lib/types";
 import { PriorityPill } from "./PriorityPill";
@@ -93,7 +94,7 @@ function HikeLines({ stop }: { stop: Stop }) {
   const parkLine = parkText({ name: stop.name, access: stop.access, walkMeters: stop.access?.walkMeters ?? null }, settings.distanceUnit);
   if (parkLine) {
     // With a lot the park line replaces the plain hike text; the hike distance stays when the line has no walk length.
-    const walkShown = /, walk /.test(parkLine);
+    const walkShown = hasWalkLength(stop.access?.walkMeters);
     return (
       <>
         <ParkLine stop={stop} />

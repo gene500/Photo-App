@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Stop } from "@/lib/types";
-import { groupLots, lotAriaLabel, lotLabel, LOT_LABEL_MAX, LOT_MERGE_M, lotSignature } from "./lot-markers";
+import { groupLots, hiddenLotLabels, estimateLabelWidth, lotAriaLabel, lotLabel, LOT_LABEL_MAX, LOT_MERGE_M, lotSignature } from "./lot-markers";
 
 const mk = (id: string, name: string, access: Stop["access"]): Pick<Stop, "id" | "name" | "access"> => ({ id, name, access });
 const lot = (lat: number, lng: number, name: string | null = "North lot") => ({ lat, lng, name, walkMeters: 500 });
@@ -49,6 +49,19 @@ describe("groupLots", () => {
     const g = groupLots([mk("a", "A", lot(37, -119, "Same")), mk("b", "B", lot(37, -119, "Same"))], null);
     expect(g[0].ariaLabel).toBe("Parking for A, B: Same");
   });
+  it("chains: a lot within the distance of ANY member joins, whatever the order", () => {
+    const m = (d: number) => 37 + d / 111_320; // metres north of 37
+    const india = lot(m(0), -119, "India");
+    const juliet = lot(m(29), -119, "Juliet");
+    const kilo = lot(m(58), -119, "Kilo"); // 58 m from India, 29 m from Juliet
+    const orders = [[0, 1, 2], [0, 2, 1], [2, 0, 1], [1, 2, 0], [2, 1, 0], [1, 0, 2]];
+    const all = [mk("i", "I", india), mk("j", "J", juliet), mk("k", "K", kilo)];
+    for (const o of orders) {
+      const g = groupLots(o.map((i) => all[i]), null);
+      expect(g).toHaveLength(1);
+      expect(g[0].count).toBe(3);
+    }
+  });
   it("marks the group of the selected stop", () => {
     const g = groupLots([mk("a", "A", lot(37, -119)), mk("b", "B", lot(38, -119))], "b");
     expect(g.map((x) => x.selected)).toEqual([false, true]);
@@ -67,5 +80,33 @@ describe("lotSignature", () => {
 describe("lotAriaLabel", () => {
   it("is the single-lot form", () => {
     expect(lotAriaLabel(["Arch"], ["North lot"])).toBe("Parking for Arch: North lot");
+  });
+});
+
+describe("hiddenLotLabels", () => {
+  const w = 80;
+  it("keeps every label when they do not overlap", () => {
+    expect(hiddenLotLabels([{ x: 0, y: 0, width: w }, { x: 300, y: 0, width: w }, { x: 0, y: 100, width: w }])).toEqual([false, false, false]);
+  });
+  it("hides a later label that overlaps an earlier visible one, keeps the earlier", () => {
+    expect(hiddenLotLabels([{ x: 0, y: 0, width: w }, { x: 20, y: 5, width: w }])).toEqual([false, true]);
+  });
+  it("a hidden label does not hide the next one", () => {
+    expect(hiddenLotLabels([{ x: 0, y: 0, width: w }, { x: 20, y: 0, width: w }, { x: 200, y: 0, width: w }])).toEqual([false, true, false]);
+    // C overlaps only the hidden B, so it stays.
+    expect(hiddenLotLabels([{ x: 0, y: 0, width: w }, { x: 70, y: 0, width: w }, { x: 140, y: 0, width: w }])).toEqual([false, true, false]);
+  });
+  it("the selected group wins even when it comes later", () => {
+    expect(hiddenLotLabels([{ x: 0, y: 0, width: w }, { x: 20, y: 0, width: w, selected: true }])).toEqual([true, false]);
+  });
+  it("is empty for no input", () => {
+    expect(hiddenLotLabels([])).toEqual([]);
+  });
+});
+
+describe("estimateLabelWidth", () => {
+  it("grows with the text and stays within the CSS max width", () => {
+    expect(estimateLabelWidth("Parking ×12")).toBeGreaterThan(estimateLabelWidth("P"));
+    expect(estimateLabelWidth("x".repeat(100))).toBeLessThanOrEqual(152);
   });
 });

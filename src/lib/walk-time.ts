@@ -23,3 +23,8 @@ export function walkMs(minutes: number | null | undefined): number {
 export function stopWalkMinutes(s: { access?: { walkMeters?: number | null } | null }): number {
   return walkMinutes(s.access?.walkMeters);
 }
+
+/** True when a walk length is known and positive (the park text then prints "walk ..."); the one check parkText and the My trip row share. */
+export function hasWalkLength(meters: number | null | undefined): boolean {
+  return typeof meters === "number" && Number.isFinite(meters) && meters > 0;
+}

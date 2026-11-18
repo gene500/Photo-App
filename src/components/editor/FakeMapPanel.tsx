@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { bearingEndpoint } from "@/lib/geo";
-import { groupLots } from "@/lib/lot-markers";
+import { estimateLabelWidth, groupLots, hiddenLotLabels } from "@/lib/lot-markers";
 import { fanOffsets } from "@/lib/marker-fan";
 import { latLngToPercent, pixelToLatLng, type Bounds } from "@/lib/map-bounds";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
@@ -108,6 +108,8 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
   const revealing = running ? { className: "route-reveal", pathLength: 100 } : {};
   // Every stop's parking lot (the route drives there), merged when they coincide; every stop's own marker stays at the stop.
   const lots = groupLots(stops, selectedId);
+  // Labels that would overlap are hidden (the P stays); the fixed viewport is treated as 1000x600 px.
+  const lotLabelHidden = hiddenLotLabels(lots.map((g) => { const p = pos(g); return { x: p.left * 10, y: p.top * 6, width: estimateLabelWidth(g.label), selected: g.selected }; }));
   const popupId = hoveredId ?? highlightedSuggestionId;
   const popupSuggestion = suggestions.find((s) => s.osmId === popupId);
 
@@ -167,12 +169,12 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
           </button>
         );
       })}
-      {lots.map((g) => (
+      {lots.map((g, gi) => (
         <span
           key={`${g.lat},${g.lng}`}
           role="img"
           aria-label={g.ariaLabel}
-          className={`lot-marker pointer-events-none absolute -translate-x-1/2 -translate-y-1/2${g.selected ? " lot-marker-selected" : ""}`}
+          className={`lot-marker pointer-events-none absolute -translate-x-1/2 -translate-y-1/2${g.selected ? " lot-marker-selected" : ""}${lotLabelHidden[gi] ? " lot-label-hidden" : ""}`}
           style={{ left: `${pos(g).left}%`, top: `${pos(g).top}%` }}
         >
           P<span className="lot-label">{g.label}</span>

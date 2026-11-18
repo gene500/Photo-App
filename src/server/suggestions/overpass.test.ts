@@ -74,6 +74,20 @@ describe("fetchOverpass", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it("with stopOnHeavy, when a hedge-started second mirror was the one that said heavy, the retry asks a different mirror, never the same one", async () => {
+    const [u0, u1, u2] = OVERPASS_ENDPOINTS;
+    const asked: string[] = [];
+    const fetchImpl = vi.fn((url: string, init: RequestInit) => {
+      asked.push(url);
+      if (url === u0) return new Promise<Response>((_, reject) => init.signal?.addEventListener("abort", () => reject(new Error("aborted")))); // stalled
+      if (url === u1) return Promise.resolve(ok({ elements: [], remark: heavyRemark }));
+      return Promise.resolve(ok({ elements: [9] }));
+    });
+    await expect(fetchOverpass("q", { fetchImpl: fetchImpl as unknown as typeof fetch, sleep: noSleep, hedgeMs: 5, stopOnHeavy: true })).resolves.toEqual({ elements: [9] });
+    expect(asked.filter((u) => u === u1)).toHaveLength(1);
+    expect(asked).toContain(u2);
+  });
+
   it("with stopOnHeavy, a heavy first mirror and a failing second mirror is a failure, not a too-heavy verdict", async () => {
     const fetchImpl = vi.fn()
       .mockResolvedValueOnce(ok({ elements: [], remark: heavyRemark }))

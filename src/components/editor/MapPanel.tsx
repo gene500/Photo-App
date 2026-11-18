@@ -5,7 +5,7 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useEffect, useRef, useState } from "react";
 import { diffIds } from "@/lib/diff-ids";
-import { groupLots, LOT_LABEL_MIN_ZOOM, lotSignature } from "@/lib/lot-markers";
+import { estimateLabelWidth, groupLots, hiddenLotLabels, LOT_LABEL_MIN_ZOOM, lotSignature } from "@/lib/lot-markers";
 import { bearingEndpoint, wrapLng } from "@/lib/geo";
 import { unwrapForFit } from "@/lib/map-bounds";
 import { isMapFatalError, type MapErrorEvent } from "@/lib/map-errors";
@@ -633,16 +633,23 @@ export default function MapPanel({
   useEffect(() => {
     lotMarkersRef.current.forEach((m, i) => m.getElement().classList.toggle("lot-marker-selected", lotsRef.current[i]?.selected ?? false));
   }, [lotSelSig, lotSig, loaded]);
-  // Zoomed far out the labels would overlap: only the P shows (CSS keys off this attribute).
+  // Zoomed far out the labels would overlap: only the P shows (CSS keys off this attribute). In between, a label that would overlap
+  // an earlier visible one (the selected lot first) is hidden too; recomputed from the screen positions when the map moves or zooms.
   useEffect(() => {
     const map = mapRef.current;
     const box = containerRef.current;
     if (!map || !box) return;
-    const update = () => { box.dataset.lotLabels = map.getZoom() >= LOT_LABEL_MIN_ZOOM ? "on" : "off"; };
+    const update = () => {
+      box.dataset.lotLabels = map.getZoom() >= LOT_LABEL_MIN_ZOOM ? "on" : "off";
+      const gs = lotsRef.current;
+      const hidden = hiddenLotLabels(gs.map((g) => { const p = map.project([g.lng, g.lat]); return { x: p.x, y: p.y, width: estimateLabelWidth(g.label), selected: g.selected }; }));
+      lotMarkersRef.current.forEach((m, i) => m.getElement().classList.toggle("lot-label-hidden", hidden[i] ?? false));
+    };
     update();
-    map.on("zoom", update);
-    return () => { map.off("zoom", update); };
-  }, [loaded]);
+    map.on("moveend", update);
+    map.on("zoomend", update);
+    return () => { map.off("moveend", update); map.off("zoomend", update); };
+  }, [lotSig, lotSelSig, loaded]);
 
   // The temporary pin.
   useEffect(() => {

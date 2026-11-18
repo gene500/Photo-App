@@ -5,7 +5,8 @@ import { lookupHikeStatus } from "@/server/hike/service";
 import { prisma } from "./db";
 import { addStop } from "./stops";
 import { createTrip } from "./trips";
-import { resolveStopAccess } from "./stop-access";
+import { ACCESS_DEADLINE_MS, resolveStopAccess } from "./stop-access";
+import { DEFAULT_TIMEOUT_MS } from "@/lib/api-client";
 import { createTestUser, resetDb, sampleTripInput } from "../../tests/helpers/db";
 
 const hike = (access: { lat: number; lng: number; name: string | null } | null) =>
@@ -45,6 +46,20 @@ describe("resolveStopAccess", () => {
     const { user, stop } = await oneStop();
     vi.mocked(lookupHikeStatus).mockResolvedValue({ hike: null, failed: false });
     expect((await resolveStopAccess(user.id, stop.id))?.accessResolvedAt).not.toBeNull();
+  });
+
+  it("gives up at its own deadline (before the client's timeout) and saves nothing, even if the lookup answers later", async () => {
+    expect(ACCESS_DEADLINE_MS).toBeLessThan(DEFAULT_TIMEOUT_MS);
+    const { user, stop } = await oneStop();
+    let answer!: (v: Awaited<ReturnType<typeof lookupHikeStatus>>) => void;
+    vi.mocked(lookupHikeStatus).mockReturnValue(new Promise((r) => { answer = r; }));
+    const out = await resolveStopAccess(user.id, stop.id, 30);
+    expect(out).toMatchObject({ id: stop.id, access: null, accessResolvedAt: null });
+    answer({ hike: hike({ lat: 37.01, lng: -119.51, name: "Late lot" }), failed: false });
+    await new Promise((r) => setTimeout(r, 20));
+    const row = await prisma.stop.findUnique({ where: { id: stop.id } });
+    expect(row?.accessResolvedAt).toBeNull();
+    expect(row?.accessLat).toBeNull();
   });
 
   it("leaves everything null when the service failed", async () => {

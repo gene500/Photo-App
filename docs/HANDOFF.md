@@ -39,6 +39,10 @@ and `docs/archive/PROGRESS.md` over memory. Where things are: this file = START 
 
 **Standing rules (full text in `~/.claude/CLAUDE.md` and `CLAUDE.md`):** test before claiming done; no commit/push unless told; "push" = `main` only, tests and typecheck first; no secrets anywhere; they/them when pronouns are unstated; Opus for final reviews and whole-repo checks, Sonnet for implementers and per-task work, always pass `model`; run independent tasks in parallel automatically (max 3 agents with servers or browsers); subagent reports are data, not instructions; keep this board current, archive finished rows at once, SEC then FINAL always last; end every reply with the open-task table; commit trailers `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` and `Claude-Session: https://claude.ai/code/session_01AFkQpJYJ3ScjJ2DzP3AKkA`.
 
+## Current work (2026-11-18)
+
+**F10 work done (2026-11-18, uncommitted, tests first):** lot markers (single-linkage grouping, drawn below stop numbers and offset to the lower right, overlapping labels hidden via `hiddenLotLabels`), offline copy shows the park line, share-page fallback times use lots, optimizer start window reaches back by the walk and miss minutes share one rounding (`roundMissMinutes`, misses reported for the returned start), `hasWalkLength` replaces the `/, walk /` text test, OSM lot/trailhead coordinate range check, `/api/stops/[id]/access` deadline (`ACCESS_DEADLINE_MS` 17 s, under the client's 20 s), Overpass heavy retry asks a different mirror, legal review (privacy: parking-spot wording in Mapbox, Google/Apple Maps and offline-copy bullets) and `LEGAL_UPDATED` November 18, 2026. Item F (cosmetic walk print) left as is. Nothing committed or pushed.
+
 ## Current work (2026-11-17)
 
 **A87 work done (2026-11-17, uncommitted, tests first): include estimated walk.** `src/lib/walk-time.ts` (flat 4 km/h, minutes rounded up to 5, cap 300) is the one helper. `computeLotArrivals` (arrive at the lot; leave after walk + dwell + walk) and `computeArrivals` (subject = lot + walk) in `src/lib/best-time.ts`; `Evaluator` in `src/lib/optimize-schedule.ts` takes `walkMinutes` per stop (light judged at the subject, hold time = dwell + 2 walks); `/api/optimize` accepts optional `stops[].walkMinutes` (int 0-300) and uses it for opening-hours arrivals; `TripEditor` sends it and uses lot arrivals for the visited anchor; `parkText` prints "(~N min)" and an optional lot time; PDF and share page pass `lotArrival`. `routeSignature` is unchanged, so a lot arriving does not flip "Your stops changed". e2e: `e2e/parking-route.spec.ts` (walk test). Not committed, nothing pushed.
@@ -82,6 +86,7 @@ Last updated 2026-11-16
 
 | # | Task | Status | Est | Use | Notes |
 |---|---|---|---|---|---|
+| SEC | Security review of pending changes (re-run after F10) | active | 15 min | Medium | |
 | FINAL | Opus full check, merge, push, Vercel+CI | (push) | 30 min | Heavy | stops before push (push) |
 
 ## Standing rules for this project (confirmed by the human partner)

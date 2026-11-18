@@ -9,7 +9,7 @@ import { lightLabel } from "./light-windows";
 import type { DistanceUnit, TimeFormat } from "./settings";
 import { PRIORITY_LABEL, stopColor } from "./stop-style";
 import type { LightPref, Stop, StopPriority } from "./types";
-import { walkMinutes } from "./walk-time";
+import { hasWalkLength, walkMinutes } from "./walk-time";
 import type { WeatherLine } from "./use-weather";
 import { weatherAriaLabel } from "./weather";
 
@@ -77,7 +77,7 @@ export function parkText(s: Pick<ItineraryStopSource, "name" | "access" | "walkM
   if (!s.access) return null;
   const name = s.access.name && hasContent(s.access.name) ? s.access.name.trim() : "the parking lot";
   const minutes = walkMinutes(s.walkMeters);
-  if (typeof s.walkMeters !== "number" || !Number.isFinite(s.walkMeters) || s.walkMeters <= 0) return `Park at ${name}`;
+  if (!hasWalkLength(s.walkMeters) || typeof s.walkMeters !== "number") return `Park at ${name}`;
   return `Park at ${name}${parkAt && minutes > 0 ? ` ~${parkAt}` : ""}, walk ${formatHikeDistance(s.walkMeters, unit)} (~${minutes} min) to ${s.name}`;
 }
 

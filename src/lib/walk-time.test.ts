@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_WALK_MINUTES, stopWalkMinutes, walkMinutes, walkMs, WALK_METERS_PER_MINUTE } from "./walk-time";
+import { hasWalkLength, MAX_WALK_MINUTES, stopWalkMinutes, walkMinutes, walkMs, WALK_METERS_PER_MINUTE } from "./walk-time";
 
 describe("walkMinutes", () => {
   it("is 0 for no, zero, negative or non-finite walks", () => {
@@ -33,5 +33,12 @@ describe("walkMs and stopWalkMinutes", () => {
     expect(stopWalkMinutes({ access: { walkMeters: null } })).toBe(0);
     expect(stopWalkMinutes({ access: null })).toBe(0);
     expect(stopWalkMinutes({})).toBe(0);
+  });
+});
+
+describe("hasWalkLength", () => {
+  it("is true only for a positive finite number", () => {
+    expect([1, 0.5].map(hasWalkLength)).toEqual([true, true]);
+    expect([0, -3, NaN, Infinity, null, undefined].map(hasWalkLength)).toEqual([false, false, false, false, false, false]);
   });
 });

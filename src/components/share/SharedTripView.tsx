@@ -12,6 +12,7 @@ import { appleMapsUrls, googleMapsUrl } from "@/lib/export";
 import { buildItinerary, itineraryFileName, parkText } from "@/lib/itinerary";
 import { createItineraryPdf, mapTokenFromEnv } from "@/lib/itinerary-download";
 import { describeLightHint, lightLabel } from "@/lib/light-windows";
+import { routePoints } from "@/lib/route-points";
 import { estimateLegDurations } from "@/lib/straight-line";
 import { useMounted } from "@/lib/use-mounted";
 import { fromTimeValue, toTimeValue } from "@/components/editor/StartTimeControl";
@@ -36,7 +37,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
   );
   // The page fetches the real driving route on the server; without one (routing down) the line is straight and the times are estimated from distance.
   const line: LngLat[] = useMemo(() => route?.geometry ?? trip.stops.map((s) => [s.lng, s.lat]), [route, trip.stops]);
-  const legs = useMemo(() => (route ? route.legs.map((l) => l.duration) : estimateLegDurations(trip.stops)), [route, trip.stops]);
+  const legs = useMemo(() => (route ? route.legs.map((l) => l.duration) : estimateLegDurations(routePoints(trip.stops).map(([lng, lat]) => ({ lat, lng })))), [route, trip.stops]);
   // With no saved start the editor shows "now" (the time it was opened) on the trip's day at the first stop; the same default is used here
   // so the page and the PDF show the times the owner sees. Until mounted (the viewer's clock is unknown) it falls back to sunrise.
   const [openedAt] = useState(() => new Date().toISOString());

@@ -2,6 +2,7 @@ import { enforcePaidLimit } from "@/server/shared-limit";
 import { clampToSolarDay, daylightInterval, departureTime } from "@/lib/best-time";
 import { orderWithoutOrigin, stopIndexWithoutOrigin, withOrigin } from "@/lib/optimize-origin";
 import { optimizeScheduleAsync, scheduleMisses } from "@/lib/optimize-schedule";
+import { roundMissMinutes } from "@/lib/light-windows";
 import { walkMs } from "@/lib/walk-time";
 import { optimizeRequestSchema } from "@/lib/validation";
 import { collectPlaceNotices } from "@/server/external/place-notices";
@@ -113,15 +114,20 @@ export const POST = handle(async (req: Request) => {
       const savedMs = departAt ? new Date(departAt).getTime() : undefined;
       const noticeStartMs =
         result.timed || savedMs === undefined ? result.departAt.getTime() : savedMs - (origin && Number.isFinite(firstLeg) ? (firstLeg ?? 0) * 1000 : 0);
+      // The misses are those of the start the client gets (whole minute, clamped), so the numbers match what the editor computes from it.
+      const reportedMisses =
+        result.timed && !keptSaved && answerDepartAt
+          ? scheduleMisses(scheduleInput, result.order, new Date(new Date(answerDepartAt).getTime() - (origin && firstLeg !== undefined ? firstLeg * 1000 : 0)))
+          : result.misses;
       const body = {
         order,
         complete: result.complete !== false,
         departAt: answerDepartAt,
-        misses: reindex(result.misses)
-          .map((m) => ({ stopIndex: m.stopIndex, minutes: Math.round(m.minutes), priority: m.priority }))
+        misses: reindex(reportedMisses)
+          .map((m) => ({ stopIndex: m.stopIndex, minutes: roundMissMinutes(m.minutes), priority: m.priority }))
           .filter((m) => m.minutes > 0),
         dark: reindex(result.dark)
-          .map((m) => ({ stopIndex: m.stopIndex, minutes: Math.round(m.minutes), priority: m.priority }))
+          .map((m) => ({ stopIndex: m.stopIndex, minutes: roundMissMinutes(m.minutes), priority: m.priority }))
           .filter((m) => m.minutes > 0),
         // Stops where the sun does not rise and set on that date: no daylight rule applies to them.
         polar: stops.flatMap((s, i) => (i < shift || daylightInterval(s.lat, s.lng, date) ? [] : [i - shift])),

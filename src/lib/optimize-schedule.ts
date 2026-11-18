@@ -231,6 +231,14 @@ class Evaluator {
     for (let t = defaultMs - 3_600_000; !fixed && t <= defaultMs + 14 * 3_600_000; t += STEP_MS) {
       if (t !== defaultMs && t !== preferredMs) this.candidates.push(t);
     }
+    // A walk to the subject delays the light check, so the search reaches back by the first stop's walk plus the longest walk to a
+    // light-constrained stop (added after the usual grid, so ties still go to the usual starts; no walk means no change).
+    const walkBack = fixed ? 0 : (stops[0]?.walkMinutes ?? 0) + Math.max(0, ...stops.filter((x) => x.lightPref !== "any").map((x) => x.walkMinutes ?? 0));
+    const extraSteps = Math.min(40, Math.ceil(Math.max(0, walkBack) / 15));
+    for (let k = 1; k <= extraSteps; k++) {
+      const t = defaultMs - 3_600_000 - k * STEP_MS;
+      if (t !== preferredMs) this.candidates.push(t);
+    }
     this.windowCache = stops.map(() => new Map());
     this.aroundCache = stops.map(() => new Map());
     this.lastDay = stops.map(() => NaN);

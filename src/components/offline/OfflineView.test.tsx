@@ -80,6 +80,19 @@ describe("OfflineView", () => {
     expect(screen.getByRole("button", { name: /Yosemite loop/ })).toBeTruthy();
   });
 
+  it("shows the park line with the walk time for a stop with a saved lot, in the chosen unit, and none without", async () => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({ distanceUnit: "mi" }));
+    saveTripCopy({ ...trip, stops: [
+      stop(0, { name: "Delicate Arch", access: { lat: 37.01, lng: -119.01, name: "North lot", walkMeters: 1609 } }),
+      stop(1, { name: "Plain stop" }),
+    ] });
+    render(<SettingsProvider><OfflineView /></SettingsProvider>);
+    await userEvent.click(await screen.findByRole("button", { name: /Yosemite loop/ }));
+    const rows = screen.getAllByTestId("offline-stop");
+    expect(within(rows[0]).getByTestId("park-line").textContent).toBe("Park at North lot, walk 1.0 mi (~25 min) to Delicate Arch");
+    expect(within(rows[1]).queryByTestId("park-line")).toBeNull();
+  });
+
   it("uses the theme tokens (so beige and dark mode apply), not fixed colours", async () => {
     saveTripCopy(trip);
     const { container } = render(<OfflineView />);

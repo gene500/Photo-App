@@ -52,6 +52,30 @@ describe("optimize: a whole-minute start never adds a miss to a stop that was me
     expect(hint === null || typeof hint.met === "boolean").toBe(true);
   });
 
+  it("the missed minutes it reports are those of the start it returns (re-posting that start fixed gives the same numbers)", async () => {
+    let seed = 1811;
+    const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32);
+    const prefs: Pref[] = ["sunrise", "golden", "sunset"];
+    let timed = 0;
+    for (let c = 0; c < 120; c++) {
+      const n = 2 + Math.floor(rnd() * 3);
+      const lat0 = -50 + rnd() * 100;
+      const lng0 = -170 + rnd() * 340;
+      const body: Body = {
+        coordinates: Array.from({ length: n }, () => [lng0 + (rnd() - 0.5) * 3, lat0 + (rnd() - 0.5) * 2] as [number, number]),
+        plannedDate: `2027-${String(1 + Math.floor(rnd() * 12)).padStart(2, "0")}-${String(1 + Math.floor(rnd() * 28)).padStart(2, "0")}`,
+        stops: Array.from({ length: n }, () => ({ lightPref: prefs[Math.floor(rnd() * 3)]!, priority: "normal" as const, dwellMinutes: 5 + Math.floor(rnd() * 56) })),
+      };
+      const first = await post(body);
+      if (!first.departAt) continue;
+      timed++;
+      const again = await post({ ...body, departAt: first.departAt, fixDeparture: true });
+      if (again.order.join() !== first.order.join()) continue;
+      expect(first.misses, `case ${c}`).toEqual(again.misses);
+    }
+    expect(timed).toBeGreaterThan(20);
+  });
+
   it("randomized (fixed seed): re-posting the returned start with a fixed departure adds no miss to a met stop", async () => {
     let seed = 20270903;
     const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 2 ** 32);

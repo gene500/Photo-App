@@ -50,6 +50,17 @@ describe("parseOsm", () => {
     expect(r.segments.length).toBe(15);
     expect(r.trailheads[1].point).toEqual([-109.5204364, 38.7356924]);
   });
+  it("drops lots and trailheads whose coordinates are out of range or not finite", () => {
+    const park = (g: object) => ({ type: "node", tags: { amenity: "parking" }, ...g });
+    const r = parseOsm({ elements: [
+      park({ lat: 38, lon: -109 }), park({ lat: 91, lon: -109 }), park({ lat: 38, lon: 181 }), park({ lat: NaN, lon: 0 }), park({ lat: 0, lon: Infinity }),
+      { type: "way", tags: { amenity: "parking" }, center: { lat: -95, lon: 10 } },
+      { type: "node", tags: { highway: "trailhead" }, lat: 38, lon: -109 }, { type: "node", tags: { highway: "trailhead" }, lat: 38, lon: 400 }, { type: "node", tags: { highway: "trailhead" }, lat: -90.5, lon: 0 },
+    ] })!;
+    expect(r.parking.map((p) => p.point)).toEqual([[-109, 38]]);
+    expect(r.trailheads.map((p) => p.point)).toEqual([[-109, 38]]);
+    expect(parseOsm({ elements: [park({ lat: 90, lon: 180 }), park({ lat: -90, lon: -180 })] })!.parking).toHaveLength(2);
+  });
   it("drops private, no-foot, sidewalk, crossing and road-like track ways", () => {
     const els = [
       way({ highway: "path" }), way({ highway: "path", access: "private" }), way({ highway: "path", foot: "no" }),

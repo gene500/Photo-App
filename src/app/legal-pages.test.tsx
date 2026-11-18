@@ -29,9 +29,17 @@ describe("legal pages", () => {
     ]) expect(html).toContain(text);
   });
 
-  it("legal pages are dated November 17, 2026", () => {
-    expect(renderToStaticMarkup(<PrivacyPage />)).toContain("Last updated November 17, 2026");
-    expect(renderToStaticMarkup(<TermsPage />)).toContain("Last updated November 17, 2026");
+  it("says route links and routing use the stop or its parking spot, and that offline copies include parking spots", () => {
+    const html = renderToStaticMarkup(<PrivacyPage />);
+    expect(html).toContain("send the coordinates of your stops, or of their parking spots where a stop has one,");
+    expect(html).not.toContain("send your stops&#x27; coordinates");
+    expect(html).toContain("coordinates of stops or their parking spots for directions and route optimization");
+    expect(html).toContain("offline copies of your trips (including their parking spots; the most recent 20)");
+  });
+
+  it("legal pages are dated November 18, 2026", () => {
+    expect(renderToStaticMarkup(<PrivacyPage />)).toContain("Last updated November 18, 2026");
+    expect(renderToStaticMarkup(<TermsPage />)).toContain("Last updated November 18, 2026");
   });
 
   it("renders the terms and links back to the privacy policy", () => {

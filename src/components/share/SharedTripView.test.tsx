@@ -8,6 +8,11 @@ import { SETTINGS_KEY } from "@/lib/settings";
 import type { PublicTrip } from "@/lib/types";
 import { SharedTripView } from "./SharedTripView";
 
+const estimateSpy = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/straight-line", async (orig) => {
+  const actual = await orig<typeof import("@/lib/straight-line")>();
+  return { ...actual, estimateLegDurations: (...a: Parameters<typeof actual.estimateLegDurations>) => { estimateSpy(...a); return actual.estimateLegDurations(...a); } };
+});
 vi.mock("@/lib/itinerary-download", () => ({
   createItineraryPdf: vi.fn(),
   loadWeatherLines: vi.fn(),
@@ -31,6 +36,17 @@ const trip: PublicTrip = {
 };
 
 describe("SharedTripView", () => {
+  it("estimates the fallback drive times between the parking lots (like the editor), not the stops", () => {
+    estimateSpy.mockClear();
+    const t = { ...trip, stops: [
+      stop(0, "A", { lat: 36, lng: -120, access: { lat: 36.5, lng: -120.5, name: "Lot A", walkMeters: 800 } }),
+      stop(1, "B", { lat: 36.3, lng: -120 }),
+    ] };
+    render(<SharedTripView trip={t} />);
+    expect(estimateSpy).toHaveBeenCalled();
+    expect(estimateSpy.mock.calls[0]![0]).toEqual([{ lat: 36.5, lng: -120.5 }, { lat: 36.3, lng: -120 }]);
+  });
+
   it("shows the trip read-only: name, numbered stops and shot list but never private notes, a pin per stop", () => {
     render(<SharedTripView trip={trip} />);
     expect(screen.getByRole("heading", { name: "Coast run" })).toBeTruthy();

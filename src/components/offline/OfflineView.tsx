@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useSettings } from "@/components/settings/SettingsProvider";
+import { ParkLine } from "@/components/editor/ParkLine";
 import { ShotListReadOnly } from "@/components/ui/ShotListReadOnly";
 import { btnGhost, card } from "@/components/ui/styles";
 import { computeBestTimes, describeBestTime, formatClock, tripDeparture } from "@/lib/best-time";
@@ -134,6 +135,7 @@ function TripCopyView({ copy, onBack, online }: { copy: NonNullable<ReturnType<t
                   {describeBestTime(bestTimes[i] ?? null, undefined, tf)}
                   {s.dwellMinutes > 0 && <> · Stay {s.dwellMinutes} min</>}
                 </p>
+                <ParkLine stop={s} className="text-xs text-muted" />
                 {s.lightPref !== "any" && <p className="text-xs text-muted">Best at {lightLabel(s.lightPref).toLowerCase()}</p>}
                 {s.notes && <p className="whitespace-pre-wrap break-words text-xs">{s.notes}</p>}
                 <ShotListReadOnly notes={s.shotNotes} checklist={s.shotChecklist} />

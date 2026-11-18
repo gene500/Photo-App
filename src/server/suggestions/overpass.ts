@@ -44,7 +44,11 @@ function overpassUrls(): string[] {
 const OVERPASS_HEDGE_MS = 1_500;
 
 class FatalOverpassError extends OverpassError {}
-class FatalHeavyError extends OverpassTooHeavyError {}
+class FatalHeavyError extends OverpassTooHeavyError {
+  constructor(message: string, readonly url: string) {
+    super(message);
+  }
+}
 const HEAVY_REMARK = /out of memory|exceeded the maximum size|maxsize/i;
 
 /**
@@ -87,7 +91,7 @@ export async function fetchOverpass(query: string, deps: Deps = {}): Promise<unk
     // Overpass reports a query that timed out or ran out of memory as a 200 with a remark and empty or partial elements.
     const remark = (json as { remark?: unknown } | null)?.remark;
     if (typeof remark === "string" && /runtime error/i.test(remark)) {
-      if (deps.stopOnHeavy && HEAVY_REMARK.test(remark)) throw new FatalHeavyError(`Overpass: ${remark}`);
+      if (deps.stopOnHeavy && HEAVY_REMARK.test(remark)) throw new FatalHeavyError(`Overpass: ${remark}`, url);
       throw new OverpassError(`Overpass: ${remark}`);
     }
     // A 200 that is not an element list is a broken answer, not "no places here": do not let it be cached as empty.
@@ -134,7 +138,9 @@ export async function fetchOverpass(query: string, deps: Deps = {}): Promise<unk
   } catch (e) {
     if (e instanceof FatalHeavyError) {
       // One mirror running out of memory may just be an overloaded mirror: a second one must agree before the query counts as too heavy.
-      const others = urls.length > 1 ? urls.slice(1) : urls;
+      // Ask a mirror that did not say heavy (with hedging, the one that did is not always the first).
+      const rest = urls.filter((u) => u !== e.url);
+      const others = rest.length > 0 ? rest : urls;
       try {
         return await race(others);
       } catch (e2) {

@@ -39,6 +39,9 @@ export function osmHikeQuery(lat: number, lng: number, radiusM: number): string 
 
 type Tags = Record<string, string | undefined>;
 
+/** A real position: finite, |lat| <= 90, |lng| <= 180 (a bad OSM node must not become a route point). */
+const validPoint = (lat: unknown, lng: unknown): boolean => typeof lat === "number" && typeof lng === "number" && Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+
 /** Walkable ways and trailhead/parking points from an `out geom` answer. null when the answer is not an element list. */
 export function parseOsm(json: unknown): OsmTrails | null {
   const elements = (json as { elements?: unknown } | null)?.elements;
@@ -50,13 +53,13 @@ export function parseOsm(json: unknown): OsmTrails | null {
       if (tags.access === "private" || tags.access === "no" || tags.access === "customers" || tags.access === "permit") continue;
       if (tags.parking === "street_side" || tags.parking === "lane" || tags.parking === "underground") continue;
       const c = typeof e.lat === "number" && typeof e.lon === "number" ? e : e.center;
-      if (typeof c?.lat !== "number" || typeof c?.lon !== "number") continue;
-      out.parking.push({ point: [c.lon, c.lat], name: lotName(tags) });
+      if (!validPoint(c?.lat, c?.lon)) continue;
+      out.parking.push({ point: [c!.lon as number, c!.lat as number], name: lotName(tags) });
       continue;
     }
     if (e?.type === "node") {
-      if (typeof e.lat !== "number" || typeof e.lon !== "number") continue;
-      if (tags.highway === "trailhead") out.trailheads.push({ point: [e.lon, e.lat], name: lotName(tags) });
+      if (!validPoint(e.lat, e.lon)) continue;
+      if (tags.highway === "trailhead") out.trailheads.push({ point: [e.lon as number, e.lat as number], name: lotName(tags) });
       continue;
     }
     if (e?.type !== "way" || !Array.isArray(e.geometry)) continue;

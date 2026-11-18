@@ -49,6 +49,12 @@ describe("park line in the editor", () => {
     expect(screen.getByTestId("stop-hike").textContent).toContain("Hike 1.2 mi one way");
   });
 
+  it("keeps the hike distance when the lot's NAME contains ', walk ' but the walk length is unknown", () => {
+    useHike.mockReturnValue(HIKE);
+    render(<SettingsProvider><TripPlanList stops={[withLot("Lot A, walk-in only", null), withLot("North, walk 5 min lot", null)]} optimized={false} bestTimes={[null, null]} onToggleVisited={vi.fn()} onPriorityChange={vi.fn()} onSelect={vi.fn()} /></SettingsProvider>);
+    expect(screen.getAllByTestId("stop-hike")).toHaveLength(2);
+  });
+
   it("does not repeat the distance: the park line replaces the plain hike text when it has the walk", () => {
     useHike.mockReturnValue(HIKE);
     render(<SettingsProvider><TripPlanList stops={[withLot("North lot", 1931)]} optimized={false} bestTimes={[null]} onToggleVisited={vi.fn()} onPriorityChange={vi.fn()} onSelect={vi.fn()} /></SettingsProvider>);

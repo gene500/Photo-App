@@ -9,7 +9,7 @@ and `docs/archive/PROGRESS.md` over memory. Where things are: this file = START 
 **Goal:** Photo Op Planner, a road-trip photo planner (Next.js 16, Prisma/libsql, next-auth, Mapbox). Live at https://photo-app-pi2o.vercel.app (Vercel project `photo-app-pi2o` only; `photo-app` is an empty duplicate).
 
 **Starting point (verify with `git status` and `git log`; trust them over this text):**
-- Repo `~/Photo-App` (older machine: `/Users/genestone/road-trip-photo-planner`), branch `main`, remote `gene500/Photo-App`. Last pushed commit: `5181cd2` (parking-lot routing, live on Vercel `photo-app-pi2o`). On top of it the working tree holds the UNCOMMITTED A89 cleanup/optimization plus fixes F11/F12 (see "Current work (2026-11-18)"); `git status` shows 28 modified and 6 new paths (3 new source files, 3 new test files, new migration dir `prisma/migrations/20261118120000_stop_photo_url_index/`). The next step is the owner's "push" (commit everything including the untracked files, legal-review note in the message, then check Vercel and CI).
+- Repo `~/Photo-App` (older machine: `/Users/genestone/road-trip-photo-planner`), branch `main`, remote `gene500/Photo-App`. Last pushed commit: `3461492` (A89 cleanup/optimization plus F11/F12, pushed 2026-11-18; Vercel `photo-app-pi2o` success, CI `check` and `e2e` success; legal pages reviewed, no change needed). Nothing is pending; the board is empty.
 - **Pushed in `2ee3008` (nothing else uncommitted except this file):** A61 (optimizer: lost-cause light misses capped, so equal-priority routes stop zigzagging), A62 (Start from my location), A63 (NPS alerts + OSM opening-hours notices; `docs/design/A63-DESIGN.md` is tracked now), A64 (Visited checkbox + quiet auto re-optimize), A65 (themed PDF), F12 (fixes from the Opus FINAL review), plus test-stability edits (`tests/setup.ts` asyncUtilTimeout 5 s, optimize stall threshold 500 ms, fake timers in TripEditor tests).
 - Last verification before F16-F19 (2026-10-29, my runs): tsc clean, lint clean, vitest 2101/2102 (the one failure was the wall-clock check "9 stops" taking 8 s under load; 1.1 s alone), e2e 58/59 (swap-undo failed under load; passed alone 2/2).
 
@@ -41,7 +41,7 @@ and `docs/archive/PROGRESS.md` over memory. Where things are: this file = START 
 
 ## Current work (2026-11-18)
 
-**Status at the end of the A89 batch (2026-11-18):** A89b cleanup (passes 1 and 2), sweeps T7-T11, fix F11, repeat sweeps T12-T16, fix F12, SEC (Opus, no Critical/High/Medium) and the FINAL Opus full check are all done and archived in `docs/archive/HANDOFF-ARCHIVE.md`. Verified on the final tree: typecheck 0, lint 0, vitest 230 files / 2536 tests, `npm run build` ok, e2e 79/79. NOTHING IS COMMITTED. FINAL is waiting for the owner's "push".
+**Status at the end of the A89 batch (2026-11-18):** A89b cleanup (passes 1 and 2), sweeps T7-T11, fix F11, repeat sweeps T12-T16, fix F12, SEC (Opus, no Critical/High/Medium) and the FINAL Opus full check are all done and archived in `docs/archive/HANDOFF-ARCHIVE.md`. Verified on the final tree: typecheck 0, lint 0, vitest 230 files / 2536 tests, `npm run build` ok, e2e 79/79. Pushed as `3461492`; FINAL is complete.
 
 **F11 (stale zone):** `src/lib/intl-cache.ts` now caches a formatter only when an explicit `timeZone` is passed; with no zone it builds a fresh one per call (the default zone can change while a page is open). In production only `formatDateOnly` (UTC) is cached, so the clock-formatter speed-up no longer applies (owner may simplify the cache later). **F12:** `TripPlanList` passes the device time zone to the memoized `TripRow` as a prop so rows re-render on a zone change (test added); the list handler ref in `TripEditor.tsx` is refreshed in `useLayoutEffect` (FINAL note L1). **Owner decisions left:** keep or drop the formatter cache; add `IF NOT EXISTS` to the index migration (it fails the Vercel build only if someone created `Stop_photoUrl_idx` by hand); the old `scripts/perf*` / `bench-*` copies (about 5,700 lines).
 
@@ -96,7 +96,6 @@ Last updated 2026-11-18
 
 | ID | Task | Status | Est | Use | Notes |
 |---|---|---|---|---|---|
-| FINAL | Opus full check, merge, push, Vercel+CI | (push) | 30 min | Heavy | Opus check done (no Critical/High/Medium); waits for "push" |
 
 ## Standing rules for this project (confirmed by the human partner)
 

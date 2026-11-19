@@ -7,14 +7,13 @@ test("core journey: account, trip, stops, optimize, visited, share, GPX, delete"
   const email = await signUp(page, "e2e-smoke");
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/login/);
-  // Retry the fill until it sticks: filling before hydration can be wiped when React takes over the form.
+  // Retry fill + submit until the login sticks: before hydration React can wipe the form or swallow the click (seen once in CI).
   await expect(async () => {
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill("correct-horse-battery");
-    await expect(page.getByLabel("Email")).toHaveValue(email, { timeout: 500 });
-  }).toPass();
-  await page.getByRole("button", { name: "Log in" }).click();
-  await expect(page).toHaveURL(/\/trips$/);
+    await page.getByRole("button", { name: "Log in" }).click();
+    await expect(page).toHaveURL(/\/trips$/, { timeout: 4000 });
+  }).toPass({ timeout: 30000 });
 
   // Create a trip; add stop 1 through the UI (click the map) and stops 2 and 3 through the API
   await newTripViaForm(page, "Smoke coast");

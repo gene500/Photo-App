@@ -61,6 +61,7 @@
     "vitest": "^4.1.11"
   },
   "overrides": {
+    "effect": "^3.22.1",
     "@vercel/cli-config": {
       "zod": "^4.6.7"
     }

@@ -290,6 +290,18 @@ describe("FakeMapPanel sky lines", () => {
       expect(screen.getByTestId("map").getAttribute("data-route-flow")).toBe("done");
       expect(screen.queryByTestId("route-flow")).toBeNull();
     });
+
+    it("draws no sweep when only the app's own Reduce motion setting is on", () => {
+      mq(false);
+      document.documentElement.setAttribute("data-reduce-motion", "true");
+      try {
+        const { rerender } = render(<FakeMapPanel {...flowProps} routeFlowId={0} />);
+        rerender(<FakeMapPanel {...flowProps} routeFlowId={1} />);
+        expect(screen.getByTestId("map").getAttribute("data-route-flow")).toBe("done");
+      } finally {
+        document.documentElement.removeAttribute("data-reduce-motion");
+      }
+    });
   });
 });
 

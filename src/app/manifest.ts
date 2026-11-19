@@ -5,6 +5,9 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Photo Op Planner",
     short_name: "Photo Ops",
     description: "Plan photo ops: scenic stops, the best light, and the route between them.",
+    // The id equals the start URL, which is the identity browsers already derive, so existing installs are not affected.
+    id: "/trips",
+    lang: "en-US",
     start_url: "/trips",
     scope: "/",
     display: "standalone",

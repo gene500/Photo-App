@@ -12,6 +12,10 @@ describe("web app manifest", () => {
     expect(m.theme_color).toBe("#d9c7a3");
     expect(m.start_url).toBe("/trips");
   });
+  it("has a stable id equal to the start URL, so installs keep their identity (QA P4-002)", () => {
+    expect(m.id).toBe("/trips");
+    expect(m.lang).toBe("en-US");
+  });
   it("points at icons that exist, including 192 and 512", () => {
     const sizes = m.icons?.map((i) => i.sizes);
     expect(sizes).toEqual(expect.arrayContaining(["192x192", "512x512"]));

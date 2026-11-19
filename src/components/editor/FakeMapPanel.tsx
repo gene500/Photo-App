@@ -1,5 +1,6 @@
 "use client";
 
+import { motionReduced } from "@/lib/reduced-motion";
 import { useEffect, useRef, useState } from "react";
 import { bearingEndpoint } from "@/lib/geo";
 import { estimateLabelWidth, groupLots, hiddenLotLabels } from "@/lib/lot-markers";
@@ -62,7 +63,7 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
     setFlowState(cur);
   }
   if (routeFlowId && routeFlowId !== cur.handled && hasRoute) {
-    const reduced = typeof window !== "undefined" && (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
+    const reduced = typeof window !== "undefined" && motionReduced();
     cur = { phase: reduced ? "done" : "running", handled: routeFlowId, sig };
     setFlowState(cur);
   }

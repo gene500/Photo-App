@@ -1,5 +1,6 @@
 "use client";
 
+import { motionReduced } from "@/lib/reduced-motion";
 import type { Feature, FeatureCollection, LineString } from "geojson";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -239,7 +240,7 @@ export default function MapPanel({
       if (points.length === 0) return;
       flowRef.current?.cancel();
       flowRef.current = null;
-      const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+      const reduced = motionReduced();
       fitMapToPoints(map, points, viewPadding(ro), reduced ? { duration: 0 } : undefined);
     });
     zoomFit.setVisible(fitDataRef.current.stops.length > 0);
@@ -416,7 +417,7 @@ export default function MapPanel({
     flowHandledRef.current = id;
     flowRef.current?.cancel();
     const points: LngLat[] = unwrapForFit([...stops.map((s): LngLat => [s.lng, s.lat]), ...routeGeometry]);
-    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    const reducedMotion = motionReduced();
     const run = startRouteFlow(map, {
       points,
       padding: viewPadding(readOnly),

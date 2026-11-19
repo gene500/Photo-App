@@ -72,7 +72,7 @@ export function TripPlan({ startTime, optimize, routeStatus, swapNote, list }: P
     <>
       {/* Start time, the buttons and the route totals are one softly tinted card, so they read as one group apart from the title block above and the itinerary below. */}
       <div className="mb-4 mt-1 space-y-3 rounded-2xl bg-hover p-3 ring-1 ring-border/60">
-      {startTime}
+      <div className="border-b border-border/60 pb-3">{startTime}</div>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
         <button
           type="button"
@@ -123,7 +123,7 @@ export function TripPlan({ startTime, optimize, routeStatus, swapNote, list }: P
         >
           <StatusText status={optimize.status} parts={optimize.statusParts} />
         </div>
-        <p data-testid="route-status" className="basis-full text-sm font-medium text-foreground">{routeStatus}</p>
+        <p data-testid="route-status" className="basis-full border-t border-border/60 pt-3 text-sm font-medium text-foreground">{routeStatus}</p>
       </div>
       </div>
       {swapNote}

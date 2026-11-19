@@ -17,6 +17,7 @@ vi.mock("./MapView", () => ({
   MapView: (p: import("./map-types").MapViewProps) => (
     <div>
       <button type="button" onClick={() => p.onMapClick({ lat: 37.5, lng: -119.5 })}>drop pin</button>
+      <button type="button" onClick={() => p.onCenterChange?.({ lat: 38.7, lng: -109.6 })}>move map</button>
       <button type="button" onClick={() => p.stops[0] && p.onStopClick(p.stops[0].id)}>click first marker</button>
       <button type="button" onClick={() => p.stops[0] && p.onStopMove?.(p.stops[0].id, { lat: 38, lng: -118 })}>drag first marker</button>
       <button type="button" onClick={() => p.stops[0] && p.onStopMove?.(p.stops[0].id, { lat: 39, lng: -117 })}>drag first marker elsewhere</button>
@@ -242,6 +243,25 @@ describe("TripEditor", () => {
     await openMyTrip();
     await waitFor(() => expect(screen.getByTestId("route-status").textContent).toBe("62 mi · 1 h 0 min"));
     expect(api.directions).toHaveBeenCalledWith([[-119.79, 36.74], [-119.12, 37.96]]);
+  });
+
+  it("after ticking stops visited, the route is asked for from the last ticked stop to the end", async () => {
+    const list = [
+      newStop({ id: "a", order: 0, name: "A", lat: 36, lng: -119 }),
+      newStop({ id: "b", order: 1, name: "B", lat: 37, lng: -118 }),
+      newStop({ id: "c", order: 2, name: "C", lat: 38, lng: -117 }),
+      newStop({ id: "d", order: 3, name: "D", lat: 39, lng: -116 }),
+    ];
+    vi.mocked(api.directions).mockResolvedValue({ route });
+    vi.mocked(api.updateStop).mockImplementation(serverUpdate(list));
+    const user = userEvent.setup();
+    render(<TripEditor initialTrip={optimizedTrip(list)} />);
+    await openMyTrip();
+    await waitFor(() => expect(api.directions).toHaveBeenCalledWith([[-119, 36], [-118, 37], [-117, 38], [-116, 39]]));
+    await user.click(screen.getAllByLabelText(/^Visited/)[1]); // ticking B also ticks A
+    await waitFor(() => expect(api.directions).toHaveBeenLastCalledWith([[-118, 37], [-117, 38], [-116, 39]]));
+    await user.click(screen.getAllByLabelText(/^Visited/)[1]); // unticking B brings the whole route back
+    await waitFor(() => expect(api.directions).toHaveBeenLastCalledWith([[-119, 36], [-118, 37], [-117, 38], [-116, 39]]));
   });
 
   it("moves route totals and start time to My trip", async () => {
@@ -1994,10 +2014,15 @@ describe("TripEditor", () => {
       expect(api.addStop).toHaveBeenCalledTimes(1);
     });
 
-    it("says there are no stops yet in the Suggestions tab and hides an old list", async () => {
+    it("with no stops, Find photo spots searches around where the map is and shows what it finds", async () => {
+      vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [{ osmId: "node/9", name: "Delicate Arch", lat: 38.74, lng: -109.5, kind: "viewpoint" }] });
       render(<TripEditor initialTrip={withStops([])} />);
+      await userEvent.click(screen.getByRole("button", { name: "move map" }));
       await userEvent.click(screen.getByRole("tab", { name: /Suggestions/ }));
-      expect(screen.getByText("Add a stop first, then find photo spots near it.")).toBeTruthy();
+      expect(screen.queryByText("Add a stop first, then find photo spots near it.")).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: "Find photo spots" }));
+      expect(await screen.findByText("Delicate Arch")).toBeTruthy();
+      expect(api.suggestions).toHaveBeenCalledWith({ around: [-109.6, 38.7] }, { enrich: false });
     });
   });
 });

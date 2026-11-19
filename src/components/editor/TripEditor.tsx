@@ -25,6 +25,7 @@ import { DEFAULT_SETTINGS } from "@/lib/settings";
 import { useOfflineCopy, type Freshness } from "@/lib/use-offline-copy";
 import { isExactOptimization } from "@/lib/optimize-schedule";
 import { leadingVisited, pinVisitedFirst } from "@/lib/visited-run";
+import { fromAnchor, planAnchor } from "@/lib/schedule-from-anchor";
 import { localDateOnly } from "@/lib/dates";
 import { routeSignature } from "@/lib/route-signature";
 import { stopWalkMinutes } from "@/lib/walk-time";
@@ -372,6 +373,10 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   // Route through the stops in order. A string key so edits that don't move anything
   // (visited, notes) don't refetch. Fewer than 2 stops means no route at all.
   const waypointKey = useMemo(() => JSON.stringify(routePoints(stops)), [stops]);
+  // The live route runs from the last visited stop (the owner is there now) to the end: the legs already driven are not drawn or counted.
+  const routeAnchor = planAnchor(stops);
+  const routeCoords = useMemo(() => (routeAnchor === 0 ? waypointKey : JSON.stringify(routePoints(stops.slice(routeAnchor)))), [stops, routeAnchor, waypointKey]);
+  const routeKey = `${routeAnchor}|${routeCoords}`;
   // The Optimize stale-result guard uses the stops' own places (not the lot-aware key above), so a parking lot
   // arriving mid-run does not discard the result; adding, removing, reordering or moving a stop still does.
   const ownPlacesKey = useMemo(() => JSON.stringify(stops.map((s) => [s.id, s.lat, s.lng])), [stops]);
@@ -429,17 +434,19 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
     else removeSuggestions(trip.id);
   }, [suggestionsState, trip.id]);
   // A place that is now a stop is not suggested again.
+  // With no stops only a list found around the map for this empty trip shows (its key is "[]"); a list left from stops since deleted is hidden.
+  const staleForEmpty = stops.length === 0 && freshSuggestions?.key !== waypointKey;
   const allSuggestions = useMemo(() => {
-    const items = freshSuggestions?.items;
+    const items = staleForEmpty ? undefined : freshSuggestions?.items;
     if (!items) return NO_SUGGESTIONS;
     const kept = items.filter((x) => !stops.some((st) => haversineMeters(st, x) < ALREADY_A_STOP_M));
     return kept.length === items.length ? items : kept;
-  }, [freshSuggestions?.items, stops]);
+  }, [freshSuggestions?.items, staleForEmpty, stops]);
   // Only the first chunk is shown at first; the rest is revealed 5 at a time as popularity ranks it (undefined = all).
   const shownCount = freshSuggestions?.shown;
   const suggestions = useMemo(() => (shownCount === undefined ? allSuggestions : allSuggestions.slice(0, shownCount)), [allSuggestions, shownCount]);
-  const suggestionsStatus: SuggestionsStatus = freshSuggestions?.status ?? (stops.length === 1 ? "loading" : "idle");
-  const suggestionsError = freshSuggestions?.error ?? null;
+  const suggestionsStatus: SuggestionsStatus = staleForEmpty ? "idle" : freshSuggestions?.status ?? (stops.length === 1 ? "loading" : "idle");
+  const suggestionsError = staleForEmpty ? null : freshSuggestions?.error ?? null;
   // Places show up as soon as they are found; popularity then fills in 10 at a time and re-ranks the list.
   const suggestionItemsRef = useRef<Suggestion[]>(NO_SUGGESTIONS);
   useEffect(() => {
@@ -498,7 +505,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const heldSinceRef = useRef<number | null>(null); // when the oldest held-back route change began waiting
 
   useEffect(() => {
-    const coordinates = JSON.parse(waypointKey) as LngLat[];
+    const coordinates = JSON.parse(routeCoords) as LngLat[];
     if (coordinates.length < 2) return;
     let cancelled = false;
     const load = () => {
@@ -507,11 +514,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       return api.directions(coordinates).then(
         ({ route: next }) => {
           if (cancelled) return;
-          setRouteResult({ key: waypointKey, route: next, error: null, dismissed: false });
+          setRouteResult({ key: routeKey, route: next, error: null, dismissed: false });
         },
         (e: unknown) => {
           if (cancelled) return;
-          setRouteResult({ key: waypointKey, route: null, error: errorMessage(e, "Couldn't load the route"), dismissed: false });
+          setRouteResult({ key: routeKey, route: null, error: errorMessage(e, "Couldn't load the route"), dismissed: false });
         },
       );
     };
@@ -528,7 +535,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `resolver` is a stable object; only the route changes refetch
-  }, [waypointKey, routeRetry]);
+  }, [routeKey, routeRetry]);
 
   // With a single stop there is no route to follow, so look around that stop automatically
   // (with two or more, suggestions follow the route and are found on request).
@@ -562,7 +569,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   }, [waypointKey]);
 
   const enoughForRoute = stops.length >= 2;
-  const current = enoughForRoute && routeResult?.key === waypointKey ? routeResult : null;
+  const current = enoughForRoute && routeResult?.key === routeKey ? routeResult : null;
   const activeRoute = current?.route ?? null;
   const activeRouteError = current?.error ?? null;
   // The unsaved Start time edit lives here so it survives a switch to another tab.
@@ -608,22 +615,25 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   );
   const departAt = trip.departAt ?? defaultDepartAt;
 
+  // With visited stops the plan starts at the last of them: today the clock restarts from when the owner last ticked a stop (or opened the editor), another day keeps the trip's start time.
+  const [tickedAt, setTickedAt] = useState<string | null>(null);
+  const anchorDepartAt = routeAnchor > 0 && mounted && trip.plannedDate === localDateOnly(new Date()) ? tickedAt ?? openedAt : null;
   const bestTimes = useMemo(
-    () => computeBestTimes({ plannedDate: trip.plannedDate, departAt, stops }, legDurations),
+    () => fromAnchor((t, l) => computeBestTimes(t, l), { plannedDate: trip.plannedDate, departAt, stops }, legDurations, routeAnchor, anchorDepartAt),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- legDurations is derived from activeRoute
-    [trip.plannedDate, departAt, stops, activeRoute],
+    [trip.plannedDate, departAt, stops, activeRoute, routeAnchor, anchorDepartAt],
   );
   const arrivals = useMemo(
-    () => computeArrivals({ plannedDate: trip.plannedDate, departAt, stops }, legDurations),
+    () => fromAnchor((t, l) => computeArrivals(t, l), { plannedDate: trip.plannedDate, departAt, stops }, legDurations, routeAnchor, anchorDepartAt),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- legDurations is derived from activeRoute
-    [trip.plannedDate, departAt, stops, activeRoute],
+    [trip.plannedDate, departAt, stops, activeRoute, routeAnchor, anchorDepartAt],
   );
 
   // When the car reaches each stop's lot (the same as `arrivals` for a stop without one); `arrivals` is the subject, one walk later.
   const lotArrivals = useMemo(
-    () => computeLotArrivals({ plannedDate: trip.plannedDate, departAt, stops }, legDurations),
+    () => fromAnchor((t, l) => computeLotArrivals(t, l), { plannedDate: trip.plannedDate, departAt, stops }, legDurations, routeAnchor, anchorDepartAt),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- legDurations is derived from activeRoute
-    [trip.plannedDate, departAt, stops, activeRoute],
+    [trip.plannedDate, departAt, stops, activeRoute, routeAnchor, anchorDepartAt],
   );
 
   // The header's export payload: rebuilt only when what it reads changes (the header re-renders for unrelated state such as typing the trip name).
@@ -830,7 +840,8 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       const head = before.slice(0, anchor);
       const tail = before.slice(anchor);
       // The re-plan starts at the last visited stop: when the current route says the owner got there. The optimizer adds that stop's dwell itself.
-      const anchorArrival = done > 1 ? lotArrivals[anchor] : null;
+      // anchorDepartAt does not wait for a route, so a re-plan right after a tick never falls back to the trip's start time.
+      const anchorArrival = done > 1 ? (anchorDepartAt ? new Date(anchorDepartAt) : lotArrivals[anchor]) : null;
       // With no saved start the Start time field shows "now": plan from that, not from sunrise, so the answer matches what is on screen.
       const planFrom = anchorArrival ? anchorArrival.toISOString() : (previousDepartAt ?? departAt);
       if (done >= before.length) {
@@ -1194,7 +1205,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   async function toggleVisited(id: string, visited: boolean) {
     // A quiet re-plan in flight is saving a new order: the server cascades by the order it holds, so send the tick after it lands.
     if (quietReorderRef.current) await quietReorderRef.current;
-    if (await patchStop(id, { visited })) scheduleAutoOptimize();
+    if (await patchStop(id, { visited })) {
+      if (visited) setTickedAt(new Date().toISOString()); // an untick is not a new arrival
+      setOptimizeNote(null); // a note about the old plan ("Start time moved to…") no longer describes it
+      scheduleAutoOptimize();
+    }
   }
 
   /** Save from the drawer. Visited cascades on the server like the list; a stop deleted elsewhere is dropped. */
@@ -1346,11 +1361,14 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   async function findSuggestions() {
     // Only a newer search supersedes this one. A change of stops doesn't discard the result (it is
     // tagged with its key, so it is just not shown) - otherwise reverting the stops left "Searching…" stuck.
-    if (stops.length !== 1 && !activeRoute) return;
+    // No stops yet: look around where the map is (a searched place the map flew to, or wherever the owner moved it).
+    const centre = stops.length === 0 ? centerRef.current : null;
+    if (stops.length === 0 && !centre) return;
+    if (stops.length > 1 && !activeRoute) return;
     const seq = ++suggestionsSeq.current;
-    if (stops.length === 1) {
+    if (stops.length <= 1) {
       const key = waypointKey;
-      const { lng, lat } = stops[0];
+      const { lng, lat } = centre ?? stops[0];
       const kept = keptForRetry(key);
       setSuggestionsState({ key, items: [], status: "loading", error: null });
       try {
@@ -1621,7 +1639,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       </div>
 
       {stops.length === 0 && !pending && (
-        <p data-testid="empty-hint" className="pointer-events-none absolute inset-x-0 top-1/3 px-6 text-center text-sm text-[#4a4538]">
+        <p data-testid="empty-hint" className="pointer-events-none absolute inset-x-0 top-1/3 px-6 text-center text-sm text-[#4a4538] lg:inset-x-auto lg:left-[24.25rem] lg:right-0 short-landscape:inset-x-auto short-landscape:left-[calc(clamp(17.5rem,40%,23.75rem)+0.75rem)] short-landscape:right-0">
           Search for a place or click the map to add your first stop.
         </p>
       )}
@@ -1698,11 +1716,11 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         suggestions={
           <SuggestionsPanel
             status={suggestionsStatus}
-            suggestions={stops.length === 0 ? NO_SUGGESTIONS : suggestions}
+            suggestions={suggestions}
             error={suggestionsError}
             noStops={stops.length === 0}
             full={stops.length >= MAX_ROUTE_WAYPOINTS}
-            canSearch={activeRoute !== null || stops.length === 1}
+            canSearch={activeRoute !== null || stops.length <= 1}
             onFind={() => void findSuggestions()}
             onAccept={acceptSuggestion}
             onDismiss={dismissSuggestion}

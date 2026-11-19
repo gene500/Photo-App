@@ -35,6 +35,17 @@ describe("StopDrawer", () => {
     expect(screen.getByTestId("light-warning").textContent).toBe("sunset: 85% cloud, likely washed out");
   });
 
+  it("labels each text field with a separate for/id label, so a browser does not fold the typed text into the field's name (QA P3-004)", () => {
+    const filled = { ...stop, notes: "hi", shotNotes: "wide angle" };
+    render(<StopDrawer plannedDate="2026-07-01" stop={filled} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);
+    for (const [role, name] of [["textbox", "Name"], ["textbox", "Notes"], ["textbox", "Shot notes"], ["spinbutton", "Time here (min)"]] as const) {
+      const field = screen.getByRole(role, { name });
+      expect(field.closest("label")).toBeNull();
+      expect(field.id).not.toBe("");
+      expect(document.querySelector(`label[for="${field.id}"]`)?.textContent).toBe(name);
+    }
+  });
+
   it("shows no warning badge when the line has no warning or there is no forecast", () => {
     useWeatherLine.mockReturnValue({ text: "clear", quality: "good" });
     const { rerender } = render(<StopDrawer plannedDate="2026-07-01" stop={stop} arrival={new Date()} onClose={vi.fn()} onSave={vi.fn()} onPhotoChange={vi.fn()} />);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { btnGhost, btnPrimary, inputClass, btnIcon } from "@/components/ui/styles";
 import { api } from "@/lib/api-client";
@@ -48,6 +48,7 @@ const message = (e: unknown, fallback: string) => (e instanceof Error ? e.messag
 export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, onErrorChange, onDirtyChange, onPhotoChange, alternatives, arrival }: Props) {
   const [initial] = useState({ name: stop.name, notes: stop.notes ?? null, visited: stop.visited, lightPref: stop.lightPref, dwellMinutes: stop.dwellMinutes, shotNotes: stop.shotNotes, shotChecklist: JSON.stringify(stop.shotChecklist) });
   const [name, setName] = useState(stop.name);
+  const fieldId = useId();
   const [notes, setNotes] = useState(stop.notes ?? "");
   // null until the box is touched here: until then it follows the stop (ticked on the card meanwhile), and only a touched box is saved.
   const [visitedEdit, setVisitedEdit] = useState<boolean | null>(null);
@@ -279,15 +280,15 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
       {alternatives && (
         <AlternativesPanel status={alternatives.status} alternatives={alternatives.items} error={alternatives.error} onFind={alternatives.onFind} onSwap={alternatives.onSwap} onDismissError={alternatives.onDismissError} swapBlockedReason={dirty ? "Save or close your edits before swapping this stop." : undefined} />
       )}
-      <label className="block">
-        <span className="text-sm text-muted">Name</span>
-        <input ref={nameRef} value={name} maxLength={MAX_STOP_NAME} aria-invalid={nameError ? true : undefined} onChange={(e) => { setName(e.target.value); setNameError(null); }} onBlur={() => { if (!hasContent(name)) { setName(initial.name); setNameError("Stop name is required"); } }} className={inputClass} />
-      </label>
+      <div className="block">
+        <label htmlFor={`${fieldId}-name`} className="text-sm text-muted">Name</label>
+        <input id={`${fieldId}-name`} ref={nameRef} value={name} maxLength={MAX_STOP_NAME} aria-invalid={nameError ? true : undefined} onChange={(e) => { setName(e.target.value); setNameError(null); }} onBlur={() => { if (!hasContent(name)) { setName(initial.name); setNameError("Stop name is required"); } }} className={inputClass} />
+      </div>
       {nameError && <p role="alert" className="-mt-3 text-sm text-danger">{nameError}</p>}
-      <label className="block">
-        <span className="text-sm text-muted">Notes</span>
-        <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
-      </label>
+      <div className="block">
+        <label htmlFor={`${fieldId}-notes`} className="text-sm text-muted">Notes</label>
+        <textarea id={`${fieldId}-notes`} rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="text-sm text-muted">Best light</span>
@@ -297,19 +298,19 @@ export function StopDrawer({ stop, plannedDate, onClose, onSave, onSaveError, on
             ))}
           </select>
         </label>
-        <label className="block">
-          <span className="text-sm text-muted">Time here (min)</span>
-          <input ref={dwellRef} type="number" inputMode="numeric" min={0} max={MAX_DWELL_MINUTES} step={5} value={dwell} onChange={(e) => setDwell(e.target.value)} className={inputClass} />
-        </label>
+        <div className="block">
+          <label htmlFor={`${fieldId}-dwell`} className="text-sm text-muted">Time here (min)</label>
+          <input id={`${fieldId}-dwell`} ref={dwellRef} type="number" inputMode="numeric" min={0} max={MAX_DWELL_MINUTES} step={5} value={dwell} onChange={(e) => setDwell(e.target.value)} className={inputClass} />
+        </div>
       </div>
       {weather?.warning && <p data-testid="light-warning" className="text-xs text-sand">{weather.warning}</p>}
       <SkyCard lat={stop.lat} lng={stop.lng} plannedDate={plannedDate} />
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium">Shot list</legend>
-        <label className="block">
-          <span className="text-sm text-muted">Shot notes</span>
-          <textarea rows={3} maxLength={MAX_SHOT_NOTES} value={shotNotes} onChange={(e) => setShotNotes(e.target.value)} className={inputClass} />
-        </label>
+        <div className="block">
+          <label htmlFor={`${fieldId}-shotnotes`} className="text-sm text-muted">Shot notes</label>
+          <textarea id={`${fieldId}-shotnotes`} rows={3} maxLength={MAX_SHOT_NOTES} value={shotNotes} onChange={(e) => setShotNotes(e.target.value)} className={inputClass} />
+        </div>
         {shots.length > 0 && (
           <ul className="space-y-1">
             {shots.map((shot, i) => (

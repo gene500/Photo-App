@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* Phone in landscape: the trip panel becomes a side panel. Keep in sync with SHORT_LANDSCAPE_QUERY in lib/short-landscape.ts. */
-@custom-variant short-landscape (@media (orientation: landscape) and (max-height: 500px) and (max-width: 1023px));
+@custom-variant short-landscape (@media (orientation: landscape) and (min-width: 480px) and (max-height: 500px) and (max-width: 1023px));
 @custom-variant touch {
   @media (max-width: 1023px) { @slot; }
   @media (pointer: coarse) { @slot; }

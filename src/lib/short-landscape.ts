@@ -2,10 +2,10 @@ import { useSyncExternalStore } from "react";
 
 /**
  * Phone held sideways: wide but short. Below lg (so desktop windows keep the left card) and at most 500px tall,
- * the trip panel becomes a side panel instead of a bottom sheet. Keep in sync with `@custom-variant short-landscape`
+ * the trip panel becomes a side panel instead of a bottom sheet. At least 480px wide, so a portrait phone whose on-screen keyboard shrinks the page (390x340) stays a bottom sheet. Keep in sync with `@custom-variant short-landscape`
  * in app/globals.css (Tailwind cannot read this constant).
  */
-const SHORT_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 500px) and (max-width: 1023px)";
+export const SHORT_LANDSCAPE_QUERY = "(orientation: landscape) and (min-width: 480px) and (max-height: 500px) and (max-width: 1023px)";
 
 function subscribe(onChange: () => void): () => void {
   if (typeof window === "undefined" || !window.matchMedia) return () => {};

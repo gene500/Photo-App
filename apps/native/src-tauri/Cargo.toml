@@ -1,0 +1,16 @@
+[package]
+name = "photo-op-planner"
+version = "0.1.0"
+description = "Photo Op Planner desktop shell"
+edition = "2021"
+
+[lib]
+name = "photo_op_planner_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"

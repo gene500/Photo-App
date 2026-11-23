@@ -1,0 +1,42 @@
+name: Native Windows installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['native-v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/native
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/native/package-lock.json
+      # Pinned to a commit on the action's default branch (it has no version tags); the toolchain input selects stable Rust.
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master 2026-10-16
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2.7.8
+        with:
+          workspaces: apps/native/src-tauri
+      - run: npm ci
+      - run: npx tauri build --bundles nsis
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: photo-op-planner-windows
+          path: apps/native/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error

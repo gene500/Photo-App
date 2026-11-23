@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/server/external/place-notices", () => ({ collectPlaceNotices: vi.fn(async () => []) }));
 vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
 vi.mock("@/server/shared-limit", () => ({ enforcePaidLimit: vi.fn() }));
+vi.mock("@/server/budget", async (orig) => ({ ...(await orig<typeof import("@/server/budget")>()), spendUserShare: vi.fn() }));
 vi.mock("@/server/external/mapbox", async (orig) => ({ ...(await orig<typeof import("@/server/external/mapbox")>()), getDurationMatrix: vi.fn() }));
 import { getCurrentUserId } from "@/server/session";
 import { enforcePaidLimit } from "@/server/shared-limit";
+import { spendUserShare } from "@/server/budget";
 import { getDurationMatrix } from "@/server/external/mapbox";
 import { getSunWindows } from "@/lib/best-time";
 import { POST } from "./route";
@@ -174,5 +176,19 @@ describe("POST /api/optimize: walkMinutes (walk from the parking lot)", () => {
       expect(res.status, String(bad)).toBe(400);
     }
     expect(getDurationMatrix).not.toHaveBeenCalled();
+  });
+
+  it("counts the matrix size (points squared, origin included) against the user's share", async () => {
+    vi.mocked(getDurationMatrix).mockResolvedValue(matrix);
+    vi.mocked(spendUserShare).mockClear();
+    await POST(post());
+    expect(spendUserShare).toHaveBeenCalledWith("mapbox-matrix", "u1", 9);
+    const withOrigin = new Request("http://localhost/api/optimize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "http://localhost" },
+      body: JSON.stringify({ coordinates: [[0, 0], [1, 1], [2, 2]], origin: { lat: 0.5, lng: 0.5 } }),
+    });
+    await POST(withOrigin);
+    expect(spendUserShare).toHaveBeenLastCalledWith("mapbox-matrix", "u1", 16);
   });
 });

@@ -72,3 +72,8 @@ next-env.d.ts
 # third-party skill caches
 __pycache__/
 *.pyc
+
+# native shell (Tauri)
+/apps/native/node_modules
+/apps/native/src-tauri/target
+/apps/native/src-tauri/gen

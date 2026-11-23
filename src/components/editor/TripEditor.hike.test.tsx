@@ -88,4 +88,17 @@ describe("TripEditor hike line", () => {
     await new Promise((r) => setTimeout(r, 30));
     expect(screen.queryByTestId("stop-hike")).toBeNull();
   });
+
+  it("omits the hike of a stop with a mapped road-end trail, but keeps it for a road end without a trail", async () => {
+    const re = (trail: [number, number][] | null) => ({ lat: 37.001, lng: -119.501, name: "Road end", walkMeters: 200, kind: "road-end" as const, trail });
+    const withTrail = { ...trip, stops: [stop({ id: "a", name: "Arch", access: re([[-119.501, 37.001], [-119.5, 37]]) })] };
+    const r = render(<SettingsProvider><TripEditor initialTrip={withTrail} /></SettingsProvider>);
+    await waitFor(() => expect(api.hike).toHaveBeenCalled());
+    await new Promise((res) => setTimeout(res, 30));
+    expect(screen.getByTestId("map-hikes").textContent).toBe("");
+    r.unmount();
+    const noTrail = { ...trip, stops: [stop({ id: "a", name: "Arch", access: re(null) })] };
+    render(<SettingsProvider><TripEditor initialTrip={noTrail} /></SettingsProvider>);
+    await waitFor(() => expect(screen.getByTestId("map-hikes").textContent).toBe("a:3"));
+  });
 });

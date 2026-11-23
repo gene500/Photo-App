@@ -42,6 +42,19 @@ describe("park line in the editor", () => {
     for (const l of lines) expect(l.textContent).toContain("Park at North lot, walk 1.2 mi (~30 min) to Delicate Arch");
   });
 
+  it("road end: plain line with a mapped trail, '(no mapped trail)' without, in the card, drawer and My trip row", () => {
+    useHike.mockReturnValue(HIKE);
+    const roadEnd = (trail: [number, number][] | null): Stop => ({ ...base, access: { lat: 37.01, lng: -119.01, name: "Road end", walkMeters: 1070, kind: "road-end", trail } });
+    const { unmount } = render(<SettingsProvider><TripPlanList stops={[roadEnd([[-119.01, 37.01], [-119, 37]])]} optimized={false} bestTimes={[null]} onToggleVisited={vi.fn()} onPriorityChange={vi.fn()} onSelect={vi.fn()} /></SettingsProvider>);
+    expect(screen.getByTestId("park-line").textContent).toBe("Park at Road end, walk 0.7 mi (~20 min) to Delicate Arch");
+    expect(screen.queryByTestId("stop-hike")).toBeNull(); // walk time shown (hasWalkLength) replaces the plain hike text
+    unmount();
+    renderAll(roadEnd(null));
+    const lines = screen.getAllByTestId("park-line");
+    expect(lines).toHaveLength(3);
+    for (const l of lines) expect(l.textContent).toBe("Park at Road end, walk 0.7 mi (~20 min) to Delicate Arch (no mapped trail)");
+  });
+
   it("keeps the hike distance in the row when the walk length is unknown", () => {
     useHike.mockReturnValue(HIKE);
     render(<SettingsProvider><TripPlanList stops={[withLot("North lot", null)]} optimized={false} bestTimes={[null]} onToggleVisited={vi.fn()} onPriorityChange={vi.fn()} onSelect={vi.fn()} /></SettingsProvider>);

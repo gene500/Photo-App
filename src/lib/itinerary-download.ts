@@ -1,5 +1,7 @@
 import { staticMapUrl } from "./static-map";
+import { sendUsagePing } from "./usage-ping";
 import { loadPdfFonts } from "./pdf-fonts";
+import type { TrailLine } from "./trail-lines";
 import { itineraryText, renderItineraryPdf, type PdfMap } from "./itinerary-pdf";
 import type { ItineraryInput } from "./itinerary";
 import type { LightPref, LngLat } from "./types";
@@ -49,6 +51,13 @@ export async function loadMapImage(url: string | null, opts: { timeoutMs?: numbe
   }
 }
 
+/** Counts the Static Images request against the monthly budget first; a refused ping (budget spent) skips the map, like any failed image load. */
+export async function loadCountedMapImage(url: string | null): Promise<PdfMap> {
+  if (!url) return FALLBACK;
+  if (!(await sendUsagePing("static-map"))) return FALLBACK;
+  return loadMapImage(url);
+}
+
 type WeatherStop = { lat: number; lng: number; lightPref: LightPref; arrival: Date | null };
 
 /** One weather line per stop with the same rules as `useWeatherLine`; a failed lookup is null for that stop only. */
@@ -84,13 +93,15 @@ export async function createItineraryPdf(a: {
   geometry: LngLat[];
   stops: { lat: number; lng: number }[];
   token: string | null;
+  trails?: TrailLine[];
 }): Promise<Blob> {
+  const trails = a.trails ?? [];
   // The Unicode font is fetched only here, on click; null (offline, blocked) keeps the built-in fonts.
   const [map, fonts] = await Promise.all([
-    loadMapImage(staticMapUrl({ stops: a.stops.map((st, i) => ({ ...st, color: a.input.stops[i]?.color })), geometry: a.geometry, token: a.token })),
+    loadCountedMapImage(staticMapUrl({ stops: a.stops.map((st, i) => ({ ...st, color: a.input.stops[i]?.color })), geometry: a.geometry, token: a.token, trails: trails.map((t) => t.geometry) })),
     loadPdfFonts({ text: itineraryText(a.input) }),
   ]);
-  return renderItineraryPdf(a.input, map, a.geometry, a.stops, fonts);
+  return renderItineraryPdf(a.input, map, a.geometry, a.stops, fonts, trails);
 }
 
 export function saveBlob(blob: Blob, fileName: string): void {

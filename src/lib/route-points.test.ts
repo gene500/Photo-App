@@ -6,6 +6,11 @@ describe("routePoint", () => {
     expect(routePoint({ lat: 1, lng: 2 })).toEqual([2, 1]);
     expect(routePoint({ lat: 1, lng: 2, access: null })).toEqual([2, 1]);
   });
+  it("uses a road end, not the stop", () => {
+    const s = { lat: 38.74, lng: -109.52, access: { lat: 38.75, lng: -109.51, kind: "road-end" as const, trail: null } };
+    expect(routePoint(s)).toEqual([-109.51, 38.75]);
+    expect(routePoints([s])).toEqual([[-109.51, 38.75]]);
+  });
   it("uses the access point as [lng, lat] when set", () => {
     expect(routePoint({ lat: 1, lng: 2, access: { lat: 3, lng: 4 } })).toEqual([4, 3]);
   });

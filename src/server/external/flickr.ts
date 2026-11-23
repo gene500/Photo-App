@@ -1,5 +1,6 @@
 import type { PlacePhoto } from "@/lib/types";
 import { hitShared } from "../shared-limit";
+import { spendBudget } from "../budget";
 import { namesMatch } from "./photo-match";
 import { allowedHttpsUrl, photoHeaders, PHOTO_TIMEOUT_MS, type PlaceQuery } from "./photo-http";
 
@@ -29,7 +30,16 @@ export const flickrKey = (): string | undefined => process.env.FLICKR_API_KEY?.t
  * by one busy user). False once spent: callers then use another source instead of failing.
  */
 export async function flickrBudgetLeft(): Promise<boolean> {
-  return (await hitShared("flickr-app", "all", Date.now(), { failClosed: true })).ok;
+  const ok = (await hitShared("flickr-app", "all", Date.now(), { failClosed: true })).ok;
+  if (ok) {
+    // Display-only monthly count (Flickr has no monthly cap); a store error must not stop Flickr, which already degrades.
+    try {
+      await spendBudget("flickr");
+    } catch {
+      // ignored on purpose
+    }
+  }
+  return ok;
 }
 
 function searchUrl(key: string, place: PlaceQuery, extra: Record<string, string>): string {

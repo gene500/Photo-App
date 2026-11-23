@@ -8,9 +8,9 @@ const OSM_TIMEOUT_MS = 12_000;
 export const OSM_DEADLINE_MS = 15_000;
 /** A bigger answer than this (a dense city) makes Overpass give up; when two mirrors both say so, the lookup counts as a finished one with no lot (one mirror alone may just be overloaded). */
 const OSM_MAX_BYTES = 6_000_000;
-const WALKABLE = "path|footway|track|steps|bridleway";
+export const WALKABLE = "path|footway|track|steps|bridleway";
 /** A "track" named like this is a road a car can use, not a trail. */
-const ROADLIKE = /\b(road|rd|highway|hwy|drive|dr|street|st|avenue|ave|lane|ln|boulevard|blvd)\b\.?$/i;
+export const ROADLIKE = /\b(road|rd|highway|hwy|drive|dr|street|st|avenue|ave|lane|ln|boulevard|blvd)\b\.?$/i;
 
 /** A place a car can stop or a walk starts: its point and its OSM `name` (trimmed, at most 120 characters), if any. */
 export type Lot = { point: LngLat; name: string | null };

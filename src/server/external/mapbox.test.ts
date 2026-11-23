@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearMapboxCaches, ExternalServiceError, geocode, getDirections, getDurationMatrix, locateArea, locateLandmark, retrievePlace, reverseGeocode, searchPlaces } from "./mapbox";
+import { prisma } from "../db";
+import { getBudgetUsage, monthEnd, monthKey, budgetCap } from "../budget";
+import { HttpError } from "../http";
+import { resetDb } from "../../../tests/helpers/db";
+import { clearMapboxCaches, ExternalServiceError, geocode, getDirections, getDurationMatrix, getWalkingTrail, WALK_SNAP_MAX_M, locateArea, locateLandmark, retrievePlace, reverseGeocode, searchPlaces } from "./mapbox";
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const okRoute = {
@@ -13,7 +17,8 @@ const okRoute = {
 };
 
 describe("mapbox", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await resetDb();
     process.env.MAPBOX_TOKEN = "test-token";
     delete process.env.EXTERNAL_APIS_FAKE;
     clearMapboxCaches();
@@ -539,5 +544,186 @@ describe("locateLandmark", () => {
     expect(await locateLandmark("Arches National Park", fetchImpl)).toBeNull();
     down = false;
     expect(await locateLandmark("Arches National Park", fetchImpl)).not.toBeNull();
+  });
+});
+
+describe("mapbox budgets", () => {
+  const used = async (product: string) => (await getBudgetUsage()).find((u) => u.product === product)!.used;
+  beforeEach(async () => {
+    await resetDb();
+    process.env.MAPBOX_TOKEN = "test-token";
+    delete process.env.EXTERNAL_APIS_FAKE;
+    clearMapboxCaches();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete process.env.MAPBOX_TOKEN;
+    delete process.env.EXTERNAL_APIS_FAKE;
+  });
+
+  it("a cached directions call does not spend budget", async () => {
+    const fetchImpl = vi.fn(async () => json(okRoute));
+    const stops: [number, number][] = [[-5, -5], [-6, -6]];
+    await getDirections(stops, fetchImpl);
+    await getDirections(stops, fetchImpl);
+    expect(await used("mapbox-directions")).toBe(1);
+  });
+
+  it("matrix with 25 stops spends 625 units", async () => {
+    const coords = Array.from({ length: 25 }, (_, i) => [i, i] as [number, number]);
+    const durations = coords.map(() => coords.map(() => 1));
+    await getDurationMatrix(coords, vi.fn(async () => json({ code: "Ok", durations })));
+    expect(await used("mapbox-matrix")).toBe(625);
+  });
+
+  it("every geocoding call spends one geocoding unit", async () => {
+    const feat = { features: [{ geometry: { coordinates: [1, 2] }, properties: { name: "A" } }] };
+    await geocode("a place", {}, vi.fn(async () => json(feat)));
+    await reverseGeocode({ lat: 1, lng: 2 }, vi.fn(async () => json(feat)));
+    await retrievePlace("id1", "s", vi.fn(async () => json(feat)));
+    await searchPlaces("somewhere", { sessionToken: "s" }, vi.fn(async () => json({ suggestions: [] })));
+    await locateArea("somewhere", vi.fn(async () => json(feat)));
+    expect(await used("mapbox-geocoding")).toBe(5);
+  });
+
+  it("a refused budget throws a 429 HttpError, not ExternalServiceError", async () => {
+    await prisma.rateLimitCounter.create({
+      data: { key: `budget:mapbox-directions:${monthKey(Date.now())}`, count: budgetCap("mapbox-directions")!, resetAt: monthEnd(Date.now()) },
+    });
+    const fetchImpl = vi.fn(async () => json(okRoute));
+    const err = await getDirections([[-7, -7], [-8, -8]], fetchImpl).catch((e) => e);
+    expect(err).toBeInstanceOf(HttpError);
+    expect(err).not.toBeInstanceOf(ExternalServiceError);
+    expect(err.status).toBe(429);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("store outage refuses with 503", async () => {
+    vi.spyOn(prisma, "$queryRaw").mockRejectedValue(new Error("db down"));
+    const fetchImpl = vi.fn(async () => json(okRoute));
+    await expect(getDirections([[-9, -9], [-10, -10]], fetchImpl)).rejects.toMatchObject({ status: 503 });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("fake external mode spends nothing", async () => {
+    process.env.EXTERNAL_APIS_FAKE = "1";
+    await getDirections([[0, 0], [1, 1]]);
+    await getDurationMatrix([[0, 0], [1, 1]]);
+    await geocode("a place");
+    expect(await used("mapbox-directions")).toBe(0);
+    expect(await used("mapbox-matrix")).toBe(0);
+    expect(await used("mapbox-geocoding")).toBe(0);
+  });
+});
+
+describe("getWalkingTrail", () => {
+  const used = async (product: string) => (await getBudgetUsage()).find((u) => u.product === product)!.used;
+  const walk = (distance: number) => ({ code: "Ok", routes: [{ geometry: { coordinates: [[-119.1, 37.1], [-119.11, 37.11]] }, distance, duration: 600, legs: [] }] });
+  const from: [number, number] = [-119.1, 37.1];
+  const to: [number, number] = [-119.11, 37.11];
+  beforeEach(async () => {
+    await resetDb();
+    process.env.MAPBOX_TOKEN = "test-token";
+    delete process.env.EXTERNAL_APIS_FAKE;
+    clearMapboxCaches();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete process.env.MAPBOX_TOKEN;
+    delete process.env.EXTERNAL_APIS_FAKE;
+  });
+
+  it("returns the walking geometry and distance, counts one directions unit, and caches", async () => {
+    const fetchImpl = vi.fn(async () => json(walk(1200)));
+    const r = await getWalkingTrail(from, to, fetchImpl);
+    expect(r).toEqual({ geometry: [[-119.1, 37.1], [-119.11, 37.11]], distanceMeters: 1200 });
+    const url = new URL((fetchImpl.mock.calls[0] as unknown as [string])[0]);
+    expect(url.pathname).toContain("/directions/v5/mapbox/walking/");
+    expect(url.searchParams.get("geometries")).toBe("geojson");
+    expect(url.searchParams.get("overview")).toBe("full");
+    expect(await used("mapbox-directions")).toBe(1);
+    expect(await getWalkingTrail(from, to, fetchImpl)).toEqual(r);
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(await used("mapbox-directions")).toBe(1);
+  });
+
+  it("returns null for NoRoute and for a walk over 5 km", async () => {
+    expect(await getWalkingTrail(from, to, vi.fn(async () => json({ code: "NoRoute" })))).toBeNull();
+    clearMapboxCaches();
+    expect(await getWalkingTrail(from, to, vi.fn(async () => json(walk(6000))))).toBeNull();
+  });
+
+  it("throws ExternalServiceError on a server error, without leaking the token", async () => {
+    const err = await getWalkingTrail(from, to, vi.fn(async () => json({}, 500))).catch((e) => e);
+    expect(err).toBeInstanceOf(ExternalServiceError);
+    expect(String(err.message)).not.toContain("test-token");
+  });
+
+  it("propagates a refused budget and does not fetch", async () => {
+    await prisma.rateLimitCounter.create({
+      data: { key: `budget:mapbox-directions:${monthKey(Date.now())}`, count: budgetCap("mapbox-directions")!, resetAt: monthEnd(Date.now()) },
+    });
+    const fetchImpl = vi.fn(async () => json(walk(100)));
+    const err = await getWalkingTrail(from, to, fetchImpl).catch((e) => e);
+    expect(err).toBeInstanceOf(HttpError);
+    expect(err.status).toBe(429);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  const line = (start: [number, number], end: [number, number]) =>
+    ({ code: "Ok", routes: [{ geometry: { coordinates: [start, [-119.105, 37.105], end] }, distance: 1200, duration: 600, legs: [] }] });
+  // 0.0009 degrees of latitude is about 100 m; 0.0018 is about 200 m.
+  const DEG_100M = 0.0009;
+
+  it("keeps a line whose ends are 100 m from the requested points", async () => {
+    const r = await getWalkingTrail(from, to, vi.fn(async () => json(line([from[0], from[1] + DEG_100M], [to[0], to[1] - DEG_100M]))));
+    expect(r).not.toBeNull();
+  });
+
+  it.each([
+    ["start", [from[0], from[1] + 2 * DEG_100M], to],
+    ["finish", from, [to[0], to[1] - 2 * DEG_100M]],
+  ] as const)("returns null when the %s is 200 m off, and caches that", async (_n, start, end) => {
+    const fetchImpl = vi.fn(async () => json(line(start as [number, number], end as [number, number])));
+    expect(await getWalkingTrail(from, to, fetchImpl)).toBeNull();
+    expect(await getWalkingTrail(from, to, fetchImpl)).toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("exports the snap limit as 150 m", () => {
+    expect(WALK_SNAP_MAX_M).toBe(150);
+  });
+
+  it("asks for from then to as lng,lat with 6 decimals", async () => {
+    const fetchImpl = vi.fn(async () => json(walk(1200)));
+    await getWalkingTrail(from, to, fetchImpl);
+    const url = new URL((fetchImpl.mock.calls[0] as unknown as [string])[0]);
+    expect(url.pathname.split("/").pop()).toBe("-119.100000,37.100000;-119.110000,37.110000");
+  });
+
+  it("propagates a 503 store outage as HttpError and does not cache it", async () => {
+    const spy = vi.spyOn(prisma, "$queryRaw").mockRejectedValue(new Error("db down"));
+    const fetchImpl = vi.fn(async () => json(walk(1200)));
+    const err = await getWalkingTrail(from, to, fetchImpl).catch((e) => e);
+    expect(err).toBeInstanceOf(HttpError);
+    expect(err.status).toBe(503);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    spy.mockRestore();
+    expect(await getWalkingTrail(from, to, fetchImpl)).not.toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not cache a 500, so a retry fetches again", async () => {
+    const failing = vi.fn(async () => json({}, 500));
+    await expect(getWalkingTrail(from, to, failing)).rejects.toBeInstanceOf(ExternalServiceError);
+    const ok = vi.fn(async () => json(walk(1200)));
+    expect(await getWalkingTrail(from, to, ok)).not.toBeNull();
+    expect(ok).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns null in fake mode without spending", async () => {
+    process.env.EXTERNAL_APIS_FAKE = "1";
+    expect(await getWalkingTrail(from, to)).toBeNull();
+    expect(await used("mapbox-directions")).toBe(0);
   });
 });

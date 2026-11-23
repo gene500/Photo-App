@@ -10,6 +10,7 @@ import { btnGhost, card } from "@/components/ui/styles";
 import { computeArrivals, computeBestTimes, computeLotArrivals, describeBestTime, formatClock } from "@/lib/best-time";
 import { appleMapsUrls, googleMapsUrl } from "@/lib/export";
 import { buildItinerary, itineraryFileName, parkText } from "@/lib/itinerary";
+import { trailLines } from "@/lib/trail-lines";
 import { createItineraryPdf, mapTokenFromEnv } from "@/lib/itinerary-download";
 import { describeLightHint, lightLabel } from "@/lib/light-windows";
 import { routePoints } from "@/lib/route-points";
@@ -23,7 +24,7 @@ const noop = () => {};
 const ESTIMATE_NOTE = "Times are estimates from straight-line distances.";
 
 /** Read-only trip for the public share page: map with numbered pins, then the stops with times. */
-export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route?: RouteResult | null }) {
+export function SharedTripView({ trip, route = null, mapAllowed = true }: { trip: PublicTrip; route?: RouteResult | null; /** False: no interactive map is started (monthly map-load budget); the stop list below is the view. */ mapAllowed?: boolean }) {
   // Clock times use the viewer's time zone, so they are only rendered once mounted (no server/client mismatch).
   const mounted = useMounted();
   const { settings } = useSettings();
@@ -85,7 +86,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
         timeFormat: tf,
         distanceUnit: settings.distanceUnit,
       });
-      const blob = await createItineraryPdf({ input, geometry: line, stops: trip.stops.map((s) => ({ lat: s.lat, lng: s.lng })), token: mapTokenFromEnv() });
+      const blob = await createItineraryPdf({ input, geometry: line, stops: trip.stops.map((s) => ({ lat: s.lat, lng: s.lng })), token: mapTokenFromEnv(), trails: trailLines(mapStops) });
       return { blob, fileName: itineraryFileName(trip.name, trip.plannedDate) };
     });
   }
@@ -95,6 +96,7 @@ export function SharedTripView({ trip, route = null }: { trip: PublicTrip; route
     <main className="relative h-dvh overflow-hidden print:h-auto print:overflow-visible">
       <div className="absolute inset-0 print:hidden">
         <MapView
+          mapAllowed={mapAllowed}
           readOnly
           stops={mapStops}
           routeGeometry={line.length > 1 ? line : null}

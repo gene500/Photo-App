@@ -314,6 +314,19 @@ describe("walk time from the parking lot", () => {
     expect(sent[2]).not.toHaveProperty("walkMinutes");
   });
 
+  it("Optimize sends a road end's walk minutes (1070 m is 20) and the road-end coordinate", async () => {
+    vi.mocked(api.optimizeOrder).mockResolvedValue({ order: [0, 1, 2], departAt: null, misses: [] });
+    vi.mocked(api.updateTrip).mockImplementation(async (_id, patch) => ({ trip: { ...trip, ...patch } as never }));
+    const ROAD_END = { lat: 36.02, lng: -119.03, name: "Road end", walkMeters: 1070, kind: "road-end" as const, trail: null };
+    render(<TripEditor initialTrip={withStops([mkStop("a", 0, { access: ROAD_END }), mkStop("b", 1), mkStop("c", 2)])} />);
+    await userEvent.click(screen.getByRole("tab", { name: "My trip" }));
+    await userEvent.click(screen.getByRole("button", { name: "Optimize route" }));
+    await waitFor(() => expect(api.optimizeOrder).toHaveBeenCalledTimes(1));
+    const [points, body] = vi.mocked(api.optimizeOrder).mock.calls[0]!;
+    expect(body!.stops[0]).toMatchObject({ walkMinutes: 20 });
+    expect(points[0]).toEqual([-119.03, 36.02]); // the road end, not the stop
+  });
+
   it("a lot arriving for an optimized trip recomputes silently: no 'Your stops changed' notice, no new optimize", async () => {
     const a = mkStop("a", 0, { accessResolvedAt: null });
     const stops = [a, mkStop("b", 1)];

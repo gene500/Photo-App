@@ -9,6 +9,7 @@ import { WRITE_LANDED_EVENT } from "@/components/RefreshWhenStale";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { btnGhost } from "@/components/ui/styles";
+import { trailLines } from "@/lib/trail-lines";
 import { api } from "@/lib/api-client";
 import { downsampleRoute, routeTooLongForSuggestions } from "@/lib/downsample";
 import { adoptPrewarm, PREWARM_DELAY_MS, startPrewarm, type Prewarm } from "@/lib/suggestion-prewarm";
@@ -37,6 +38,7 @@ import type { LightPref, LngLat, Place, RouteResult, Stop, StopPriority, StopSou
 import { MAX_ROUTE_WAYPOINTS, MAX_STOP_NAME, MAX_SUGGESTIONS_ROUTE_KM, longEnoughToSearch } from "@/lib/limits";
 import type { StopPatch, TripPatch } from "@/lib/validation";
 import { MapView } from "./MapView";
+import { MapUsageBanner } from "@/components/ui/MapUsageBanner";
 import { focusLost } from "@/lib/focus";
 import { PlaceCard } from "./PlaceCard";
 import { SearchBar } from "./SearchBar";
@@ -108,7 +110,7 @@ function sameInstant(a: string | null, b: string | null): boolean {
   return a === b || (a !== null && b !== null && Date.parse(a) === Date.parse(b));
 }
 
-export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops; /** Signed-in user; enables the offline copy. */ userId?: string }) {
+export function TripEditor({ initialTrip, userId, mapAllowed = true, mapUsageHigh = false }: { initialTrip: TripWithStops; /** Signed-in user; enables the offline copy. */ userId?: string; /** False: the real map is not started (monthly map-load budget); the offline preview shows. */ mapAllowed?: boolean; /** Show the "map usage is high" banner. */ mapUsageHigh?: boolean }) {
   const { stops: initialStops, ...initialFields } = initialTrip;
   const { settings } = useSettings();
   const { confirm, dialog } = useConfirm();
@@ -644,6 +646,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
         departAt: departAt ? new Date(departAt) : null,
         totalDistanceM: activeRoute?.distance ?? null,
         totalDurationS: activeRoute?.duration ?? null,
+        trails: trailLines(stops),
         stops: stops.map((s, i) => ({ name: s.name, lat: s.lat, lng: s.lng, notes: s.notes, shotNotes: s.shotNotes, lightPref: s.lightPref, arrival: arrivals[i] ?? null, lotArrival: lotArrivals[i] ?? null, source: s.source, visited: s.visited, priority: s.priority, access: s.access, walkMeters: s.access?.walkMeters ?? null })),
       },
   }), [stops, activeRoute, departAt, arrivals, lotArrivals]);
@@ -1576,13 +1579,18 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
   const hikeStops = useMemo(() => stops.filter((s) => settings.showHikes || s.id === cardId), [stops, cardId, settings.showHikes]);
   const hikePoints = useMemo(() => hikeStops.map((s) => ({ id: s.id, lat: s.lat, lng: s.lng })), [hikeStops]);
   const hikeByStop = useHikes(hikePoints);
-  const mapHikes = useMemo(() => Array.from(hikeByStop, ([id, h]) => ({ id, geometry: h.geometry })), [hikeByStop]);
+  // A stop with a mapped road-end trail shows that trail instead of its green hike line; a straight no-trail road end keeps the hike line.
+  const mapHikes = useMemo(() => {
+    const trailed = new Set(stops.filter((s) => s.access?.kind === "road-end" && (s.access.trail?.length ?? 0) >= 2).map((s) => s.id));
+    return Array.from(hikeByStop).filter(([id]) => !trailed.has(id)).map(([id, h]) => ({ id, geometry: h.geometry }));
+  }, [hikeByStop, stops]);
 
   return (
     <main id="main-content" data-fill tabIndex={-1} className="relative min-h-0 flex-1 overflow-hidden outline-none">
       {dialog}
       <p role="status" data-testid="announcer" className="sr-only">{announcement}</p>
       <MapView
+        mapAllowed={mapAllowed}
         stops={stops}
         routeGeometry={optimized ? activeRoute?.geometry ?? null : null}
         pending={pending}
@@ -1602,6 +1610,7 @@ export function TripEditor({ initialTrip, userId }: { initialTrip: TripWithStops
       />
 
       <div className="pointer-events-none absolute inset-x-3 top-3 z-[15] space-y-2 lg:inset-x-auto lg:left-[24.25rem] lg:w-[28.75rem] lg:max-w-[calc(100vw-29rem)] short-landscape:inset-x-auto short-landscape:left-[calc(clamp(17.5rem,40%,23.75rem)+0.75rem)] short-landscape:right-[max(0.75rem,env(safe-area-inset-right))] short-landscape:w-auto short-landscape:max-w-none">
+        {mapUsageHigh && <div className="pointer-events-auto"><MapUsageBanner /></div>}
         <div className="pointer-events-auto">
           <SearchBar getProximity={() => centerRef.current} onSelect={selectSearchResult} inputRef={searchRef} />
         </div>

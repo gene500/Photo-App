@@ -400,3 +400,20 @@ describe("Unicode font", () => {
     expect(s).toContain("(?)");
   });
 });
+
+describe("access trails on the drawn map", () => {
+  const trails = [{ id: "a", geometry: [[-122.4, 37.7], [-122.38, 37.71], [-122.36, 37.72]] as [number, number][], mapped: true }];
+  // setLineDashPattern is an instance method of jsPDF, so it is read back from the page stream (the "d" operator).
+  const dashOps = (pdf: string) => [...pdf.matchAll(/\[([^\]]*)\] [\d.]+ d\b/g)].map((m) => m[1]!.trim());
+  it("draws each trail dashed with [1.5, 1] and resets the pattern afterwards", async () => {
+    const blob = await renderItineraryPdf(input(2), fallback, geometry, latLng, null, trails);
+    const ops = dashOps(Buffer.from(await blob.arrayBuffer()).toString("latin1"));
+    expect(ops).toContain("1.5 1.");
+    expect(ops.at(-1)).toBe("");
+    expect(ops.indexOf("1.5 1.")).toBeLessThan(ops.lastIndexOf(""));
+  });
+  it("never sets a dash pattern without trails", async () => {
+    const blob = await renderItineraryPdf(input(2), fallback, geometry, latLng);
+    expect(dashOps(Buffer.from(await blob.arrayBuffer()).toString("latin1"))).toEqual([]);
+  });
+});

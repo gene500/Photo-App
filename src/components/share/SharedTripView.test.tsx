@@ -2,6 +2,7 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { api } from "@/lib/api-client";
 import { createItineraryPdf, loadWeatherLines, saveBlob } from "@/lib/itinerary-download";
 import { installMemoryStorage } from "../../../tests/helpers/memory-storage";
 import { SETTINGS_KEY } from "@/lib/settings";
@@ -34,6 +35,13 @@ const trip: PublicTrip = {
     stop(1, "Second view", { shotNotes: "Use a polarizer", shotChecklist: [{ text: "Wide shot", done: true }, { text: "Detail", done: false }], lightPref: "sunset" }),
   ],
 };
+
+describe("SharedTripView map allowance", () => {
+  it("still lists the stops when the map is not allowed", () => {
+    render(<SharedTripView trip={trip} mapAllowed={false} />);
+    expect(screen.getAllByTestId("shared-stop")).toHaveLength(2);
+  });
+});
 
 describe("SharedTripView", () => {
   it("estimates the fallback drive times between the parking lots (like the editor), not the stops", () => {
@@ -68,6 +76,31 @@ describe("SharedTripView", () => {
     expect(rows[0]).toContain("Park at North lot");
     expect(rows[1]).toContain("Park at the parking lot");
     expect(rows[2]).not.toContain("Park at");
+  });
+
+  it("a road end reads like a lot, plus '(no mapped trail)' when it has no trail", () => {
+    const t = { ...trip, stops: [stop(0, "Arch", { access: { lat: 36, lng: -120, name: "Road end", walkMeters: 1070, kind: "road-end", trail: [[-120, 36], [-120.01, 36.01]] } }), stop(1, "Dune", { access: { lat: 36, lng: -120, name: "Road end", walkMeters: 1070, kind: "road-end", trail: null } })] };
+    render(<SharedTripView trip={t} />);
+    const rows = screen.getAllByTestId("shared-park").map((r) => r.textContent);
+    expect(rows[0]).toMatch(/^Park at Road end( ~\d{1,2}:\d{2} [AP]M)?, walk 0\.7 mi \(~20 min\) to Arch$/);
+    expect(rows[1]).toMatch(/^Park at Road end( ~\d{1,2}:\d{2} [AP]M)?, walk 0\.7 mi \(~20 min\) to Dune \(no mapped trail\)$/);
+  });
+
+  it("draws the trail on the share map, passes the trails to the PDF and the road-end park line, and never resolves access", async () => {
+    vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["x"]));
+    const resolve = vi.spyOn(api, "resolveAccess");
+    const mk = (trail: [number, number][] | null) => ({ lat: 36, lng: -120, name: "Road end", walkMeters: 1070, kind: "road-end" as const, trail });
+    const t = { ...trip, stops: [stop(0, "Arch", { access: mk([[-120.01, 36.01], [-120, 36]]) }), stop(1, "Dune", { access: mk(null) })] };
+    render(<SharedTripView trip={t} />);
+    const lines = screen.getAllByTestId("access-trail");
+    expect(lines).toHaveLength(2);
+    expect(lines.map((l) => l.getAttribute("data-mapped"))).toEqual(["true", "false"]);
+    await userEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
+    const arg = vi.mocked(createItineraryPdf).mock.calls.at(-1)![0];
+    expect(arg.trails).toHaveLength(2);
+    expect(arg.input.stops[1]!.parkLine).toMatch(/to Dune \(no mapped trail\)$/);
+    expect(arg.input.stops[1]!.parkLine).toBe(screen.getAllByTestId("shared-park")[1]!.textContent);
+    expect(resolve).not.toHaveBeenCalled();
   });
 
   it("says how far to walk, in the viewer's distance unit, on screen and in the PDF input", async () => {

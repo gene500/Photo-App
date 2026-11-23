@@ -8,6 +8,7 @@ import { DownloadDialog } from "@/components/itinerary/DownloadDialog";
 import { useItineraryDownload } from "@/components/itinerary/use-itinerary-download";
 import { useSettings } from "@/components/settings/SettingsProvider";
 import { buildItinerary, itineraryFileName, type ItineraryStopSource } from "@/lib/itinerary";
+import type { TrailLine } from "@/lib/trail-lines";
 import { createItineraryPdf, loadWeatherLines, mapTokenFromEnv, saveBlob } from "@/lib/itinerary-download";
 import { SHORT_SCREEN_POPOVER, usePopover } from "./use-popover";
 
@@ -19,7 +20,7 @@ type Props = {
   /** Driven route line, when one is loaded; becomes the GPX track. */
   route: LngLat[] | null;
   /** When given, the menu offers "Download PDF" built from this. */
-  pdf?: { departAt: Date | null; totalDistanceM: number | null; totalDurationS: number | null; stops: ItineraryStopSource[] };
+  pdf?: { departAt: Date | null; totalDistanceM: number | null; totalDurationS: number | null; stops: ItineraryStopSource[]; /** Road-end trails drawn on the PDF map. */ trails?: TrailLine[] };
 };
 
 const item = "block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent-strong";
@@ -56,7 +57,7 @@ export function ExportControl({ tripName, plannedDate, stops, route, pdf }: Prop
         timeFormat: settings.timeFormat,
         distanceUnit: settings.distanceUnit,
       });
-      const blob = await createItineraryPdf({ input, geometry: route ?? [], stops: stops.map((s) => ({ lat: s.lat, lng: s.lng })), token: mapTokenFromEnv() });
+      const blob = await createItineraryPdf({ input, geometry: route ?? [], stops: stops.map((s) => ({ lat: s.lat, lng: s.lng })), token: mapTokenFromEnv(), trails: pdf.trails ?? [] });
       return { blob, fileName: itineraryFileName(tripName, plannedDate) };
     });
     close(); // the dialog takes over; it hands focus back to this trigger when it closes

@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("./usage-ping", () => ({ sendUsagePing: vi.fn().mockResolvedValue(true) }));
 vi.mock("./weather-cache", () => ({ loadForecast: vi.fn(), loadForecastBatch: vi.fn() }));
 
 import { readFileSync } from "node:fs";
-import { createItineraryPdf, loadMapImage, loadWeatherLines, mapTokenFromEnv, saveBlob } from "./itinerary-download";
+import { sendUsagePing } from "./usage-ping";
+import { createItineraryPdf, loadCountedMapImage, loadMapImage, loadWeatherLines, mapTokenFromEnv, saveBlob } from "./itinerary-download";
 import { loadForecast } from "./weather-cache";
 import type { WeatherForecast } from "./types";
 
@@ -181,6 +183,17 @@ describe("createItineraryPdf", () => {
     expect(s).toContain("/BaseFont /NotoSans");
   });
 
+  it("adds the road-end trails to the Mapbox image and draws them on the fallback map", async () => {
+    const fetchMock = fetchStub(true);
+    vi.stubGlobal("fetch", fetchMock);
+    const trails = [{ id: "a", geometry: [[-122.4, 37.7], [-122.3, 37.75], [-122.2, 37.8]] as [number, number][], mapped: true }];
+    await createItineraryPdf({ input, geometry, stops, token: "pk.test-token", trails });
+    const url = fetchMock.mock.calls.map((c) => String(c[0])).find((u) => u.includes("api.mapbox.com"))!;
+    expect(url).toContain("path-2+8c6a35-0.9(");
+    const s = await text(await createItineraryPdf({ input, geometry, stops, token: null, trails }));
+    expect(s).toMatch(/\[1\.5 1\.\] [\d.]+ d/);
+  });
+
   it("without a token asks Mapbox for nothing and draws the map itself", async () => {
     const fetchMock = fetchStub(true);
     vi.stubGlobal("fetch", fetchMock);
@@ -196,5 +209,27 @@ describe("createItineraryPdf", () => {
     expect(s).not.toContain("/Subtype /Image");
     expect(s).not.toContain("/BaseFont /NotoSans");
     expect(s).toContain("/BaseFont /Helvetica");
+  });
+});
+
+describe("loadCountedMapImage", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("pings before fetching and skips the map when the budget is spent", async () => {
+    vi.mocked(sendUsagePing).mockResolvedValue(false);
+    const f = vi.fn();
+    vi.stubGlobal("fetch", f);
+    expect(await loadCountedMapImage("https://x/y")).toEqual({ kind: "fallback" });
+    expect(sendUsagePing).toHaveBeenCalledWith("static-map");
+    expect(f).not.toHaveBeenCalled();
+  });
+  it("fetches the image after an accepted ping", async () => {
+    vi.mocked(sendUsagePing).mockResolvedValue(true);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(imageResponse()));
+    expect((await loadCountedMapImage("https://x/y")).kind).toBe("image");
+  });
+  it("does not ping without a URL", async () => {
+    vi.mocked(sendUsagePing).mockClear();
+    expect(await loadCountedMapImage(null)).toEqual({ kind: "fallback" });
+    expect(sendUsagePing).not.toHaveBeenCalled();
   });
 });

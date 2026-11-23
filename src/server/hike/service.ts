@@ -3,6 +3,7 @@ import { fakeHike, isFakeExternal } from "@/server/external/fake";
 import { findHikePath, lineLengthMeters, simplifyLine, type HikePath } from "./graph";
 import { fetchNpsTrails } from "./nps";
 import { fetchOsmTrails, type Lot } from "./osm";
+import { LOT_MAX_WALK_M } from "./limits";
 
 /** Trails are looked for this far around the place (a trailhead farther away is not found: "small radius"). */
 const HIKE_RADIUS_M = 2500;
@@ -17,8 +18,7 @@ type Deps = { fetchImpl?: typeof fetch; now?: () => number };
 
 /** A lot this close to the place is not a drive-then-walk: the walk is kept but the car goes to the place itself. */
 const ACCESS_MIN_M = 150;
-/** A parking lot or trailhead marker more than this far away by trail is not "the" start: trailhead markers are tried after lots, and with neither in range the walk starts at a trail dead end with no drive target. */
-export const LOT_MAX_WALK_M = 5000;
+export { LOT_MAX_WALK_M };
 
 const toHike = (path: HikePath, source: Hike["source"], at: { lat: number; lng: number }, lot: Lot | null = null): Hike => ({
   distanceMeters: Math.round(path.distanceMeters / 10) * 10,

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { sessionSchema } from "@/lib/validation";
 import { ExternalServiceError, retrievePlace } from "@/server/external/mapbox";
 import { handle, HttpError, requireUserId } from "@/server/http";
+import { spendUserShare } from "@/server/budget";
 import { enforcePaidLimit } from "@/server/shared-limit";
 
 // The id goes into an upstream URL path, so only URL-safe characters are let through.
@@ -15,6 +16,7 @@ export const GET = handle(async (req: Request) => {
   const session = sessionSchema.parse(params.get("session") ?? "");
   // Malformed requests are refused before they count against the paid limit.
   await enforcePaidLimit("geocode-retrieve", userId);
+  await spendUserShare("mapbox-geocoding", userId);
   try {
     return Response.json({ place: await retrievePlace(id, session) });
   } catch (e) {

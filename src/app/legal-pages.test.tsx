@@ -34,12 +34,20 @@ describe("legal pages", () => {
     expect(html).toContain("send the coordinates of your stops, or of their parking spots where a stop has one,");
     expect(html).not.toContain("send your stops&#x27; coordinates");
     expect(html).toContain("coordinates of stops or their parking spots for directions and route optimization");
-    expect(html).toContain("offline copies of your trips (including their parking spots; the most recent 20)");
+    expect(html).toContain("offline copies of your trips (including their parking spots and trail lines; the most recent 20)");
   });
 
-  it("legal pages are dated November 19, 2026", () => {
-    expect(renderToStaticMarkup(<PrivacyPage />)).toContain("Last updated November 19, 2026");
-    expect(renderToStaticMarkup(<TermsPage />)).toContain("Last updated November 19, 2026");
+  it("says a stop may have a road end with a trail line, and what Mapbox and OpenStreetMap receive for it", () => {
+    const html = renderToStaticMarkup(<PrivacyPage />);
+    for (const text of ["the nearest road end for a stop far from any road", "the short trail line to the stop", "parking spots and road-end trail lines", "when OpenStreetMap has no mapped trail, the stop and its nearest road end for walking directions", "the area around that stop"]) expect(html).toContain(text);
+    const terms = renderToStaticMarkup(<TermsPage />);
+    expect(terms).toContain("the trail line drawn from a road end");
+    expect(terms).toContain("trail data from OpenStreetMap contributors, Mapbox and the National Park Service");
+  });
+
+  it("legal pages are dated November 23, 2026", () => {
+    expect(renderToStaticMarkup(<PrivacyPage />)).toContain("Last updated November 23, 2026");
+    expect(renderToStaticMarkup(<TermsPage />)).toContain("Last updated November 23, 2026");
   });
 
   it("renders the terms and links back to the privacy policy", () => {

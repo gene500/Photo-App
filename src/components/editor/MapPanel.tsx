@@ -4,7 +4,7 @@ import { motionReduced } from "@/lib/reduced-motion";
 import type { Feature, FeatureCollection, LineString } from "geojson";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { diffIds } from "@/lib/diff-ids";
 import { estimateLabelWidth, groupLots, hiddenLotLabels, LOT_LABEL_MIN_ZOOM, lotSignature } from "@/lib/lot-markers";
 import { bearingEndpoint, wrapLng } from "@/lib/geo";
@@ -23,8 +23,11 @@ import { fanOffsets } from "@/lib/marker-fan";
 import { STOP_MARKER_CLASS, stopColor } from "@/lib/stop-style";
 import type { LngLat, Suggestion } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
+import { sendUsagePing } from "@/lib/usage-ping";
 import { isHoverPointer } from "./hover-pointer";
 import { ensureHikeLayer } from "./hike-layer";
+import { ensureTrailLayer } from "./trail-layer";
+import { trailLines } from "@/lib/trail-lines";
 import { createSuggestionPopupContent } from "./suggestion-popup";
 
 const ROUTE_SOURCE = "route";
@@ -183,6 +186,9 @@ export default function MapPanel({
   const flowHandledRef = useRef(routeFlowId ?? 0);
   const flowSeenRef = useRef({ id: routeFlowId ?? 0, at: 0 });
   const hikesRef = useRef(hikes);
+  const trailsRef = useRef(trailLines(stops));
+  /** One map-load ping per component instance: React strict mode runs the create effect twice in development. */
+  const pingedRef = useRef(false);
 
   useEffect(() => {
     routeGeometryRef.current = routeGeometry;
@@ -214,6 +220,11 @@ export default function MapPanel({
     } catch {
       onUnavailable?.();
       return;
+    }
+    // Count this map start against the monthly budget (fire and forget; never blocks or breaks the map).
+    if (!pingedRef.current) {
+      pingedRef.current = true;
+      void sendUsagePing("map-load");
     }
     // A rejected token or failing tiles leave a blank map; say so once. Ordinary per-tile errors are ignored.
     // The notice clears when a tile does load (a later style swap or a recovered network).
@@ -324,6 +335,7 @@ export default function MapPanel({
           "text-halo-width": 1.5,
         },
       });
+      ensureTrailLayer(map, trailsRef.current);
       ensureHikeLayer(map, hikesRef.current);
       setLoaded(true);
       reportCenter();
@@ -433,17 +445,22 @@ export default function MapPanel({
   }, [loaded, routeFlowId, routeGeometry]);
 
   // Hike lines (the selected stop's and toggled-on ones): a separate dotted layer, never the route. Emptied when there are none, and put back if a style reload dropped it.
+  const trails = useMemo(() => trailLines(stops), [stops]);
   useEffect(() => {
     hikesRef.current = hikes;
+    trailsRef.current = trails;
     const map = mapRef.current;
     if (!map || !loaded) return;
-    const apply = () => ensureHikeLayer(map, hikesRef.current);
+    const apply = () => {
+      ensureTrailLayer(map, trailsRef.current);
+      ensureHikeLayer(map, hikesRef.current);
+    };
     apply();
     map.on("style.load", apply);
     return () => {
       map.off("style.load", apply);
     };
-  }, [loaded, hikes]);
+  }, [loaded, hikes, trails]);
 
   // Sunrise/sunset lines for the selected stop; redrawn after each zoom so they stay SKY_LINE_PX long.
   useEffect(() => {

@@ -96,6 +96,15 @@ describe("ExportControl", () => {
       expect(document.activeElement).toBe(screen.getByRole("button", { name: "Export" }));
     });
 
+    it("passes the road-end trails to the PDF", async () => {
+      vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["x"]));
+      const trails = [{ id: "a", geometry: [[-120, 40], [-120.01, 40.01]] as [number, number][], mapped: true }];
+      render(<ExportControl tripName="T" stops={two} route={null} pdf={{ ...pdf, trails }} />);
+      await userEvent.click(screen.getByRole("button", { name: "Export" }));
+      await userEvent.click(screen.getByRole("button", { name: "Download PDF" }));
+      expect(vi.mocked(createItineraryPdf).mock.calls[0][0].trails).toEqual(trails);
+    });
+
     it("adds a note when every arrival is missing, and none when some are known", async () => {
       vi.mocked(createItineraryPdf).mockResolvedValue(new Blob(["x"]));
       const { unmount } = render(<ExportControl tripName="T" stops={two} route={null} pdf={pdf} />);

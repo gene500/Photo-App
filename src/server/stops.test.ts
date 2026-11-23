@@ -210,21 +210,21 @@ describe("moving a stop clears its access point", () => {
 
   const withAccess = async () => {
     const { user, stops } = await tripWithStops(["a"]);
-    await prisma.stop.update({ where: { id: stops[0].id }, data: { accessLat: 1, accessLng: 2, accessName: "Lot", accessWalkMeters: 900, accessResolvedAt: new Date() } });
+    await prisma.stop.update({ where: { id: stops[0].id }, data: { accessLat: 1, accessLng: 2, accessName: "Lot", accessWalkMeters: 900, accessKind: "road-end", accessTrail: "[[1,2],[3,4]]", accessResolvedAt: new Date() } });
     return { user, id: stops[0].id };
   };
 
-  it("clears all five columns when lat/lng is patched", async () => {
+  it("clears all seven columns when lat/lng is patched", async () => {
     const { user, id } = await withAccess();
     const moved = await updateStop(user.id, id, { lat: 37.1, lng: -119.6 });
     expect(moved).toMatchObject({ access: null, accessResolvedAt: null });
-    expect(await prisma.stop.findUnique({ where: { id } })).toMatchObject({ accessLat: null, accessLng: null, accessName: null, accessWalkMeters: null, accessResolvedAt: null });
+    expect(await prisma.stop.findUnique({ where: { id } })).toMatchObject({ accessLat: null, accessLng: null, accessName: null, accessWalkMeters: null, accessKind: null, accessTrail: null, accessResolvedAt: null });
   });
 
   it("leaves them when only the name changes", async () => {
     const { user, id } = await withAccess();
     const out = await updateStop(user.id, id, { name: "renamed" });
-    expect(out?.access).toEqual({ lat: 1, lng: 2, name: "Lot", walkMeters: 900 });
+    expect(out?.access).toEqual({ lat: 1, lng: 2, name: "Lot", walkMeters: 900, kind: "road-end", trail: [[1, 2], [3, 4]] });
     expect(out?.accessResolvedAt).not.toBeNull();
   });
 });

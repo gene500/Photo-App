@@ -263,6 +263,15 @@ describe("offline-store", () => {
       return loadTripCopy("a")!.trip.stops[0];
     };
 
+    it("normalizes kind and trail of a stored access point", () => {
+      const trail = [[-109.5, 38.7], [-109.51, 38.71]];
+      expect(withAccess({ lat: 1, lng: 2, name: "L", walkMeters: null }).access).toMatchObject({ kind: "lot", trail: null });
+      expect(withAccess({ lat: 1, lng: 2, name: "R", walkMeters: null, kind: "road-end", trail }).access).toMatchObject({ kind: "road-end", trail });
+      expect(withAccess({ lat: 1, lng: 2, name: "R", walkMeters: null, kind: "banana" }).access?.kind).toBe("lot");
+      expect(withAccess({ lat: 1, lng: 2, name: "R", walkMeters: null, kind: "road-end", trail: [[1, 2], "x"] }).access?.trail).toBeNull();
+      expect(withAccess({ lat: 1, lng: 2, name: "R", walkMeters: null, kind: "road-end", trail: [[1, 2]] }).access?.trail).toBeNull();
+    });
+
     it("treats a stored lot name of only invisible characters as no name", () => {
       expect(withAccess({ lat: 1, lng: 2, name: "\u200B\u200D", walkMeters: null }).access?.name).toBeNull();
     });
@@ -282,9 +291,9 @@ describe("offline-store", () => {
 
     it("keeps a valid access point, the walk length and the resolved time (a copy from before the walk length gets null)", () => {
       const s = withAccess({ lat: 37.01, lng: -119.5, name: "North lot", walkMeters: 1930 }, { accessResolvedAt: "2026-11-17T10:00:00.000Z" });
-      expect(s.access).toEqual({ lat: 37.01, lng: -119.5, name: "North lot", walkMeters: 1930 });
+      expect(s.access).toEqual({ lat: 37.01, lng: -119.5, name: "North lot", walkMeters: 1930, kind: "lot", trail: null });
       expect(s.accessResolvedAt).toBe("2026-11-17T10:00:00.000Z");
-      expect(withAccess({ lat: 37.01, lng: -119.5, name: null }).access).toEqual({ lat: 37.01, lng: -119.5, name: null, walkMeters: null });
+      expect(withAccess({ lat: 37.01, lng: -119.5, name: null }).access).toEqual({ lat: 37.01, lng: -119.5, name: null, walkMeters: null, kind: "lot", trail: null });
     });
 
     it("treats a malformed access point as none, keeping the stop", () => {

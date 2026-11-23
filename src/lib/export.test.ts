@@ -121,6 +121,11 @@ describe("Maps links use the parking lot when a stop has one; GPX waypoints stay
     expect(u.searchParams.get("destination")).toBe("41.01,-121.02");
     expect(appleMapsUrl(withLot)).toContain("daddr=41.01%2C-121.02");
   });
+  it("Google and Apple point at a road end", () => {
+    const stops = [withLot[0], { name: "Arch", lat: 41, lng: -121, notes: null, access: { lat: 41.03, lng: -121.04, kind: "road-end" as const, trail: null } }];
+    expect(new URL(googleMapsUrl(stops)![0].url).searchParams.get("destination")).toBe("41.03,-121.04");
+    expect(appleMapsUrl(stops)).toContain("daddr=41.03%2C-121.04");
+  });
   it("GPX keeps the stop's own coordinates", () => {
     expect(buildGpx({ name: "t", stops: withLot })).toContain('lat="41" lon="-121"');
   });

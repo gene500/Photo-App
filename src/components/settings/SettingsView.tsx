@@ -62,7 +62,7 @@ function goBack(e: MouseEvent<HTMLAnchorElement>) {
   }
 }
 
-export function SettingsView({ email, hasPassword = true }: { email: string | null; hasPassword?: boolean }) {
+export function SettingsView({ email, hasPassword = true, isOwner = false }: { email: string | null; hasPassword?: boolean; isOwner?: boolean }) {
   const { settings, update, reset } = useSettings();
   const dwellId = useId();
   // The text being typed may be empty or out of range; only a valid number is saved, and blur snaps it back.
@@ -229,6 +229,7 @@ export function SettingsView({ email, hasPassword = true }: { email: string | nu
         <div><DeleteAccountButton className={btnSecondary} hasPassword={hasPassword} /></div>
       </Section>
 
+      {isOwner && <p className="text-sm"><Link href="/settings/usage" className="underline">API usage</Link></p>}
       <div>
         <button type="button" className={btnSecondary} onClick={() => { reset(); setDwellText(null); }}>
           Reset to defaults

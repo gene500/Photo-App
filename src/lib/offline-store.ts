@@ -3,6 +3,7 @@
 // copies are wiped on sign-out and when a different user signs in, and everything is best-effort
 // (storage can be missing, full or blocked; nothing here ever throws).
 import { isDateOnly } from "@/lib/dates";
+import { parseAccessTrail } from "@/lib/access-trail";
 import { isNum, isObj } from "@/lib/guards";
 import { removeKeysWithPrefix } from "@/lib/storage-util";
 import { cleanLine } from "@/lib/text";
@@ -246,7 +247,14 @@ const LIGHT_PREFS = ["any", "sunrise", "golden", "sunset"] as const;
 function normalizeAccess(a: unknown): AccessPoint | null {
   if (!isObj(a) || !isNum(a.lat) || !isNum(a.lng) || Math.abs(a.lat) > 90 || Math.abs(a.lng) > 180) return null;
   if (a.name !== null && typeof a.name !== "string") return null;
-  return { lat: a.lat, lng: a.lng, name: a.name === null ? null : cleanLine(a.name, 120), walkMeters: isNum(a.walkMeters) && a.walkMeters > 0 ? a.walkMeters : null };
+  return {
+    lat: a.lat,
+    lng: a.lng,
+    name: a.name === null ? null : cleanLine(a.name, 120),
+    walkMeters: isNum(a.walkMeters) && a.walkMeters > 0 ? a.walkMeters : null,
+    kind: a.kind === "road-end" ? "road-end" : "lot",
+    trail: parseAccessTrail(a.trail),
+  };
 }
 
 /** Shallow validation of one stored stop; fills defaults for fields older copies lack. Null when it cannot be shown safely. */

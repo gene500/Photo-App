@@ -1,5 +1,6 @@
 import { coordsLabel, haversineMeters } from "@/lib/geo";
 import { OSM_ATTRIBUTION, type Hike } from "@/lib/hike";
+import type { RoadEndResult } from "@/server/hike/road-end-lookup";
 import { addDays } from "@/lib/weather";
 import type { LngLat, Place, PlaceNotice, PlacePhoto, RouteResult, SearchSuggestion, Suggestion, WeatherForecast, WeatherHour } from "@/lib/types";
 
@@ -122,6 +123,21 @@ export function fakeHike(lat: number, lng: number): Hike | null {
   let distanceMeters = 0;
   for (let i = 1; i < geometry.length; i++) distanceMeters += haversineMeters({ lat: geometry[i - 1][1], lng: geometry[i - 1][0] }, { lat: geometry[i][1], lng: geometry[i][0] });
   return { distanceMeters: Math.round(distanceMeters / 10) * 10, geometry, source: "osm", attribution: OSM_ATTRIBUTION, access: { lat: geometry[0][1], lng: geometry[0][0], name: "Fake Trailhead Lot" } };
+}
+
+/** The one place with a fake road end, distinct from FAKE_HIKE_POINT so the two fake features do not collide. */
+export const FAKE_ROAD_END_POINT = { lat: 37.2, lng: -119.5 };
+const FAKE_ROAD_END_RADIUS_DEG = 0.05;
+
+/** A canned road end 400 m west of the stop with a 4-point trail to it, or null away from FAKE_ROAD_END_POINT. */
+export function fakeRoadEnd(lat: number, lng: number): RoadEndResult | null {
+  if (Math.abs(lat - FAKE_ROAD_END_POINT.lat) > FAKE_ROAD_END_RADIUS_DEG || Math.abs(lng - FAKE_ROAD_END_POINT.lng) > FAKE_ROAD_END_RADIUS_DEG) return null;
+  const r = (n: number) => Math.round(n * 1e5) / 1e5;
+  const dLng = 400 / (111_320 * Math.cos((lat * Math.PI) / 180));
+  const offsets: [number, number][] = [[-1, 0], [-0.66, 0.0008], [-0.33, -0.0006], [0, 0]];
+  const trail = offsets.map(([f, dy]): LngLat => [r(lng + f * dLng), r(lat + dy * 0.5)]);
+  trail[3] = [lng, lat];
+  return { kind: "road-end", point: trail[0], trail, walkMeters: 400 };
 }
 
 /** Fake heads-ups (no network): a stop near Tioga Pass (Yosemite) gets a closed-road notice, one near Horseshoe Bend a closed-at-arrival one. */

@@ -6,6 +6,7 @@ import type { RouteResult } from "@/lib/types";
 import { enforceLimit } from "@/server/rate-limit";
 import { routePoints } from "@/lib/route-points";
 import { getDirections } from "@/server/external/mapbox";
+import { mapLoadState } from "@/server/budget";
 import { loadSharedTrip } from "@/server/share";
 
 // A revoked link must stop working immediately, so this page is never cached or prerendered.
@@ -44,5 +45,7 @@ export default async function SharedTripPage({ params }: PageProps<"/s/[token]">
   const { token } = await params;
   const shared = await loadShared(token);
   if (!shared) notFound();
-  return <SharedTripView trip={shared.trip} route={await routeFor(token, shared.ownerId, shared.trip.stops)} />;
+  // Anyone can open this page, so at 80% of the month's map loads it starts no interactive map (the stop list stays).
+  const state = await mapLoadState();
+  return <SharedTripView trip={shared.trip} route={await routeFor(token, shared.ownerId, shared.trip.stops)} mapAllowed={state === "ok" || state === "warn"} />;
 }

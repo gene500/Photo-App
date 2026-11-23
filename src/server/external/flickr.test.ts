@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getFlickrPhoto, getFlickrPhotoCount } from "./flickr";
+import { flickrBudgetLeft, getFlickrPhoto, getFlickrPhotoCount } from "./flickr";
+import { getBudgetUsage } from "../budget";
+import { resetDb } from "../../../tests/helpers/db";
+import { prisma } from "../db";
+
+const hourly = vi.hoisted(() => ({ spent: false }));
+vi.mock("../shared-limit", async (orig) => {
+  const real = await orig<typeof import("../shared-limit")>();
+  return { ...real, hitShared: (...a: Parameters<typeof real.hitShared>) => (hourly.spent ? Promise.resolve({ ok: false, retryAfter: 60 } as Awaited<ReturnType<typeof real.hitShared>>) : real.hitShared(...a)) };
+});
+const flickrUsed = async () => (await getBudgetUsage()).find((u) => u.product === "flickr")!.used;
 
 // Fixtures follow the response shape documented at flickr.com/services/api/flickr.photos.search.html (format=json&nojsoncallback=1);
 // there was no API key to capture a live response, so Flickr is verified against docs/fixtures only.
@@ -125,5 +135,32 @@ describe("Flickr", () => {
       spy.mockRestore();
       vi.unstubAllEnvs();
     }
+  });
+});
+
+describe("Flickr monthly counter", () => {
+  beforeEach(async () => {
+    hourly.spent = false;
+    await resetDb();
+  });
+  afterEach(() => {
+    hourly.spent = false;
+    vi.restoreAllMocks();
+  });
+
+  it("counts one use per successful hourly spend", async () => {
+    expect(await flickrBudgetLeft()).toBe(true);
+    expect(await flickrUsed()).toBe(1);
+  });
+
+  it("does not count when the hourly budget is spent", async () => {
+    hourly.spent = true;
+    expect(await flickrBudgetLeft()).toBe(false);
+    expect(await flickrUsed()).toBe(0);
+  });
+
+  it("still returns true when the monthly store errors", async () => {
+    vi.spyOn(prisma, "$queryRaw").mockRejectedValue(new Error("down"));
+    expect(await flickrBudgetLeft()).toBe(true);
   });
 });

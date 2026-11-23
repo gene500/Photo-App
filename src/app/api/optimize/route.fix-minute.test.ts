@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/server/external/place-notices", () => ({ collectPlaceNotices: vi.fn(async () => []) }));
 vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
 vi.mock("@/server/shared-limit", () => ({ enforcePaidLimit: vi.fn() }));
+vi.mock("@/server/budget", async (orig) => ({ ...(await orig<typeof import("@/server/budget")>()), spendUserShare: vi.fn() }));
 vi.mock("@/server/external/mapbox", async (orig) => {
   const actual = await orig<typeof import("@/server/external/mapbox")>();
   const { fakeDurationMatrix } = await import("@/server/external/fake");

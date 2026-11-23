@@ -22,4 +22,15 @@ describe("MapView", () => {
     expect(screen.getByTestId("map")).toBeTruthy(); // FakeMapPanel
     expect(screen.queryByTestId("real-map")).toBeNull();
   });
+
+  it("shows the offline preview with a budget note, and never loads the real map, when the map is not allowed", async () => {
+    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", "pk.test");
+    vi.stubEnv("NEXT_PUBLIC_MAP_FAKE", "");
+    const { MapView } = await import("./MapView");
+    render(<MapView mapAllowed={false} stops={[]} routeGeometry={null} onMapClick={vi.fn()} onStopClick={vi.fn()} />);
+    expect(screen.getByText(/map is paused for now/i)).toBeTruthy();
+    expect(screen.getByTestId("map")).toBeTruthy();
+    expect(screen.queryByTestId("real-map")).toBeNull();
+  });
 });
+

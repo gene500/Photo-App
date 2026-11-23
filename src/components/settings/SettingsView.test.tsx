@@ -182,3 +182,16 @@ describe("time format labels", () => {
   });
 });
 
+
+describe("SettingsView usage link", () => {
+  it("shows the usage link only to the owner", async () => {
+    vi.resetModules();
+    const { SettingsProvider } = await import("./SettingsProvider");
+    const { SettingsView } = await import("./SettingsView");
+    const { unmount } = render(<SettingsProvider><SettingsView email="me@example.com" isOwner /></SettingsProvider>);
+    expect(screen.getByRole("link", { name: /api usage/i }).getAttribute("href")).toBe("/settings/usage");
+    unmount();
+    render(<SettingsProvider><SettingsView email="me@example.com" /></SettingsProvider>);
+    expect(screen.queryByRole("link", { name: /api usage/i })).toBeNull();
+  });
+});

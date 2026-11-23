@@ -9,6 +9,9 @@ import { createTestUser, resetDb, sampleTripInput } from "../../../../tests/help
 const getDirections = vi.fn();
 vi.mock("@/server/external/mapbox", () => ({ getDirections: (...a: unknown[]) => getDirections(...a) }));
 
+const mapLoadState = vi.fn();
+vi.mock("@/server/budget", () => ({ mapLoadState: () => mapLoadState() }));
+
 import SharedTripPage from "./page";
 
 const route: RouteResult = { geometry: [[-120, 36], [-119, 37]], distance: 1000, duration: 600, legs: [{ distance: 1000, duration: 600 }] };
@@ -16,7 +19,7 @@ const spot = (name: string, lat: number, lng: number) => ({ name, lat, lng, sour
 
 /** What the share page hands its view for a token: the stops in order and the route it was fetched for. */
 async function render(token: string) {
-  const el = (await SharedTripPage({ params: Promise.resolve({ token }) } as never)) as { props: { trip: { stops: { name: string }[] }; route: RouteResult | null } };
+  const el = (await SharedTripPage({ params: Promise.resolve({ token }) } as never)) as { props: { trip: { stops: { name: string }[] }; route: RouteResult | null; mapAllowed: boolean } };
   return el.props;
 }
 
@@ -24,6 +27,8 @@ describe("share page follows the owner's saved stop order", () => {
   beforeEach(async () => {
     await resetDb();
     getDirections.mockReset();
+    mapLoadState.mockReset();
+    mapLoadState.mockResolvedValue("ok");
     getDirections.mockResolvedValue(route);
   });
 
@@ -61,4 +66,25 @@ describe("share page follows the owner's saved stop order", () => {
     await render(token);
     expect(getDirections).toHaveBeenLastCalledWith([[-120.02, 36.01], [-119, 37]]);
   });
+
+  it("fetches the route to a road end's coordinates, not the stop", async () => {
+    const user = await createTestUser();
+    const trip = await createTrip(user.id, sampleTripInput);
+    const a = (await addStop(user.id, trip.id, spot("A", 36, -120)))!;
+    await addStop(user.id, trip.id, spot("B", 37, -119));
+    await prisma.stop.update({ where: { id: a.id }, data: { accessLat: 36.02, accessLng: -120.03, accessName: "Road end", accessKind: "road-end", accessTrail: JSON.stringify([[-120.03, 36.02], [-120, 36]]), accessResolvedAt: new Date() } });
+    const token = (await createShareToken(user.id, trip.id))!;
+    await render(token);
+    expect(getDirections).toHaveBeenLastCalledWith([[-120.03, 36.02], [-119, 37]]);
+  });
+
+  it.each([["ok", true], ["warn", true], ["shared-off", false], ["all-off", false]] as const)("passes mapAllowed for map state %s", async (state, allowed) => {
+    mapLoadState.mockResolvedValue(state);
+    const user = await createTestUser();
+    const trip = await createTrip(user.id, sampleTripInput);
+    await addStop(user.id, trip.id, spot("A", 36, -120));
+    const token = (await createShareToken(user.id, trip.id))!;
+    expect((await render(token)).mapAllowed).toBe(allowed);
+  });
 });
+

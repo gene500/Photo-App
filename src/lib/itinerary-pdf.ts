@@ -2,10 +2,12 @@
 
 import { downsampleRoute } from "./downsample";
 import { fanOffsets } from "./marker-fan";
+import { ACCESS_TRAIL_COLOR } from "./map-theme";
 import { parseCmap, pdfText, type PdfFonts } from "./pdf-fonts";
 import { PDF_BORDER, PDF_RULE, PDF_THEME, hexToRgb, markerTextColor, safeStopColor, type Rgb } from "./pdf-theme";
 import type { ItineraryInput } from "./itinerary";
 import { STATIC_MAP_HEIGHT, STATIC_MAP_WIDTH } from "./static-map";
+import type { TrailLine } from "./trail-lines";
 import type { LngLat } from "./types";
 
 export type PdfMap = { kind: "image"; dataUrl: string } | { kind: "fallback" };
@@ -62,7 +64,7 @@ function unwrapLongitudes(points: LngLat[]): LngLat[] {
   });
 }
 
-function drawFallbackMap(doc: Doc, family: string, x: number, y: number, w: number, h: number, geometry: LngLat[], stops: { lat: number; lng: number }[], colors: string[]) {
+function drawFallbackMap(doc: Doc, family: string, x: number, y: number, w: number, h: number, geometry: LngLat[], stops: { lat: number; lng: number }[], colors: string[], trails: TrailLine[] = []) {
   fillRgb(doc, PDF_THEME.backdrop);
   drawRgb(doc, PDF_BORDER);
   doc.setLineWidth(1);
@@ -74,7 +76,11 @@ function drawFallbackMap(doc: Doc, family: string, x: number, y: number, w: numb
   const pts = unwrapLongitudes(rawPts);
   const refLng = pts.length ? pts.reduce((a, p) => a + p[0], 0) / pts.length : 0;
   const stopPts = rawStops.map((p): LngLat => [p[0] + 360 * Math.round((refLng - p[0]) / 360), p[1]]);
-  const all = [...pts, ...stopPts];
+  // Each trail follows the same longitude wrap as the stops, so a trip across the date line stays in one piece.
+  const trailPts = trails
+    .map((t) => t.geometry.filter(finite).map((p): LngLat => [p[0] + 360 * Math.round((refLng - p[0]) / 360), p[1]]))
+    .filter((t) => t.length >= 2);
+  const all = [...pts, ...stopPts, ...trailPts.flat()];
   if (all.length === 0) return;
   const meanLat = all.reduce((a, p) => a + p[1], 0) / all.length;
   const k = Math.cos((meanLat * Math.PI) / 180);
@@ -106,6 +112,21 @@ function drawFallbackMap(doc: Doc, family: string, x: number, y: number, w: numb
     doc.setLineWidth(2.5);
     doc.lines(deltas, a[0][0], a[0][1], [1, 1], "S", false);
   }
+  if (trailPts.length) {
+    drawRgb(doc, ACCESS_TRAIL_COLOR);
+    doc.setLineWidth(1.5);
+    doc.setLineDashPattern([1.5, 1], 0);
+    try {
+      for (const t of trailPts) {
+        const a = t.map(at);
+        const deltas: [number, number][] = [];
+        for (let i = 1; i < a.length; i++) deltas.push([a[i][0] - a[i - 1][0], a[i][1] - a[i - 1][1]]);
+        doc.lines(deltas, a[0][0], a[0][1], [1, 1], "S", false);
+      }
+    } finally {
+      doc.setLineDashPattern([], 0);
+    }
+  }
   doc.setFontSize(8);
   // Display-only: numbered circles (16 pt wide) that would overlap are fanned around their shared spot so every number stays legible.
   const spots = stopPts.map((p, i) => { const [x, y] = at(p); return { id: String(i), x, y }; });
@@ -133,6 +154,7 @@ export async function renderItineraryPdf(
   geometry: LngLat[],
   stops: { lat: number; lng: number }[],
   fonts: PdfFonts | null = null,
+  trails: TrailLine[] = [],
 ): Promise<Blob> {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
@@ -277,10 +299,10 @@ export async function renderItineraryPdf(
     } catch {
       // A corrupt image must not lose the whole itinerary: draw the map instead.
       try { doc.restoreGraphicsState(); } catch { /* nothing saved */ }
-      drawFallbackMap(doc, family, MARGIN, y, contentW, mapH, geometry, stops, colors);
+      drawFallbackMap(doc, family, MARGIN, y, contentW, mapH, geometry, stops, colors, trails);
     }
   } else {
-    drawFallbackMap(doc, family, MARGIN, y, contentW, mapH, geometry, stops, colors);
+    drawFallbackMap(doc, family, MARGIN, y, contentW, mapH, geometry, stops, colors, trails);
   }
   y += mapH + 24;
 

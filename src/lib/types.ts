@@ -16,7 +16,16 @@ export type StopPriority = "normal" | "high" | "must";
 export type ShotItem = { text: string; done: boolean };
 
 /** Where the car stops for a stop's hike (parking lot or trailhead). */
-export type AccessPoint = { lat: number; lng: number; name: string | null; walkMeters: number | null };
+export type AccessPoint = {
+  lat: number;
+  lng: number;
+  name: string | null;
+  walkMeters: number | null;
+  /** "road-end" is where a drivable road stops short of an off-road stop; absent or "lot" is a parking lot or trailhead. */
+  kind?: "lot" | "road-end";
+  /** The walk from the access point to the stop, [lng, lat] points; null or absent = none. */
+  trail?: LngLat[] | null;
+};
 
 export type Stop = {
   id: string;

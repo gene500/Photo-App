@@ -40,6 +40,8 @@ export const POLICIES = {
   "photo-read": { limit: 300, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   suggestions: { limit: 30, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   popularity: { limit: 10, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
+  /** Client usage pings (POST /api/usage/ping), per address. */
+  "usage-ping": { limit: 30, windowMs: MINUTE, message: "Too many requests. Slow down a little." },
   /** App-wide Flickr API calls (all users, key "all"); past it popularity falls back to Commons and place photos skip Flickr. */
   "flickr-app": { limit: 3000, windowMs: 60 * MINUTE, message: "Flickr budget spent." },
   hike: { limit: 60, windowMs: MINUTE, message: "Too many requests. Slow down a little." },

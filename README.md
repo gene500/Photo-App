@@ -7,6 +7,7 @@ Live site: <https://photo-app-pi2o.vercel.app>
 ## Contents
 
 - [Setup](#setup)
+- [Desktop app (macOS and Windows)](#desktop-app-macos-and-windows)
 - [Offline mode and offline copies](#offline-mode-and-offline-copies)
 - [Text, photo and search rules](#text-photo-and-search-rules)
 - [Scripts](#scripts)
@@ -14,6 +15,7 @@ Live site: <https://photo-app-pi2o.vercel.app>
 - [Trip tools](#trip-tools): shot list, alternatives, settings, sharing, export
 - [Photos and suggestions](#photos-and-suggestions)
 - [Weather and light-window forecast](#weather-and-light-window-forecast)
+- [Monthly API budgets](#monthly-api-budgets)
 - [Privacy policy and terms](#privacy-policy-and-terms)
 - [How best time is computed](#how-best-time-is-computed)
 - [Tunables](#tunables)
@@ -45,6 +47,22 @@ Then set up the database and start the dev server:
 npx prisma migrate dev
 npm run dev
 ```
+
+## Desktop app (macOS and Windows)
+
+`apps/native` is a small Tauri 2 shell: a native window around the live site (<https://photo-app-pi2o.vercel.app>). It is for the owner's own use. Nothing is built into it except the window, so it needs an internet connection (no offline copies of the site) and always shows the current deployed version. Links to other sites open in the default browser. Downloads the app starts (PDF, calendar and other exports) are saved to your Downloads folder under the suggested name; an existing file is never overwritten (a number is added, for example `trip (1).pdf`), and downloads that do not come from the app itself are refused. The Mac app is only ad hoc signed (no Developer ID signing or notarization).
+
+**Mac (universal, Apple Silicon and Intel).** Rust is required (`rustup`, plus `rustup target add aarch64-apple-darwin x86_64-apple-darwin`).
+
+```bash
+cd apps/native
+npm ci
+npx tauri build --target universal-apple-darwin
+```
+
+The app is `apps/native/src-tauri/target/universal-apple-darwin/release/bundle/macos/Photo Op Planner.app` (a `.dmg` is next to it under `bundle/dmg`). Copy the `.app` to `/Applications`. If macOS blocks it on another Mac, right-click it and choose Open.
+
+**Windows.** The installer is built on GitHub, not locally: run the "Native Windows installer" workflow (`.github/workflows/native-windows.yml`) by hand from the Actions tab, or push a tag that starts with `native-v`. When it finishes, download the `photo-op-planner-windows` artifact (an NSIS `.exe`). This workflow has not been run on GitHub yet. Not yet tried on a real Mac: downloads. Before relying on them, download a PDF and a calendar export from the Mac app and check that both land in Downloads. The installer is unsigned, so Windows SmartScreen warns: choose More info, then Run anyway.
 
 ## Offline mode and offline copies
 
@@ -185,6 +203,8 @@ When a stop has a hike (a mapped trail to it), the car is routed to the parking 
 - **What counts as a lot:** within 2.5 km of the stop (a true circle by straight-line distance; the query box is clamped to valid latitudes and longitudes and its corners are cut off), within 150 m of a trail, nearest by walking distance first, and at most 5 km of walking (`LOT_MAX_WALK_M`, applied to lots and to trailhead markers alike); a lot farther than that is skipped and trailhead markers are tried, and a marker farther than that is skipped too (the walk then starts at a trail dead end and the car goes to the stop itself). Parking tagged `access=private|no|customers|permit` or `parking=street_side|lane|underground` is never a lot. Lot names are stripped of control and bidi characters and cut to 120 characters (without splitting an emoji) when saved and again when read; a name with nothing visible (only zero-width characters) is saved and read as no name, and the itinerary then says "the parking lot". When Overpass answers that a dense area is too big for one query, a second mirror is asked once: only if it also says so does the lookup finish as "no lot" (saved); if the second mirror answers normally its answer is used, and if it fails the lookup counts as failed and is retried later. A lot within 150 m of the stop is not a separate drive: the stop keeps routing to itself. The lot may be on a different road than the stop; there is no extra Directions check.
 - **The saved access point:** the editor calls the owner-only `POST /api/stops/:id/access` after a stop is added, and for stops not yet looked up when a trip opens (3 at a time). The result is stored on the stop (`access`: lot coordinates, its OpenStreetMap name and the walk length in metres; `accessResolvedAt` marks a finished lookup, with or without a lot). A failed lookup (service down) saves nothing and is retried on the next open, and again when the browser comes back online. Optimize (manual and automatic) waits for pending lookups, at most 8 s, so it orders by drive times that include the lots; the first route request goes out at once, and while lookups are still pending later ones wait 1.2 s after the last change (at most 5 s since the first change held back), so lots that arrive close together cost one request. Moving a stop or swapping in an alternative clears the access point, and it is looked up again; a stop whose move is still being saved counts as pending for Optimize. Dragging a stop again before the first save answers is safe: only the answer to the latest move sets the position, and a failed older save never rolls back a newer one.
 - **Where it is used:** editor directions, Optimize and the public share page all route through `routePoints` (`src/lib/route-points.ts`), which uses the lot coordinates. Stop markers stay at the stop; every stop with a lot also shows a green "P" marker at it on the editor and share-page maps, with the lot name beside it (cut to 18 characters; "Parking" when unnamed; lots within 30 m merge into one "Parking ×N" marker; lots chain: one within 30 m of ANY member joins, whatever the order; labels hide below zoom 11 and wherever they would overlap an earlier one (the selected lot wins; the P stays; `hiddenLotLabels`); the P is drawn below the stop markers and to the lower right of its point so a stop number stays readable; the selected stop's marker is larger; plain DOM markers, not clickable, `src/lib/lot-markers.ts`), and the dotted hike line starts there. The stop card, stop drawer and My trip rows, the offline copy (`OfflineView`, with the walk time, no arrival times), the itinerary, PDF and share view say "Park at <name>, walk <distance> (~N min) to <stop>"; the share popover lists the parking spot among what the link shows.
+
+- **Road end and trail (stops with no lot):** a stop that has no parking lot and is more than 100 m from a road is routed to the nearest road a trail connects it to (`src/server/hike/road-end.ts`, `road-end-lookup.ts`, OpenStreetMap via Overpass, 5 km search). The access point is then a "Road end" (`kind: "road-end"`, stored with `accessTrail`, a capped polyline) and behaves like a lot everywhere: the car goes there, the stop card, My trip, share page, itinerary and PDF say "Park at Road end, walk ...", and the walk time is in the schedule (4 km/h). The trail is drawn dashed (`#8c6a35`) on the editor, share and static PDF maps; where no trail is mapped the line is straight and the text says "no mapped trail". When OpenStreetMap has no mapped trail, one Mapbox walking request can supply the line; it counts against the monthly Mapbox budget (user share and global). The result is stored once per stop (moving the stop clears it), so viewing never costs a lookup; a failed lookup is retried, never stored as "no road". A real lot always wins over a road end. Stops looked up before this release that already finished with no parking lot are not looked up again, so they only get a road end if their stop is moved or re-added. Migration `20261123140000_stop_road_end`.
 - **Walk time** (`src/lib/walk-time.ts`): the walk from the lot to the stop is part of the plan. One-way minutes = the saved walk length (metres) / 66.7 m per minute (4 km/h), rounded up to the next 5 minutes (a 1.9 km walk is 30 min); no saved length means no walk time. It is a flat estimate: it ignores elevation, surface and rests, so a steep trail takes longer. The car reaches the lot at the time the drive says; the stop (the subject) is reached one walk later; the stop's Time here is spent there; the car leaves the lot walk + Time here + walk after arriving, and the next drive starts then. So a stop with a lot adds twice its walk before the next leg. "Arrive ~" on the stop cards, the share page and the PDF is the time at the stop; the itinerary, PDF and share page also say when the car reaches the lot ("Park at North lot ~5:17 AM, walk 1.2 mi (~25 min) to Viewpoint"). Light checks (best-time window, "Misses sunrise by N min", dark visits, opening-hours notices) and Optimize use the time at the stop, not at the lot; Optimize receives each stop's one-way walk minutes (`walkMinutes`, optional, 0-300; an older client without it is planned as before) and searches start times back by the first stop's walk plus the longest walk to a light-constrained stop (so a long walk to a sunrise stop still finds a start that meets the light); the missed minutes it reports are those of the start it returns, rounded by the same `roundMissMinutes` the editor uses. The share page's fallback drive times (no routing) are estimated between the lots. Route geometry and drive times are unchanged, and a lot arriving only recomputes the times (it does not make the trip "changed since Optimize"). Nothing new is stored.
 - **Sunrise and sunset maths** (Optimize light windows, the sun lines) use the same lot coordinates; a lot is a few km at most from the stop, so the times shift by seconds.
 - Share-page viewers never trigger lookups or writes. The lookup sends only the stop's coordinates to OpenStreetMap (Overpass) and NPS, as the hike lookup already did.
@@ -410,6 +430,25 @@ Data comes from Open-Meteo (free, no key).
 - Open-Meteo labels hours in the location's local time, so `src/lib/weather.ts` converts with `utc_offset_seconds` before matching them to arrival instants.
 - The public share page does not show weather. Offline mode returns canned data.
 - No new environment variables.
+
+## Monthly API budgets
+
+The app counts its paid-provider calls per UTC month in the `RateLimitCounter` table and stops at 80% of each free allowance (`BUDGET_FRACTION`). One signed-in user may spend at most 30% of that capped amount per product per month (`USER_SHARE_FRACTION`); the owner is exempt. Figures live in `src/server/budget-config.ts`.
+
+| Product | Monthly allowance | Cap at 80% | One user's share (30%) | Confirmed |
+|---|---|---|---|---|
+| Mapbox place search (Geocoding) | 10,000 | 8,000 | 2,400 | no, check the dashboard |
+| Mapbox directions | 10,000 | 8,000 | 2,400 | yes |
+| Mapbox travel-time matrix (elements) | 10,000 | 8,000 | 2,400 | yes |
+| Mapbox map loads | 5,000 | 4,000 | 1,200 | yes |
+| Mapbox static images | 10,000 | 8,000 | 2,400 | no, check the dashboard |
+| Flickr | no monthly cap | none | none | the hourly `flickr-app` limit applies |
+
+- A 10-stop Optimize costs 100 Matrix elements (10 x 10), so the 8,000 cap allows about 80 such runs a month.
+- Map loads are counted from the browser: `POST /api/usage/ping` (`kind` is `map-load` or `static-map`) is called when a map starts or an itinerary map image loads. It is public (shared pages load a map without sign-in), same-origin only, and limited per address.
+- A `map-load` ping is only counted, never refused (the map has already loaded), so the count keeps rising past the cap; a `static-map` ping is refused with 429 at the cap. At 70% a banner warns. At 80% the shared trip page shows the stop list instead of a map; at 95% the editor map is switched off. Past the cap, server calls answer 429; if the counter store is down, paid server calls answer 503 (the map-load ping then answers 503 and the load is not counted).
+- `OWNER_EMAIL` (env) names the owner account, which is exempt from the per-user share and can open `/settings/usage` (everyone else gets a 404). Set it in Vercel to the email the owner signed up with.
+- Dashboard checklist for what code cannot cap: Mapbox, restrict the public token to the site's URLs and turn on usage emails; Turso, usage alerts for rows read, rows written and storage; Vercel, usage alerts (and 2FA on the account).
 
 ## Privacy policy and terms
 

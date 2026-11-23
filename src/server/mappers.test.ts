@@ -5,7 +5,7 @@ import { parseShotChecklist, toPublicTripDto, toStopDto } from "./mappers";
 const row: StopRow = {
   id: "s1", tripId: "t1", order: 0, name: "A", lat: 1, lng: 2, notes: null, source: "manual", photoUrl: null,
   visited: false, lightPref: "any", priority: "normal", dwellMinutes: 30, shotNotes: "Tripod", shotChecklist: "[]",
-  accessLat: null, accessLng: null, accessName: null, accessWalkMeters: null, accessResolvedAt: null,
+  accessLat: null, accessLng: null, accessName: null, accessWalkMeters: null, accessKind: null, accessTrail: null, accessResolvedAt: null,
   createdAt: new Date(), updatedAt: new Date(),
 };
 
@@ -61,7 +61,7 @@ describe("stop access point", () => {
   it("maps the saved lot and the resolved time", () => {
     const at = new Date("2026-11-17T10:00:00Z");
     const dto = toStopDto({ ...row, accessLat: 1, accessLng: 2, accessName: "North lot", accessWalkMeters: 1930, accessResolvedAt: at });
-    expect(dto.access).toEqual({ lat: 1, lng: 2, name: "North lot", walkMeters: 1930 });
+    expect(dto.access).toEqual({ lat: 1, lng: 2, name: "North lot", walkMeters: 1930, kind: "lot", trail: null });
     expect(dto.accessResolvedAt).toBe(at.toISOString());
   });
   it("cleans the lot name like a stop name (control characters and line breaks)", () => {
@@ -80,7 +80,28 @@ describe("stop access point", () => {
   it("public stops carry access but never accessResolvedAt", () => {
     const trip = { id: "t", name: "T", plannedDate: new Date("2026-11-17T00:00:00Z"), departAt: null, shareToken: null, routeOptimizedFor: null, userId: "u", createdAt: new Date(), updatedAt: new Date(), stops: [{ ...row, accessLat: 1, accessLng: 2, accessName: "L", accessWalkMeters: 640, accessResolvedAt: new Date() }] } as unknown as Parameters<typeof toPublicTripDto>[0];
     const s = toPublicTripDto(trip).stops[0];
-    expect(s.access).toEqual({ lat: 1, lng: 2, name: "L", walkMeters: 640 });
+    expect(s.access).toEqual({ lat: 1, lng: 2, name: "L", walkMeters: 640, kind: "lot", trail: null });
     expect("accessResolvedAt" in s).toBe(false);
+  });
+  it("maps a road end with its trail, and a null kind to lot", () => {
+    const trail = [[-109.5, 38.7], [-109.51, 38.71]];
+    const re = toStopDto({ ...row, accessLat: 1, accessLng: 2, accessName: "Road end", accessKind: "road-end", accessTrail: JSON.stringify(trail) });
+    expect(re.access?.kind).toBe("road-end");
+    expect(re.access?.trail).toEqual(trail);
+    const lot = toStopDto({ ...row, accessLat: 1, accessLng: 2, accessName: "Lot", accessKind: null });
+    expect(lot.access).toMatchObject({ kind: "lot", trail: null });
+    expect(toStopDto({ ...row, accessLat: 1, accessLng: 2, accessKind: "banana" }).access?.kind).toBe("lot");
+  });
+  it("public stops carry kind and trail", () => {
+    const trail = [[-109.5, 38.7], [-109.51, 38.71]];
+    const trip = { id: "t", name: "T", plannedDate: new Date("2026-11-17T00:00:00Z"), departAt: null, shareToken: null, routeOptimizedFor: null, userId: "u", createdAt: new Date(), updatedAt: new Date(), stops: [{ ...row, accessLat: 1, accessLng: 2, accessName: "Road end", accessKind: "road-end", accessTrail: JSON.stringify(trail) }] } as unknown as Parameters<typeof toPublicTripDto>[0];
+    const access = toPublicTripDto(trip).stops[0].access;
+    expect(access).toMatchObject({ kind: "road-end", trail });
+    expect(Object.keys(access!).sort()).toEqual(["kind", "lat", "lng", "name", "trail", "walkMeters"]);
+    expect(Object.keys(toPublicTripDto(trip).stops[0])).not.toContain("id");
+    expect(JSON.stringify(toPublicTripDto(trip))).not.toContain("shareToken");
+  });
+  it("a corrupt stored trail gives trail null without throwing", () => {
+    expect(toStopDto({ ...row, accessLat: 1, accessLng: 2, accessKind: "road-end", accessTrail: "{not json" }).access?.trail).toBeNull();
   });
 });

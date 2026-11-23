@@ -405,4 +405,20 @@ describe("FakeMapPanel parking markers for every lot", () => {
     render(<FakeMapPanel {...base} stops={[a]} />);
     expect(screen.getByRole("img", { name: /^Parking for/ }).getAttribute("tabindex")).toBeNull();
   });
+
+  describe("access trail", () => {
+    const re = (trail: [number, number][] | null) => ({ lat: 37.1, lng: -119.1, name: "Road end", walkMeters: 200, kind: "road-end" as const, trail });
+    it("draws a dashed polyline per road-end trail, straight and unmapped without one, and none for a lot", () => {
+      const mapped = { ...stop, id: "m", access: re([[-119.1, 37.1], [-119.05, 37.05], [-119, 37]]) };
+      const bare = { ...stop, id: "n", access: re(null) };
+      const lot = { ...stop, id: "l", access: { lat: 37.1, lng: -119.1, name: "Lot", walkMeters: 500 } };
+      render(<FakeMapPanel {...base} stops={[mapped, bare, lot]} />);
+      const lines = screen.getAllByTestId("access-trail");
+      expect(lines).toHaveLength(2);
+      expect(lines[0].getAttribute("data-mapped")).toBe("true");
+      expect(lines[0].getAttribute("stroke-dasharray")).toBeTruthy();
+      expect(lines[1].getAttribute("data-mapped")).toBe("false");
+      expect(lines[1].getAttribute("points")!.split(" ")).toHaveLength(2);
+    });
+  });
 });

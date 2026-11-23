@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({ ctor: vi.fn(), supported: vi.fn(() => true), handlers: {} as Record<string, (e: unknown) => void> }));
@@ -12,15 +13,17 @@ vi.mock("mapbox-gl", () => ({
     AttributionControl: function () {},
   },
 }));
+vi.mock("@/lib/usage-ping", () => ({ sendUsagePing: vi.fn().mockResolvedValue(true) }));
 vi.mock("@/components/settings/SettingsProvider", () => ({ useSettings: () => ({ settings: { mapStyle: "standard" } }) }));
 
+import { sendUsagePing } from "@/lib/usage-ping";
 import MapPanel from "./MapPanel";
 
 const props = { stops: [], routeGeometry: null, onMapClick: vi.fn(), onStopClick: vi.fn() };
 
 describe("MapPanel fallbacks", () => {
   beforeEach(() => { h.supported.mockReturnValue(true); });
-  afterEach(() => { h.ctor.mockReset(); });
+  afterEach(() => { h.ctor.mockReset(); vi.mocked(sendUsagePing).mockClear(); });
 
   it("calls onUnavailable instead of throwing when the Map constructor fails", () => {
     h.ctor.mockImplementation(() => { throw new Error("Failed to initialize WebGL."); });
@@ -70,5 +73,30 @@ describe("MapPanel fallbacks", () => {
     expect(screen.queryByText(/Map tiles could not be loaded/)).toBeNull();
     act(() => h.handlers.error({ error: { message: "Failed to fetch" } }));
     expect(screen.getAllByText(/Map tiles could not be loaded/)).toHaveLength(1);
+  });
+
+  const fakeMap = () => ({
+    on: vi.fn(), off: vi.fn(), addControl: vi.fn(), remove: vi.fn(),
+    getCenter: () => ({ lat: 0, lng: 0 }), getZoom: () => 3,
+  });
+
+  it("sends one map-load ping per map start, even when strict mode runs the effect twice", () => {
+    h.ctor.mockImplementation(fakeMap);
+    render(<StrictMode><MapPanel {...props} /></StrictMode>);
+    expect(h.ctor.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(sendUsagePing).toHaveBeenCalledTimes(1);
+    expect(sendUsagePing).toHaveBeenCalledWith("map-load");
+  });
+
+  it("sends no ping when the map cannot start", () => {
+    h.supported.mockReturnValue(false);
+    render(<MapPanel {...props} onUnavailable={vi.fn()} />);
+    expect(sendUsagePing).not.toHaveBeenCalled();
+  });
+
+  it("is not broken by a ping that rejects", () => {
+    vi.mocked(sendUsagePing).mockRejectedValueOnce(new Error("offline"));
+    h.ctor.mockImplementation(fakeMap);
+    expect(() => render(<MapPanel {...props} />)).not.toThrow();
   });
 });

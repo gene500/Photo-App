@@ -110,3 +110,15 @@ describe("estimateLabelWidth", () => {
     expect(estimateLabelWidth("x".repeat(100))).toBeLessThanOrEqual(152);
   });
 });
+
+describe("road ends", () => {
+  const re = (lat: number, lng: number) => ({ lat, lng, name: "Road end", walkMeters: 200, kind: "road-end" as const, trail: null });
+  it("labels a single road end 'Road end'", () => {
+    expect(groupLots([mk("a", "A", re(37, -119))], null)[0].label).toBe("Road end");
+  });
+  it("merges two stops sharing one road end into one group labelled Parking ×2", () => {
+    const g = groupLots([mk("a", "A", re(37, -119)), mk("b", "B", re(37.0001, -119))], null);
+    expect(g).toHaveLength(1);
+    expect(g[0]).toMatchObject({ count: 2, label: "Parking ×2" });
+  });
+});

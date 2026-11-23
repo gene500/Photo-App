@@ -1,3 +1,4 @@
+import { spendUserShare } from "@/server/budget";
 import { enforcePaidLimit } from "@/server/shared-limit";
 import { clampToSolarDay, daylightInterval, departureTime } from "@/lib/best-time";
 import { orderWithoutOrigin, stopIndexWithoutOrigin, withOrigin } from "@/lib/optimize-origin";
@@ -26,6 +27,9 @@ export const POST = handle(async (req: Request) => {
   // The concurrency slot comes before the limit: a busy 503 must neither call Mapbox nor use up the user's per-minute allowance.
   const { body, noticeArgs } = await withOptimizeSlot(async () => {
     await enforcePaidLimit("optimize", userId);
+    // Matrix units match what getDurationMatrix counts: points squared (the origin is one more point).
+    const points = input.coordinates.length + (input.origin ? 1 : 0);
+    await spendUserShare("mapbox-matrix", userId, points * points);
     const { coordinates, stops: prefs, plannedDate, departAt, focus, fixDeparture } = input;
     try {
       // The origin only ever helps: if the road network has no route from it to the chosen first stop, optimize without it.

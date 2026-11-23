@@ -109,3 +109,26 @@ describe("fakeHike", () => {
     }
   });
 });
+
+describe("fakeRoadEnd", () => {
+  it("gives a road end 400 m west with a 4-point trail near the fake road-end point", async () => {
+    const { fakeRoadEnd, FAKE_ROAD_END_POINT, FAKE_HIKE_POINT } = await import("./fake");
+    expect(FAKE_ROAD_END_POINT).toEqual({ lat: 37.2, lng: -119.5 });
+    expect(FAKE_ROAD_END_POINT).not.toEqual(FAKE_HIKE_POINT);
+    const at = { lat: FAKE_ROAD_END_POINT.lat + 0.01, lng: FAKE_ROAD_END_POINT.lng - 0.01 };
+    const r = fakeRoadEnd(at.lat, at.lng)!;
+    expect(r.kind).toBe("road-end");
+    if (r.kind !== "road-end") return;
+    expect(r.trail).toHaveLength(4);
+    expect(r.trail!.at(-1)).toEqual([at.lng, at.lat]);
+    expect(r.trail![0]).toEqual(r.point);
+    expect(r.point[0]).toBeLessThan(at.lng);
+    expect(r.walkMeters).toBeGreaterThan(350);
+    expect(r.walkMeters).toBeLessThan(450);
+  });
+  it("gives null anywhere else", async () => {
+    const { fakeRoadEnd } = await import("./fake");
+    expect(fakeRoadEnd(37, -119.5)).toBeNull();
+    expect(fakeRoadEnd(37.2, -118.2)).toBeNull();
+  });
+});

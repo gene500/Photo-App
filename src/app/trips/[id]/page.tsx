@@ -5,6 +5,7 @@ import { preconnect } from "react-dom";
 import { RefreshWhenStale } from "@/components/RefreshWhenStale";
 import { TripEditor } from "@/components/editor/TripEditor";
 import { loginUrl } from "@/lib/safe-callback";
+import { mapLoadState } from "@/server/budget";
 import { getCurrentUserId } from "@/server/session";
 import { getTrip } from "@/server/trips";
 
@@ -31,12 +32,14 @@ export default async function TripPage({ params }: PageProps<"/trips/[id]">) {
   const { userId, trip } = loaded;
   if (!trip) notFound();
   const renderedAt = renderStamp();
+  // Signed-in users keep the map until 95% of the month's allowance; from 70% they get a heads-up banner. Fails open (see mapLoadState).
+  const mapState = await mapLoadState();
   // Back/Forward can restore a cached copy of this page; RefreshWhenStale then fetches a fresh one. The editor stays mounted
   // and merges the fresher data into its live state (see TripEditor), so typed text, open forms and requests in flight survive.
   return (
     <>
       <RefreshWhenStale renderedAt={renderedAt} />
-      <TripEditor initialTrip={trip} userId={userId} />
+      <TripEditor initialTrip={trip} userId={userId} mapAllowed={mapState !== "all-off"} mapUsageHigh={mapState !== "ok"} />
     </>
   );
 }

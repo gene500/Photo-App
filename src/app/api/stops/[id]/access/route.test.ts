@@ -33,6 +33,16 @@ describe("POST /api/stops/[id]/access", () => {
     expect(resolveStopAccess).toHaveBeenCalledWith("u-access-route", "s1");
   });
 
+  it("returns a road-end access with its trail", async () => {
+    const access = { lat: 37.0097, lng: -119.5, name: "Road end", walkMeters: 1070, kind: "road-end", trail: [[-119.5, 37.0097], [-119.5, 37]] };
+    vi.mocked(resolveStopAccess).mockResolvedValue({ id: "s1", access } as never);
+    const res = await post();
+    expect(res.status).toBe(200);
+    const { stop } = await res.json();
+    expect(stop.access.kind).toBe("road-end");
+    expect(stop.access.trail).toEqual(access.trail);
+  });
+
   it("is 404 for a stop of another user", async () => {
     vi.mocked(resolveStopAccess).mockResolvedValue(null);
     expect((await post()).status).toBe(404);

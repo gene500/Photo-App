@@ -1,4 +1,5 @@
 import type { Stop as StopRow, Trip as TripRow } from "@/generated/prisma/client";
+import { parseAccessTrail } from "@/lib/access-trail";
 import { utcToDateOnly } from "@/lib/dates";
 import { cleanLine, clampText, hasContent, stripNameChars, stripTextChars } from "@/lib/text";
 import type { AccessPoint, LightPref, PublicStop, PublicTrip, ShotItem, Stop, StopPriority, StopSource, Trip } from "@/lib/types";
@@ -46,7 +47,10 @@ const toSource = (value: string): StopSource => (value === "suggested" ? value :
 const toAccess = (row: StopRow): AccessPoint | null =>
   row.accessLat === null || row.accessLng === null
     ? null
-    : { lat: row.accessLat, lng: row.accessLng, name: row.accessName === null ? null : cleanLine(row.accessName, 120), walkMeters: row.accessWalkMeters };
+    : { lat: row.accessLat, lng: row.accessLng, name: row.accessName === null ? null : cleanLine(row.accessName, 120), walkMeters: row.accessWalkMeters,
+        kind: row.accessKind === "road-end" ? "road-end" : "lot",
+        trail: parseAccessTrail(row.accessTrail),
+      };
 
 export function toStopDto(row: StopRow): Stop {
   return {

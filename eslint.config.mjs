@@ -14,6 +14,7 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     "src/generated/**",
     ".next-e2e/**",
+    "apps/native/**",
     // Benchmark and equivalence harnesses with frozen copies of the old algorithms (A82); not app code.
     "scripts/perf/**",
     "scripts/perf-b/**",

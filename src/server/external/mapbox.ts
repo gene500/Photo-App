@@ -1,7 +1,10 @@
 import type { LngLat, Place, RouteResult, SearchSuggestion } from "@/lib/types";
-import { coordsLabel } from "@/lib/geo";
+import { coordsLabel, haversineMeters } from "@/lib/geo";
 import { MAX_STOP_NAME } from "@/lib/validation";
 import { clampText, stripNameChars } from "@/lib/text";
+import { LOT_MAX_WALK_M } from "../hike/limits";
+import { spendBudget } from "../budget";
+import type { BudgetProduct } from "../budget-config";
 import { TtlCache } from "../suggestions/cache";
 import { fakeDirections, fakeDurationMatrix, fakeGeocode, fakeLocate, fakeRetrieve, fakeReverseGeocode, fakeSearch, isFakeExternal } from "./fake";
 
@@ -26,6 +29,8 @@ type DirectionsResponse = {
   }[];
 };
 
+type Spend = { product: BudgetProduct; units: number };
+
 function token(): string {
   const t = process.env.MAPBOX_TOKEN;
   if (!t) {
@@ -36,7 +41,11 @@ function token(): string {
   return t;
 }
 
-async function getJson<T>(url: string, fetchImpl: typeof fetch, unreachable: string): Promise<{ ok: boolean; body: T | null }> {
+const GEOCODING: Spend = { product: "mapbox-geocoding", units: 1 };
+
+/** Reserves the monthly budget (HttpError 429 when used up, 503 when the store is down) right before the paid call. */
+async function getJson<T>(url: string, fetchImpl: typeof fetch, unreachable: string, spend: Spend): Promise<{ ok: boolean; body: T | null }> {
+  await spendBudget(spend.product, spend.units);
   let res: Response;
   try {
     res = await fetchImpl(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
@@ -57,6 +66,7 @@ const geocodeCache = new TtlCache<Place[]>(LOOKUP_TTL_MS, 300);
 const reverseCache = new TtlCache<Place>(LOOKUP_TTL_MS, 300);
 const searchCache = new TtlCache<SearchSuggestion[]>(LOOKUP_TTL_MS, 300);
 const retrieveCache = new TtlCache<Place>(LOOKUP_TTL_MS, 300);
+const walkingCache = new TtlCache<{ geometry: LngLat[]; distanceMeters: number } | null>(LOOKUP_TTL_MS, 100);
 const matrixCache = new TtlCache<number[][]>(LOOKUP_TTL_MS, 100);
 
 export function clearMapboxCaches(): void {
@@ -68,6 +78,7 @@ export function clearMapboxCaches(): void {
   searchCache.clear();
   retrieveCache.clear();
   matrixCache.clear();
+  walkingCache.clear();
 }
 
 const isLngLat = (c: unknown): c is LngLat =>
@@ -83,7 +94,7 @@ export async function getDirections(coords: LngLat[], fetchImpl: typeof fetch = 
   const url =
     `${MAPBOX_BASE}/directions/v5/mapbox/driving/${path}` +
     `?geometries=geojson&overview=full&access_token=${encodeURIComponent(token())}`;
-  const { ok, body } = await getJson<DirectionsResponse>(url, fetchImpl, "Couldn't reach the routing service");
+  const { ok, body } = await getJson<DirectionsResponse>(url, fetchImpl, "Couldn't reach the routing service", { product: "mapbox-directions", units: 1 });
   const route = body?.routes?.[0];
   if (!ok || body?.code !== "Ok" || !route) {
     throw new ExternalServiceError(
@@ -99,6 +110,34 @@ export async function getDirections(coords: LngLat[], fetchImpl: typeof fetch = 
     duration: route.duration,
   };
   directionsCache.set(path, result);
+  return result;
+}
+
+/** Mapbox walking snaps each end to the nearest walkable way with no radius; a line starting or ending farther than this from the asked point is not the walk we wanted. */
+export const WALK_SNAP_MAX_M = 150;
+const snapped = (a: LngLat, b: LngLat) => haversineMeters({ lng: a[0], lat: a[1] }, { lng: b[0], lat: b[1] }) <= WALK_SNAP_MAX_M;
+
+/** Walking line from a road end to a stop; null when there is no walkable route, it is over LOT_MAX_WALK_M, or an end snapped more than WALK_SNAP_MAX_M from the asked point. A refused budget throws HttpError, never null. */
+export async function getWalkingTrail(from: LngLat, to: LngLat, fetchImpl: typeof fetch = fetch): Promise<{ geometry: LngLat[]; distanceMeters: number } | null> {
+  if (isFakeExternal()) return null;
+  const path = [from, to].map(([lng, lat]) => `${lng.toFixed(6)},${lat.toFixed(6)}`).join(";");
+  const cached = walkingCache.get(path);
+  if (cached !== undefined) return cached;
+  const url =
+    `${MAPBOX_BASE}/directions/v5/mapbox/walking/${path}` +
+    `?geometries=geojson&overview=full&access_token=${encodeURIComponent(token())}`;
+  const { ok, body } = await getJson<DirectionsResponse>(url, fetchImpl, "Couldn't reach the routing service", { product: "mapbox-directions", units: 1 });
+  if (body?.code === "NoRoute") {
+    walkingCache.set(path, null);
+    return null;
+  }
+  const route = body?.routes?.[0];
+  if (!ok || body?.code !== "Ok" || !route) throw new ExternalServiceError("Routing failed. Please try again.");
+  const coords = route.geometry?.coordinates;
+  if (!Array.isArray(coords) || !coords.every(isLngLat) || !isNonNegative(route.distance)) throw new ExternalServiceError(BAD_ROUTING_RESPONSE);
+  const offRoad = coords.length === 0 || !snapped(coords[0]!, from) || !snapped(coords[coords.length - 1]!, to);
+  const result = route.distance > LOT_MAX_WALK_M || offRoad ? null : { geometry: coords, distanceMeters: route.distance };
+  walkingCache.set(path, result);
   return result;
 }
 
@@ -119,7 +158,7 @@ export async function getDurationMatrix(coords: LngLat[], fetchImpl: typeof fetc
   const url =
     `${MAPBOX_BASE}/directions-matrix/v1/mapbox/driving/${path}` +
     `?annotations=duration&access_token=${encodeURIComponent(token())}`;
-  const { ok, body } = await getJson<MatrixResponse>(url, fetchImpl, "Couldn't reach the routing service");
+  const { ok, body } = await getJson<MatrixResponse>(url, fetchImpl, "Couldn't reach the routing service", { product: "mapbox-matrix", units: coords.length * coords.length });
   const rows = body?.durations;
   const square = Array.isArray(rows) && rows.length === coords.length && rows.every((r) => Array.isArray(r) && r.length === coords.length);
   if (!ok || body?.code !== "Ok" || !square) {
@@ -160,7 +199,7 @@ export async function geocode(query: string, options: GeocodeOptions = {}, fetch
   const url =
     `${MAPBOX_BASE}/search/geocode/v6/forward?q=${encodeURIComponent(query)}` +
     `&autocomplete=true&limit=5${proximity}&access_token=${encodeURIComponent(token())}`;
-  const { ok, body } = await getJson<GeocodeResponse>(url, fetchImpl, "Couldn't reach the place search service");
+  const { ok, body } = await getJson<GeocodeResponse>(url, fetchImpl, "Couldn't reach the place search service", GEOCODING);
   if (!ok || !body?.features) throw new ExternalServiceError("Place search failed. Please try again.");
   const places = body.features
     .filter((f) => f && isLngLat(f.geometry?.coordinates))
@@ -195,7 +234,7 @@ export async function locateArea(query: string, fetchImpl: typeof fetch = fetch)
   if (cached !== undefined) return cached;
   for (const types of ["place,locality,neighborhood", "district,region,country"]) {
     const url = `${MAPBOX_BASE}/search/geocode/v6/forward?q=${encodeURIComponent(q)}&types=${types}&limit=1&autocomplete=true&language=en&access_token=${encodeURIComponent(token())}`;
-    const { ok, body } = await getJson<AreaResponse>(url, fetchImpl, "Couldn't reach the place search service");
+    const { ok, body } = await getJson<AreaResponse>(url, fetchImpl, "Couldn't reach the place search service", GEOCODING);
     if (!ok || !body?.features) throw new ExternalServiceError("Place search failed. Please try again.");
     const f = body.features[0];
     if (f && isLngLat(f.geometry?.coordinates)) {
@@ -301,7 +340,7 @@ export async function searchPlaces(query: string, options: SearchOptions, fetchI
     `&types=poi,address,place,locality,neighborhood&language=en&access_token=${encodeURIComponent(token())}`;
   let raw: SearchBoxSuggestion[] | null = null;
   try {
-    const { ok, body } = await getJson<SuggestResponse>(url, fetchImpl, "Couldn't reach the place search service");
+    const { ok, body } = await getJson<SuggestResponse>(url, fetchImpl, "Couldn't reach the place search service", GEOCODING);
     if (ok && Array.isArray(body?.suggestions)) raw = body.suggestions;
   } catch (e) {
     if (!(e instanceof ExternalServiceError)) throw e;
@@ -335,7 +374,7 @@ export async function retrievePlace(id: string, sessionToken: string, fetchImpl:
   const url =
     `${MAPBOX_BASE}/search/searchbox/v1/retrieve/${encodeURIComponent(id)}` +
     `?session_token=${encodeURIComponent(sessionToken)}&access_token=${encodeURIComponent(token())}`;
-  const { ok, body } = await getJson<RetrieveResponse>(url, fetchImpl, "Couldn't reach the place lookup service");
+  const { ok, body } = await getJson<RetrieveResponse>(url, fetchImpl, "Couldn't reach the place lookup service", GEOCODING);
   const f = body?.features?.[0];
   const coords = f?.geometry?.coordinates;
   if (!ok || !f || !isLngLat(coords)) throw new ExternalServiceError("Place lookup failed. Please try again.");
@@ -356,7 +395,7 @@ export async function reverseGeocode(p: { lat: number; lng: number }, fetchImpl:
   const url =
     `${MAPBOX_BASE}/search/geocode/v6/reverse?longitude=${p.lng.toFixed(6)}&latitude=${p.lat.toFixed(6)}` +
     `&limit=1&access_token=${encodeURIComponent(token())}`;
-  const { ok, body } = await getJson<GeocodeResponse>(url, fetchImpl, "Couldn't reach the place lookup service");
+  const { ok, body } = await getJson<GeocodeResponse>(url, fetchImpl, "Couldn't reach the place lookup service", GEOCODING);
   if (!ok || !body) throw new ExternalServiceError("Place lookup failed. Please try again.");
   const f = body.features?.[0];
   const place = { name: pickName(f?.properties, coordsLabel(p)), lat: p.lat, lng: p.lng };

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { applyMapTheme, MAP_COLORS as C, themeLayerPaint } from "./map-theme";
+import { ACCESS_TRAIL_COLOR, applyMapTheme, MAP_COLORS as C, themeLayerPaint } from "./map-theme";
 
 const paint = (id: string, type: string) => themeLayerPaint({ id, type })?.paint;
 
@@ -23,8 +23,8 @@ describe("themeLayerPaint", () => {
     expect(paint("land", "background")).toEqual({ "background-color": C.land });
     expect(paint("water", "fill")).toEqual({ "fill-color": "#b9c3be" });
     expect(paint("waterway", "line")).toEqual({ "line-color": "#b9c3be" });
-    expect(paint("landuse", "fill")).toEqual({ "fill-color": "#c8c9a8" });
-    expect(paint("national-park", "fill")).toEqual({ "fill-color": "#c8c9a8" });
+    expect(paint("landuse", "fill")).toEqual({ "fill-color": "#d3ccb5" });
+    expect(paint("national-park", "fill")).toEqual({ "fill-color": "#d3ccb5" });
     expect(paint("building", "fill")).toEqual({ "fill-color": "#cdc4ac" });
   });
 
@@ -95,5 +95,12 @@ describe("applyMapTheme", () => {
     expect(lum(C.roadCasing)).toBeLessThan(lum(C.land));
     expect(lum(C.land) - lum(C.labelText)).toBeGreaterThan(100);
     expect(lum(C.water)).toBeLessThan(lum(C.road));
+  });
+});
+
+describe("ACCESS_TRAIL_COLOR", () => {
+  it("is a 7-char hex distinct from the beige path roads", () => {
+    expect(ACCESS_TRAIL_COLOR).toMatch(/^#[0-9a-f]{6}$/);
+    expect(ACCESS_TRAIL_COLOR).not.toBe(C.path);
   });
 });

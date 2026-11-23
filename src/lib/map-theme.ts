@@ -1,11 +1,14 @@
 // Recolours Mapbox's stock light-v11 basemap to the beige theme at runtime (we can't publish a custom Studio style).
-// Darkened one step 2026-10-26 (A43). Pure: maps a style layer to the paint properties to override. Anything unrecognised returns null and is left alone.
+// Darkened one step 2026-10-26 (A43); parks made beige, not green, 2026-11-23. Pure: maps a style layer to the paint properties to override. Anything unrecognised returns null and is left alone.
+
+/** The road-end-to-stop trail: a darker step of the route colour (#a8834b), readable on the beige path roads. A hex because Mapbox paint cannot read CSS variables. */
+export const ACCESS_TRAIL_COLOR = "#8c6a35";
 
 export const MAP_COLORS = {
   land: "#d8d1bd",
   water: "#b9c3be",
-  green: "#c8c9a8",
-  greenLine: "#b9b898",
+  green: "#d3ccb5",
+  greenLine: "#c5bda5",
   building: "#cdc4ac",
   buildingLine: "#bdb298",
   road: "#f7f3e6",

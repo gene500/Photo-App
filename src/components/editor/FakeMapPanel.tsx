@@ -9,6 +9,8 @@ import { latLngToPercent, pixelToLatLng, type Bounds } from "@/lib/map-bounds";
 import { loadPlacePhoto } from "@/lib/place-photo-cache";
 import { SUNRISE_COLOR, SUNSET_COLOR } from "@/lib/sky";
 import { STOP_MARKER_CLASS, stopColor } from "@/lib/stop-style";
+import { ACCESS_TRAIL_COLOR } from "@/lib/map-theme";
+import { trailLines } from "@/lib/trail-lines";
 import type { Suggestion } from "@/lib/types";
 import type { MapViewProps } from "./map-types";
 import { FLOW_TOTAL_MS } from "./route-flow";
@@ -131,6 +133,11 @@ export function FakeMapPanel({ stops, routeGeometry, pending, suggestions = [], 
         {routePoints && flow === "running" && (
           <polyline key={flowRun} data-testid="route-flow" className="route-flow-line" points={routePoints} pathLength={100} fill="none" stroke="#8fd3f7" strokeOpacity={0.9} strokeWidth={0.9} strokeLinecap="round" strokeLinejoin="round" />
         )}
+        {trailLines(stops).map((t) => (
+          <polyline key={`trail-${t.id}`} data-testid="access-trail" data-stop-id={t.id} data-mapped={t.mapped}
+            points={t.geometry.map(([lng, lat]) => pos({ lat, lng })).map((p) => `${p.left},${p.top}`).join(" ")}
+            fill="none" stroke={ACCESS_TRAIL_COLOR} strokeWidth={0.4} strokeDasharray="1.2 0.9" strokeLinejoin="round" />
+        ))}
         {(hikes ?? []).filter((h) => h.geometry.length >= 2).map((h) => (
           <polyline key={h.id} data-testid="hike-line" data-stop-id={h.id} data-points={h.geometry.length}
             points={h.geometry.map(([lng, lat]) => pos({ lat, lng })).map((p) => `${p.left},${p.top}`).join(" ")}

@@ -1,4 +1,5 @@
 import { downsampleRoute } from "./downsample";
+import { ACCESS_TRAIL_COLOR } from "./map-theme";
 import type { LngLat } from "./types";
 
 export const STATIC_MAP_MAX_URL = 7500;
@@ -10,6 +11,9 @@ const START_POINTS = 1000;
 /** The app's route colour (--route) and manual stop colour, so the printed map matches the screen. */
 const STATIC_MAP_ROUTE_COLOR = "a8834b";
 const PIN_COLOR = "3b3226";
+/** Road-end trails: ACCESS_TRAIL_COLOR without "#". Static images have no dashes, so this is a thin solid line. */
+const STATIC_MAP_TRAIL_COLOR = ACCESS_TRAIL_COLOR.replace("#", "");
+const TRAIL_MAX_POINTS = 20;
 
 const pinColor = (c: string | undefined) => (c && /^#?[0-9a-f]{6}$/i.test(c) ? c.replace("#", "").toLowerCase() : PIN_COLOR);
 
@@ -46,6 +50,8 @@ export function staticMapUrl(a: {
   token: string | null;
   width?: number;
   height?: number;
+  /** Road-end trails; each is cut to 20 points, and all are dropped first when the URL would be too long. */
+  trails?: LngLat[][];
 }): string | null {
   if (!a.token || a.stops.length < 2) return null;
   const w = clampSide(a.width ?? STATIC_MAP_WIDTH);
@@ -54,17 +60,26 @@ export function staticMapUrl(a: {
     const label = i + 1 <= 99 ? `-${i + 1}` : "";
     return `pin-s${label}+${pinColor(s.color)}(${s.lng.toFixed(5)},${s.lat.toFixed(5)})`;
   });
-  const build = (path: string | null) =>
-    `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${[...(path ? [path] : []), ...pins].join(",")}/auto/${w}x${h}@2x?access_token=${encodeURIComponent(a.token!)}`;
+  const trailPaths = (a.trails ?? [])
+    .filter((t) => t.length >= 2)
+    .map((t) => `path-2+${STATIC_MAP_TRAIL_COLOR}-0.9(${encodeURIComponent(encodePolyline(downsampleRoute(t, TRAIL_MAX_POINTS)))})`);
+  const build = (path: string | null, withTrails = false) =>
+    `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/static/${[...(path ? [path] : []), ...(withTrails ? trailPaths : []), ...pins].join(",")}/auto/${w}x${h}@2x?access_token=${encodeURIComponent(a.token!)}`;
 
   const noPath = build(null);
   if (noPath.length > STATIC_MAP_MAX_URL) return null;
-  if (a.geometry.length < 2) return noPath;
+  const withTrailsOk = (path: string | null, base: string) => {
+    if (trailPaths.length === 0) return base;
+    const url = build(path, true);
+    return url.length <= STATIC_MAP_MAX_URL ? url : base;
+  };
+  if (a.geometry.length < 2) return withTrailsOk(null, noPath);
 
   for (let target = START_POINTS; target >= 2; target = Math.floor(target / 2)) {
     const pts = downsampleRoute(a.geometry, target);
-    const url = build(`path-4+${STATIC_MAP_ROUTE_COLOR}-0.9(${encodeURIComponent(encodePolyline(pts))})`);
-    if (url.length <= STATIC_MAP_MAX_URL) return url;
+    const path = `path-4+${STATIC_MAP_ROUTE_COLOR}-0.9(${encodeURIComponent(encodePolyline(pts))})`;
+    const url = build(path);
+    if (url.length <= STATIC_MAP_MAX_URL) return withTrailsOk(path, url);
   }
-  return noPath;
+  return withTrailsOk(null, noPath);
 }

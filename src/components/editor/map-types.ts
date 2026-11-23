@@ -5,6 +5,8 @@ type LatLng = { lat: number; lng: number };
 export type MapViewProps = {
   /** Public share view: markers cannot be dragged. */
   readOnly?: boolean;
+  /** False: do not start the real map (this month's map-load budget is spent); the offline preview shows instead. Default true. */
+  mapAllowed?: boolean;
   stops: Stop[];
   routeGeometry: LngLat[] | null;
   /** Temporary pin for a search result / clicked spot / suggestion being considered. */

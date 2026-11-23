@@ -1,3 +1,4 @@
+import { spendUserShare } from "@/server/budget";
 import { enforcePaidLimit } from "@/server/shared-limit";
 import { directionsRequestSchema } from "@/lib/validation";
 import { ExternalServiceError, getDirections } from "@/server/external/mapbox";
@@ -7,6 +8,7 @@ export const POST = handle(async (req: Request) => {
   const userId = await requireUserId();
   const { coordinates } = directionsRequestSchema.parse(await readJson(req));
   await enforcePaidLimit("directions", userId);
+  await spendUserShare("mapbox-directions", userId);
   try {
     return Response.json({ route: await getDirections(coordinates) }, { headers: { "Cache-Control": "private, max-age=300" } });
   } catch (e) {

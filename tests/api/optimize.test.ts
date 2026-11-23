@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/server/external/place-notices", () => ({ collectPlaceNotices: vi.fn(async () => []) }));
 vi.mock("@/server/session", () => ({ getCurrentUserId: vi.fn() }));
+// These tests are about load protection, not the monthly budget; the heavy runs would spend one user share.
+vi.mock("@/server/budget", async (orig) => ({ ...(await orig<typeof import("@/server/budget")>()), spendUserShare: vi.fn() }));
 vi.mock("@/server/external/mapbox", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/external/mapbox")>()),
   getDurationMatrix: vi.fn(),

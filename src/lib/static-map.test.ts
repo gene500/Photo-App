@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { encodePolyline, STATIC_MAP_MAX_URL, staticMapUrl } from "./static-map";
+import { downsampleRoute } from "./downsample";
 import type { LngLat } from "./types";
 
 const GEOM: LngLat[] = [
@@ -76,5 +77,42 @@ describe("staticMapUrl", () => {
   it("returns null when pins alone exceed the limit", () => {
     const stops = Array.from({ length: 400 }, (_, i) => ({ lat: 10 + i * 0.001, lng: 20 + i * 0.001 }));
     expect(staticMapUrl({ stops, geometry: [], token: "T" })).toBeNull();
+  });
+});
+
+describe("staticMapUrl trails", () => {
+  const base = { stops: STOPS, geometry: GEOM, token: "TOKEN" };
+  const TRAIL: LngLat[] = [[-120.2, 38.5], [-120.21, 38.51], [-120.22, 38.52]];
+  const longTrail = (n: number, seed: number): LngLat[] => Array.from({ length: n }, (_, i): LngLat => [-120 + seed + Math.sin(i * 1.7 + seed) * 0.37, 38 + Math.cos(i * 2.3 + seed) * 0.41 + i * 0.003]);
+
+  it("adds each trail as a thin solid path after the route path, within the URL limit", () => {
+    const url = staticMapUrl({ ...base, trails: [TRAIL] })!;
+    expect(url.match(/path-2\+8c6a35-0\.9\(/g)).toHaveLength(1);
+    expect(url).toContain(`path-2+8c6a35-0.9(${encodeURIComponent(encodePolyline(TRAIL))})`);
+    expect(url.indexOf("path-4+")).toBeLessThan(url.indexOf("path-2+"));
+    expect(url.indexOf("path-2+")).toBeLessThan(url.indexOf("pin-s-1+"));
+    expect(url.length).toBeLessThanOrEqual(STATIC_MAP_MAX_URL);
+  });
+
+  it("is unchanged by an empty trails list", () => {
+    expect(staticMapUrl({ ...base, trails: [] })).toBe(staticMapUrl(base));
+  });
+
+  it("cuts a 200-point trail to at most 20 points", () => {
+    const url = staticMapUrl({ ...base, trails: [longTrail(200, 1)] })!;
+    const m = /path-2\+8c6a35-0\.9\(([^)]*)\)/.exec(url)!;
+    const decoded = decodeURIComponent(m[1]);
+    // each point is at least 2 encoded chars (lat + lng deltas, 1 char each at minimum)
+    expect(decoded.length).toBeGreaterThan(0);
+    expect(decoded.length).toBeLessThanOrEqual(20 * 12);
+    const expected = encodePolyline(downsampleRoute(longTrail(200, 1), 20));
+    expect(decoded).toBe(expected);
+  });
+
+  it("drops every trail, not just some, when they would push the URL over the limit", () => {
+    const trails = Array.from({ length: 40 }, (_, i) => longTrail(200, i + 1));
+    const noTrail = staticMapUrl(base)!;
+    expect(staticMapUrl({ ...base, trails })).toBe(noTrail);
+    expect(noTrail.length).toBeLessThanOrEqual(STATIC_MAP_MAX_URL);
   });
 });

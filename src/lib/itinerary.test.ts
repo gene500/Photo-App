@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildItinerary, itineraryFileName, type ItineraryStopSource } from "./itinerary";
+import { buildItinerary, itineraryFileName, parkText, type ItineraryStopSource } from "./itinerary";
 
 const stop = (over: Partial<ItineraryStopSource> = {}): ItineraryStopSource => ({
   name: "Spot",
@@ -137,5 +137,28 @@ describe("buildItinerary parking line", () => {
   it("prints nothing without an access point", () => {
     expect(build([stop()]).stops[0].parkLine).toBeNull();
     expect(build([stop({ access: null, walkMeters: 500 })]).stops[0].parkLine).toBeNull();
+  });
+});
+
+describe("parkText for a road end", () => {
+  const trail: [number, number][] = [[-109.52, 38.74], [-109.51, 38.75]];
+  const mapped = { name: "Road end", kind: "road-end" as const, trail };
+  const unmapped = { name: "Road end", kind: "road-end" as const, trail: null };
+  it("uses the lot format when the trail is mapped", () => {
+    expect(parkText({ name: "Delicate Arch", access: mapped, walkMeters: 1070 }, "km")).toBe("Park at Road end, walk 1.1 km (~20 min) to Delicate Arch");
+  });
+  it("adds the no mapped trail note when there is no trail", () => {
+    expect(parkText({ name: "Delicate Arch", access: unmapped, walkMeters: 1070 }, "km")).toBe("Park at Road end, walk 1.1 km (~20 min) to Delicate Arch (no mapped trail)");
+  });
+  it("leaves a lot unchanged, with or without a trail", () => {
+    expect(parkText({ name: "Delicate Arch", access: { name: "North lot" }, walkMeters: 1070 }, "km")).toBe("Park at North lot, walk 1.1 km (~20 min) to Delicate Arch");
+    expect(parkText({ name: "Delicate Arch", access: { name: "North lot", kind: "lot", trail: null }, walkMeters: 1070 }, "km")).toBe("Park at North lot, walk 1.1 km (~20 min) to Delicate Arch");
+  });
+  it("puts the clock after the road end name", () => {
+    expect(parkText({ name: "Delicate Arch", access: mapped, walkMeters: 1070 }, "km", "5:17 AM")).toBe("Park at Road end ~5:17 AM, walk 1.1 km (~20 min) to Delicate Arch");
+  });
+  it("says only where to park when the walk length is unknown", () => {
+    expect(parkText({ name: "Delicate Arch", access: mapped, walkMeters: null }, "km")).toBe("Park at Road end");
+    expect(parkText({ name: "Delicate Arch", access: unmapped, walkMeters: null }, "km")).toBe("Park at Road end (no mapped trail)");
   });
 });

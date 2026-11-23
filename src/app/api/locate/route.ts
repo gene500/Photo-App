@@ -2,6 +2,7 @@ import { z } from "zod";
 import { MIN_SEARCH_CHARS } from "@/lib/limits";
 import { ExternalServiceError, locateArea, locateLandmark } from "@/server/external/mapbox";
 import { DEADLINE_FAST_MS, handle, HttpError, requireUserId, withDeadline } from "@/server/http";
+import { spendUserShare } from "@/server/budget";
 import { enforcePaidLimit } from "@/server/shared-limit";
 
 const querySchema = z.string().trim().min(MIN_SEARCH_CHARS, `Type at least ${MIN_SEARCH_CHARS} characters`).max(200, "Search text must be at most 200 characters");
@@ -12,6 +13,7 @@ export const GET = handle(async (req: Request) => {
   // Validate first so a malformed request never uses up paid-API quota.
   const q = querySchema.parse(new URL(req.url).searchParams.get("q") ?? "");
   await enforcePaidLimit("locate", userId);
+  await spendUserShare("mapbox-geocoding", userId, 2);
   // Both lookups run under one deadline so their separate timeouts never add up past the client's limit.
   // Whatever finished by then is used; a lookup still hanging counts as failed.
   let areaRes: { area: Awaited<ReturnType<typeof locateArea>>; areaError: ExternalServiceError | null } | undefined;

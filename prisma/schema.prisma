@@ -71,6 +71,10 @@ model Stop {
   accessName       String?
   /// Length of the walk from the lot to the stop, in metres (the hike's distance); null with no lot.
   accessWalkMeters Int?
+  /// "lot" | "road-end"; null = lot. A road end is where a drivable road stops short of an off-road stop. Validated in application code.
+  accessKind       String?
+  /// JSON array of [lng, lat] points (2..120, at most 4000 chars) of the walk from the access point to the stop; null = none.
+  accessTrail      String?
   /// When the lookup last finished (with or without a lot); null = never finished, retry on next open.
   accessResolvedAt DateTime?
   createdAt        DateTime  @default(now())

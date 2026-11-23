@@ -25,6 +25,7 @@ vi.mock("./MapView", () => ({
       {p.routeGeometry && <span data-testid="route-line">{p.routeGeometry.length}</span>}
       <button type="button" onClick={() => p.suggestions?.[0] && p.onSuggestionClick?.(p.suggestions[0].osmId)}>click first suggestion</button>
       {p.flyTo && <span data-testid="fly-to">{p.flyTo.lat},{p.flyTo.lng},{p.flyTo.area ? "area" : "point"}</span>}
+      {p.mapAllowed === false && <span data-testid="map-paused" />}
       {p.pending && <span data-testid="pending-pin">{p.pending.lat},{p.pending.lng}</span>}
     </div>
   ),
@@ -107,6 +108,31 @@ const confirmDeleteStop = () =>
 
 /** Moves the fake clock on without really waiting (the clock also ticks with real time, so waitFor and userEvent keep working). */
 const settle = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+describe("TripEditor map usage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    installMemoryStorage();
+    vi.mocked(api.suggestions).mockResolvedValue({ suggestions: [] });
+    vi.mocked(api.locate).mockResolvedValue({ area: null });
+    vi.mocked(api.reverseGeocode).mockResolvedValue({ place: { name: "Tunnel View", lat: 37.5, lng: -119.5 } });
+  });
+  it("shows no banner and keeps the map when usage is normal", () => {
+    render(<TripEditor initialTrip={trip} />);
+    expect(screen.queryByText(/map usage is high/i)).toBeNull();
+    expect(screen.queryByTestId("map-paused")).toBeNull();
+  });
+  it("shows the banner but keeps the map when usage is high", () => {
+    render(<TripEditor initialTrip={trip} mapUsageHigh />);
+    expect(screen.getByText("Map usage is high this month; the map may pause until it resets")).toBeTruthy();
+    expect(screen.queryByTestId("map-paused")).toBeNull();
+  });
+  it("tells the map it is not allowed when the page says so", () => {
+    render(<TripEditor initialTrip={trip} mapUsageHigh mapAllowed={false} />);
+    expect(screen.getByTestId("map-paused")).toBeTruthy();
+    expect(screen.getByText(/map usage is high/i)).toBeTruthy();
+  });
+});
 
 describe("TripEditor", () => {
   afterEach(() => vi.useRealTimers());

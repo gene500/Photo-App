@@ -17,12 +17,14 @@ export function MapView(props: MapViewProps) {
   // Set when the real map cannot start (no WebGL): the offline preview takes over so the rest of the editor keeps working.
   const [unavailable, setUnavailable] = useState(false);
   if (FAKE_MAP) return <FakeMapPanel {...props} />;
-  if (unavailable) {
+  if (props.mapAllowed === false || unavailable) {
     return (
       <div className="relative h-full w-full">
         <FakeMapPanel {...props} />
         <p role="status" className="pointer-events-none absolute left-1/2 top-[4.5rem] z-10 max-w-[calc(100%-6rem)] -translate-x-1/2 rounded-full bg-surface px-3 py-1 text-center text-xs text-muted shadow ring-1 ring-border lg:bottom-3 lg:top-auto">
-          The map could not start on this device, so a simple preview is shown.
+          {props.mapAllowed === false
+            ? "The map is paused for now to stay within this month's free usage, so a simple preview is shown."
+            : "The map could not start on this device, so a simple preview is shown."}
         </p>
       </div>
     );

@@ -16,6 +16,10 @@ describe("walkMinutes", () => {
     expect(walkMinutes(2000)).toBe(30);
     expect(walkMinutes(2001)).toBe(35);
   });
+  it("walks a road end at 4 km/h like a lot", () => {
+    expect(walkMinutes(1070)).toBe(20); // 16.05 min
+    expect(walkMinutes(1559)).toBe(25); // 23.4 min (the brief said 30; 1920 m is the 30 min case)
+  });
   it("uses 4 km/h and caps a huge walk", () => {
     expect(walkMinutes(1e12)).toBe(MAX_WALK_MINUTES);
   });
@@ -31,6 +35,8 @@ describe("walkMs and stopWalkMinutes", () => {
     expect(stopWalkMinutes({ access: { walkMeters: 1920 } })).toBe(30);
     expect(stopWalkMinutes({ access: { walkMeters: null } })).toBe(0);
     expect(stopWalkMinutes({ access: null })).toBe(0);
+    const roadEnd = { access: { walkMeters: 1070, kind: "road-end" as const, trail: null } };
+    expect(stopWalkMinutes(roadEnd)).toBe(20);
     expect(stopWalkMinutes({})).toBe(0);
   });
 });

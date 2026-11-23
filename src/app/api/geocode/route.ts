@@ -3,6 +3,7 @@ import { MIN_SEARCH_CHARS } from "@/lib/limits";
 import { sessionSchema } from "@/lib/validation";
 import { ExternalServiceError, searchPlaces } from "@/server/external/mapbox";
 import { DEADLINE_FAST_MS, handle, HttpError, requireUserId, withDeadline } from "@/server/http";
+import { spendUserShare } from "@/server/budget";
 import { enforcePaidLimit } from "@/server/shared-limit";
 
 const querySchema = z.string().trim().min(MIN_SEARCH_CHARS, `Type at least ${MIN_SEARCH_CHARS} characters`).max(200, "Search text must be at most 200 characters");
@@ -24,6 +25,7 @@ export const GET = handle(async (req: Request) => {
   const proximity = rawProximity === null ? undefined : proximitySchema.parse(rawProximity);
   // Malformed requests are refused before they count against the paid limit.
   await enforcePaidLimit("geocode", userId);
+  await spendUserShare("mapbox-geocoding", userId);
   try {
     const suggestions = await withDeadline(searchPlaces(q, { proximity, sessionToken }), DEADLINE_FAST_MS, () => {
       throw new ExternalServiceError("Couldn't reach the place search service");

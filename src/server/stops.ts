@@ -120,7 +120,7 @@ export async function updateStopCascade(
       const data = {
         ...toStopData(shotBase && patch.shotChecklist ? { ...patch, shotChecklist: mergeShotChecklist(parseShotChecklist(row.shotChecklist), shotBase, patch.shotChecklist) } : patch),
         // A moved stop's parking lot is stale: forget it so it is looked up again.
-        ...(patch.lat !== undefined || patch.lng !== undefined ? { accessLat: null, accessLng: null, accessName: null, accessWalkMeters: null, accessResolvedAt: null } : {}),
+        ...(patch.lat !== undefined || patch.lng !== undefined ? { accessLat: null, accessLng: null, accessName: null, accessWalkMeters: null, accessKind: null, accessTrail: null, accessResolvedAt: null } : {}),
       };
       const updated = await tx.stop.update({ where: { id: stopId }, data });
       const cascaded: Stop[] = [];

@@ -6,6 +6,11 @@ Old context only. Current state is in `docs/HANDOFF.md`; trust `git log` over th
 
 | # | Task | Status | Notes |
 |---|---|---|---|
+| A5 (2026-11-23) | Windows installer workflow | completed | `.github/workflows/native-windows.yml` written and reviewed (manual or `native-v*` tag, NSIS, unsigned). YAML parses; not run on GitHub yet, so not known to work. |
+| A3 (2026-11-23) | Tauri shell and universal Mac app | completed | `apps/native`; universal build ok and installed in /Applications; launch and HTTP checks passed; interactive window checks left to the owner (row A4). |
+| A2 (2026-11-23) | Check the web app is installable | completed | manifest test 3 passed; manifest and sw.js 200 live; Chrome Install prompt left to the owner. |
+| A1 (2026-11-23) | Native apps plan | completed | `docs/superpowers/plans/2026-11-23-native-apps.md`. |
+| A6 (2026-11-23) | iPhone app | removed | Dropped by the owner on 2026-11-23. |
 | F15 (2026-11-05) | Fix pass for T14 findings (12 approved) | completed | 11 fixed, item 9 not reproducible (no change); tsc, eslint, vitest 2113, e2e 59 pass. See BACKLOG.md "T14 findings". |
 | SEC (2026-11-05) | /security-review of A67-F15 changes (Opus, read-only) | completed | No findings at confidence 8 or more. |
 | T14 (2026-11-05) | 10 Sonnet testers: new features + Optimize | completed | No High found by any tester; no code changed. Findings (Medium unless noted) are listed in BACKLOG.md under "T14 findings" for the owner to pick fixes from. |
@@ -322,3 +327,6 @@ Temporary insert rule (owner, 2026-10-27, from 15:07 until 15:27 local time, the
 | F12 | Fix what sweeps T12-T16 find | completed | 20 min | Light | Done 2026-11-18 (uncommitted): TripPlanList passes the device time zone to memoized TripRow as a prop so a zone change re-renders rows (T14 finding); test added (fails without the fix); comment fixes from SEC. typecheck 0, lint 0, vitest 230 files / 2536 tests, build ok, e2e 79/79 (port 3260). |
 | SEC | Security review of cleanup changes | completed | 15 min | Medium | Done 2026-11-18 (Opus, read-only): no Critical/High/Medium. Two Low notes (intl-cache map unbounded but only the fixed dateOnly key is ever cached; sun memo evicts oldest-added not LRU) fixed as comment wording. Auth, rate limits, ownership, injection, secrets, deps, migration, privacy all clean. |
 | FINAL | Opus full check, merge, push, Vercel+CI | completed | 30 min | Heavy | Done 2026-11-18: Opus check clean (no Critical/High/Medium); pushed `3461492` to main; Vercel photo-app-pi2o success (Turso migration ran), CI check and e2e success. |
+
+- 2026-11-23 SEC (native apps): `/security-review` of the pending native-app changes (lib.rs, tauri.conf.json, Windows workflow, config edits): no findings at confidence 8 or above. Completed.
+- 2026-11-23 A7 (monthly API budgets, Tasks 1-8): completed, UNCOMMITTED and not pushed. Budget counters, per-user share and owner exemption, Flickr counter, usage ping, map states, owner usage page, README section, legal pages reviewed and updated.

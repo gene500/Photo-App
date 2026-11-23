@@ -16,6 +16,12 @@ Moved out of `docs/HANDOFF.md`. Owner follow-ups that are not code, known limits
 | # | Task | Status | Notes |
 |---|---|---|---|
 
+## Trail access (F3), owner follow-ups
+
+- Look at a real trip with an off-road stop (Arches) on the real Mapbox map: is the dashed trail (`#8c6a35`) readable on every map style, and is the Road end spot sensible?
+- Confirm the assistant's calls: 100 m road threshold, dashed trail, 4 km/h walking speed, fixed name "Road end", the Mapbox walking fallback counted in the monthly budget, and the new privacy/terms wording (a stop's road end and trail line are stored and shown on shared pages; Mapbox gets the stop and road-end points for walking directions when OpenStreetMap has no trail).
+- Parked minors: capTrail is duplicated in `stop-access.ts` and `road-end-lookup.ts`; concurrent callers both run an idempotent updateMany; a cached walking answer still costs one user-share unit; orphan fetch after the 12 s deadline; no test for the >4000-char serialized trail; offline copy skips the 4000 cap; trails are dropped from a static map when the URL is too long; an unmapped straight line is drawn like a mapped one on the static/PDF map; `parkText` treats an empty trail `[]` as mapped.
+
 ## Backlog (from the old TODO.md; not started)
 
 To verify by hand:
